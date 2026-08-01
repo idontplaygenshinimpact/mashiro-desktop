@@ -47,3 +47,22 @@ export const config = {
   // 每题讲解的 max_tokens（长文完整讲解需要足够空间，24000 防截断）
   solveMaxTokens: 24000,
 };
+
+// 启动自检：key 缺失时明确报错（避免静默失败）
+export function assertConfig() {
+  if (!config.apiKey) {
+    console.error(
+      "\n❌ 未找到 DeepSeek API Key！\n" +
+        "  请在 D:\\mianshi-agent\\.env 中配置：\n" +
+        "    DEEPSEEK_API_KEY=sk-xxx\n" +
+        "  或设置环境变量 DEEPSEEK_API_KEY\n" +
+        "  （也可复用 opencode 的 key：~/.local/share/opencode/auth.json）\n"
+    );
+    process.exit(1);
+  }
+  if (!/^(sk-|deepseek-)/.test(config.apiKey)) {
+    console.error("\n❌ API Key 格式异常（应以 sk- 开头）：", config.apiKey.slice(0, 8) + "...\n");
+    process.exit(1);
+  }
+  return true;
+}

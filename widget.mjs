@@ -12,6 +12,7 @@ import notifier from "node-notifier";
 import { config } from "./config.mjs";
 import * as studyApi from "./lib/study.mjs";
 import { chatWithAgent } from "./lib/agent.mjs";
+import { startInterview, submitAnswer, endInterview } from "./lib/interview.mjs";
 
 const PORT = 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -334,6 +335,48 @@ const server = createServer((req, res) => {
         res.end(JSON.stringify({ error: e.message }));
       }
     });
+    return;
+  }
+  if (url.pathname === "/api/interview/start") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const r = await startInterview(JSON.parse(body || "{}"));
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/interview/answer") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const r = await submitAnswer(JSON.parse(body || "{}").answer || "");
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/interview/end") {
+    endInterview()
+      .then((r) => {
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      })
+      .catch((e) => {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      });
     return;
   }
   if (url.pathname === "/api/refresh") {

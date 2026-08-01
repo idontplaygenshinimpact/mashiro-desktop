@@ -17,10 +17,7 @@ const fileList = document.getElementById("file-list");
 const dirList = document.getElementById("dir-list");
 
 // ---------- PIXI + Live2D ----------
-console.log("[diag] PIXI version:", PIXI.VERSION);
 const gl = document.createElement("canvas").getContext("webgl");
-console.log("[diag] WebGL available:", !!gl, gl ? gl.getParameter(gl.VERSION) : "");
-console.log("[diag] window size:", window.innerWidth, "x", window.innerHeight);
 
 const app = new PIXI.Application({
   view: canvas,
@@ -38,8 +35,6 @@ const glCtx = app.renderer.gl;
 if (glCtx) {
   try { glCtx.clearColor(0, 0, 0, 0); } catch { /* ignore */ }
 }
-console.log("[diag] PIXI app created, renderer:", app.renderer.type, "size:", app.renderer.width, "x", app.renderer.height);
-console.log("[diag] ticker started:", app.ticker.started);
 
 // 手动监听窗口 resize（固定窗口方案：canvas 同步窗口尺寸 + 模型固定定位）
 window.addEventListener("resize", () => {
@@ -70,7 +65,6 @@ async function loadModel() {
     }
     console.log("[kanban] loading model:", modelPath);
     model = await Live2DModel.from(modelPath, { autoInteract: false });
-    console.log("[diag] model loaded, internalModel:", !!model.internalModel, "model size:", model.width, "x", model.height);
     // 椎名真白（Sakurasou mashiro·旅行装）半身模型
     // 定位：画布中心放窗口 60% 高度处，显示到腿的半身形态（Live2D 看板娘传统设计）
     const targetH = 300; // 画布（模型）高度
@@ -82,13 +76,11 @@ async function loadModel() {
       app.screen.width / 2,
       app.screen.height * 0.60
     );
-    console.log("[diag] model positioned, scale:", scale.toFixed(3));
 
     // 通知主进程显示窗口（尺寸已固定锁定，仅触发 show）
     try {
       await window.kanban.fitWindow(model.width, model.height);
     } catch (e) {
-      console.log("[diag] fitWindow failed:", e.message);
     }
 
     // 关键：确保模型 update 在每次 draw 前执行（否则 Cubism runtime 报
@@ -99,7 +91,6 @@ async function loadModel() {
     app.ticker.add(() => {
       app.renderer.render(app.stage);
     });
-    console.log("[diag] ticker handler registered");
 
     // 空闲动作：只播温和的 idle 待机动作（tap 组里有镜头推近/大幅动作，会看起来"变大"）
     startIdleMotion();
@@ -164,39 +155,25 @@ function showBubble(text, duration = 5000) {
   bubbleTimer = setTimeout(() => bubble.classList.add("hidden"), duration);
 }
 
-// ---------- 面板 ----------
+// ---------- 面板：点击角色 → 打开独立大面板窗口 ----------
 function togglePanel() {
-  if (panel.classList.contains("hidden")) {
-    panel.classList.remove("hidden");
-    loadData();
-  } else {
-    panel.classList.add("hidden");
-  }
-  // 上报面板状态（面板打开时桌宠强制显示，不被桌面检测隐藏）
-  try { window.kanban.setPanelState(!panel.classList.contains("hidden")); } catch { /* ignore */ }
+  // 独立面板窗口由主进程管理（window:toggle-panel）
+  window.kanban.togglePanel();
 }
 
-document.getElementById("btn-close").addEventListener("click", () => panel.classList.add("hidden"));
-document.getElementById("btn-refresh").addEventListener("click", () => { loadData(); showBubble("🔄 已刷新"); });
-
-// 语音开关（默认开）
+// 语音开关（默认开）——桌宠小窗保留
 let voiceOn = true;
-const voiceBtn = document.getElementById("btn-voice");
-voiceBtn.addEventListener("click", () => {
-  voiceOn = !voiceOn;
-  window.kanban.setVoiceEnabled(voiceOn);
-  voiceBtn.textContent = voiceOn ? "🔊" : "🔇";
-  showBubble(voiceOn ? "🔊 语音已开启，真白会开口说话啦" : "🔇 语音已关闭", 3000);
-});
-document.getElementById("btn-run").addEventListener("click", async () => {
-  await window.kanban.runDiscover();
-  showBubble("🔍 已开始爬取，稍后我会提醒你新产出~", 6000);
-});
-document.getElementById("btn-output").addEventListener("click", async () => {
-  await window.kanban.openOutput();
-  showBubble("📁 已打开输出目录", 3000);
-});
-document.getElementById("btn-quit").addEventListener("click", () => window.kanban.quit());
+try {
+  const voiceBtn = document.getElementById("btn-voice");
+  if (voiceBtn) {
+    voiceBtn.addEventListener("click", () => {
+      voiceOn = !voiceOn;
+      window.kanban.setVoiceEnabled(voiceOn);
+      voiceBtn.textContent = voiceOn ? "🔊" : "🔇";
+      showBubble(voiceOn ? "🔊 语音已开启，真白会开口说话啦" : "🔇 语音已关闭", 3000);
+    });
+  }
+} catch { /* ignore */ }
 
 // ============ 学习清单 ============
 const studyList = document.getElementById("study-list");

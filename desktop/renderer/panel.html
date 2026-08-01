@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>真白 · 前端秋招助手</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">🎀 真白 · 前端秋招助手</div>
+    <div class="top-actions">
+      <button id="voice-btn" title="语音开关">🔊</button>
+      <button id="refresh-btn" title="刷新">🔄</button>
+    </div>
+  </header>
+
+  <!-- Tab 导航 -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="interview">🎤 模拟面试</button>
+    <button class="tab" data-tab="study">📋 学习清单</button>
+    <button class="tab" data-tab="chat">💬 对话</button>
+    <button class="tab" data-tab="crawl">🔍 爬取产出</button>
+  </nav>
+
+  <main>
+    <!-- ========== 模拟面试 Tab ========== -->
+    <section id="tab-interview" class="tab-panel active">
+      <div class="interview-setup" id="interview-setup">
+        <div class="form-row">
+          <label>目标岗位</label>
+          <input id="iv-position" type="text" placeholder="如：前端实习生 / React 前端" value="前端实习生" />
+        </div>
+        <div class="form-row">
+          <label>面试官风格</label>
+          <select id="iv-role">
+            <option value="技术深挖型">技术深挖型</option>
+            <option value="温和引导型">温和引导型</option>
+            <option value="压力追问型">压力追问型</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>重点方向（可选）</label>
+          <input id="iv-focus" type="text" placeholder="如：React / 事件循环 / 简历项目" />
+        </div>
+        <button id="iv-start" class="primary">🎤 开始模拟面试</button>
+        <div class="iv-hint">面试会参考你的学习清单 + 最近面经 + 薄弱点出题，答完自动评分，结束后生成复盘并回流薄弱点</div>
+      </div>
+
+      <div class="interview-session hidden" id="interview-session">
+        <div class="iv-head">
+          <span id="iv-status" class="iv-status">面试中 · 第 1 轮</span>
+          <button id="iv-end" class="danger">结束面试</button>
+        </div>
+        <div class="iv-question" id="iv-question"></div>
+        <div class="iv-meta" id="iv-meta"></div>
+        <div class="iv-answer-area">
+          <textarea id="iv-answer" placeholder="输入你的回答...（可用语音输入）"></textarea>
+          <button id="iv-send" class="primary">提交回答</button>
+        </div>
+        <div class="iv-scores" id="iv-scores"></div>
+        <div class="iv-log" id="iv-log"></div>
+        <div class="iv-review hidden" id="iv-review"></div>
+      </div>
+    </section>
+
+    <!-- ========== 学习清单 Tab ========== -->
+    <section id="tab-study" class="tab-panel">
+      <div class="study-toolbar">
+        <button id="study-gen" class="primary">✨ 从产出生成清单</button>
+        <button id="study-review" class="secondary">📝 复盘验证</button>
+      </div>
+      <div id="study-list" class="study-list"></div>
+      <div id="review-box" class="review-box hidden">
+        <h4>复盘验证</h4>
+        <div id="review-questions"></div>
+        <button id="review-submit" class="primary">提交判分</button>
+      </div>
+    </section>
+
+    <!-- ========== 对话 Tab ========== -->
+    <section id="tab-chat" class="tab-panel">
+      <div id="chat-log" class="chat-log"></div>
+      <div class="chat-input-row">
+        <input id="chat-input" type="text" placeholder="问真白：找面经 / 讲题 / 开始模拟面试..." />
+        <button id="chat-send">➤</button>
+      </div>
+    </section>
+
+    <!-- ========== 爬取产出 Tab ========== -->
+    <section id="tab-crawl" class="tab-panel">
+      <div class="crawl-toolbar">
+        <button id="crawl-run" class="primary">🔍 开始爬取</button>
+        <button id="crawl-output" class="secondary">📁 打开输出目录</button>
+      </div>
+      <div class="crawl-progress" id="crawl-progress">暂无任务</div>
+      <div class="progress-wrap hidden" id="crawl-bar-wrap"><div class="progress-bar" id="crawl-bar"></div></div>
+      <h4>最近产出</h4>
+      <div id="file-list" class="file-list"></div>
+    </section>
+  </main>
+
+  <script src="panel.js"></script>
+</body>
+</html>

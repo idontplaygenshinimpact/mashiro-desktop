@@ -18,17 +18,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
 let win = null;
+let panelWin = null;
 let tray = null;
 let widgetProc = null; // 后端数据服务（widget.mjs）
 const WIDGET_URL = "http://127.0.0.1:8899";
 
-// ---------- 启动/复用后端 widget 服务 ----------
+// ---------- 启动/复用后端 widget 服务（含守护：死了自动拉起） ----------
 function ensureWidgetServer() {
-  // 探测 8899 是否已有服务；没有则拉起 widget.mjs
   fetch(`${WIDGET_URL}/api/refresh`)
-    .then((r) => {
-      if (!r.ok) throw new Error("bad status");
-    })
+    .then((r) => { if (!r.ok) throw new Error("bad status"); })
     .catch(() => {
       widgetProc = spawn("node", ["widget.mjs"], {
         cwd: ROOT,
@@ -40,6 +38,9 @@ function ensureWidgetServer() {
       console.log("[kanban] widget.mjs 已后台拉起");
     });
 }
+
+// 持续守护：每 30 秒探测，挂了自动重启
+setInterval(ensureWidgetServer, 30000);
 
 // ---------- 托盘图标（用字符画生成简单图标） ----------
 function createTrayIcon() {
@@ -122,7 +123,7 @@ function createTray() {
     { label: "📌 看板娘", enabled: false },
     { type: "separator" },
     { label: "显示/隐藏", click: () => { if (win) { win.isVisible() ? win.hide() : win.show(); } } },
-    { label: "打开面板", click: () => { if (win) { win.show(); win.webContents.send("open-panel"); } } },
+    { label: "打开面板", click: () => { createPanelWindow(); } },
     { label: "立即爬取", click: () => { win?.webContents.send("run-discover"); } },
     { label: "打开输出目录", click: () => { spawn("explorer", [path.join(ROOT, "output")], { detached: true }).unref(); } },
     { type: "separator" },
@@ -188,6 +189,11 @@ ipcMain.handle("widget:study-check", (e, { id, done }) => widgetGet(`/api/study-
 ipcMain.handle("widget:study-review", () => widgetPost("/api/study-review"));
 ipcMain.handle("widget:study-answer", (e, { answers }) => widgetPost("/api/study-answer", { answers }));
 
+// 模拟面试转发
+ipcMain.handle("interview:start", (e, cfg) => widgetPost("/api/interview/start", cfg || {}));
+ipcMain.handle("interview:answer", (e, { answer }) => widgetPost("/api/interview/answer", { answer }));
+ipcMain.handle("interview:end", () => widgetPost("/api/interview/end", {}));
+
 ipcMain.handle("widget:notify", async (e, { title, message }) => {
   // 系统通知（复用 node-notifier 同款 toast）
   try {
@@ -229,12 +235,13 @@ ipcMain.handle("window:speak", (e, { text }) => {
   return { ok: true };
 });
 
-// 渲染层模型加载完成后，通知主进程显示窗口（窗口尺寸已在创建时固定并锁定）
-ipcMain.handle("window:fit", async (e, { w, h }) => {
+// 渲染层模型加载完成后，通知主进程显示桌宠窗口（尺寸已固定锁定）
+ipcMain.handle("window:fit", async () => {
   if (!win) return { ok: false };
   win.showInactive(); // 不抢焦点（避免透明窗口 isFocused 永久 true 导致全屏不隐藏）
   // show 后延迟强制拉回一次（透明窗口 show 时 DWM 可能调整）
   setTimeout(() => {
+    if (!win || win.isDestroyed()) return;
     const { workArea } = screen.getPrimaryDisplay();
     win.setBounds({
       x: workArea.x + workArea.width - 240 - 12,
@@ -244,8 +251,46 @@ ipcMain.handle("window:fit", async (e, { w, h }) => {
     });
     win.setMinimumSize(240, 470);
     win.setMaximumSize(240, 470);
-    console.log("[kanban] window stabilized after show");
   }, 1200);
+  return { ok: true };
+});
+
+// ---------- 独立面板窗口（学习清单/模拟面试/对话/产出） ----------
+function createPanelWindow() {
+  if (panelWin && !panelWin.isDestroyed()) {
+    panelWin.show();
+    panelWin.focus();
+    return;
+  }
+  panelWin = new BrowserWindow({
+    width: 440,
+    height: 680,
+    minWidth: 380,
+    minHeight: 520,
+    title: "真白 · 前端秋招助手",
+    backgroundColor: "#171322",
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      additionalArguments: [
+        `--model-path=${path.join(ROOT, "node_modules", "live2d-widget-model-mashiro-zamp", "assets", "model", "Sakurasou", "mashiro", "ryoufuku.model.json")}`,
+        `--panel-window=1`,
+      ],
+    },
+  });
+  panelWin.loadFile(path.join(__dirname, "renderer", "panel.html"));
+  panelWin.on("closed", () => { panelWin = null; });
+}
+
+// 面板窗口开关（角色点击/托盘触发）
+ipcMain.handle("window:toggle-panel", () => {
+  if (panelWin && !panelWin.isDestroyed() && panelWin.isVisible()) {
+    panelWin.hide();
+  } else {
+    createPanelWindow();
+  }
   return { ok: true };
 });
 
@@ -286,10 +331,6 @@ function startDesktopScopeCheck() {
       // 注意：不用 isFocused() 豁免——透明窗口焦点状态不可靠（fit 时曾 focus 后永远 true）
       // 用户点击桌宠时它自然成为前台窗口（fg=normal 小窗口），不会误隐藏
       const shouldShow = fg !== "fullscreen" || panelOpen;
-      // 调试日志：每 5 次打印一次状态
-      if (++checkCount % 5 === 1) {
-        console.log(`[kanban] fg=${fg} panelOpen=${panelOpen} visible=${win.isVisible()} shouldShow=${shouldShow}`);
-      }
       if (shouldShow && !win.isVisible()) {
         win.showInactive();
         console.log("[kanban] 显示桌宠（前台:", fg + "）");
@@ -304,7 +345,6 @@ function startDesktopScopeCheck() {
     }
   }, 1000);
 }
-let checkCount = 0;
 
 // ---------- 生命周期 ----------
 app.whenReady().then(() => {

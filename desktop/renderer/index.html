@@ -16,54 +16,7 @@
   </div>
 
   <!-- 状态小圆点 -->
-  <div id="status-dot" title="点击角色查看面板"></div>
-
-  <!-- 信息面板 -->
-  <div id="panel" class="panel hidden">
-    <div class="panel-glow"></div>
-    <div class="panel-head">
-      <span class="panel-title">📌 mianshi-agent</span>
-      <div class="panel-actions">
-        <button id="btn-voice" title="语音开关">🔊</button>
-        <button id="btn-refresh" title="刷新">🔄</button>
-        <button id="btn-close" title="收起">✕</button>
-      </div>
-    </div>
-    <div class="panel-body">
-      <div class="section">
-        <h4>📋 优先学习清单 <button id="btn-study-gen" class="mini-btn" title="从产出生成清单">✨生成</button> <button id="btn-review" class="mini-btn" title="复盘验证学习效果">📝复盘</button></h4>
-        <div id="study-list"><div class="empty">未生成，点 ✨生成 从最新产出提炼</div></div>
-      </div>
-      <div class="section">
-        <h4>🔍 爬取进度</h4>
-        <div id="crawl-progress"><div class="empty">暂无任务</div></div>
-        <div id="crawl-bar-wrap" class="progress-wrap hidden"><div id="crawl-bar" class="progress-bar"></div></div>
-      </div>
-      <div class="section">
-        <h4>📚 今日学习计划</h4>
-        <div id="plan-list"><div class="empty">加载中...</div></div>
-      </div>
-      <div class="section">
-        <h4>🆕 最新产出</h4>
-        <div id="file-list"><div class="empty">加载中...</div></div>
-      </div>
-    </div>
-    <div class="panel-foot">
-      <button id="btn-run" class="primary">🔍 开始爬取</button>
-      <button id="btn-output">📁 输出目录</button>
-      <button id="btn-quit">退出</button>
-    </div>
-    <!-- 复盘问答区（隐藏，点复盘弹出） -->
-    <div id="review-box" class="review-box hidden">
-      <div class="review-head">📝 复盘验证 <button id="review-close">✕</button></div>
-      <div id="review-questions"></div>
-    </div>
-    <!-- 对话输入条 -->
-    <div id="chat-bar" class="chat-bar">
-      <input id="chat-input" type="text" placeholder="问真白：找面经 / 讲题 / 查秋招..." />
-      <button id="chat-send">➤</button>
-    </div>
-  </div>
+  <div id="status-dot" title="点击角色打开面板"></div>
 
   <!-- Cubism 2.1 runtime：必须先于 bundle 加载（提供全局 Live2D 对象） -->
   <script src="lib/live2d.min.js"></script>
