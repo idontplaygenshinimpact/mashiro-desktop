@@ -17,6 +17,7 @@
   <!-- Tab 导航 -->
   <nav class="tabs">
     <button class="tab active" data-tab="interview">🎤 模拟面试</button>
+    <button class="tab" data-tab="review">🔁 复习</button>
     <button class="tab" data-tab="study">📋 学习清单</button>
     <button class="tab" data-tab="chat">💬 对话</button>
     <button class="tab" data-tab="crawl">🔍 爬取产出</button>
@@ -61,6 +62,24 @@
         <div class="iv-log" id="iv-log"></div>
         <div class="iv-review hidden" id="iv-review"></div>
       </div>
+    </section>
+
+    <!-- ========== 复习 Tab ========== -->
+    <section id="tab-review" class="tab-panel">
+      <div class="review-stats" id="review-stats"></div>
+      <div id="review-card" class="review-card hidden">
+        <div class="rc-topic" id="rc-topic"></div>
+        <div class="rc-question" id="rc-question"></div>
+        <div class="rc-answer hidden" id="rc-answer"></div>
+        <button id="rc-show" class="secondary">显示答案</button>
+        <div class="rc-buttons hidden" id="rc-buttons">
+          <button class="rc-btn" data-rating="0">😵 忘了</button>
+          <button class="rc-btn" data-rating="1">😕 困难</button>
+          <button class="rc-btn" data-rating="2">🙂 记得</button>
+          <button class="rc-btn" data-rating="3">😄 简单</button>
+        </div>
+      </div>
+      <div id="review-empty" class="empty-hint">🎉 今日没有到期的复习卡片</div>
     </section>
 
     <!-- ========== 学习清单 Tab ========== -->

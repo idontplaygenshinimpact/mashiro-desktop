@@ -90,6 +90,21 @@ input:focus, select:focus, textarea:focus { border-color: rgba(168,138,240,0.6);
   white-space: pre-wrap; max-height: 300px; overflow-y: auto;
 }
 
+/* ===== 复习 ===== */
+.review-stats { display: flex; gap: 8px; margin-bottom: 12px; }
+.stat-chip { background: #2a2540; border: 1px solid rgba(168,138,240,0.2); border-radius: 8px; padding: 8px 12px; font-size: 12px; }
+.stat-chip b { color: #ffd98a; font-size: 16px; }
+.review-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(168,138,240,0.2); border-radius: 12px; padding: 14px; }
+.rc-topic { font-size: 12px; color: #ffd98a; font-weight: 600; margin-bottom: 8px; }
+.rc-question { font-size: 14px; line-height: 1.7; margin-bottom: 10px; white-space: pre-wrap; }
+.rc-answer { font-size: 12px; color: #b8b8cc; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; margin-bottom: 10px; white-space: pre-wrap; }
+.rc-buttons { display: flex; gap: 6px; margin-top: 10px; }
+.rc-btn { flex: 1; padding: 8px 0; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; background: #3a3a58; color: #e8e8ef; }
+.rc-btn:hover { background: #4a4a6a; }
+.rc-btn[data-rating="3"] { background: #3a5a4a; }
+.rc-btn[data-rating="0"] { background: #5a3a3a; }
+.empty-hint { color: #7c7c7c; font-size: 13px; text-align: center; padding: 30px 0; }
+
 /* ===== 学习清单 ===== */
 .study-toolbar { display: flex; gap: 8px; }
 .study-item {

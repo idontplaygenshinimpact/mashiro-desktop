@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld("kanban", {
   invStart: (cfg) => ipcRenderer.invoke("interview:start", cfg),
   invAnswer: (answer) => ipcRenderer.invoke("interview:answer", { answer }),
   invEnd: () => ipcRenderer.invoke("interview:end"),
+  // 复习
+  reviewDue: () => ipcRenderer.invoke("review:due"),
+  reviewSubmit: (id, rating) => ipcRenderer.invoke("review:submit", { id, rating }),
   runDiscover: () => ipcRenderer.invoke("widget:run-discover"),
   quit: () => ipcRenderer.invoke("window:quit"),
   openOutput: () => ipcRenderer.invoke("window:open-output"),

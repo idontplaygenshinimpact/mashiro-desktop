@@ -13,6 +13,7 @@ import { config } from "./config.mjs";
 import * as studyApi from "./lib/study.mjs";
 import { chatWithAgent } from "./lib/agent.mjs";
 import { startInterview, submitAnswer, endInterview } from "./lib/interview.mjs";
+import * as reviewApi from "./lib/review.mjs";
 
 const PORT = 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -148,11 +149,14 @@ async function checkStudyReminder() {
     const plan = getStudyPlan();
     const bishiCount = plan.bishi.length;
     const mianshiCount = plan.mianshi.length;
+    // 到期复习卡片数
+    let dueCount = 0;
+    try { dueCount = reviewApi.review.getDueCards().length; } catch { /* ignore */ }
     console.log(`[widget] 学习提醒触发 ${h}:00`);
+    const dueText = dueCount > 0 ? `，还有 ${dueCount} 张复习卡片到期` : "";
     await sendNotification(
       "📚 面经笔试学习时间",
-      `今天建议：笔试 ${bishiCount} 篇 + 面经 ${mianshiCount} 篇\n在 output 目录看最新合集`,
-      { wait: false }
+      `今天建议：笔试 ${bishiCount} 篇 + 面经 ${mianshiCount} 篇${dueText}\n在面板「复习」Tab 完成到期卡片`
     );
   }
 }
@@ -247,8 +251,10 @@ const server = createServer((req, res) => {
     try {
       progress = JSON.parse(readFileSync(path.join(config.outputDir, "..", "progress.json"), "utf8"));
     } catch { /* ignore */ }
+    let reviewStats = { total: 0, due: 0 };
+    try { reviewStats = reviewApi.review.getStats(); } catch { /* ignore */ }
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ ok: true, plan, files, outputs, progress, time: new Date().toISOString() }));
+    res.end(JSON.stringify({ ok: true, plan, files, outputs, progress, review: reviewStats, time: new Date().toISOString() }));
     return;
   }
   if (url.pathname === "/api/chat") {
@@ -377,6 +383,29 @@ const server = createServer((req, res) => {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
       });
+    return;
+  }
+  if (url.pathname === "/api/review/due") {
+    // 今日到期复习卡片
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: true, due: reviewApi.review.getDailySession(), stats: reviewApi.review.getStats() }));
+    return;
+  }
+  if (url.pathname === "/api/review/submit") {
+    // 复习提交评级 0-3
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { id, rating } = JSON.parse(body || "{}");
+        const r = reviewApi.review.reviewCard(id, parseInt(rating, 10) || 2);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
     return;
   }
   if (url.pathname === "/api/refresh") {

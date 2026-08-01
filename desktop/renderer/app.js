@@ -140,11 +140,51 @@ canvas.addEventListener("pointermove", (e) => {
 canvas.addEventListener("pointerup", (e) => {
   dragging = false;
   canvas.style.cursor = "grab";
-  // 短按且没移动 = 点击角色 → 打开面板
+  // 短按且没移动 = 点击角色 → 检查命中的部位（人设反应）或打开面板
   if (!moved && Date.now() - downAt < 400) {
-    togglePanel();
+    handleClick(e);
   }
 });
+
+// ---------- 点击部位反应（真白人设） ----------
+const MASHIRO_REACTIONS = {
+  head: ["……嗯？有人在摸我的头。像在画布上轻轻扫了一层底色。", "……头被摸了。会分心。不过……不讨厌。"],
+  face: ["……戳脸的话，颜料会花的。", "……脸。不要戳。会画歪的。"],
+  body: ["……不要乱动。我还在想构图。", "……嗯。你在我旁边。"],
+  hand: ["这双手……是用来画画的。你要看吗？", "……手。握画笔的地方有茧。"],
+  default: ["……空太？", "……嗯。我在。", "……今天画什么好呢。"],
+};
+
+let lastTapTs = 0, tapCount = 0;
+async function handleClick(e) {
+  // 检查是否命中模型部位
+  let hitArea = null;
+  try {
+    if (model?.internalModel?.hitTest) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const hits = model.internalModel.hitTest(x, y);
+      if (hits?.length) hitArea = hits[0];
+    }
+  } catch { /* ignore */ }
+
+  // 连击检测（3秒内3次 → 情绪峰值）
+  const now = Date.now();
+  if (now - lastTapTs < 3000) tapCount++; else tapCount = 1;
+  lastTapTs = now;
+
+  let reaction;
+  if (tapCount >= 3) {
+    reaction = "……你，很无聊吗？我可以分你一支画笔。";
+  } else {
+    const pool = MASHIRO_REACTIONS[hitArea] || MASHIRO_REACTIONS.default;
+    reaction = pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  showBubble(reaction, 5000);
+  if (voiceOn) window.kanban.speak(reaction);
+}
 
 // ---------- 气泡 ----------
 let bubbleTimer = null;
@@ -403,6 +443,32 @@ function rememberFiles(files) {
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+
+// ============ 时间问候（一天一次） ============
+const TIME_GREETINGS = [
+  { range: [5, 10], text: "……早。我还没想好今天画什么。你呢？" },
+  { range: [10, 18], text: "光线不错。适合画素描……也适合学习。" },
+  { range: [18, 20], text: "……天要暗了。该收画笔了。你收工了吗？" },
+  { range: [20, 23], text: "……这么晚还醒着。记得早点睡。" },
+  { range: [0, 5], text: "……夜晚的颜色其实很好看。但你该睡了。" },
+];
+
+function maybeTimeGreeting() {
+  try {
+    const h = new Date().getHours();
+    const g = TIME_GREETINGS.find((x) => h >= x.range[0] && h < x.range[1]);
+    if (!g) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const key = "mashiro-greeting-" + today;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, g.text);
+    setTimeout(() => {
+      showBubble(g.text, 8000);
+      if (voiceOn) window.kanban.speak(g.text);
+    }, 4000);
+  } catch { /* ignore */ }
+}
+setTimeout(maybeTimeGreeting, 6000);
 
 // ---------- 爬取进度轮询（桌宠展示 + 完成提示） ----------
 let crawlState = { status: "idle" };

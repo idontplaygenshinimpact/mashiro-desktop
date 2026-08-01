@@ -10,6 +10,7 @@ document.querySelectorAll(".tab").forEach((btn) => {
     document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
     if (btn.dataset.tab === "study") loadStudyPlan();
     if (btn.dataset.tab === "crawl") loadCrawlData();
+    if (btn.dataset.tab === "review") loadReview();
   });
 });
 
@@ -116,7 +117,55 @@ function addIvLog(text) {
   log.scrollTop = log.scrollHeight;
 }
 
-// ============ 学习清单 ============
+// ============ 复习（FSRS 间隔重复） ============
+let reviewQueue = [];
+let reviewIdx = 0;
+
+async function loadReview() {
+  const r = await window.kanban.reviewDue();
+  if (!r?.ok) return;
+  const stats = r.stats || {};
+  $("review-stats").innerHTML = `
+    <div class="stat-chip">总卡片 <b>${stats.total || 0}</b></div>
+    <div class="stat-chip">今日到期 <b>${stats.due || 0}</b></div>
+    <div class="stat-chip">已掌握 <b>${stats.mastered || 0}</b></div>`;
+  reviewQueue = r.due || [];
+  reviewIdx = 0;
+  if (reviewQueue.length) {
+    $("review-empty").classList.add("hidden");
+    showReviewCard();
+  } else {
+    $("review-card").classList.add("hidden");
+    $("review-empty").classList.remove("hidden");
+  }
+}
+
+function showReviewCard() {
+  const card = reviewQueue[reviewIdx];
+  if (!card) { loadReview(); return; }
+  $("rc-topic").textContent = "🔁 " + card.topic;
+  $("rc-question").textContent = card.question || card.topic;
+  $("rc-answer").textContent = card.answer || "";
+  $("rc-answer").classList.add("hidden");
+  $("rc-show").classList.remove("hidden");
+  $("rc-buttons").classList.add("hidden");
+}
+
+$("rc-show").addEventListener("click", () => {
+  $("rc-answer").classList.remove("hidden");
+  $("rc-show").classList.add("hidden");
+  $("rc-buttons").classList.remove("hidden");
+});
+
+document.querySelectorAll(".rc-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const card = reviewQueue[reviewIdx];
+    await window.kanban.reviewSubmit(card.id, parseInt(btn.dataset.rating, 10));
+    reviewIdx++;
+    if (reviewIdx < reviewQueue.length) showReviewCard();
+    else loadReview(); // 复习完一轮刷新
+  });
+});
 async function loadStudyPlan() {
   const r = await window.kanban.studyPlan();
   if (!r?.ok) return;

@@ -194,6 +194,10 @@ ipcMain.handle("interview:start", (e, cfg) => widgetPost("/api/interview/start",
 ipcMain.handle("interview:answer", (e, { answer }) => widgetPost("/api/interview/answer", { answer }));
 ipcMain.handle("interview:end", () => widgetPost("/api/interview/end", {}));
 
+// 复习转发
+ipcMain.handle("review:due", () => widgetGet("/api/review/due"));
+ipcMain.handle("review:submit", (e, { id, rating }) => widgetPost("/api/review/submit", { id, rating }));
+
 ipcMain.handle("widget:notify", async (e, { title, message }) => {
   // 系统通知（复用 node-notifier 同款 toast）
   try {
