@@ -14,6 +14,7 @@ import * as studyApi from "./lib/study.mjs";
 import { chatWithAgent } from "./lib/agent.mjs";
 import { startInterview, submitAnswer, endInterview } from "./lib/interview.mjs";
 import * as reviewApi from "./lib/review.mjs";
+import { pick as pickEmotion, EMOTIONS } from "./lib/emotions.mjs";
 
 const PORT = 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -301,12 +302,17 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/study-check") {
-    // 勾选完成
+    // 勾选完成 → 返回真白情感反馈（庆祝/取消）
     try {
       const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
-      const r = studyApi.checkItem(u.searchParams.get("id"), u.searchParams.get("done") === "1");
+      const done = u.searchParams.get("done") === "1";
+      const r = studyApi.checkItem(u.searchParams.get("id"), done);
+      let emotion = null;
+      try {
+        emotion = done ? pickEmotion(EMOTIONS.celebrate) : "……嗯，那先放着。";
+      } catch { /* ignore */ }
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(r));
+      res.end(JSON.stringify({ ...r, emotion }));
     } catch (e) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
@@ -399,8 +405,17 @@ const server = createServer((req, res) => {
       try {
         const { id, rating } = JSON.parse(body || "{}");
         const r = reviewApi.review.reviewCard(id, parseInt(rating, 10) || 2);
+        // 答错（Again/Hard）→ 真白安慰
+        let emotion = null;
+        try {
+          if ((parseInt(rating, 10) || 2) <= 1) {
+            emotion = pickEmotion(EMOTIONS.comfort);
+          } else if ((parseInt(rating, 10) || 2) >= 2 && r.card && r.card.fsrs && r.card.fsrs.stability >= 21) {
+            emotion = pickEmotion(EMOTIONS.celebrate);
+          }
+        } catch { /* ignore */ }
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(r));
+        res.end(JSON.stringify({ ...r, emotion }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));

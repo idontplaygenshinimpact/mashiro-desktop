@@ -160,7 +160,12 @@ $("rc-show").addEventListener("click", () => {
 document.querySelectorAll(".rc-btn").forEach((btn) => {
   btn.addEventListener("click", async () => {
     const card = reviewQueue[reviewIdx];
-    await window.kanban.reviewSubmit(card.id, parseInt(btn.dataset.rating, 10));
+    const r = await window.kanban.reviewSubmit(card.id, parseInt(btn.dataset.rating, 10));
+    // 真白情感反馈
+    if (r?.emotion) {
+      window.kanban.notify("🎀 真白", r.emotion);
+      if (voiceOn) window.kanban.speak(r.emotion);
+    }
     reviewIdx++;
     if (reviewIdx < reviewQueue.length) showReviewCard();
     else loadReview(); // 复习完一轮刷新
@@ -186,7 +191,12 @@ async function loadStudyPlan() {
     </div>`).join("");
   list.querySelectorAll(".study-item").forEach((el) => {
     el.querySelector("input").addEventListener("change", async (e) => {
-      await window.kanban.studyCheck(el.dataset.id, e.target.checked);
+      const r = await window.kanban.studyCheck(el.dataset.id, e.target.checked);
+      // 真白情感反馈（庆祝/安慰）+ 语音
+      if (r?.emotion) {
+        window.kanban.notify("🎀 真白", r.emotion);
+        if (voiceOn) window.kanban.speak(r.emotion);
+      }
       loadStudyPlan();
     });
   });
