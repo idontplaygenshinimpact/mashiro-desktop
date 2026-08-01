@@ -379,6 +379,47 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`   Ctrl+C 停止`);
 });
 
+// ============ 主动推送：按关注点定时巡检新内容 ============
+import { memory } from "./lib/memory.mjs";
+
+// 巡检间隔：30 分钟一次（避免频繁请求）
+const PATROL_INTERVAL = 30 * 60 * 1000;
+
+async function patrolInterests() {
+  const interests = memory.getInterests();
+  if (!interests.length) return;
+  try {
+    const { chatWithAgent } = { chatWithAgent: null }; // 避免循环依赖，直接调 search
+    const { fetchPage } = await import("./lib/fetch-page.mjs");
+    const re = /(\/discuss\/\d+|\/post\/\d+|\/article\/details\/\d+|juejin\.cn\/post\/\d+|blog\.csdn\.net\/[^/]+\/article\/details\/\d+)/;
+    const newPosts = [];
+    // 取前 2 个关注点，各搜一个站
+    for (const topic of interests.slice(0, 2)) {
+      const url = `https://www.nowcoder.com/discuss?type=2&query=${encodeURIComponent(topic)}`;
+      try {
+        const page = await fetchPage(url, { maxTextChars: 1500, collectLinks: true });
+        for (const l of page.links) {
+          if (re.test(l.href) && l.text.length > 8) {
+            const clean = l.href.replace(/[?&]searchId=[^&]*/g, "").split("?")[0];
+            if (!memory.isSeen(clean)) {
+              newPosts.push({ title: l.text.slice(0, 50), url: clean, topic });
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    if (newPosts.length) {
+      const names = newPosts.slice(0, 3).map((p) => p.title.slice(0, 20)).join("、");
+      console.log(`[widget] 巡检发现 ${newPosts.length} 条新内容（关注点 ${interests.slice(0, 2).join("、")}）`);
+      await sendNotification("🆕 真白发现新面经", `${names}${newPosts.length > 3 ? ` 等 ${newPosts.length} 条` : ""}\n在桌宠对话里说"看看"即可查看`);
+    }
+  } catch { /* ignore */ }
+}
+
+// 启动巡检（首次 5 分钟后，之后每 30 分钟）
+setTimeout(() => patrolInterests(), 5 * 60 * 1000);
+setInterval(patrolInterests, PATROL_INTERVAL);
+
 // ============ 周期任务 ============
 
 // 初始扫描（不通知）

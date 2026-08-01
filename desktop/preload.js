@@ -1,6 +1,8 @@
 // preload：安全桥接 IPC
 const { contextBridge, ipcRenderer } = require("electron");
 
+let voiceEnabled = true; // 语音开关（渲染层可切换）
+
 // 从启动参数读取模型路径
 const modelArg = process.argv.find((a) => a.startsWith("--model-path="));
 const modelPath = modelArg ? modelArg.split("=").slice(1).join("=") : "";
@@ -19,6 +21,9 @@ contextBridge.exposeInMainWorld("kanban", {
   runDiscover: () => ipcRenderer.invoke("widget:run-discover"),
   quit: () => ipcRenderer.invoke("window:quit"),
   openOutput: () => ipcRenderer.invoke("window:open-output"),
+  speak: (text) => ipcRenderer.invoke("window:speak", { text }),
+  setVoiceEnabled: (on) => { voiceEnabled = !!on; },
+  isVoiceEnabled: () => voiceEnabled,
   setPanelState: (open) => ipcRenderer.invoke("window:panel-state", { open }),
   fitWindow: (w, h) => ipcRenderer.invoke("window:fit", { w, h }),
   moveWindow: (x, y) => ipcRenderer.invoke("window:move", { x, y }),

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
+    "edge-tts": "^1.0.1",
     "jsdom": "^29.1.1",
     "koffi": "^3.1.4",
     "live2d-widget-model-mashiro-seifuku": "^1.0.1",

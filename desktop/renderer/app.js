@@ -178,6 +178,16 @@ function togglePanel() {
 
 document.getElementById("btn-close").addEventListener("click", () => panel.classList.add("hidden"));
 document.getElementById("btn-refresh").addEventListener("click", () => { loadData(); showBubble("🔄 已刷新"); });
+
+// 语音开关（默认开）
+let voiceOn = true;
+const voiceBtn = document.getElementById("btn-voice");
+voiceBtn.addEventListener("click", () => {
+  voiceOn = !voiceOn;
+  window.kanban.setVoiceEnabled(voiceOn);
+  voiceBtn.textContent = voiceOn ? "🔊" : "🔇";
+  showBubble(voiceOn ? "🔊 语音已开启，真白会开口说话啦" : "🔇 语音已关闭", 3000);
+});
 document.getElementById("btn-run").addEventListener("click", async () => {
   await window.kanban.runDiscover();
   showBubble("🔍 已开始爬取，稍后我会提醒你新产出~", 6000);
@@ -302,6 +312,10 @@ async function sendChat() {
   try {
     const r = await window.kanban.chat(msg, chatHistory);
     chatHistory = r.history || [];
+    // 语音播报（真白人设语音稿）
+    if (r.voice && voiceOn) {
+      window.kanban.speak(r.voice);
+    }
     // 打字机效果：逐字显示回复
     typewriter("💬 " + (r.reply || "（无回复）"));
   } catch (e) {

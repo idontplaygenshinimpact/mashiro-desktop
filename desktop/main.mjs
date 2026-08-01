@@ -4,6 +4,7 @@ import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage } from "el
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, exec } from "node:child_process";
+import { writeFileSync } from "node:fs";
 
 // ---------- 启动加速 ----------
 // 注意：透明窗口 + disable-gpu 会导致窗口不渲染（看不到）。
@@ -208,6 +209,23 @@ ipcMain.handle("window:quit", () => app.quit());
 // 打开输出目录（explorer）
 ipcMain.handle("window:open-output", () => {
   spawn("explorer", [path.join(ROOT, "output")], { detached: true }).unref();
+  return { ok: true };
+});
+
+// 语音播放：pwsh + System.Speech 中文 TTS（脚本文件方式，避免命令行转义）
+// 语音文本按"真白人设"由 agent 生成后传入
+ipcMain.handle("window:speak", (e, { text }) => {
+  if (!text || !String(text).trim()) return { ok: false };
+  try {
+    // 文本写入临时文件（UTF-8），ps1 读取（避免特殊字符转义问题）
+    const tmpFile = path.join(app.getPath("temp"), "mashiro-tts.txt");
+    writeFileSync(tmpFile, String(text).slice(0, 200), "utf8");
+    spawn(
+      "pwsh",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(__dirname, "speak.ps1"), "-TextFile", tmpFile],
+      { windowsHide: true, detached: true, stdio: "ignore" }
+    ).unref();
+  } catch { /* ignore */ }
   return { ok: true };
 });
 
