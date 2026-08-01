@@ -1,0 +1,29 @@
+{
+  "name": "mianshi-agent",
+  "version": "0.1.0",
+  "description": "面经/招聘采集 + AI 完整讲解工具：Playwright 抓页 → 通用正文提取 → DeepSeek 判断与解答 → Markdown 归档",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "run": "node run.mjs",
+    "cron": "node cron.mjs"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "jsdom": "^29.1.1",
+    "koffi": "^3.1.4",
+    "live2d-widget-model-mashiro-seifuku": "^1.0.1",
+    "live2d-widget-model-mashiro-zamp": "^1.0.0",
+    "live2d-widget-model-shizuku": "^1.0.5",
+    "node-cron": "^4.6.0",
+    "node-notifier": "^10.0.1",
+    "pixi-live2d-display": "^0.4.0",
+    "pixi.js": "^6.5.10",
+    "playwright": "^1.62.1",
+    "pngjs": "^7.0.0"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0",
+    "esbuild": "^0.28.1"
+  }
+}

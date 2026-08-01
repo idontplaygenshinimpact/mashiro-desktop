@@ -1,0 +1,24 @@
+# 依赖
+node_modules/
+
+# 密钥（绝不提交）
+.env
+
+# 数据/产出/日志
+data/
+output/
+progress.json
+widget-run.log
+*.log
+
+# 构建产物 / 调试 / 第三方 runtime
+desktop/renderer/app.bundle.js
+desktop/renderer/test-direct.html
+desktop/renderer/lib/
+
+# 系统文件
+Thumbs.db
+.DS_Store
+
+# 临时
+*.tmp
