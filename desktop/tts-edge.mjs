@@ -46,15 +46,3 @@ $p.Close()`;
     spawn("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", psFile], { windowsHide: true, detached: true, stdio: "ignore" }).unref();
   }
 }
-
-// 清理 10 分钟前的旧 mp3
-export function cleanup() {
-  try {
-    const now = Date.now();
-    for (const f of require("node:fs").readdirSync(TMP_DIR)) {
-      const fp = path.join(TMP_DIR, f);
-      const st = require("node:fs").statSync(fp);
-      if (now - st.mtimeMs > 10 * 60 * 1000) require("node:fs").unlinkSync(fp);
-    }
-  } catch { /* ignore */ }
-}

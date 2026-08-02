@@ -1,3 +1,4 @@
-﻿# 重跑截断的两篇（max_tokens 已提高到 24000）
-https://www.nowcoder.com/discuss/911382260387962880
-https://www.nowcoder.com/discuss/910652558140530688
+﻿# 手动模式输入：每行一个 URL（node run.mjs 或 npm run run 处理）
+# 示例：
+# https://www.nowcoder.com/discuss/123456789012345678
+# https://juejin.cn/post/1234567890123456789

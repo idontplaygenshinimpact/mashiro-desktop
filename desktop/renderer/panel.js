@@ -534,6 +534,19 @@ async function loadCrawlData() {
         <span style="color:#6c6c7c;font-size:10px">${esc(f.dir || "")}</span>
       </div>`).join("")
     : '<div style="color:#7c7c7c;font-size:12px">暂无产出</div>';
+  // 今日推荐（笔试/面经轮转建议）
+  const reco = r.plan || {};
+  const recoItems = [...(reco.bishi || []).map((f) => ({ ...f, tag: "笔试" })), ...(reco.mianshi || []).map((f) => ({ ...f, tag: "面经" }))];
+  if (recoItems.length) {
+    $("today-reco").classList.remove("hidden");
+    $("today-reco-body").innerHTML = recoItems.map((f) => `
+      <div class="file-item">
+        <span class="tag reco-${f.tag === "笔试" ? "bishi" : "mianshi"}">${f.tag}</span>
+        <span class="t">${esc(f.title || f.file || "")}</span>
+      </div>`).join("");
+  } else {
+    $("today-reco").classList.add("hidden");
+  }
   // 使用统计（对话/复习/面试）
   try {
     const s = await window.kanban.getStats();

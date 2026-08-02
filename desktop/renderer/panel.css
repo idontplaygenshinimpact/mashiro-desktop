@@ -307,3 +307,7 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .iv-hist-head { font-size: 12px; font-weight: 600; color: #4a3a9d; display: flex; justify-content: space-between; }
 .iv-hist-score { font-size: 11px; color: #3a8a5a; font-weight: 700; }
 .iv-hist-report { font-size: 11px; color: #6a6790; margin-top: 4px; line-height: 1.5; }
+.today-reco { margin-top: 4px; }
+.today-reco h4 { margin-top: 10px; }
+.reco-bishi { background: rgba(200, 160, 60, 0.15) !important; color: #9a7a2a !important; }
+.reco-mianshi { background: rgba(60, 160, 100, 0.15) !important; color: #3a8a5a !important; }

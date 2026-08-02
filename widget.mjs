@@ -212,79 +212,6 @@ async function checkStudyReminder() {
   }
 }
 
-// ============ 面板 HTML ============
-
-function renderPanel() {
-  const outputs = latestOutputs(10);
-  const files = scanNewestFiles(15);
-  const plan = getStudyPlan();
-  const trends = files.slice(0, 8).map((f) => {
-    const { company, title } = parseTitle(f.file);
-    return `<div class="trend">
-      <span class="tag">${company}</span>
-      <span class="t">${title.slice(0, 30)}</span>
-      <span class="d">${f.dir}</span>
-    </div>`;
-  }).join("");
-
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<title>mianshi-agent</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; font-family: "Microsoft YaHei", sans-serif; }
-  body { background: rgba(18,18,24,0.92); color:#e8e8ef; padding:14px; width: 340px; }
-  .logo { font-size:16px; font-weight:700; color:#fff; margin-bottom:10px; display:flex; justify-content:space-between; }
-  .logo span { color:#7c7c8c; font-size:12px; font-weight:400; }
-  .card { background:rgba(255,255,255,0.06); border-radius:10px; padding:10px 12px; margin-bottom:10px; }
-  .card h3 { font-size:13px; color:#9d9dff; margin-bottom:6px; }
-  .trend { display:flex; align-items:center; gap:8px; font-size:12px; padding:3px 0; }
-  .tag { background:#3a3a55; color:#c6c6ff; border-radius:4px; padding:1px 6px; font-size:11px; white-space:nowrap; }
-  .t { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .d { color:#6c6c7c; font-size:10px; }
-  .plan-item { font-size:12px; padding:3px 0; color:#d8d8e8; }
-  .plan-item b { color:#ffd98a; font-weight:600; }
-  .empty { color:#6c6c7c; font-size:12px; padding:4px 0; }
-  .footer { color:#5c5c6c; font-size:10px; text-align:center; margin-top:4px; }
-  .btn { background:#3a3a55; border:none; color:#fff; border-radius:6px; padding:4px 10px; font-size:11px; cursor:pointer; margin-right:6px; }
-  .btn:hover { background:#4a4a6a; }
-  .actions { display:flex; margin-bottom:8px; }
-</style>
-</head>
-<body>
-  <div class="logo">📌 mianshi-agent <span>${new Date().toLocaleString("zh-CN")}</span></div>
-  <div class="actions">
-    <button class="btn" onclick="fetch('/api/refresh').then(()=>location.reload())">立即刷新</button>
-    <button class="btn" onclick="fetch('/api/notify-test')">测试通知</button>
-    <button class="btn" onclick="fetch('/api/run-discover').then(()=>location.reload())">开始爬取</button>
-  </div>
-
-  <div class="card">
-    <h3>📚 今日学习计划（${plan.date}）</h3>
-    ${plan.bishi.length || plan.mianshi.length ? "" : '<div class="empty">还没有产出，先跑一次爬取吧</div>'}
-    ${plan.bishi.map((f) => `<div class="plan-item">✏️ <b>笔试</b> ${parseTitle(f.file).company} · ${parseTitle(f.file).title.slice(0, 24)}</div>`).join("")}
-    ${plan.mianshi.map((f) => `<div class="plan-item">💬 <b>面经</b> ${parseTitle(f.file).company} · ${parseTitle(f.file).title.slice(0, 24)}</div>`).join("")}
-  </div>
-
-  <div class="card">
-    <h3>🆕 最新产出 / 趋势</h3>
-    ${trends || '<div class="empty">暂无产出</div>'}
-  </div>
-
-  <div class="card">
-    <h3>📂 输出目录</h3>
-    ${outputs.map((o) => `<div class="trend"><span class="d">${o.dir}</span><span class="d">${o.mtime.toLocaleString("zh-CN")}</span></div>`).join("")}
-  </div>
-
-  <div class="footer">自动刷新中 · 学习提醒 ${STUDY_HOURS.join(":00 / ")}:00 · 通知可用</div>
-  <script>
-    setInterval(() => { fetch('/api/refresh').then(() => location.reload()); }, 60000);
-  </script>
-</body>
-</html>`;
-}
-
 // ============ HTTP 服务 ============
 
 const server = createServer((req, res) => {
@@ -659,12 +586,24 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/" || url.pathname === "/index.html") {
+    // 最小状态页（健康检查/浏览器访问）：真实 UI 在 Electron 面板
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(renderPanel());
+    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>mianshi-agent 服务</title></head>
+<body style="font-family:sans-serif;background:#121218;color:#e8e8ef;padding:20px">
+<h3>📌 mianshi-agent 数据服务运行中</h3>
+<p>完整面板在桌宠（双击真白打开）。此页面仅供健康检查。</p>
+<p>状态: <span style="color:#5fd85f">OK</span> · ${new Date().toLocaleString("zh-CN")}</p>
+</body></html>`);
     return;
   }
   res.writeHead(404); res.end("Not Found");
 });
+
+// 启动自检：key 缺失/格式异常时明确报错退出（避免静默运行全部 LLM 调用失败）
+try {
+  const { assertConfig } = await import("./config.mjs");
+  assertConfig();
+} catch (e) { /* config.mjs 无此导出时忽略 */ }
 
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`✅ 桌面小组件已启动: http://127.0.0.1:${PORT}`);
