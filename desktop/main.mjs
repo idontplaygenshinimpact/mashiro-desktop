@@ -1,9 +1,9 @@
 // 看板娘 Electron 主进程
 // 透明无边框窗口 + 置顶 + 拖拽 + 系统托盘
-import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage } from "electron";
+import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn, exec } from "node:child_process";
+import { spawn, exec, spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 
 // ---------- 启动加速 ----------
@@ -68,7 +68,7 @@ function createTrayIcon() {
 function createWindow() {
   const { workArea } = screen.getPrimaryDisplay();
   // 固定窗口尺寸（创建即锁定，绝不做 setSize——透明窗口 setSize 会被系统二次调整导致"长按增大"）
-  const W = 240, H = 470;
+  const W = 220, H = 360;
   console.log(`[kanban] workArea: x=${workArea.x} y=${workArea.y} w=${workArea.width} h=${workArea.height}`);
   const winX = workArea.x + workArea.width - W - 12;
   const winY = workArea.y + workArea.height - H - 12;
@@ -124,7 +124,7 @@ function createTray() {
     { type: "separator" },
     { label: "显示/隐藏", click: () => { if (win) { win.isVisible() ? win.hide() : win.show(); } } },
     { label: "打开面板", click: () => { createPanelWindow(); } },
-    { label: "立即爬取", click: () => { win?.webContents.send("run-discover"); } },
+    { label: "立即爬取", click: () => { widgetPost("/api/run-discover", {}).catch(() => {}); } },
     { label: "打开输出目录", click: () => { spawn("explorer", [path.join(ROOT, "output")], { detached: true }).unref(); } },
     { type: "separator" },
     { label: "退出", click: () => { app.quit(); } },
@@ -184,6 +184,8 @@ async function widgetGet(pathname) {
 }
 ipcMain.handle("widget:chat", (e, { message, history }) => widgetPost("/api/chat", { message, history }));
 ipcMain.handle("widget:study-plan", () => widgetGet("/api/study-plan"));
+ipcMain.handle("widget:interview-history", () => widgetGet("/api/interview/history"));
+ipcMain.handle("widget:stats", () => widgetGet("/api/stats"));
 ipcMain.handle("widget:study-detail", (e, { id }) => widgetGet(`/api/study-detail?id=${encodeURIComponent(id)}`));
 // 流式讲解：main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）
 ipcMain.handle("widget:study-detail-stream", async (e, { id }) => {
@@ -252,7 +254,6 @@ ipcMain.handle("window:quit", () => app.quit());
 ipcMain.handle("window:open-file", (e, { filePath }) => {
   if (!filePath) return { ok: false, error: "no path" };
   try {
-    const { shell } = require("electron");
     shell.openPath(String(filePath));
     return { ok: true };
   } catch (err) {
@@ -300,7 +301,6 @@ ipcMain.handle("window:speak", async (e, { text }) => {
       } catch { /* ignore */ }
     };
     try {
-      const { spawnSync } = require("node:child_process");
       const probe = spawnSync("pwsh", ["-NoProfile", "-Command", "exit 0"], { timeout: 3000, windowsHide: true });
       if (probe.status === 0) { run("pwsh"); return { ok: true, engine: "pwsh" }; }
     } catch { /* ignore */ }
@@ -319,13 +319,13 @@ ipcMain.handle("window:fit", async () => {
     if (!win || win.isDestroyed()) return;
     const { workArea } = screen.getPrimaryDisplay();
     win.setBounds({
-      x: workArea.x + workArea.width - 240 - 12,
-      y: workArea.y + workArea.height - 470 - 12,
-      width: 240,
-      height: 470,
+      x: workArea.x + workArea.width - 220 - 12,
+      y: workArea.y + workArea.height - 360 - 12,
+      width: 220,
+      height: 360,
     });
-    win.setMinimumSize(240, 470);
-    win.setMaximumSize(240, 470);
+    win.setMinimumSize(220, 360);
+    win.setMaximumSize(220, 360);
   }, 1200);
   return { ok: true };
 });
@@ -394,7 +394,7 @@ ipcMain.handle("window:set-ignore", (e, { ignore }) => {
 // setBounds 完整指定位置+尺寸，从根源避免透明窗口漂移）
 ipcMain.handle("window:move", (e, { x, y }) => {
   if (!win) return { ok: false };
-  win.setBounds({ x: Math.round(x), y: Math.round(y), width: 240, height: 470 });
+  win.setBounds({ x: Math.round(x), y: Math.round(y), width: 220, height: 360 });
   return { ok: true };
 });
 ipcMain.handle("window:stabilize", () => ({ ok: false }));

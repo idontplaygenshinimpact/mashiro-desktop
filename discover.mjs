@@ -86,6 +86,9 @@ process.on("SIGINT", () => { clearProgress(); process.exit(0); });
 const POST_URL_RE =
   /(\/discuss\/\d+|\/post\/\d+|\/article\/details\/\d+|juejin\.cn\/post\/\d+|blog\.csdn\.net\/[^/]+\/article\/details\/\d+)/;
 
+// 标题级方向过滤：嵌入式/硬件/算法/后端等非前端方向直接排除（列表页收集时就过滤，省 AI 挑帖额度）
+const EXCLUDE_TITLE = /嵌入式|单片机|硬件|驱动|PCB|STM32|ESP32|ARM|C\+\+|Java|Go语言|后端|算法岗|机器学习|深度学习|大数据|测试开发|测开|运维|产品|运营|数据分析|爬虫开发|上位机|物联网|芯片|FPGA/;
+
 function cleanHref(href) {
   // 去掉搜索跟踪参数（searchId 等），保留纯净链接
   return href
@@ -114,10 +117,10 @@ async function main() {
       continue;
     }
 
-    // 提取帖子链接（通用模式），去重 + 清洗 + 过滤已爬过的
+    // 提取帖子链接（通用模式），去重 + 清洗 + 过滤已爬过的 + 标题方向过滤
     const posts = dedupePosts(
       list.links
-        .filter((l) => POST_URL_RE.test(l.href) && l.text.length > 5)
+        .filter((l) => POST_URL_RE.test(l.href) && l.text.length > 5 && !EXCLUDE_TITLE.test(l.text))
         .map((l) => ({ text: l.text.slice(0, 120), href: cleanHref(l.href) }))
     ).filter((p) => !history.has(keyOf(p.href)));
     console.log(`列表页发现 ${posts.length} 篇新帖子（过滤已爬 ${list.links.filter((l) => POST_URL_RE.test(l.href)).length - posts.length} 篇）`);

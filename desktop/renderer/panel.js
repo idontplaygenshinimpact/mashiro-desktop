@@ -326,9 +326,11 @@ async function showStudyDetail(id) {
     // 流式获取（SSE）：逐段渲染，无文件条目也能边生成边看
     const topic = await streamStudyDetail(id, (content) => {
       sdBody().innerHTML = renderMd(content) + '<div class="sd-streaming">⏳ 生成中...</div>';
-      sdBody().scrollTop = sdBody().scrollHeight;
+      sdBody().scrollTop = sdBody().scrollHeight; // 生成中跟随最新内容
     });
     $("sd-modal-title").textContent = "📖 " + topic;
+    // 生成完成：回到顶部（从头阅读，不留在末尾）
+    sdBody().scrollTop = 0;
   } catch (e) {
     sdBody().innerHTML = `<div style="color:#c05050;font-size:13px;padding:12px">⚠️ ${esc(e.message)}</div>`;
   }
@@ -532,6 +534,30 @@ async function loadCrawlData() {
         <span style="color:#6c6c7c;font-size:10px">${esc(f.dir || "")}</span>
       </div>`).join("")
     : '<div style="color:#7c7c7c;font-size:12px">暂无产出</div>';
+  // 使用统计（对话/复习/面试）
+  try {
+    const s = await window.kanban.getStats();
+    if (s?.ok && s.stats) {
+      $("stats-row").innerHTML = `
+        <div class="stat-chip">💬 对话 <b>${s.stats.chats || 0}</b></div>
+        <div class="stat-chip">📝 复盘 <b>${s.stats.reviewsDone || 0}</b></div>
+        <div class="stat-chip">🎤 面试 <b>${s.stats.interviewsDone || 0}</b></div>
+        <div class="stat-chip">📚 复习 <b>${r.review?.total || 0}</b></div>`;
+    }
+  } catch { /* ignore */ }
+  // 面试历史
+  try {
+    const h = await window.kanban.interviewHistory();
+    const list = (h?.history || []).slice(-5).reverse();
+    $("interview-history").innerHTML = list.length
+      ? list.map((it) => `
+        <div class="iv-hist-item">
+          <div class="iv-hist-head">${esc(it.position || "模拟面试")} · ${esc(it.role || "")} · ${it.rounds || 0} 轮
+            <span class="iv-hist-score">均分 ${it.avg ?? it.avgScore ?? "-"}</span></div>
+          ${it.report ? `<div class="iv-hist-report">${esc(it.report).slice(0, 150)}${it.report.length > 150 ? "..." : ""}</div>` : ""}
+        </div>`).join("")
+      : '<div style="color:#7c7c7c;font-size:12px">暂无面试记录，去「🎤 模拟面试」来一场吧</div>';
+  } catch { /* ignore */ }
 }
 
 $("crawl-run").addEventListener("click", async () => {

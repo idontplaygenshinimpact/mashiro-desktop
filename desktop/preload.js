@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld("kanban", {
   notify: (title, message) => ipcRenderer.invoke("widget:notify", { title, message }),
   chat: (message, history) => ipcRenderer.invoke("widget:chat", { message, history }),
   studyPlan: () => ipcRenderer.invoke("widget:study-plan"),
+  interviewHistory: () => ipcRenderer.invoke("widget:interview-history"),
+  getStats: () => ipcRenderer.invoke("widget:stats"),
   studyDetail: (id) => ipcRenderer.invoke("widget:study-detail", { id }),
   studyDetailStream: (id, onChunk) => {
     // 订阅 chunk 事件；返回 promise，结束（done/error）时 resolve

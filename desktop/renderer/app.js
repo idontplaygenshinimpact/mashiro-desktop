@@ -118,19 +118,34 @@ canvas.addEventListener("dblclick", (e) => {
   window.kanban.togglePanel();
 });
 
-// ---------- 鼠标穿透：只在角色区域可交互，透明区域点击穿透到下层应用 ----------
-// 角色区域估算：模型半身（高 300，锚点 0.5,0.5，中心在窗口底部上方 170px）
-// 区域 = 模型包围盒（宽约 190，高约 320）+ 顶部气泡区
+// ---------- 鼠标穿透：只在角色模型附近可交互，其余区域点击穿透到下层应用 ----------
+// 区域 = 模型实际渲染包围盒（按 model.width/height 实时计算）* 收缩系数，贴合模型轮廓
 let ignoreActive = false;
 let lastInArea = null;
+// 命中区：宽度=模型宽×0.6（左右贴合）；高度=模型高×0.55，中心比模型中心下移 15px（顶部明显收小）
+const HIT_SHRINK_W = 0.6;
+const HIT_SHRINK_H = 0.55;
+
+function getModelRect() {
+  const cx = window.innerWidth / 2;
+  let w = 190, h = 320; // 兜底估计
+  try {
+    if (model && model.width > 0 && model.height > 0) {
+      w = model.width;
+      h = model.height;
+    }
+  } catch { /* ignore */ }
+  // 模型中心 = 内高-170（position: 内高 - h/2 - 20，anchor 0.5）；命中区中心下移 15px
+  const cy = window.innerHeight - 155;
+  const hh = h * HIT_SHRINK_H;
+  return { cx, cy, w: w * HIT_SHRINK_W, h: hh };
+}
 
 function isInModelArea(x, y) {
-  // 模型中心位置（与 loadModel 里一致）
-  const cx = window.innerWidth / 2;
-  const cy = window.innerHeight - 170;
-  // 模型宽约 190，高约 320（半身模型）；气泡区在顶部 15% 内也允许交互（气泡可点）
-  const inModel = Math.abs(x - cx) < 95 && Math.abs(y - cy) < 160;
-  const inBubble = y < window.innerHeight * 0.15 && x > 0 && x < window.innerWidth;
+  const r = getModelRect();
+  const inModel = Math.abs(x - r.cx) < r.w / 2 && Math.abs(y - r.cy) < r.h / 2;
+  // 气泡区：只覆盖气泡本身（顶部中央，宽 140 高 50）
+  const inBubble = y < 55 && Math.abs(x - window.innerWidth / 2) < 70;
   return inModel || inBubble;
 }
 

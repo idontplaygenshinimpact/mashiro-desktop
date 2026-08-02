@@ -33,12 +33,14 @@ function latestOutputs(limit = 12) {
 
 function scanNewestFiles(limit = 20) {
   // 扫最新产出目录里的 md 文件，返回标题/公司/路径
-  // 排除 00_ 开头的索引/README 文件（如 00_README.md），避免被当成产出展示
+  // 排除 00_ 开头的索引/README + study_notes（学习讲解存档，不算产出）——chat_solutions（对话解答）保留展示
   const outDir = config.outputDir;
   if (!existsSync(outDir)) return [];
   const files = [];
+  const SKIP_DIRS = new Set(["study_notes"]);
   for (const d of readdirSync(outDir, { withFileTypes: true })) {
     if (!d.isDirectory()) continue;
+    if (SKIP_DIRS.has(d.name)) continue; // 学习讲解存档不展示
     const dirPath = path.join(outDir, d.name);
     for (const f of readdirSync(dirPath)) {
       if (!f.endsWith(".md")) continue;
@@ -555,6 +557,29 @@ const server = createServer((req, res) => {
       });
     return;
   }
+  if (url.pathname === "/api/interview/history") {
+    // 面试历史（复盘报告）
+    try {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, history: memory.getInterviewHistory() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/stats") {
+    // 使用统计（对话/复习/面试/答题）
+    try {
+      const m = memory.get();
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, stats: m.stats || {} }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
   if (url.pathname === "/api/review/due") {
     // 今日到期复习卡片
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -661,6 +686,8 @@ async function patrolInterests() {
     const { chatWithAgent } = { chatWithAgent: null }; // 避免循环依赖，直接调 search
     const { fetchPage } = await import("./lib/fetch-page.mjs");
     const re = /(\/discuss\/\d+|\/post\/\d+|\/article\/details\/\d+|juejin\.cn\/post\/\d+|blog\.csdn\.net\/[^/]+\/article\/details\/\d+)/;
+    // 标题级方向过滤：嵌入式/硬件/算法/后端/C++ 等非前端方向直接排除（避免通知混入无关内容）
+    const EXCLUDE_TITLE = /嵌入式|单片机|硬件|驱动|PCB|STM32|ESP32|ARM|C\+\+|Java|Go语言|后端|算法岗|机器学习|深度学习|大数据|测试开发|测开|运维|产品|运营|数据分析|爬虫开发|上位机|物联网|芯片|FPGA/;
     const newPosts = [];
     // 取前 2 个关注点，各搜一个站
     for (const topic of interests.slice(0, 2)) {
@@ -669,6 +696,7 @@ async function patrolInterests() {
         const page = await fetchPage(url, { maxTextChars: 1500, collectLinks: true });
         for (const l of page.links) {
           if (re.test(l.href) && l.text.length > 8) {
+            if (EXCLUDE_TITLE.test(l.text)) continue; // 非前端方向标题跳过
             const clean = l.href.replace(/[?&]searchId=[^&]*/g, "").split("?")[0];
             if (!memory.isSeen(clean)) {
               newPosts.push({ title: l.text.slice(0, 50), url: clean, topic });
@@ -680,9 +708,60 @@ async function patrolInterests() {
     if (newPosts.length) {
       const names = newPosts.slice(0, 3).map((p) => p.title.slice(0, 20)).join("、");
       console.log(`[widget] 巡检发现 ${newPosts.length} 条新内容（关注点 ${interests.slice(0, 2).join("、")}）`);
-      await sendNotification("🆕 真白发现新面经", `${names}${newPosts.length > 3 ? ` 等 ${newPosts.length} 条` : ""}\n在桌宠对话里说"看看"即可查看`);
+      // 真正处理：抓正文 → 分类过滤 → 讲解 → 存档（通知不再"空口说白话"）
+      const saved = await processPatrolPosts(newPosts.slice(0, 2));
+      await sendNotification(
+        "🆕 真白发现新面经",
+        `${names}${newPosts.length > 3 ? ` 等 ${newPosts.length} 条` : ""}\n${saved.length ? `已生成讲解：\n${saved.map((s) => `  📄 ${s}`).join("\n")}\n在面板「🔍 爬取产出」查看` : "都是旧内容，未生成新讲解"}`
+      );
     }
   } catch { /* ignore */ }
+}
+
+// 巡检帖 → 抓正文 → 分类/方向过滤 → 具体题目检测 → 完整讲解 → 存档
+// 返回存档文件名列表（[] = 无有效内容）
+async function processPatrolPosts(posts) {
+  const saved = [];
+  try {
+    const { fetchPage } = await import("./lib/fetch-page.mjs");
+    const { classifyPage, detectQuestions, solveQuestion } = await import("./lib/ai.mjs");
+    const GOOD_DIRS = ["frontend", "agent"];
+    for (const p of posts) {
+      try {
+        // 标记已看（避免下次重复通知）
+        memory.markSeen(p.url);
+        const page = await fetchPage(p.url, { maxTextChars: 6000 });
+        if (!page.ok || page.invalid || !page.text || page.text.length < 200) continue;
+        // 方向过滤：只留前端/Agent
+        const cls = await classifyPage({ title: page.title, text: page.text });
+        if (!GOOD_DIRS.includes(cls.direction) || cls.worth < 40) continue;
+        // 具体题目检测：攻略文跳过
+        const dq = await detectQuestions({ title: page.title, text: page.text });
+        if (!dq.hasQuestion || !dq.questions?.length) continue;
+        // 完整讲解
+        const md = await solveQuestion({
+          title: page.title,
+          text: dq.questions.slice(0, 3).map((q, i) => `【题${i + 1}】${q.question}`).join("\n"),
+          company: cls.company,
+          position: cls.position,
+          sourceUrl: p.url,
+        });
+        // 存档到 output/<date>_patrol/
+        const date = new Date().toISOString().slice(0, 10);
+        const dir = path.join(config.outputDir, `${date}_patrol`);
+        mkdirSync(dir, { recursive: true });
+        const fname = `${String(saved.length + 1).padStart(2, "0")}_${(cls.company || cls.type || "patrol").replace(/[\\/:*?"<>|]/g, "_")}_${page.title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 30)}.md`;
+        writeFileSync(path.join(dir, fname), `# ${page.title}\n\n> 来源: ${p.url}\n\n${md}\n`, "utf8");
+        saved.push(fname);
+        console.log(`[widget] 巡检讲解完成: ${fname}`);
+      } catch (e) {
+        console.log(`[widget] 巡检讲解失败 ${p.url}: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    console.log(`[widget] processPatrolPosts 异常: ${e.message}`);
+  }
+  return saved;
 }
 
 // 启动巡检（首次 5 分钟后，之后每 30 分钟）
