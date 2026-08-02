@@ -16,6 +16,88 @@ document.querySelectorAll(".tab").forEach((btn) => {
 
 const $ = (id) => document.getElementById(id);
 
+// ============ 简历文件解析（移植 ai-career：txt/md/json/docx/pdf） ============
+const fileBtn = $("iv-file-btn");
+const fileInput = $("iv-file");
+const resumeStatus = $("resume-status");
+const resumeText = $("iv-resume");
+
+function ext(name) {
+  const i = name.lastIndexOf(".");
+  return i >= 0 ? name.slice(i).toLowerCase() : "";
+}
+
+async function parseResumeFile(file) {
+  const extension = ext(file.name);
+  if (extension === ".pdf") {
+    const pdfjsLib = await import("pdfjs-dist");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      pages.push(content.items.map((it) => (it.str || "")).filter(Boolean).join(" "));
+    }
+    const text = pages.join("\n").trim();
+    if (!text) throw new Error("PDF 没有可提取文本，可能是图片型 PDF，请复制文本粘贴");
+    return { text, msg: `已解析 PDF 简历（${pdf.numPages} 页）` };
+  }
+  if (extension === ".doc") throw new Error("暂不支持旧版 .doc，请另存为 .docx");
+  if (extension === ".docx") {
+    const mammoth = await import("mammoth/mammoth.browser");
+    const buffer = await file.arrayBuffer();
+    const result = await mammoth.default.extractRawText({ arrayBuffer: buffer });
+    const text = result.value.trim();
+    if (!text) throw new Error("Word 文件中没有可分析文本");
+    return { text, msg: "已解析 Word 简历" };
+  }
+  if (extension === ".txt" || extension === ".md" || extension === "") {
+    return { text: (await file.text()).trim(), msg: "已读取文本简历" };
+  }
+  if (extension === ".json") {
+    const raw = await file.text();
+    return { text: JSON.stringify(JSON.parse(raw), null, 2), msg: "已读取 JSON 简历" };
+  }
+  throw new Error(`暂不支持 ${extension || "未知"} 格式，支持 .txt/.md/.json/.docx/.pdf`);
+}
+
+fileBtn.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const r = await parseResumeFile(file);
+    resumeText.value = r.text;
+    resumeStatus.textContent = "✅ " + r.msg;
+    resumeStatus.className = "resume-status";
+  } catch (err) {
+    resumeStatus.textContent = "⚠️ " + err.message;
+    resumeStatus.className = "resume-status error";
+  }
+});
+
+// 拖拽上传
+const uploadZone = $("resume-upload");
+uploadZone.addEventListener("dragover", (e) => { e.preventDefault(); uploadZone.style.borderColor = "#8a5adc"; });
+uploadZone.addEventListener("dragleave", () => { uploadZone.style.borderColor = ""; });
+uploadZone.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  uploadZone.style.borderColor = "";
+  const file = e.dataTransfer?.files?.[0];
+  if (!file) return;
+  try {
+    const r = await parseResumeFile(file);
+    resumeText.value = r.text;
+    resumeStatus.textContent = "✅ " + r.msg;
+    resumeStatus.className = "resume-status";
+  } catch (err) {
+    resumeStatus.textContent = "⚠️ " + err.message;
+    resumeStatus.className = "resume-status error";
+  }
+});
+
 // ============ 模拟面试 ============
 let ivSession = null; // { question, basis, dimension, criteria, boundary, round }
 const ivSetup = $("interview-setup");
@@ -25,10 +107,11 @@ $("iv-start").addEventListener("click", async () => {
   const position = $("iv-position").value.trim() || "前端实习生";
   const role = $("iv-role").value;
   const focus = $("iv-focus").value.trim();
+  const resume = $("iv-resume").value.trim();
   $("iv-start").disabled = true;
   $("iv-start").textContent = "面试官准备中...";
   try {
-    const r = await window.kanban.invStart({ position, role, focus });
+    const r = await window.kanban.invStart({ position, role, focus, resume });
     if (r.error) { alert("启动失败: " + r.error); return; }
     ivSetup.classList.add("hidden");
     ivSessionEl.classList.remove("hidden");
@@ -180,26 +263,170 @@ async function loadStudyPlan() {
     list.innerHTML = '<div style="color:#7c7c7c;font-size:12px">未生成，点「✨ 从产出生成清单」</div>';
     return;
   }
-  list.innerHTML = items.map((it) => `
+  // 按层级分组：必会 → 进阶 → 拓展（未标 level 的归必会）
+  const groups = [
+    { level: "必会", label: "🔴 必会 · 高频核心", cls: "lv-must", items: [] },
+    { level: "进阶", label: "🟡 进阶 · 原理深挖", cls: "lv-adv", items: [] },
+    { level: "拓展", label: "🟢 拓展 · 加分新方向", cls: "lv-ext", items: [] },
+  ];
+  for (const it of items) {
+    const g = groups.find((x) => x.level === (it.level || "必会")) || groups[0];
+    g.items.push(it);
+  }
+  const renderItem = (it) => `
     <div class="study-item ${it.done ? "done" : ""}" data-id="${it.id}">
       <input type="checkbox" ${it.done ? "checked" : ""} />
       <div style="flex:1">
-        <div class="s-topic">${esc(it.topic)}</div>
+        <div class="s-topic">${esc(it.topic)} ${it.fromInterview ? '<span class="s-src">面试</span>' : ""}</div>
         <div class="s-why">${esc(it.why || "")}</div>
       </div>
+      <button class="s-learn" data-id="${it.id}">${it.hasFile ? "📖 学习" : "💡 讲解"}</button>
       <span class="s-badge ${it.reviewed ? "reviewed" : ""}">${it.reviewed ? "已复盘" : "待学"}</span>
-    </div>`).join("");
+    </div>`;
+  list.innerHTML = groups
+    .filter((g) => g.items.length)
+    .map((g) => `
+      <div class="study-group">
+        <div class="sg-head ${g.cls}">${g.label} <span class="sg-count">${g.items.length}</span></div>
+        ${g.items.map(renderItem).join("")}
+      </div>`).join("");
   list.querySelectorAll(".study-item").forEach((el) => {
-    el.querySelector("input").addEventListener("change", async (e) => {
+    const cb = el.querySelector("input");
+    cb.addEventListener("change", async (e) => {
       const r = await window.kanban.studyCheck(el.dataset.id, e.target.checked);
+      // 本地更新状态（不整表重渲染，避免闪烁）
+      el.classList.toggle("done", e.target.checked);
       // 真白情感反馈（庆祝/安慰）+ 语音
       if (r?.emotion) {
         window.kanban.notify("🎀 真白", r.emotion);
         if (voiceOn) window.kanban.speak(r.emotion);
       }
-      loadStudyPlan();
     });
+    el.querySelector(".s-learn").addEventListener("click", () => showStudyDetail(el.dataset.id));
   });
+}
+
+// ============ 学习详情：全屏弹层展开讲解 ============
+let studyDetailCache = {}; // id -> { content, topic }
+const sdOverlay = () => $("study-detail-overlay");
+const sdBody = () => $("sd-modal-body");
+
+async function showStudyDetail(id) {
+  // 显示弹层 + 加载态
+  sdOverlay().classList.remove("hidden");
+  sdBody().innerHTML = '<div style="color:#8a87a8;font-size:13px;padding:12px">📖 加载讲解中...</div>';
+  try {
+    // 缓存命中：直接展示
+    if (studyDetailCache[id]?.content) {
+      $("sd-modal-title").textContent = "📖 " + studyDetailCache[id].topic;
+      sdBody().innerHTML = renderMd(studyDetailCache[id].content);
+      sdBody().scrollTop = 0;
+      return;
+    }
+    // 流式获取（SSE）：逐段渲染，无文件条目也能边生成边看
+    const topic = await streamStudyDetail(id, (content) => {
+      sdBody().innerHTML = renderMd(content) + '<div class="sd-streaming">⏳ 生成中...</div>';
+      sdBody().scrollTop = sdBody().scrollHeight;
+    });
+    $("sd-modal-title").textContent = "📖 " + topic;
+  } catch (e) {
+    sdBody().innerHTML = `<div style="color:#c05050;font-size:13px;padding:12px">⚠️ ${esc(e.message)}</div>`;
+  }
+}
+
+// 流式获取讲解（走 IPC 通道，避开渲染层 fetch 的 webSecurity 限制）
+async function streamStudyDetail(id, onUpdate) {
+  let content = "";
+  let topic = "讲解";
+  const result = await window.kanban.studyDetailStream(id, (delta) => {
+    if (!delta) return;
+    content += delta;
+    onUpdate(content);
+  });
+  // JSON 模式（有文件）：result 带 topic/content
+  if (result?.fromFile) {
+    content = result.content || content;
+    topic = result.topic || topic;
+  }
+  if (!content) throw new Error("没有获取到内容");
+  studyDetailCache[id] = { content, topic };
+  return topic;
+}
+
+$("sd-modal-close").addEventListener("click", () => sdOverlay().classList.add("hidden"));
+sdOverlay().addEventListener("click", (e) => {
+  if (e.target === sdOverlay()) sdOverlay().classList.add("hidden"); // 点遮罩关闭
+});
+
+// 轻量 Markdown 渲染：标题/代码块/列表/表格/引用/加粗/斜体/行内代码/分隔线
+function renderMd(md) {
+  const lines = String(md || "").split("\n");
+  let html = "";
+  let inCode = false;
+  let tableBuf = [];
+  let quoteBuf = [];
+  const flushTable = () => {
+    if (!tableBuf.length) return;
+    // 拆行 → 单元格（去首尾 |）
+    const rows = tableBuf.map((r) => r.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim()));
+    // 过滤分隔行 |---|---|
+    const dataRows = rows.filter((r) => !(r.length && r.every((c) => /^:?-{2,}:?$/.test(c.replace(/<[^>]*>/g, "")))));
+    let t = "<table class='sd-table'><tbody>";
+    dataRows.forEach((r, i) => {
+      t += "<tr>";
+      r.forEach((c) => {
+        t += i === 0 ? `<th>${inlineMd(c)}</th>` : `<td>${inlineMd(c)}</td>`;
+      });
+      t += "</tr>";
+    });
+    html += t + "</tbody></table>";
+    tableBuf = [];
+  };
+  const flushQuote = () => {
+    if (!quoteBuf.length) return;
+    html += `<blockquote class="sd-quote">${quoteBuf.map((q) => `<div>${inlineMd(q)}</div>`).join("")}</blockquote>`;
+    quoteBuf = [];
+  };
+  for (const raw of lines) {
+    if (raw.trim().startsWith("```")) {
+      flushTable(); flushQuote();
+      if (inCode) { html += "</code></pre>"; inCode = false; }
+      else { html += "<pre class='sd-code'><code>"; inCode = true; }
+      continue;
+    }
+    if (inCode) { html += esc(raw) + "\n"; continue; }
+    const t = raw.trim();
+    // 表格
+    if (t.startsWith("|")) { flushQuote(); tableBuf.push(t); continue; }
+    flushTable();
+    // 引用
+    if (t.startsWith(">")) { const q = t.replace(/^>\s?/, ""); if (q) quoteBuf.push(q); continue; }
+    flushQuote();
+    if (!t) { html += "<div class='sd-blank'></div>"; continue; }
+    // 分隔线
+    if (/^(-{3,}|\*{3,})$/.test(t)) { html += "<hr class='sd-hr'>"; continue; }
+    // 标题
+    const h = t.match(/^(#{1,4})\s+(.*)$/);
+    if (h) { html += `<h4>${inlineMd(h[2])}</h4>`; continue; }
+    // 列表
+    if (/^[-*•]\s/.test(t)) { html += `<div class="sd-li">• ${inlineMd(t.replace(/^[-*•]\s/, ""))}</div>`; continue; }
+    if (/^\d+\.\s/.test(t)) { html += `<div class="sd-li">${inlineMd(t)}</div>`; continue; }
+    // 段落
+    html += `<p>${inlineMd(t)}</p>`;
+  }
+  flushTable(); flushQuote();
+  if (inCode) html += "</code></pre>";
+  return html;
+}
+
+// 行内格式：**加粗** / *斜体* / `行内代码` / [文字](链接)
+function inlineMd(s) {
+  const escaped = esc(s);
+  return escaped
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
+    .replace(/`([^`]+)`/g, "<code class='sd-inline-code'>$1</code>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
 }
 
 $("study-gen").addEventListener("click", async () => {

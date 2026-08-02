@@ -184,6 +184,38 @@ async function widgetGet(pathname) {
 }
 ipcMain.handle("widget:chat", (e, { message, history }) => widgetPost("/api/chat", { message, history }));
 ipcMain.handle("widget:study-plan", () => widgetGet("/api/study-plan"));
+ipcMain.handle("widget:study-detail", (e, { id }) => widgetGet(`/api/study-detail?id=${encodeURIComponent(id)}`));
+// 流式讲解：main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）
+ipcMain.handle("widget:study-detail-stream", async (e, { id }) => {
+  try {
+    const res = await fetch(`${WIDGET_URL}/api/study-detail-stream?id=${encodeURIComponent(id)}`);
+    const ctype = res.headers.get("content-type") || "";
+    // 有文件：一次性 JSON
+    if (!ctype.includes("text/event-stream")) {
+      const j = await res.json();
+      e.sender.send("study-detail-chunk", JSON.stringify(j));
+      return { ok: true, mode: "json" };
+    }
+    // 无文件：SSE 流，逐块转发
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const event = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        e.sender.send("study-detail-chunk", event); // 原样转发 data: {...}
+      }
+    }
+    return { ok: true, mode: "sse" };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
 ipcMain.handle("widget:study-generate", () => widgetPost("/api/study-generate"));
 ipcMain.handle("widget:study-check", (e, { id, done }) => widgetGet(`/api/study-check?id=${encodeURIComponent(id)}&done=${done ? "1" : "0"}`));
 ipcMain.handle("widget:study-review", () => widgetPost("/api/study-review"));
@@ -216,27 +248,66 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
 
 ipcMain.handle("window:quit", () => app.quit());
 
+// 打开指定文件（用系统默认程序，如 md 编辑器/浏览器）
+ipcMain.handle("window:open-file", (e, { filePath }) => {
+  if (!filePath) return { ok: false, error: "no path" };
+  try {
+    const { shell } = require("electron");
+    shell.openPath(String(filePath));
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 // 打开输出目录（explorer）
 ipcMain.handle("window:open-output", () => {
   spawn("explorer", [path.join(ROOT, "output")], { detached: true }).unref();
   return { ok: true };
 });
 
-// 语音播放：pwsh + System.Speech 中文 TTS（脚本文件方式，避免命令行转义）
+// 语音播放：edge-tts 神经语音（晓伊少女音，真白人设）→ 失败降级系统 TTS
 // 语音文本按"真白人设"由 agent 生成后传入
-ipcMain.handle("window:speak", (e, { text }) => {
+let ttsEdge = null;
+async function getTtsEdge() {
+  if (!ttsEdge) {
+    try { ttsEdge = await import("./tts-edge.mjs"); } catch { ttsEdge = null; }
+  }
+  return ttsEdge;
+}
+ipcMain.handle("window:speak", async (e, { text }) => {
   if (!text || !String(text).trim()) return { ok: false };
+  // 优先 edge-tts（神经语音）
   try {
-    // 文本写入临时文件（UTF-8），ps1 读取（避免特殊字符转义问题）
+    const tts = await getTtsEdge();
+    if (tts) {
+      const r = await tts.speak(String(text));
+      if (r.ok) return { ok: true, engine: "edge-tts" };
+    }
+  } catch { /* ignore */ }
+  // 降级：系统 TTS（pwsh → powershell）
+  try {
     const tmpFile = path.join(app.getPath("temp"), "mashiro-tts.txt");
     writeFileSync(tmpFile, String(text).slice(0, 200), "utf8");
-    spawn(
-      "pwsh",
-      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(__dirname, "speak.ps1"), "-TextFile", tmpFile],
-      { windowsHide: true, detached: true, stdio: "ignore" }
-    ).unref();
+    const ps1 = path.join(__dirname, "speak.ps1");
+    const run = (shell) => {
+      try {
+        spawn(
+          shell,
+          ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, "-TextFile", tmpFile],
+          { windowsHide: true, detached: true, stdio: "ignore" }
+        ).unref();
+      } catch { /* ignore */ }
+    };
+    try {
+      const { spawnSync } = require("node:child_process");
+      const probe = spawnSync("pwsh", ["-NoProfile", "-Command", "exit 0"], { timeout: 3000, windowsHide: true });
+      if (probe.status === 0) { run("pwsh"); return { ok: true, engine: "pwsh" }; }
+    } catch { /* ignore */ }
+    run("powershell");
+    return { ok: true, engine: "powershell" };
   } catch { /* ignore */ }
-  return { ok: true };
+  return { ok: false };
 });
 
 // 渲染层模型加载完成后，通知主进程显示桌宠窗口（尺寸已固定锁定）
@@ -266,11 +337,21 @@ function createPanelWindow() {
     panelWin.focus();
     return;
   }
+  const { workArea } = screen.getPrimaryDisplay();
+  // 面板尺寸：宽 560 适合模拟面试（问题+评分+回答并排），高 720 内容不挤
+  // 上限不超过屏幕 90%，小屏自动缩小
+  const W = Math.min(560, Math.round(workArea.width * 0.9));
+  const H = Math.min(720, Math.round(workArea.height * 0.9));
+  // 屏幕居中
+  const x = Math.round(workArea.x + (workArea.width - W) / 2);
+  const y = Math.round(workArea.y + (workArea.height - H) / 2);
   panelWin = new BrowserWindow({
-    width: 440,
-    height: 680,
-    minWidth: 380,
-    minHeight: 520,
+    width: W,
+    height: H,
+    x,
+    y,
+    minWidth: 420,
+    minHeight: 560,
     title: "真白 · 前端秋招助手",
     backgroundColor: "#171322",
     autoHideMenuBar: true,
@@ -285,6 +366,9 @@ function createPanelWindow() {
     },
   });
   panelWin.loadFile(path.join(__dirname, "renderer", "panel.html"));
+  panelWin.webContents.on("console-message", (e, level, message) => {
+    console.log(`[panel] ${message}`);
+  });
   panelWin.on("closed", () => { panelWin = null; });
 }
 
@@ -295,6 +379,14 @@ ipcMain.handle("window:toggle-panel", () => {
   } else {
     createPanelWindow();
   }
+  return { ok: true };
+});
+
+// 鼠标穿透：透明区域不拦截点击，角色区域可交互
+// ignore=true → 窗口忽略鼠标事件（forward 让 renderer 仍能收到 mousemove 用于检测）
+ipcMain.handle("window:set-ignore", (e, { ignore }) => {
+  if (!win || win.isDestroyed()) return { ok: false };
+  win.setIgnoreMouseEvents(!!ignore, { forward: true });
   return { ok: true };
 });
 

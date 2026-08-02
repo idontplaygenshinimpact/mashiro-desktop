@@ -43,8 +43,18 @@
           <label>重点方向（可选）</label>
           <input id="iv-focus" type="text" placeholder="如：React / 事件循环 / 简历项目" />
         </div>
+        <div class="form-row">
+          <label>📄 简历内容（支持上传文件或粘贴文本——面试官会基于简历追问项目经历）</label>
+          <div class="resume-upload" id="resume-upload">
+            <input type="file" id="iv-file" accept=".txt,.md,.json,.docx,.pdf" hidden />
+            <button id="iv-file-btn" class="secondary" type="button">📂 上传简历文件</button>
+            <span class="resume-file-hint" id="resume-file-hint">支持 .txt / .md / .json / .docx / .pdf</span>
+          </div>
+          <textarea id="iv-resume" placeholder="或直接粘贴简历文本：项目经历、实习、技能、教育背景...&#10;留空则面试官只问通用技术题"></textarea>
+          <div class="resume-status" id="resume-status"></div>
+        </div>
         <button id="iv-start" class="primary">🎤 开始模拟面试</button>
-        <div class="iv-hint">面试会参考你的学习清单 + 最近面经 + 薄弱点出题，答完自动评分，结束后生成复盘并回流薄弱点</div>
+        <div class="iv-hint">面试会参考你的学习清单 + 最近面经 + 薄弱点出题；提供简历后优先从简历项目切入追问</div>
       </div>
 
       <div class="interview-session hidden" id="interview-session">
@@ -95,6 +105,17 @@
         <button id="review-submit" class="primary">提交判分</button>
       </div>
     </section>
+
+    <!-- 学习详情弹层（占面板大空间，避免小框滑动） -->
+    <div id="study-detail-overlay" class="sd-overlay hidden">
+      <div class="sd-modal">
+        <div class="sd-modal-head">
+          <b id="sd-modal-title">📖 讲解</b>
+          <button id="sd-modal-close" class="sd-close" title="关闭">✕</button>
+        </div>
+        <div class="sd-modal-body" id="sd-modal-body">加载中...</div>
+      </div>
+    </div>
 
     <!-- ========== 对话 Tab ========== -->
     <section id="tab-chat" class="tab-panel">
