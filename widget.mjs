@@ -5,7 +5,7 @@
 //   3. 学习提醒 —— 每天固定时间提醒做面经/笔试学习
 // 用法: node widget.mjs [--no-notify]
 import { createServer } from "node:http";
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { exec } from "node:child_process";
 import notifier from "node-notifier";
@@ -33,6 +33,7 @@ function latestOutputs(limit = 12) {
 
 function scanNewestFiles(limit = 20) {
   // 扫最新产出目录里的 md 文件，返回标题/公司/路径
+  // 排除 00_ 开头的索引/README 文件（如 00_README.md），避免被当成产出展示
   const outDir = config.outputDir;
   if (!existsSync(outDir)) return [];
   const files = [];
@@ -41,11 +42,58 @@ function scanNewestFiles(limit = 20) {
     const dirPath = path.join(outDir, d.name);
     for (const f of readdirSync(dirPath)) {
       if (!f.endsWith(".md")) continue;
+      if (/^00[_-]/.test(f)) continue; // 索引文件跳过
       const fp = path.join(dirPath, f);
       files.push({ file: f, dir: d.name, mtime: statSync(fp).mtime, path: fp });
     }
   }
   return files.sort((a, b) => b.mtime - a.mtime).slice(0, limit);
+}
+
+// 文件名规范化：忽略空格/下划线/括号差异，用于模糊匹配
+const normName = (s) => String(s || "").toLowerCase().replace(/[\s_\-（）()【】\[\]．.]/g, "");
+
+// 学习讲解文件专用目录（AI 生成的讲解存档）
+const STUDY_NOTES_DIR = () => path.join(config.outputDir, "study_notes");
+
+// 查找学习条目的讲解文件：
+// 1. study_notes/ 下按 topic 精确匹配（最优先——AI 生成的讲解存档）
+// 2. 产出目录里按 source 文件名模糊匹配
+function findStudyFile(item) {
+  const outDir = config.outputDir;
+  if (!existsSync(outDir)) return null;
+  // 1. study_notes 按 topic 匹配
+  const notesDir = STUDY_NOTES_DIR();
+  if (existsSync(notesDir)) {
+    const topicNorm = normName(item.topic);
+    for (const f of readdirSync(notesDir)) {
+      if (!f.endsWith(".md")) continue;
+      if (normName(f.replace(/\.md$/, "")) === topicNorm) {
+        return path.join(notesDir, f);
+      }
+    }
+  }
+  // 2. 产出目录按 source 模糊匹配
+  const src = (item.source || "").replace(/\.md$/, "");
+  const sn = normName(src);
+  for (const d of readdirSync(outDir, { withFileTypes: true })) {
+    if (!d.isDirectory() || d.name === "study_notes") continue;
+    const dirPath = path.join(outDir, d.name);
+    for (const f of readdirSync(dirPath)) {
+      if (!f.endsWith(".md") || /^00[_-]/.test(f)) continue;
+      const key = normName(f.replace(/\.md$/, ""));
+      if (key === sn || key.includes(sn) || sn.includes(key)) return path.join(dirPath, f);
+    }
+  }
+  return null;
+}
+
+// 知识点名 → 安全文件名（去掉 Windows 非法字符）
+function sanitizeFilename(name) {
+  return String(name || "note")
+    .replace(/[\\/:*?"<>|\r\n]/g, "")
+    .trim()
+    .slice(0, 60) || "note";
 }
 
 function parseTitle(file) {
@@ -240,6 +288,12 @@ function renderPanel() {
 const server = createServer((req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
 
+  // CORS：允许面板渲染层（file:// 页面）直接 fetch 流式接口
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+
   if (url.pathname === "/api/widget-data") {
     // 看板娘数据：学习计划 + 最新产出 + 趋势 + 爬取进度
     const plan = getStudyPlan();
@@ -277,14 +331,124 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/study-plan") {
-    // 学习清单（读取）——study.mjs 已在顶部导入
+    // 学习清单（读取）——study.mjs 已在顶部导入；为每条附加讲解文件路径
     try {
+      const plan = studyApi.getPlan();
+      const items = (plan.items || []).map((it) => {
+        const filePath = findStudyFile(it);
+        return { ...it, filePath, hasFile: !!filePath };
+      });
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, plan: studyApi.getPlan() }));
+      res.end(JSON.stringify({ ok: true, plan: { ...plan, items } }));
     } catch (e) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
     }
+    return;
+  }
+  if (url.pathname === "/api/study-detail-stream") {
+    // 学习详情（流式）：SSE 逐段推送讲解；有文件直接返回；无文件边生成边推 + 存档
+    const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
+    const id = u.searchParams.get("id") || "";
+    const plan = studyApi.getPlan();
+    const item = (plan.items || []).find((i) => i.id === id);
+    if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
+    const filePath = findStudyFile(item);
+    if (filePath) {
+      // 有文件：一次性返回（快，无需流式）
+      try {
+        const content = readFileSync(filePath, "utf8");
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: true, content: content.slice(0, 12000), filePath }));
+        return;
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "读取讲解失败: " + e.message }));
+        return;
+      }
+    }
+    // 无文件：SSE 流式生成
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    });
+    const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    send({ type: "start", topic: item.topic });
+    let full = "";
+    import("./lib/ai.mjs").then(async ({ solveQuestionStream }) => {
+      full = await solveQuestionStream({
+        title: item.verify_question || `请完整讲解：${item.topic}`,
+        text: `这是一道前端面试题，请完整讲解：${item.topic}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
+        company: "真白讲解",
+        sourceUrl: "学习清单",
+      }, (delta) => {
+        full += delta;
+        send({ type: "delta", delta });
+      });
+      // 存档
+      let savedPath = null;
+      try {
+        const notesDir = STUDY_NOTES_DIR();
+        mkdirSync(notesDir, { recursive: true });
+        const savePath = path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
+        const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
+        writeFileSync(savePath, header + full.slice(0, 12000), "utf8");
+        savedPath = savePath;
+      } catch { /* ignore */ }
+      send({ type: "done", saved: !!savedPath, filePath: savedPath });
+      res.end();
+    }).catch((e) => {
+      send({ type: "error", error: e.message });
+      res.end();
+    });
+    return;
+  }
+  if (url.pathname === "/api/study-detail") {
+    // 学习详情：返回条目讲解内容（有文件读文件；无文件现场生成并写入 study_notes 存档）
+    const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
+    const id = u.searchParams.get("id") || "";
+    const plan = studyApi.getPlan();
+    const item = (plan.items || []).find((i) => i.id === id);
+    if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
+    const filePath = findStudyFile(item);
+    if (filePath) {
+      try {
+        const content = readFileSync(filePath, "utf8");
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: true, content: content.slice(0, 12000), filePath }));
+        return;
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "读取讲解失败: " + e.message }));
+        return;
+      }
+    }
+    // 无文件：现场生成讲解（前端格式：结论/原理/实现/边界），并写入 study_notes 存档
+    import("./lib/ai.mjs").then(async ({ solveQuestion }) => {
+      const content = String(await solveQuestion({
+        title: item.verify_question || `请完整讲解：${item.topic}`,
+        text: `这是一道前端面试题，请完整讲解：${item.topic}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
+        company: "真白讲解",
+        sourceUrl: "学习清单",
+      })).slice(0, 12000);
+      // 写入存档（下次直接读文件，不再生成）
+      let savedPath = null;
+      try {
+        const notesDir = STUDY_NOTES_DIR();
+        mkdirSync(notesDir, { recursive: true });
+        const savePath = path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
+        const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
+        writeFileSync(savePath, header + content, "utf8");
+        savedPath = savePath;
+      } catch (e) { /* 存档失败不影响返回 */ }
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: false, content, filePath: savedPath, saved: !!savedPath }));
+    }).catch((e) => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "生成讲解失败: " + e.message }));
+    });
     return;
   }
   if (url.pathname === "/api/study-generate") {
@@ -395,6 +559,24 @@ const server = createServer((req, res) => {
     // 今日到期复习卡片
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify({ ok: true, due: reviewApi.review.getDailySession(), stats: reviewApi.review.getStats() }));
+    return;
+  }
+  if (url.pathname === "/api/review/add") {
+    // 添加复习卡（学习清单/薄弱点回流用）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { topic, question = "", answer = "", source = "" } = JSON.parse(body || "{}");
+        if (!topic) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "topic required" })); return; }
+        const card = reviewApi.review.addCard({ topic, question, answer, source });
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, card }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
     return;
   }
   if (url.pathname === "/api/review/submit") {

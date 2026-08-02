@@ -19,16 +19,44 @@ const DEFAULT_STARTS = [
   "https://so.csdn.net/so/search?q=%E5%89%8D%E7%AB%AF%E9%9D%A2%E7%BB%8F",
   "https://so.csdn.net/so/search?q=Agent%20%E9%9D%A2%E7%BB%8F",
 ];
-const TARGET_COUNT = 3; // 每个起始页挑几篇
+const TARGET_COUNT = 5; // 每个起始页挑几篇（多爬点：3→5）
 // 重点方向：不限制岗位范围；笔试类优先，面经/招聘兼顾
 const FOCUS = ["前端", "React", "Vue", "浏览器", "CSS", "JavaScript", "TypeScript", "全栈", "Agent", "AI应用", "大模型前端"];
+
+// URL 规范 key（去 query/hash；牛客帖按 discuss id）
+function keyOf(url) {
+  const m = String(url || "").match(/\/discuss\/(\d+)/);
+  if (m) return "discuss:" + m[1];
+  return String(url || "").split("?")[0].split("#")[0];
+}
+
+// 加载历史已爬链接（all_links.md 全部行 + 记忆 seenUrls），用于跨次去重
+function loadHistoryUrls() {
+  const seen = new Set();
+  try {
+    const linksFile = path.join(config.outputDir, "all_links.md");
+    if (existsSync(linksFile)) {
+      for (const line of readFileSync(linksFile, "utf8").split("\n")) {
+        const m = line.match(/^- (https?:\/\/\S+)/);
+        if (m) seen.add(keyOf(m[1]));
+      }
+    }
+  } catch { /* ignore */ }
+  try {
+    const memFile = path.join(import.meta.dirname, "data", "agent-memory.json");
+    if (existsSync(memFile)) {
+      const mem = JSON.parse(readFileSync(memFile, "utf8"));
+      for (const u of mem.seenUrls || []) seen.add(keyOf(u));
+    }
+  } catch { /* ignore */ }
+  return seen;
+}
 
 function dedupePosts(posts) {
   const seen = new Set();
   const out = [];
   for (const p of posts) {
-    const id = p.href.match(/\/discuss\/(\d+)/)?.[1];
-    const key = id || p.href;
+    const key = keyOf(p.href);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(p);
@@ -69,6 +97,9 @@ function cleanHref(href) {
 async function main() {
   const startUrls = (process.argv[2] ? process.argv[2].split(",") : DEFAULT_STARTS).filter(Boolean);
   const want = parseInt(process.argv[3] || String(TARGET_COUNT), 10);
+  // 历史已爬链接（跨次去重：这次只爬新的）
+  const history = loadHistoryUrls();
+  console.log(`历史已爬链接 ${history.size} 条，本次只挑选新帖子`);
   writeProgress({ status: "running", step: "start", message: "开始爬取", current: 0, total: startUrls.length });
 
   // 每个起始页：抓列表 → AI 挑帖
@@ -83,13 +114,17 @@ async function main() {
       continue;
     }
 
-    // 提取帖子链接（通用模式），去重 + 清洗
+    // 提取帖子链接（通用模式），去重 + 清洗 + 过滤已爬过的
     const posts = dedupePosts(
       list.links
         .filter((l) => POST_URL_RE.test(l.href) && l.text.length > 5)
         .map((l) => ({ text: l.text.slice(0, 120), href: cleanHref(l.href) }))
-    );
-    console.log(`列表页发现 ${posts.length} 篇帖子，交给 AI 挑选...`);
+    ).filter((p) => !history.has(keyOf(p.href)));
+    console.log(`列表页发现 ${posts.length} 篇新帖子（过滤已爬 ${list.links.filter((l) => POST_URL_RE.test(l.href)).length - posts.length} 篇）`);
+    if (posts.length === 0) {
+      console.log("⏭️ 该页没有新帖子，跳过");
+      continue;
+    }
 
     // AI 挑选最有价值的帖子（按重点方向优先）
     const picked = await pickPosts(posts, want, FOCUS);
@@ -207,6 +242,11 @@ async function main() {
   writeFileSync(path.join(outDir, "00_README.md"), summary.join("\n"), "utf8");
   try {
     appendFileSync(path.join(config.outputDir, "all_links.md"), `\n## ${date} (discover)\n` + okPages.map((p) => `- ${p.url}`).join("\n") + "\n", "utf8");
+  } catch { /* ignore */ }
+  // 标记本次已看（记忆模块 seenUrls，供 agent 侧去重参考）
+  try {
+    const { memory } = await import("./lib/memory.mjs");
+    for (const p of okPages) memory.markSeen(p.url);
   } catch { /* ignore */ }
 
   writeProgress({ status: "done", step: "done", message: "爬取完成！共 " + items.length + " 篇讲解 + " + qiuItems.length + " 条情报", current: items.length, total: items.length, outDir });
