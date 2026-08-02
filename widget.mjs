@@ -648,19 +648,30 @@ async function patrolInterests() {
       const names = newPosts.slice(0, 3).map((p) => p.title.slice(0, 20)).join("、");
       console.log(`[widget] 巡检发现 ${newPosts.length} 条新内容（关注点 ${interests.slice(0, 2).join("、")}）`);
       // 真正处理：抓正文 → 分类过滤 → 讲解 → 存档（通知不再"空口说白话"）
-      const saved = await processPatrolPosts(newPosts.slice(0, 2));
-      await sendNotification(
-        "🆕 真白发现新面经",
-        `${names}${newPosts.length > 3 ? ` 等 ${newPosts.length} 条` : ""}\n${saved.length ? `已生成讲解：\n${saved.map((s) => `  📄 ${s}`).join("\n")}\n在面板「🔍 爬取产出」查看` : "都是旧内容，未生成新讲解"}`
-      );
+      const result = await processPatrolPosts(newPosts.slice(0, 2));
+      const saved = result.saved;
+      let detail;
+      if (saved.length) {
+        detail = `已生成讲解：\n${saved.map((s) => `  📄 ${s}`).join("\n")}\n在面板「🔍 爬取产出」查看`;
+      } else {
+        // 如实说明未生成的原因（不再是笼统的"都是旧内容"）
+        const reasons = Object.entries(result.skipped || {}).filter(([, n]) => n > 0);
+        const reasonText = reasons.length
+          ? reasons.map(([k, n]) => `${k} ${n} 篇`).join("；")
+          : "未说明原因";
+        detail = `未生成新讲解（${reasonText}）`;
+      }
+      await sendNotification("🆕 真白发现新面经", `${names}${newPosts.length > 3 ? ` 等 ${newPosts.length} 条` : ""}\n${detail}`);
     }
   } catch { /* ignore */ }
 }
 
 // 巡检帖 → 抓正文 → 分类/方向过滤 → 具体题目检测 → 完整讲解 → 存档
-// 返回存档文件名列表（[] = 无有效内容）
+// 返回 { saved: [文件名], skipped: { 原因: 篇数 } }
 async function processPatrolPosts(posts) {
   const saved = [];
+  const skipped = {};
+  const skip = (reason) => { skipped[reason] = (skipped[reason] || 0) + 1; };
   try {
     const { fetchPage } = await import("./lib/fetch-page.mjs");
     const { classifyPage, detectQuestions, solveQuestion } = await import("./lib/ai.mjs");
@@ -670,13 +681,14 @@ async function processPatrolPosts(posts) {
         // 标记已看（避免下次重复通知）
         memory.markSeen(p.url);
         const page = await fetchPage(p.url, { maxTextChars: 6000 });
-        if (!page.ok || page.invalid || !page.text || page.text.length < 200) continue;
+        if (!page.ok || page.invalid || !page.text || page.text.length < 200) { skip("页面无效/404"); continue; }
         // 方向过滤：只留前端/Agent
         const cls = await classifyPage({ title: page.title, text: page.text });
-        if (!GOOD_DIRS.includes(cls.direction) || cls.worth < 40) continue;
+        if (!GOOD_DIRS.includes(cls.direction)) { skip("非前端/Agent方向"); continue; }
+        if (cls.worth < 40) { skip("内容价值低"); continue; }
         // 具体题目检测：攻略文跳过
         const dq = await detectQuestions({ title: page.title, text: page.text });
-        if (!dq.hasQuestion || !dq.questions?.length) continue;
+        if (!dq.hasQuestion || !dq.questions?.length) { skip("攻略文/无具体题"); continue; }
         // 完整讲解
         const md = await solveQuestion({
           title: page.title,
@@ -695,12 +707,13 @@ async function processPatrolPosts(posts) {
         console.log(`[widget] 巡检讲解完成: ${fname}`);
       } catch (e) {
         console.log(`[widget] 巡检讲解失败 ${p.url}: ${e.message}`);
+        skip("讲解失败");
       }
     }
   } catch (e) {
     console.log(`[widget] processPatrolPosts 异常: ${e.message}`);
   }
-  return saved;
+  return { saved, skipped };
 }
 
 // 启动巡检（首次 5 分钟后，之后每 30 分钟）
