@@ -36,8 +36,11 @@ function resolveApiKey() {
 
 export const config = {
   apiKey: resolveApiKey(),
-  // OpenCode Go 端点（OpenAI 兼容），走 Go 订阅额度
+  // 主端点：OpenCode Go 端点（OpenAI 兼容），走 Go 订阅额度
   baseUrl: process.env.DEEPSEEK_BASE_URL || "https://opencode.ai/zen/go/v1",
+  // 备用端点（failover）：主端点连续失败时降级；可用官方 API 兜底
+  fallbackBaseUrl: process.env.DEEPSEEK_FALLBACK_BASE_URL || "https://api.deepseek.com/v1",
+  fallbackApiKey: process.env.DEEPSEEK_FALLBACK_API_KEY || "",
   // 判断/过滤用 flash（便宜快），完整讲解用 flash 亦可，质量不够可切 pro
   model: process.env.MIANSHI_MODEL || "deepseek-v4-flash",
   linksFile: path.join(import.meta.dirname, "links.txt"),
