@@ -6,7 +6,10 @@
   "private": true,
   "scripts": {
     "run": "node run.mjs",
-    "smoke": "node scripts/smoke-test.mjs"
+    "smoke": "node scripts/smoke-test.mjs",
+    "test": "node --experimental-test-module-mocks --test \"tests/*.test.mjs\"",
+    "test:unit": "node --experimental-test-module-mocks --test \"tests/*.test.mjs\" --test-skip-pattern \"integration\"",
+    "test:integration": "node --test \"tests/integration-widget.test.mjs\""
   },
   "dependencies": {
     "@andresaya/edge-tts": "^1.8.0",

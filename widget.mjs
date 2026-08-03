@@ -17,8 +17,10 @@ import * as reviewApi from "./lib/review.mjs";
 import { pick as pickEmotion, EMOTIONS } from "./lib/emotions.mjs";
 import { getLLMStats, getRecentTools } from "./lib/trace.mjs";
 
-const PORT = 8899;
+const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
+// 测试隔离：集成测试起实例时禁用巡检定时器（生产不设置则正常巡检）
+const DISABLE_PATROL = process.env.MIANSHI_DISABLE_PATROL === "1";
 
 // ============ 数据读取 ============
 
