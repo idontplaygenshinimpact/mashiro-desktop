@@ -1,0 +1,84 @@
+{
+  "_说明": "讲解质量评测集 v2：客观可判定为主（对标 SWE-bench 的判定逻辑，领域换成前端面试题）。题型：code=提取讲解中JS代码跑测试断言；predict=跑代码比对stdout；coverage=讲解文本命中必考要点。Judge 双评仅作辅助分。",
+  "questions": [
+    {
+      "id": "q1",
+      "title": "事件循环输出顺序预测",
+      "question": "解释浏览器事件循环宏任务/微任务机制，并说明下面代码的输出顺序及原因：\nconsole.log(1);\nsetTimeout(() => console.log(2), 0);\nPromise.resolve().then(() => console.log(3));\nconsole.log(4);",
+      "type": "predict",
+      "expected_stdout": "1\n4\n3\n2",
+      "must_cover": ["微任务", "宏任务", "执行顺序", "Promise", "setTimeout"]
+    },
+    {
+      "id": "q2",
+      "title": "手写防抖 debounce",
+      "question": "手写一个防抖函数 debounce(fn, wait)，支持立即执行选项和取消方法，说明原理和使用场景。",
+      "type": "code",
+      "fn": "debounce",
+      "test": "const calls = [];\nconst f = debounce((x) => calls.push(x), 100);\nf(1); f(2); f(3); f(4); f(5);\nsetTimeout(() => {\n  if (calls.length !== 1) { console.error('debounce fail: 触发' + calls.length + '次'); process.exit(1); }\n  if (calls[0] !== 5) { console.error('debounce fail: 应传最后一次参数' + calls[0]); process.exit(1); }\n  console.log('PASS');\n}, 300);",
+      "must_cover": ["防抖", "定时器", "this", "取消"]
+    },
+    {
+      "id": "q3",
+      "title": "手写节流 throttle",
+      "question": "手写一个节流函数 throttle(fn, interval)，保证在时间间隔内最多执行一次，说明与防抖的区别。",
+      "type": "code",
+      "fn": "throttle",
+      "test": "let count = 0;\nconst f = throttle(() => count++, 200);\nconst t = setInterval(f, 30);\nsetTimeout(() => {\n  clearInterval(t);\n  if (count < 2 || count > 7) { console.error('throttle fail: ' + count + '次'); process.exit(1); }\n  console.log('PASS');\n}, 1000);",
+      "must_cover": ["节流", "时间戳", "定时器", "防抖区别"]
+    },
+    {
+      "id": "q4",
+      "title": "手写深拷贝 deepClone",
+      "question": "手写 deepClone，处理对象/数组/Date/循环引用，说明浅拷贝与深拷贝的区别。",
+      "type": "code",
+      "fn": "deepClone",
+      "test": "const a = { x: 1, arr: [1, { y: 2 }], d: new Date(123) };\nconst b = deepClone(a);\nif (b === a) { console.error('fail: 返回了原对象'); process.exit(1); }\na.arr[1].y = 999;\nif (b.arr[1].y !== 2) { console.error('fail: 不是深拷贝'); process.exit(1); }\nif (!(b.d instanceof Date) || b.d.getTime() !== 123) { console.error('fail: Date 处理'); process.exit(1); }\nconst c = {}; c.self = c;\ntry {\n  const d = deepClone(c);\n  if (d.self !== d) { console.error('fail: 循环引用结果不对'); process.exit(1); }\n} catch (e) { console.error('fail: 循环引用崩溃 ' + e.message); process.exit(1); }\nconsole.log('PASS');",
+      "must_cover": ["深拷贝", "浅拷贝", "循环引用", "Date", "WeakMap"]
+    },
+    {
+      "id": "q5",
+      "title": "手写 Promise.all",
+      "question": "手写 promiseAll(promises)，与 Promise.all 行为一致：全部成功返回结果数组，任一失败整体 reject。",
+      "type": "code",
+      "fn": "promiseAll",
+      "test": "promiseAll([Promise.resolve(1), new Promise((res) => setTimeout(() => res(2), 10))]).then((v) => {\n  if (v.join(',') !== '1,2') { console.error('fail: 结果 ' + v.join(',')); process.exit(1); }\n  return promiseAll([Promise.resolve(1), Promise.reject(new Error('x'))]).then(\n    () => { console.error('fail: 应 reject'); process.exit(1); },\n    () => { console.log('PASS'); }\n  );\n}).catch((e) => { console.error('crash: ' + e.message); process.exit(1); });",
+      "must_cover": ["Promise", "all", "reject", "并发"]
+    },
+    {
+      "id": "q6",
+      "title": "React Hooks 原理",
+      "question": "解释 React Hooks 的实现原理：为什么 useState 不能写在条件语句中，hooks 链表如何工作，闭包陷阱是什么。",
+      "type": "coverage",
+      "must_cover": ["Fiber", "链表", "调用顺序", "闭包", "依赖"]
+    },
+    {
+      "id": "q7",
+      "title": "HTTP 缓存策略",
+      "question": "完整讲解 HTTP 缓存：强缓存与协商缓存的区别、Cache-Control 指令、ETag/Last-Modified 工作方式。",
+      "type": "coverage",
+      "must_cover": ["强缓存", "协商缓存", "Cache-Control", "ETag", "Last-Modified"]
+    },
+    {
+      "id": "q8",
+      "title": "跨域与 CORS",
+      "question": "讲解浏览器跨域限制、JSONP 原理与局限、CORS 完整流程（预检/简单请求/响应头）与常见解决方案。",
+      "type": "coverage",
+      "must_cover": ["同源", "JSONP", "CORS", "预检", "Access-Control"]
+    },
+    {
+      "id": "q9",
+      "title": "前端性能优化",
+      "question": "给出前端性能优化完整方案：网络加载层、渲染层、运行时三个维度，说明每项的优化原理与衡量指标。",
+      "type": "coverage",
+      "must_cover": ["首屏", "懒加载", "渲染", "指标", "代码分割"]
+    },
+    {
+      "id": "q10",
+      "title": "SSE 与前端流式交互",
+      "question": "讲解 Server-Sent Events 原理（与 WebSocket 区别）、fetch 流式读取（ReadableStream）、在 AI Agent 应用中的实践。",
+      "type": "coverage",
+      "must_cover": ["SSE", "WebSocket", "ReadableStream", "流式", "打字机"]
+    }
+  ]
+}

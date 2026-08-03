@@ -1,0 +1,330 @@
+{
+  "ts": "2026-08-03T19:33:32.182Z",
+  "mode": "full",
+  "composite": 78,
+  "dims": {
+    "solve": 56,
+    "codePass": "3/5",
+    "classify": 100,
+    "detect": 100,
+    "static": 100
+  },
+  "details": {
+    "questions": [
+      {
+        "id": "q1",
+        "title": "事件循环输出顺序预测",
+        "type": "predict",
+        "score": 30,
+        "objective": 0,
+        "covRate": 100,
+        "covHit": [
+          "微任务",
+          "宏任务",
+          "执行顺序",
+          "Promise",
+          "setTimeout"
+        ],
+        "covMissing": [],
+        "judge": 0,
+        "detail": "代码验证失败(4个代码块)",
+        "answerLen": 3709
+      },
+      {
+        "id": "q2",
+        "title": "手写防抖 debounce",
+        "type": "code",
+        "score": 80,
+        "objective": 50,
+        "covRate": 100,
+        "covHit": [
+          "防抖",
+          "定时器",
+          "this",
+          "取消"
+        ],
+        "covMissing": [],
+        "judge": 0,
+        "detail": "代码验证通过",
+        "answerLen": 4389
+      },
+      {
+        "id": "q3",
+        "title": "手写节流 throttle",
+        "type": "code",
+        "score": 0,
+        "objective": 0,
+        "covRate": 0,
+        "covHit": [],
+        "covMissing": [
+          "节流",
+          "时间戳",
+          "定时器",
+          "防抖区别"
+        ],
+        "judge": 0,
+        "detail": "代码验证失败(0个代码块)",
+        "answerLen": 0
+      },
+      {
+        "id": "q4",
+        "title": "手写深拷贝 deepClone",
+        "type": "code",
+        "score": 80,
+        "objective": 50,
+        "covRate": 100,
+        "covHit": [
+          "深拷贝",
+          "浅拷贝",
+          "循环引用",
+          "Date",
+          "WeakMap"
+        ],
+        "covMissing": [],
+        "judge": 0,
+        "detail": "代码验证通过",
+        "answerLen": 7233
+      },
+      {
+        "id": "q5",
+        "title": "手写 Promise.all",
+        "type": "code",
+        "score": 80,
+        "objective": 50,
+        "covRate": 100,
+        "covHit": [
+          "Promise",
+          "all",
+          "reject",
+          "并发"
+        ],
+        "covMissing": [],
+        "judge": 0,
+        "detail": "代码验证通过",
+        "answerLen": 2737
+      },
+      {
+        "id": "q6",
+        "title": "React Hooks 原理",
+        "type": "coverage",
+        "score": 60,
+        "objective": 0,
+        "covRate": 100,
+        "covHit": [
+          "Fiber",
+          "链表",
+          "调用顺序",
+          "闭包",
+          "依赖"
+        ],
+        "covMissing": [],
+        "judge": 0,
+        "detail": "",
+        "answerLen": 5075
+      },
+      {
+        "id": "q7",
+        "title": "HTTP 缓存策略",
+        "type": "coverage",
+        "score": 60,
+        "objective": 0,
+        "covRate": 100,
+        "covHit": [
+          "强缓存",
+          "协商缓存",
+          "Cache-Control",
+          "ETag",
+          "Last-Modified"
+        ],
+        "covMissing": [],
+        "judge": 0,
+        "detail": "",
+        "answerLen": 10195
+      },
+      {
+        "id": "q8",
+        "title": "跨域与 CORS",
+        "type": "coverage",
+        "score": 60,
+        "objective": 0,
+        "covRate": 100,
+        "covHit": [
+          "同源",
+          "JSONP",
+          "CORS",
+          "预检",
+          "Access-Control"
+        ],
+        "covMissing": [],
+        "judge": 0,
+        "detail": "",
+        "answerLen": 12792
+      },
+      {
+        "id": "q9",
+        "title": "前端性能优化",
+        "type": "coverage",
+        "score": 48,
+        "objective": 0,
+        "covRate": 80,
+        "covHit": [
+          "首屏",
+          "懒加载",
+          "渲染",
+          "指标"
+        ],
+        "covMissing": [
+          "代码分割"
+        ],
+        "judge": 0,
+        "detail": "",
+        "answerLen": 11957
+      },
+      {
+        "id": "q10",
+        "title": "SSE 与前端流式交互",
+        "type": "coverage",
+        "score": 60,
+        "objective": 0,
+        "covRate": 100,
+        "covHit": [
+          "SSE",
+          "WebSocket",
+          "ReadableStream",
+          "流式",
+          "打字机"
+        ],
+        "covMissing": [],
+        "judge": 0,
+        "detail": "",
+        "answerLen": 16881
+      }
+    ],
+    "classify": [
+      {
+        "id": "c1",
+        "expected": "mianshi",
+        "actual": "mianshi",
+        "ok": true
+      },
+      {
+        "id": "c2",
+        "expected": "zhaopin",
+        "actual": "zhaopin",
+        "ok": true
+      },
+      {
+        "id": "c3",
+        "expected": "bishi",
+        "actual": "bishi",
+        "ok": true
+      },
+      {
+        "id": "c4",
+        "expected": "other",
+        "actual": "other",
+        "ok": true
+      },
+      {
+        "id": "c5",
+        "expected": "mianshi",
+        "actual": "mianshi",
+        "ok": true
+      },
+      {
+        "id": "c6",
+        "expected": "zhaopin",
+        "actual": "zhaopin",
+        "ok": true
+      },
+      {
+        "id": "c7",
+        "expected": "bishi",
+        "actual": "bishi",
+        "ok": true
+      },
+      {
+        "id": "c8",
+        "expected": "other",
+        "actual": "other",
+        "ok": true
+      }
+    ],
+    "detect": [
+      {
+        "id": "d1",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d2",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d3",
+        "expected": false,
+        "actual": false,
+        "ok": true
+      },
+      {
+        "id": "d4",
+        "expected": false,
+        "actual": false,
+        "ok": true
+      },
+      {
+        "id": "d5",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d6",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      }
+    ],
+    "static": [
+      {
+        "text": "事件循环与微任务",
+        "expected": "js-event-loop",
+        "actual": "js-event-loop",
+        "ok": true
+      },
+      {
+        "text": "React Hooks 原理",
+        "expected": "rc-hooks",
+        "actual": "rc-hooks",
+        "ok": true
+      },
+      {
+        "text": "原型链",
+        "expected": "js-prototype",
+        "actual": "js-prototype",
+        "ok": true
+      },
+      {
+        "text": "Webpack 配置",
+        "expected": "eng-build",
+        "actual": "eng-build",
+        "ok": true
+      },
+      {
+        "text": "XSS 跨域 CORS",
+        "expected": "br-security",
+        "actual": "br-security",
+        "ok": true
+      },
+      {
+        "text": "完全不相关内容",
+        "expected": null,
+        "actual": null,
+        "ok": true
+      }
+    ]
+  }
+}

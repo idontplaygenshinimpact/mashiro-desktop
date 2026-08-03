@@ -1,0 +1,59 @@
+{
+  "ts": "2026-08-03T19:18:38.615Z",
+  "layer": "B",
+  "pass": 10,
+  "total": 10,
+  "rate": 1,
+  "results": [
+    {
+      "name": "工具循环：LLM 决定调工具 → harness 执行并回填 → 最终回答",
+      "ok": true,
+      "detail": "回复:执行完毕。 工具记录:1"
+    },
+    {
+      "name": "参数校验：LLM 传缺参 → validateArgs 拦截，不执行工具",
+      "ok": true,
+      "detail": "拦截原因:参数缺失: question（solve_question "
+    },
+    {
+      "name": "未知工具：LLM 幻觉工具名 → 报错不崩溃",
+      "ok": true,
+      "detail": "回复:好的。"
+    },
+    {
+      "name": "记忆写入：remember 工具 → 关注点持久化",
+      "ok": true,
+      "detail": "interests:React"
+    },
+    {
+      "name": "上下文压缩：长对话触发 compaction 且回答正常",
+      "ok": true,
+      "detail": "回复:压缩后正常回答。"
+    },
+    {
+      "name": "语音稿分离：【语音】标记正确解析",
+      "ok": true,
+      "detail": "voice:很简单哦~"
+    },
+    {
+      "name": "闭环-面试实录：被问住的知识点 → 学习清单(必会) + 复习卡",
+      "ok": true,
+      "detail": "清单:事件循环 卡数:1"
+    },
+    {
+      "name": "闭环-复盘判分：错题 → 薄弱点回流 + 标记已复盘",
+      "ok": true,
+      "detail": "薄弱点:事件循环 reviewed:true"
+    },
+    {
+      "name": "闭环-模拟面试：低分轮 → 复盘报告 + 薄弱点 + 复习卡 + 清单回流",
+      "ok": true,
+      "detail": "报告:## 面试复盘\n###  薄弱点:true 卡:true 清单:true 历史:true"
+    },
+    {
+      "name": "搜索过滤：方向排除 + 跨源去重 + 已看跳过",
+      "ok": true,
+      "detail": "结果:字节前端一面面经 | React Hooks 面试题整理"
+    }
+  ]
+}

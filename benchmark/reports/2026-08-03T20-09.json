@@ -1,0 +1,181 @@
+{
+  "ts": "2026-08-03T20:09:13.997Z",
+  "mode": "quick",
+  "composite": 88,
+  "dims": {
+    "solve": 75,
+    "codePass": "1/2",
+    "classify": 100,
+    "detect": 100,
+    "static": 100
+  },
+  "details": {
+    "questions": [
+      {
+        "id": "q1",
+        "title": "事件循环输出顺序预测",
+        "type": "predict",
+        "score": 50,
+        "objective": 0,
+        "covRate": 100,
+        "covHit": [
+          "微任务",
+          "宏任务",
+          "执行顺序",
+          "Promise",
+          "setTimeout"
+        ],
+        "covMissing": [],
+        "judge": 100,
+        "judgeOk": true,
+        "detail": "代码验证失败(6个代码块)",
+        "answerLen": 4861
+      },
+      {
+        "id": "q2",
+        "title": "手写防抖 debounce",
+        "type": "code",
+        "score": 100,
+        "objective": 50,
+        "covRate": 100,
+        "covHit": [
+          "防抖",
+          "定时器",
+          "this",
+          "取消"
+        ],
+        "covMissing": [],
+        "judge": 0,
+        "judgeOk": false,
+        "detail": "代码验证通过",
+        "answerLen": 9469
+      }
+    ],
+    "classify": [
+      {
+        "id": "c1",
+        "expected": "mianshi",
+        "actual": "mianshi",
+        "ok": true
+      },
+      {
+        "id": "c2",
+        "expected": "zhaopin",
+        "actual": "zhaopin",
+        "ok": true
+      },
+      {
+        "id": "c3",
+        "expected": "bishi",
+        "actual": "bishi",
+        "ok": true
+      },
+      {
+        "id": "c4",
+        "expected": "other",
+        "actual": "other",
+        "ok": true
+      },
+      {
+        "id": "c5",
+        "expected": "mianshi",
+        "actual": "mianshi",
+        "ok": true
+      },
+      {
+        "id": "c6",
+        "expected": "zhaopin",
+        "actual": "zhaopin",
+        "ok": true
+      },
+      {
+        "id": "c7",
+        "expected": "bishi",
+        "actual": "bishi",
+        "ok": true
+      },
+      {
+        "id": "c8",
+        "expected": "other",
+        "actual": "other",
+        "ok": true
+      }
+    ],
+    "detect": [
+      {
+        "id": "d1",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d2",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d3",
+        "expected": false,
+        "actual": false,
+        "ok": true
+      },
+      {
+        "id": "d4",
+        "expected": false,
+        "actual": false,
+        "ok": true
+      },
+      {
+        "id": "d5",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d6",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      }
+    ],
+    "static": [
+      {
+        "text": "事件循环与微任务",
+        "expected": "js-event-loop",
+        "actual": "js-event-loop",
+        "ok": true
+      },
+      {
+        "text": "React Hooks 原理",
+        "expected": "rc-hooks",
+        "actual": "rc-hooks",
+        "ok": true
+      },
+      {
+        "text": "原型链",
+        "expected": "js-prototype",
+        "actual": "js-prototype",
+        "ok": true
+      },
+      {
+        "text": "Webpack 配置",
+        "expected": "eng-build",
+        "actual": "eng-build",
+        "ok": true
+      },
+      {
+        "text": "XSS 跨域 CORS",
+        "expected": "br-security",
+        "actual": "br-security",
+        "ok": true
+      },
+      {
+        "text": "完全不相关内容",
+        "expected": null,
+        "actual": null,
+        "ok": true
+      }
+    ]
+  }
+}
