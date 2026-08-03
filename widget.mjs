@@ -766,8 +766,8 @@ async function patrolInterests() {
     const { chatWithAgent } = { chatWithAgent: null }; // 避免循环依赖，直接调 search
     const { fetchPage } = await import("./lib/fetch-page.mjs");
     const re = /(\/discuss\/\d+|\/post\/\d+|\/article\/details\/\d+|juejin\.cn\/post\/\d+|blog\.csdn\.net\/[^/]+\/article\/details\/\d+)/;
-    // 标题级方向过滤：嵌入式/硬件/算法/后端/C++ 等非前端方向直接排除（避免通知混入无关内容）
-    const EXCLUDE_TITLE = /嵌入式|单片机|硬件|驱动|PCB|STM32|ESP32|ARM|C\+\+|Java|Go语言|后端|算法岗|机器学习|深度学习|大数据|测试开发|测开|运维|产品|运营|数据分析|爬虫开发|上位机|物联网|芯片|FPGA/;
+    // 标题级方向过滤：嵌入式/硬件/算法/后端 + 简历/求职咨询/闲聊类（避免通知混入无关内容）
+    const EXCLUDE_TITLE = /嵌入式|单片机|硬件|驱动|PCB|STM32|ESP32|ARM|芯片|FPGA|物联网|上位机|爬虫开发/;
     const newPosts = [];
     // 取前 2 个关注点，每个搜多站（牛客/掘金/CSDN）
     const searchSites = [

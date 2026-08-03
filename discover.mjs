@@ -92,8 +92,8 @@ process.on("SIGINT", () => { clearProgress(); process.exit(0); });
 const POST_URL_RE =
   /(\/discuss\/\d+|\/post\/\d+|\/article\/details\/\d+|juejin\.cn\/post\/\d+|blog\.csdn\.net\/[^/]+\/article\/details\/\d+)/;
 
-// 标题级方向过滤：嵌入式/硬件/算法/后端等非前端方向直接排除（列表页收集时就过滤，省 AI 挑帖额度）
-const EXCLUDE_TITLE = /嵌入式|单片机|硬件|驱动|PCB|STM32|ESP32|ARM|C\+\+|Java|Go语言|后端|算法岗|机器学习|深度学习|大数据|测试开发|测开|运维|产品|运营|数据分析|爬虫开发|上位机|物联网|芯片|FPGA/;
+// 标题级方向过滤：嵌入式/硬件/算法/后端等非前端方向 + 简历/求职咨询/闲聊（列表页收集时就过滤，省 AI 挑帖额度）
+const EXCLUDE_TITLE = /嵌入式|单片机|硬件|驱动|PCB|STM32|ESP32|ARM|芯片|FPGA|物联网|上位机|爬虫开发/;
 
 function cleanHref(href) {
   // 去掉搜索跟踪参数（searchId 等），保留纯净链接
