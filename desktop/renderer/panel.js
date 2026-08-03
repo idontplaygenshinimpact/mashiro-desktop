@@ -306,12 +306,14 @@ async function loadStudyPlan() {
   });
 }
 
-// ============ 学习详情：全屏弹层展开讲解 ============
+// ============ 学习详情：全屏弹层展开讲解 + 追问补充 ============
 let studyDetailCache = {}; // id -> { content, topic }
+let sdCurrentId = null;    // 当前弹层打开的条目 id
 const sdOverlay = () => $("study-detail-overlay");
 const sdBody = () => $("sd-modal-body");
 
 async function showStudyDetail(id) {
+  sdCurrentId = id;
   // 显示弹层 + 加载态
   sdOverlay().classList.remove("hidden");
   sdBody().innerHTML = '<div style="color:#8a87a8;font-size:13px;padding:12px">📖 加载讲解中...</div>';
@@ -335,6 +337,56 @@ async function showStudyDetail(id) {
     sdBody().innerHTML = `<div style="color:#c05050;font-size:13px;padding:12px">⚠️ ${esc(e.message)}</div>`;
   }
 }
+
+// 追问补充：基于已有讲解继续深入（流式显示 + 更新缓存）
+let sdAsking = false;
+async function askStudyDetail() {
+  const question = $("sd-ask-input").value.trim();
+  if (!question || !sdCurrentId || sdAsking) return;
+  sdAsking = true;
+  const btn = $("sd-ask-btn");
+  btn.disabled = true;
+  btn.textContent = "补充中...";
+  $("sd-ask-input").value = "";
+  try {
+    // 初始内容（未生成时先生成）
+    if (!studyDetailCache[sdCurrentId]?.content) {
+      const topic = await streamStudyDetail(sdCurrentId, (c) => {
+        sdBody().innerHTML = renderMd(c) + '<div class="sd-streaming">⏳ 生成中...</div>';
+        sdBody().scrollTop = sdBody().scrollHeight;
+      });
+      $("sd-modal-title").textContent = "📖 " + topic;
+    }
+    const base = studyDetailCache[sdCurrentId]?.content || "";
+    // 追加分隔 + 追问标题
+    sdBody().innerHTML = renderMd(base) + `<div class="sd-ask-q">💬 追问：${esc(question)}</div><div class="sd-streaming">⏳ 补充中...</div>`;
+    sdBody().scrollTop = sdBody().scrollHeight;
+    // 流式补充
+    let extra = "";
+    await window.kanban.studyDetailAppend(sdCurrentId, question, (delta) => {
+      extra += delta;
+      sdBody().innerHTML = renderMd(base) + `<div class="sd-ask-q">💬 追问：${esc(question)}</div>` + renderMd(extra) + '<div class="sd-streaming">⏳ 补充中...</div>';
+      sdBody().scrollTop = sdBody().scrollHeight;
+    });
+    // 完成：更新缓存（下次打开能看到补充内容）
+    const topic = studyDetailCache[sdCurrentId]?.topic || "讲解";
+    studyDetailCache[sdCurrentId] = { content: base + `\n\n## 💬 追问：${question}\n\n` + extra, topic };
+    sdBody().innerHTML = renderMd(studyDetailCache[sdCurrentId].content);
+    sdBody().scrollTop = sdBody().scrollHeight; // 停留在补充处
+  } catch (e) {
+    const box = document.createElement("div");
+    box.style.cssText = "color:#c05050;font-size:12px;padding:8px";
+    box.textContent = "⚠️ " + e.message;
+    sdBody().appendChild(box);
+  } finally {
+    sdAsking = false;
+    btn.disabled = false;
+    btn.textContent = "💬 追问";
+  }
+}
+
+$("sd-ask-btn").addEventListener("click", askStudyDetail);
+$("sd-ask-input").addEventListener("keydown", (e) => { if (e.key === "Enter") askStudyDetail(); });
 
 // 流式获取讲解（走 IPC 通道，避开渲染层 fetch 的 webSecurity 限制）
 async function streamStudyDetail(id, onUpdate) {

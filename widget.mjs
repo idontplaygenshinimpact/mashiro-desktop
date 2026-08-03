@@ -5,7 +5,7 @@
 //   3. 学习提醒 —— 每天固定时间提醒做面经/笔试学习
 // 用法: node widget.mjs [--no-notify]
 import { createServer } from "node:http";
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, readdirSync, statSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { exec } from "node:child_process";
 import notifier from "node-notifier";
@@ -327,6 +327,63 @@ const server = createServer((req, res) => {
         savedPath = savePath;
       } catch { /* ignore */ }
       send({ type: "done", saved: !!savedPath, filePath: savedPath });
+      res.end();
+    }).catch((e) => {
+      send({ type: "error", error: e.message });
+      res.end();
+    });
+    return;
+  }
+  if (url.pathname === "/api/study-append-stream") {
+    // 讲解追问补充：基于已有讲解内容 + 用户问题，流式生成补充章节并追加存档
+    const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
+    const id = u.searchParams.get("id") || "";
+    const question = u.searchParams.get("question") || "";
+    if (!question.trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "question required" })); return; }
+    const plan = studyApi.getPlan();
+    const item = (plan.items || []).find((i) => i.id === id);
+    if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
+    // 读已有讲解（study_notes 存档优先；没有则用验证题作为上下文）
+    let existing = "";
+    const filePath = findStudyFile(item);
+    if (filePath) {
+      try { existing = readFileSync(filePath, "utf8"); } catch { /* ignore */ }
+    }
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    });
+    const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    send({ type: "start", topic: item.topic });
+    let full = "";
+    import("./lib/ai.mjs").then(async ({ solveAppendStream }) => {
+      full = await solveAppendStream({
+        topic: item.topic,
+        existing: existing || `（暂无已有讲解，围绕知识点直接回答）${item.verify_question || item.topic}`,
+        question,
+      }, (delta) => {
+        full += delta;
+        send({ type: "delta", delta });
+      });
+      // 追加写回讲解文件（持久化：下次打开能看到补充内容）
+      try {
+        const notesDir = STUDY_NOTES_DIR();
+        mkdirSync(notesDir, { recursive: true });
+        const savePath = filePath || path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
+        const appendBlock = `\n\n---\n\n## 💬 追问：${question}\n\n${full.slice(0, 8000)}\n`;
+        // 追加（文件存在则 append，否则新建带头部）
+        if (filePath) {
+          appendFileSync(savePath, appendBlock, "utf8");
+        } else {
+          const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
+          writeFileSync(savePath, header + full.slice(0, 12000) + appendBlock, "utf8");
+        }
+        send({ type: "done", saved: true, filePath: savePath });
+      } catch (e) {
+        send({ type: "done", saved: false, filePath: null });
+      }
       res.end();
     }).catch((e) => {
       send({ type: "error", error: e.message });

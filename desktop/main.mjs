@@ -219,6 +219,35 @@ ipcMain.handle("widget:study-detail-stream", async (e, { id }) => {
     return { ok: false, error: err.message };
   }
 });
+// 讲解追问补充：main 转发 widget append-stream SSE → 渲染层（独立事件通道）
+ipcMain.handle("widget:study-append-stream", async (e, { id, question }) => {
+  try {
+    const res = await fetch(`${WIDGET_URL}/api/study-append-stream?id=${encodeURIComponent(id)}&question=${encodeURIComponent(question)}`);
+    const ctype = res.headers.get("content-type") || "";
+    if (!ctype.includes("text/event-stream")) {
+      const j = await res.json();
+      e.sender.send("study-append-chunk", JSON.stringify(j));
+      return { ok: true, mode: "json" };
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const event = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        e.sender.send("study-append-chunk", event);
+      }
+    }
+    return { ok: true, mode: "sse" };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
 ipcMain.handle("widget:study-generate", () => widgetPost("/api/study-generate"));
 ipcMain.handle("widget:study-check", (e, { id, done }) => widgetGet(`/api/study-check?id=${encodeURIComponent(id)}&done=${done ? "1" : "0"}`));
 ipcMain.handle("widget:study-review", () => widgetPost("/api/study-review"));
@@ -336,6 +365,8 @@ function createPanelWindow() {
   if (panelWin && !panelWin.isDestroyed()) {
     panelWin.show();
     panelWin.focus();
+    // 面板显示时隐藏桌宠（避免遮挡）
+    hideMascot();
     return;
   }
   const { workArea } = screen.getPrimaryDisplay();
@@ -370,13 +401,35 @@ function createPanelWindow() {
   panelWin.webContents.on("console-message", (e, level, message) => {
     console.log(`[panel] ${message}`);
   });
-  panelWin.on("closed", () => { panelWin = null; });
+  panelWin.on("closed", () => {
+    panelWin = null;
+    showMascot(); // 面板被关闭 → 恢复桌宠
+  });
+  // 面板显示时隐藏桌宠（避免遮挡）
+  hideMascot();
+}
+
+// 隐藏桌宠（面板打开时调用）
+function hideMascot() {
+  if (win && !win.isDestroyed() && win.isVisible()) {
+    win.hide();
+    console.log("[kanban] 面板打开，桌宠隐藏");
+  }
+}
+
+// 恢复桌宠显示（面板关闭/隐藏时调用）
+function showMascot() {
+  if (win && !win.isDestroyed() && !win.isVisible()) {
+    win.showInactive(); // 不抢焦点
+    console.log("[kanban] 面板关闭，桌宠恢复");
+  }
 }
 
 // 面板窗口开关（角色点击/托盘触发）
 ipcMain.handle("window:toggle-panel", () => {
   if (panelWin && !panelWin.isDestroyed() && panelWin.isVisible()) {
     panelWin.hide();
+    showMascot(); // 面板关闭 → 恢复桌宠
   } else {
     createPanelWindow();
   }

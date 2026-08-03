@@ -274,6 +274,22 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .sd-modal-body .sd-hr { border: none; border-top: 1px dashed rgba(109, 79, 216, 0.25); margin: 8px 0; }
 .sd-modal-body .sd-blank { height: 6px; }
 .sd-modal-body .sd-streaming { color: #8a87a8; font-size: 12px; padding: 10px 0; animation: sd-pulse 1.2s infinite; }
+.sd-modal-body .sd-ask-q {
+  font-size: 12px; font-weight: 700; color: #5d48b8;
+  background: rgba(109,79,216,0.08); border-left: 3px solid #8a5adc;
+  border-radius: 0 6px 6px 0; padding: 6px 10px; margin: 12px 0 8px;
+}
+/* 追问输入区 */
+.sd-modal-ask {
+  display: flex; gap: 6px; padding: 10px 14px;
+  border-top: 1px solid rgba(109, 79, 216, 0.15);
+  background: rgba(255, 255, 255, 0.7); flex-shrink: 0;
+}
+.sd-modal-ask input {
+  flex: 1; padding: 8px 10px; border: 1px solid rgba(109,79,216,0.25); border-radius: 8px;
+  font-size: 12px; background: rgba(255,255,255,0.9); color: #2d2a45; outline: none;
+}
+.sd-modal-ask input:focus { border-color: #8a5adc; }
 @keyframes sd-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 .review-box { margin-top: 12px; }
 .rq { margin-bottom: 12px; }
