@@ -211,6 +211,7 @@ async function loadReview() {
   $("review-stats").innerHTML = `
     <div class="stat-chip">总卡片 <b>${stats.total || 0}</b></div>
     <div class="stat-chip">今日到期 <b>${stats.due || 0}</b></div>
+    <div class="stat-chip">学习中 <b>${stats.learning || 0}</b></div>
     <div class="stat-chip">已掌握 <b>${stats.mastered || 0}</b></div>`;
   reviewQueue = r.due || [];
   reviewIdx = 0;
@@ -232,6 +233,14 @@ function showReviewCard() {
   $("rc-answer").classList.add("hidden");
   $("rc-show").classList.remove("hidden");
   $("rc-buttons").classList.add("hidden");
+  // 来源 + 复习次数标签（追加在题目上方）
+  const src = card.source || "";
+  const times = card.history?.length || 0;
+  const srcTag = document.getElementById("rc-src");
+  if (srcTag) {
+    srcTag.textContent = `${src ? "来源：" + src + " · " : ""}已复习 ${times} 次`;
+    srcTag.style.display = "block";
+  }
 }
 
 $("rc-show").addEventListener("click", () => {

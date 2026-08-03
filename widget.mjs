@@ -212,6 +212,28 @@ async function checkStudyReminder() {
   }
 }
 
+// ============ 复习到期提醒（有到期卡主动提示，每天一次） ============
+const reviewReminded = new Set(); // 已提醒日期
+
+async function checkReviewReminder() {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  if (reviewReminded.has(todayKey)) return; // 今天已提醒过
+  try {
+    const due = reviewApi.review.getDueCards();
+    if (due.length === 0) return;
+    // 首次提醒时间：卡片到期当天 9 点后（避免半夜打扰）；之后每小时检查
+    const h = new Date().getHours();
+    if (h < 9) return;
+    reviewReminded.add(todayKey);
+    const topics = due.slice(0, 3).map((c) => c.topic.slice(0, 18)).join("、");
+    console.log(`[widget] 复习到期提醒：${due.length} 张`);
+    await sendNotification(
+      "🔁 复习时间到",
+      `有 ${due.length} 张复习卡片到期${due.length > 3 ? `（${topics} 等）` : `：${topics}`}\n在面板「🔁 复习」Tab 完成，答对会自动拉长下次间隔`
+    );
+  } catch { /* ignore */ }
+}
+
 // ============ HTTP 服务 ============
 
 const server = createServer((req, res) => {
@@ -326,6 +348,15 @@ const server = createServer((req, res) => {
         writeFileSync(savePath, header + full.slice(0, 50000), "utf8");
         savedPath = savePath;
       } catch { /* ignore */ }
+      // 讲解生成完成 → 自动建复习卡（学过的知识点进间隔复习，不必等勾选）
+      try {
+        reviewApi.review.addCard({
+          topic: item.topic,
+          question: item.verify_question || `请简述：${item.topic}`,
+          answer: full.slice(0, 500),
+          source: "学习清单讲解",
+        });
+      } catch { /* ignore */ }
       send({ type: "done", saved: !!savedPath, filePath: savedPath });
       res.end();
     }).catch((e) => {
@@ -429,6 +460,15 @@ const server = createServer((req, res) => {
         writeFileSync(savePath, header + content, "utf8");
         savedPath = savePath;
       } catch (e) { /* 存档失败不影响返回 */ }
+      // 讲解生成完成 → 自动建复习卡
+      try {
+        reviewApi.review.addCard({
+          topic: item.topic,
+          question: item.verify_question || `请简述：${item.topic}`,
+          answer: content.slice(0, 500),
+          source: "学习清单讲解",
+        });
+      } catch { /* ignore */ }
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: false, content, filePath: savedPath, saved: !!savedPath }));
     }).catch((e) => {
@@ -829,3 +869,6 @@ setTimeout(checkTrends, 3000);
 setInterval(checkTrends, 5 * 60 * 1000);
 // 每分钟检查学习提醒
 setInterval(checkStudyReminder, 60 * 1000);
+// 每 30 分钟检查复习到期（9 点后，有到期卡每天提醒一次）
+setInterval(checkReviewReminder, 30 * 60 * 1000);
+setTimeout(checkReviewReminder, 60 * 1000); // 启动 1 分钟后先查一次

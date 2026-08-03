@@ -135,6 +135,7 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .stat-chip { background: rgba(255,255,255,0.75); border: 1px solid rgba(109,79,216,0.2); border-radius: 8px; padding: 8px 12px; font-size: 12px; }
 .stat-chip b { color: #b07020; font-size: 16px; }
 .review-card { background: rgba(255,255,255,0.8); border: 1px solid rgba(109,79,216,0.2); border-radius: 12px; padding: 14px; }
+.rc-src { font-size: 10px; color: #8a87a8; margin-bottom: 6px; }
 .rc-topic { font-size: 12px; color: #b07020; font-weight: 600; margin-bottom: 8px; }
 .rc-question { font-size: 14px; line-height: 1.7; margin-bottom: 10px; white-space: pre-wrap; }
 .rc-answer { font-size: 12px; color: #6a6790; background: rgba(109,79,216,0.06); border-radius: 8px; padding: 10px; margin-bottom: 10px; white-space: pre-wrap; }
