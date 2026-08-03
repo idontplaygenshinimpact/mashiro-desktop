@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("kanban", {
   studyPlan: () => ipcRenderer.invoke("widget:study-plan"),
   interviewHistory: () => ipcRenderer.invoke("widget:interview-history"),
   getStats: () => ipcRenderer.invoke("widget:stats"),
+  getObservability: () => ipcRenderer.invoke("widget:observability"),
   interviewNotes: (topics) => ipcRenderer.invoke("widget:interview-notes", { topics }),
   studyDetail: (id) => ipcRenderer.invoke("widget:study-detail", { id }),
   studyDetailStream: (id, onChunk) => {

@@ -186,6 +186,7 @@ ipcMain.handle("widget:chat", (e, { message, history }) => widgetPost("/api/chat
 ipcMain.handle("widget:study-plan", () => widgetGet("/api/study-plan"));
 ipcMain.handle("widget:interview-history", () => widgetGet("/api/interview/history"));
 ipcMain.handle("widget:stats", () => widgetGet("/api/stats"));
+ipcMain.handle("widget:observability", () => widgetGet("/api/observability"));
 ipcMain.handle("widget:interview-notes", (e, { topics }) => widgetPost("/api/interview-notes", { topics }));
 ipcMain.handle("widget:study-detail", (e, { id }) => widgetGet(`/api/study-detail?id=${encodeURIComponent(id)}`));
 // 流式讲解：main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）

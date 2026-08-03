@@ -157,6 +157,50 @@ mianshi-agent/
 
 ---
 
+## 架构总览
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  桌面层（Electron）                                       │
+│  ┌─────────────┐    ┌──────────────────────────────┐    │
+│  │ 桌宠窗口     │    │ 面板窗口（模拟面试/复习/清单/对话）│    │
+│  │ Live2D 真白  │    │ 学习弹层(SSE流式/追问/归并)     │    │
+│  │ 点击/拖拽/语音 │    │ 运行监控(LLM调用/token统计)    │    │
+│  └──────┬──────┘    └──────────────┬───────────────┘    │
+│         │ IPC(preload)             │ IPC                  │
+└─────────┼──────────────────────────┼──────────────────────┘
+          ▼                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  widget.mjs（HTTP :8899 数据服务）                        │
+│  /api/chat /study-* /interview-* /review-* /observability│
+└──────────────┬──────────────────────────────────────────┘
+               ▼
+┌─────────────────────────────────────────────────────────┐
+│  Agent 核心（lib/）                                      │
+│  agent.mjs  工具循环（while + tool_calls + validateArgs） │
+│    ↓ 调用链可观测（trace_llm / trace_tools）              │
+│  llm.mjs    统一 LLM 客户端（failover / 重试 / SSE）      │
+│  ai.mjs     讲解/分类/挑帖/归并（solve/cluster/consolidate）│
+│  memory.mjs 记忆（SQLite + origin 溯源防污染）            │
+│  study.mjs  学习清单  review.mjs FSRS复习  knowledge.mjs │
+│  db.mjs     node:sqlite 主存储（WAL）                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+## 技术选型（为什么这么做）
+
+| 决策 | 选择 | 理由 |
+|---|---|---|
+| **Agent 循环** | 自研工具循环（非 LangGraph/LangChain）| 与 Claude Code/OpenCode 同款范式：单 agent 线性循环用 while + tool_calls 最可控。LangGraph 是状态机编排框架，解决多分支/checkpoint/人工审批，与 coding agent 的核心矛盾（流式/上下文/权限/错误恢复）不重叠 |
+| **流式交互** | SSE + IPC 转发 | 面板直接 fetch 会撞 webSecurity，main 进程转发 SSE → 渲染层事件，逐 token 打字机渲染 |
+| **记忆存储** | node:sqlite（`mianshi.db`，WAL）| 内置零依赖（Electron 43 绑定 Node 24 免 rebuild），规范化小表 + origin 溯源列 + FSRS due 拆列索引，替代 4 个 JSON 文件 |
+| **LLM 客户端** | 统一 `llm.mjs`：failover + 重试 + SSE | 主端点（OpenCode Go）失败自动降级官方 API；3 次退避重试；流式/非流式统一入口 |
+| **记忆防污染** | origin 溯源（owner/agent/untrusted）| 模拟面试/爬虫提炼的伪知识点（"综合能力"）不注入 prompt，只保留可信源（对标 OpenClaw 溯源模型）|
+| **评测闭环** | 五维评分 + 复盘判分回流 + FSRS | 面试→评分→薄弱点→复习卡→再面试，自研遗忘曲线调度 |
+| **可观测性** | `trace_llm` / `trace_tools` 表 | 每次 LLM 调用记录 token/耗时/成败，面板"运行监控"实时可见 |
+
+---
+
 ## 常见问题
 
 **Q：桌宠不显示？**
@@ -179,9 +223,12 @@ mianshi-agent/
 - [x] 学习闭环（清单/勾选/复盘/薄弱点回流）
 - [x] 对话 agent（工具循环 + 任务规划 + 记忆画像）
 - [x] 桌宠（Live2D 真白 / 气泡 / 全屏隐藏 / 开机自启）
-- [ ] Repair：失败自动重试/换源降级
-- [ ] 主动推送：按关注点定时巡检新内容
-- [ ] 进化闭环：内置评测集 + 自动改进 prompt
+- [x] Repair：失败自动重试/换源降级（withRetry + LLM failover）
+- [x] 主动推送：按关注点定时巡检新内容（多站搜索 + 全量爬取兜底）
+- [x] 讲解增强：流式生成 / 追问补充 / 多条目归并（主题簇 + 关联扩展）
+- [x] 面试实录：被问住的知识点一键入清单 + 复习卡
+- [x] 可观测性：LLM 调用/token/耗时监控（面板实时可见）
+- [ ] 进化闭环：内置评测集（LLM-as-Judge）+ 自动改进 prompt
 
 ---
 

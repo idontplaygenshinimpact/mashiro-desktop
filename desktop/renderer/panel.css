@@ -336,6 +336,12 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .stats-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
 .stats-row .stat-chip { font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(109,79,216,0.08); color: #5d48b8; }
 .stats-row .stat-chip b { font-size: 13px; }
+.stats-row .chip-fail { background: rgba(200,80,80,0.15) !important; color: #c05050 !important; }
+.obs-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.obs-row .stat-chip { font-size: 10px; padding: 3px 7px; border-radius: 5px; background: rgba(80,110,170,0.08); color: #4a6a9d; }
+.obs-list { margin-bottom: 4px; }
+.obs-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 11px; border-bottom: 1px dashed rgba(109,79,216,0.1); }
+.obs-item .tag-fail { background: rgba(200,80,80,0.15) !important; color: #c05050 !important; }
 .interview-history { margin-top: 2px; }
 .iv-hist-item { padding: 8px 10px; border: 1px solid rgba(109,79,216,0.15); border-radius: 8px; margin-bottom: 8px; background: rgba(255,255,255,0.5); }
 .iv-hist-head { font-size: 12px; font-weight: 600; color: #4a3a9d; display: flex; justify-content: space-between; }

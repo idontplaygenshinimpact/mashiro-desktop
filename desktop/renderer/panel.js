@@ -759,6 +759,26 @@ async function loadCrawlData() {
         <div class="stat-chip">📚 复习 <b>${r.review?.total || 0}</b></div>`;
     }
   } catch { /* ignore */ }
+  // 可观测性：LLM 调用统计
+  try {
+    const o = await window.kanban.getObservability();
+    if (o?.ok && o.llm) {
+      const l = o.llm;
+      $("obs-row").innerHTML = `
+        <div class="stat-chip">⚡ LLM 调用 <b>${l.total}</b></div>
+        <div class="stat-chip">⏱️ 总耗时 <b>${(l.totalDurationMs / 1000).toFixed(1)}s</b></div>
+        <div class="stat-chip">📥 输入 <b>${(l.totalInputTokens / 1000).toFixed(1)}k</b></div>
+        <div class="stat-chip">📤 输出 <b>${(l.totalOutputTokens / 1000).toFixed(1)}k</b></div>
+        <div class="stat-chip ${l.fail > 0 ? "chip-fail" : ""}">❌ 失败 <b>${l.fail}</b></div>`;
+      // 最近调用
+      $("obs-list").innerHTML = (l.recent || []).map((r2) => `
+        <div class="obs-item">
+          <span class="tag ${r2.ok ? "" : "tag-fail"}">${r2.ok ? "✅" : "❌"} ${esc(r2.role)}</span>
+          <span class="t">${esc(String(r2.model || "").slice(0, 22))}${r2.stream ? " ⤳" : ""}</span>
+          <span style="color:#6c6c7c;font-size:10px">${r2.durationMs}ms ${r2.input_tokens ? "· " + r2.input_tokens + "→" + (r2.output_tokens || 0) + "tok" : ""}</span>
+        </div>`).join("") || '<div style="color:#7c7c7c;font-size:12px">暂无调用记录</div>';
+    }
+  } catch { /* ignore */ }
   // 面试历史
   try {
     const h = await window.kanban.interviewHistory();

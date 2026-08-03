@@ -15,6 +15,7 @@ import { chatWithAgent } from "./lib/agent.mjs";
 import { startInterview, submitAnswer, endInterview } from "./lib/interview.mjs";
 import * as reviewApi from "./lib/review.mjs";
 import { pick as pickEmotion, EMOTIONS } from "./lib/emotions.mjs";
+import { getLLMStats, getRecentTools } from "./lib/trace.mjs";
 
 const PORT = 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -714,6 +715,19 @@ const server = createServer((req, res) => {
       const m = memory.get();
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ ok: true, stats: m.stats || {} }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/observability") {
+    // 可观测性：LLM 调用统计 + 最近调用 + 工具链
+    try {
+      const llm = getLLMStats();
+      const tools = getRecentTools(8);
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, llm, tools }));
     } catch (e) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
