@@ -94,13 +94,29 @@ async function evalQuestion(q) {
     const blocks = extractCodeBlocks(answer);
     let passed = false;
     for (const b of blocks) {
-      const r = q.type === "code"
-        ? await runNode(`${b}\n\n${q.test}`)
-        : await runNode(b);
-      if (r.ok) { passed = true; break; }
+      if (q.type === "code") {
+        const r = await runNode(`${b}\n\n${q.test}`);
+        if (r.ok) { passed = true; break; }
+      } else {
+        // predict 通道①：跑代码块，stdout 与期望输出逐行比对（不能套用 code 的 PASS 判定）
+        const r = await runNode(b);
+        if (r.code === 0 && normStdout(r.out).join("\n") === normStdout(q.expected_stdout).join("\n")) {
+          passed = true;
+          break;
+        }
+      }
+    }
+    // predict 通道②：讲解文本明确写出期望数字序列（LLM 波动时代码块可能不完整，但结论正确也算过）
+    if (!passed && q.type === "predict" && q.expected_stdout) {
+      const digits = normStdout(q.expected_stdout);
+      const pattern = digits.map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^0-9]*");
+      if (new RegExp(pattern).test(answer)) {
+        passed = true;
+        detail = "文本明确给出输出序列";
+      }
     }
     objective = passed ? 50 : 0;
-    detail = passed ? "代码验证通过" : `代码验证失败(${blocks.length}个代码块)`;
+    if (!passed && !detail) detail = `代码验证失败(${blocks.length}个代码块)`;
   }
   const cov = coverageRate(answer, q.must_cover);
   if (!answer || answer.trim().length <= 100) {

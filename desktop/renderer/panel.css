@@ -351,3 +351,47 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .today-reco h4 { margin-top: 10px; }
 .reco-bishi { background: rgba(200, 160, 60, 0.15) !important; color: #9a7a2a !important; }
 .reco-mianshi { background: rgba(60, 160, 100, 0.15) !important; color: #3a8a5a !important; }
+
+/* ============ 权限审批条 ============ */
+.approval-bar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, #fdf2f8, #fff);
+  border-bottom: 2px solid #f472b6;
+  box-shadow: 0 2px 12px rgba(244, 114, 182, 0.25);
+  font-size: 13px;
+}
+.approval-bar[hidden] { display: none; }
+.approval-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.approval-icon { font-size: 15px; }
+#approval-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #334155;
+}
+.approval-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.approval-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #fff;
+}
+.approval-btn.deny { background: #94a3b8; }
+.approval-btn.allow { background: #f472b6; }
+.approval-btn.allow-session { background: #a78bfa; }
+.approval-btn:hover { filter: brightness(1.1); }

@@ -14,6 +14,19 @@
     </div>
   </header>
 
+  <!-- 权限审批条（agent 请求执行敏感操作时出现） -->
+  <div id="approval-bar" class="approval-bar" hidden>
+    <div class="approval-info">
+      <span class="approval-icon">🔐</span>
+      <span id="approval-text">agent 请求执行操作</span>
+    </div>
+    <div class="approval-actions">
+      <button class="approval-btn deny" data-action="deny">拒绝</button>
+      <button class="approval-btn allow" data-action="allow">允许</button>
+      <button class="approval-btn allow-session" data-action="allow-session">本会话允许</button>
+    </div>
+  </div>
+
   <!-- Tab 导航 -->
   <nav class="tabs">
     <button class="tab active" data-tab="interview">🎤 模拟面试</button>

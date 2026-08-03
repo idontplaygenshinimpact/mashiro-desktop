@@ -16,6 +16,7 @@ import { startInterview, submitAnswer, endInterview } from "./lib/interview.mjs"
 import * as reviewApi from "./lib/review.mjs";
 import { pick as pickEmotion, EMOTIONS } from "./lib/emotions.mjs";
 import { getLLMStats, getRecentTools } from "./lib/trace.mjs";
+import { getPendingApprovals, resolveApproval, getSessionApproved } from "./lib/permission.mjs";
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -793,6 +794,36 @@ const server = createServer((req, res) => {
   if (url.pathname === "/api/notify-test") {
     sendNotification("✅ 通知测试", "mianshi-agent 小组件通知正常");
     res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+  if (url.pathname === "/api/approval-pending") {
+    // 权限审批：查询当前待审批的工具调用（面板轮询）
+    try {
+      const pendingList = getPendingApprovals();
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, pending: pendingList, sessionApproved: getSessionApproved() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/approval") {
+    // 权限审批：用户决策（allow/session）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { toolName, allow, session } = JSON.parse(body || "{}");
+        if (!toolName) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "toolName required" })); return; }
+        const r = resolveApproval(toolName, { allow: !!allow, session: !!session });
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: r.ok, ...r }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
     return;
   }
   if (url.pathname === "/api/interview-notes") {

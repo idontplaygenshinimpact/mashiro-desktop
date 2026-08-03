@@ -1,10 +1,10 @@
 {
-  "ts": "2026-08-03T20:52:04.720Z",
+  "ts": "2026-08-03T20:45:53.098Z",
   "mode": "quick",
-  "composite": 100,
+  "composite": 88,
   "dims": {
-    "solve": 100,
-    "codePass": "2/2",
+    "solve": 75,
+    "codePass": "1/2",
     "classify": 100,
     "detect": 100,
     "static": 100
@@ -15,8 +15,8 @@
         "id": "q1",
         "title": "事件循环输出顺序预测",
         "type": "predict",
-        "score": 100,
-        "objective": 50,
+        "score": 50,
+        "objective": 0,
         "covRate": 100,
         "covHit": [
           "微任务",
@@ -28,8 +28,8 @@
         "covMissing": [],
         "judge": 100,
         "judgeOk": true,
-        "detail": "文本明确给出输出序列",
-        "answerLen": 3211
+        "detail": "代码验证失败(3个代码块)",
+        "answerLen": 5762
       },
       {
         "id": "q2",
@@ -47,8 +47,8 @@
         "covMissing": [],
         "judge": 0,
         "judgeOk": false,
-        "detail": "",
-        "answerLen": 4263
+        "detail": "代码验证通过",
+        "answerLen": 4140
       }
     ],
     "classify": [

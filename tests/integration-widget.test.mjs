@@ -13,8 +13,9 @@ const PORT = 18000 + Math.floor(Math.random() * 1000);
 const BASE = `http://127.0.0.1:${PORT}`;
 const dbDir = mkdtempSync(path.join(tmpdir(), "mianshi-int-"));
 let child;
+let childErr = "";
 
-async function waitReady(timeoutMs = 15000) {
+async function waitReady(timeoutMs = 45000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -30,7 +31,7 @@ before(async () => {
   child = spawn(process.execPath, ["widget.mjs"], {
     cwd: ROOT,
     windowsHide: true,
-    stdio: "ignore",
+    stdio: ["ignore", "ignore", "pipe"],
     env: {
       ...process.env,
       MIANSHI_PORT: String(PORT),
@@ -39,8 +40,12 @@ before(async () => {
       DEEPSEEK_API_KEY: "sk-test-dummy",
     },
   });
+  child.stderr.on("data", (d) => { childErr += d; });
   const ready = await waitReady();
-  assert.ok(ready, `widget 服务 ${BASE} 未在 15s 内就绪`);
+  if (!ready) {
+    console.log(`[集成测试] widget 未就绪，stderr: ${childErr.slice(0, 1500)}`);
+  }
+  assert.ok(ready, `widget 服务 ${BASE} 未在 45s 内就绪（并发跑时 playwright 加载慢）`);
 });
 
 after(async () => {
@@ -139,6 +144,23 @@ test("POST /api/review/submit 不存在的卡 → ok:false", async () => {
 test("POST /api/interview-notes 空 topics → 不崩溃", async () => {
   const r = await (await fetch(`${BASE}/api/interview-notes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topics: [] }) })).json();
   assert.ok(r.ok === true || r.error, "返回 ok 或 error 都不算崩溃");
+});
+
+test("GET /api/approval-pending 返回结构", async () => {
+  const r = await (await fetch(`${BASE}/api/approval-pending`)).json();
+  assert.equal(r.ok, true);
+  assert.ok(Array.isArray(r.pending));
+  assert.ok(Array.isArray(r.sessionApproved));
+});
+
+test("POST /api/approval 缺 toolName → 400", async () => {
+  const r = await fetch(`${BASE}/api/approval`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+  assert.equal(r.status, 400);
+});
+
+test("POST /api/approval 不存在的请求 → ok:false", async () => {
+  const r = await (await fetch(`${BASE}/api/approval`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ toolName: "nope", allow: true }) })).json();
+  assert.equal(r.ok, false);
 });
 
 // ---------- 错误路径 ----------

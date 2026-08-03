@@ -817,8 +817,55 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// ============ 权限审批（human-in-the-loop） ============
+// agent 请求执行敏感工具（solve_question / record_interview_topics）时，
+// 顶部弹出确认条，用户决定 拒绝/允许/本会话允许（对标 Claude Code permission）
+let currentApproval = null;
+
+async function checkApprovals() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/approval-pending");
+    const j = await r.json();
+    const first = j?.pending?.[0] || null;
+    const bar = document.getElementById("approval-bar");
+    if (!bar) return;
+    if (first && !currentApproval) {
+      currentApproval = first;
+      const nameMap = { solve_question: "生成完整讲解", record_interview_topics: "记录面试知识点" };
+      document.getElementById("approval-text").textContent =
+        `真白想执行：${nameMap[first.toolName] || first.toolName} —— ${first.reason || ""}`;
+      bar.hidden = false;
+    } else if (!first && currentApproval) {
+      currentApproval = null;
+      bar.hidden = true;
+    }
+  } catch { /* 服务未就绪忽略 */ }
+}
+
+async function sendApproval(action) {
+  if (!currentApproval) return;
+  const allow = action !== "deny";
+  const session = action === "allow-session";
+  try {
+    await fetch("http://127.0.0.1:8899/api/approval", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toolName: currentApproval.toolName, allow, session }),
+    });
+  } catch { /* ignore */ }
+  currentApproval = null;
+  document.getElementById("approval-bar").hidden = true;
+  setTimeout(checkApprovals, 800); // 立即查下一个
+}
+
+document.querySelectorAll(".approval-btn").forEach((btn) => {
+  btn.addEventListener("click", () => sendApproval(btn.dataset.action));
+});
+
 // ============ 初始化 ============
 loadCrawlData();
 loadStudyPlan();
 // 轮询爬取进度
 setInterval(loadCrawlData, 5000);
+// 轮询审批请求（agent 请求敏感操作时弹出确认条）
+setInterval(checkApprovals, 2000);
