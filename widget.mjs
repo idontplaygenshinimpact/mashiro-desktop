@@ -756,8 +756,8 @@ server.listen(PORT, "127.0.0.1", () => {
 // ============ 主动推送：按关注点定时巡检新内容 ============
 import { memory } from "./lib/memory.mjs";
 
-// 巡检间隔：30 分钟一次（避免频繁请求）
-const PATROL_INTERVAL = 30 * 60 * 1000;
+// 巡检间隔：60 分钟一次（无新帖时触发全量爬取，2 小时限频，不宜太频繁）
+const PATROL_INTERVAL = 60 * 60 * 1000;
 
 async function patrolInterests() {
   const interests = memory.getInterests();
@@ -769,27 +769,34 @@ async function patrolInterests() {
     // 标题级方向过滤：嵌入式/硬件/算法/后端/C++ 等非前端方向直接排除（避免通知混入无关内容）
     const EXCLUDE_TITLE = /嵌入式|单片机|硬件|驱动|PCB|STM32|ESP32|ARM|C\+\+|Java|Go语言|后端|算法岗|机器学习|深度学习|大数据|测试开发|测开|运维|产品|运营|数据分析|爬虫开发|上位机|物联网|芯片|FPGA/;
     const newPosts = [];
-    // 取前 2 个关注点，各搜一个站
+    // 取前 2 个关注点，每个搜多站（牛客/掘金/CSDN）
+    const searchSites = [
+      (q) => `https://www.nowcoder.com/discuss?type=2&query=${encodeURIComponent(q)}`,
+      (q) => `https://juejin.cn/search?query=${encodeURIComponent(q + " 面经")}`,
+      (q) => `https://so.csdn.net/so/search?q=${encodeURIComponent(q + " 面经")}`,
+    ];
     for (const topic of interests.slice(0, 2)) {
-      const url = `https://www.nowcoder.com/discuss?type=2&query=${encodeURIComponent(topic)}`;
-      try {
-        const page = await fetchPage(url, { maxTextChars: 1500, collectLinks: true });
-        for (const l of page.links) {
-          if (re.test(l.href) && l.text.length > 8) {
-            if (EXCLUDE_TITLE.test(l.text)) continue; // 非前端方向标题跳过
-            const clean = l.href.replace(/[?&]searchId=[^&]*/g, "").split("?")[0];
-            if (!memory.isSeen(clean)) {
-              newPosts.push({ title: l.text.slice(0, 50), url: clean, topic });
+      for (const makeUrl of searchSites) {
+        const url = makeUrl(topic);
+        try {
+          const page = await fetchPage(url, { maxTextChars: 1500, collectLinks: true });
+          for (const l of page.links) {
+            if (re.test(l.href) && l.text.length > 8) {
+              if (EXCLUDE_TITLE.test(l.text)) continue; // 非前端方向标题跳过
+              const clean = l.href.replace(/[?&]searchId=[^&]*/g, "").split("?")[0];
+              if (!memory.isSeen(clean)) {
+                newPosts.push({ title: l.text.slice(0, 50), url: clean, topic });
+              }
             }
           }
-        }
-      } catch { /* ignore */ }
+        } catch { /* ignore */ }
+      }
     }
     if (newPosts.length) {
       const names = newPosts.slice(0, 3).map((p) => p.title.slice(0, 20)).join("、");
       console.log(`[widget] 巡检发现 ${newPosts.length} 条新内容（关注点 ${interests.slice(0, 2).join("、")}）`);
       // 真正处理：抓正文 → 分类过滤 → 讲解 → 存档（通知不再"空口说白话"）
-      const result = await processPatrolPosts(newPosts.slice(0, 2));
+      const result = await processPatrolPosts(newPosts.slice(0, 4));
       const saved = result.saved;
       let detail;
       if (saved.length) {
@@ -803,9 +810,23 @@ async function patrolInterests() {
         detail = `未生成新讲解（${reasonText}）`;
       }
       await sendNotification("🆕 真白发现新面经", `${names}${newPosts.length > 3 ? ` 等 ${newPosts.length} 条` : ""}\n${detail}`);
+    } else {
+      // 多站都没找到新帖：触发一次完整 discover 全量爬取（7 源），但限制频率（2 小时一次）
+      const now = Date.now();
+      if (now - (lastFullCrawl || 0) > 2 * 60 * 60 * 1000) {
+        lastFullCrawl = now;
+        console.log("[widget] 巡检无新帖，触发全量爬取");
+        try {
+          const { exec } = await import("node:child_process");
+          exec('start cmd /c "cd /d D:\\mianshi-agent && node discover.mjs > widget-run.log 2>&1"', { windowsHide: true });
+        } catch { /* ignore */ }
+      } else {
+        console.log("[widget] 巡检无新帖，全量爬取冷却中（2 小时限频）");
+      }
     }
   } catch { /* ignore */ }
 }
+let lastFullCrawl = null; // 全量爬取限频标记
 
 // 巡检帖 → 抓正文 → 分类/方向过滤 → 具体题目检测 → 完整讲解 → 存档
 // 返回 { saved: [文件名], skipped: { 原因: 篇数 } }
