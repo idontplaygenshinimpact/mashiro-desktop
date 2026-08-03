@@ -422,6 +422,122 @@ const server = createServer((req, res) => {
     });
     return;
   }
+  if (url.pathname === "/api/study-consolidate-stream") {
+    // 整理讲解全文：把原始讲解 + 多轮追问整合成结构统一的完整讲解，流式生成并写回
+    const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
+    const id = u.searchParams.get("id") || "";
+    const plan = studyApi.getPlan();
+    const item = (plan.items || []).find((i) => i.id === id);
+    if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
+    // 读完整讲解素材
+    let content = "";
+    const filePath = findStudyFile(item);
+    if (filePath) {
+      try { content = readFileSync(filePath, "utf8"); } catch { /* ignore */ }
+    }
+    if (!content || content.length < 200) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "还没有讲解内容，先点「💡 讲解」生成" })); return; }
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    });
+    const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    send({ type: "start", topic: item.topic });
+    let full = "";
+    import("./lib/ai.mjs").then(async ({ consolidateStudyStream }) => {
+      full = await consolidateStudyStream({ topic: item.topic, content }, (delta) => {
+        full += delta;
+        send({ type: "delta", delta });
+      });
+      // 写回：原文件改名 .orig 备份，写整合版
+      let savedPath = null;
+      try {
+        const notesDir = STUDY_NOTES_DIR();
+        mkdirSync(notesDir, { recursive: true });
+        const savePath = filePath || path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
+        if (filePath) {
+          try { writeFileSync(savePath + ".orig", readFileSync(savePath, "utf8"), "utf8"); } catch { /* ignore */ }
+        }
+        const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档（已整理） | 整理于 ${new Date().toLocaleString("zh-CN")}\n\n`;
+        writeFileSync(savePath, header + full.slice(0, 50000), "utf8");
+        savedPath = savePath;
+      } catch (e) { /* ignore */ }
+      send({ type: "done", saved: !!savedPath, filePath: savedPath });
+      res.end();
+    }).catch((e) => {
+      send({ type: "error", error: e.message });
+      res.end();
+    });
+    return;
+  }
+  if (url.pathname === "/api/study-cluster-stream") {
+    // 多条目知识归并：把多个相关条目的讲解整合成主题簇综合讲解，流式生成并存到 study_notes/<簇>/ 目录
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { ids } = JSON.parse(body || "{}");
+        if (!Array.isArray(ids) || ids.length < 2) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "请至少选择 2 个相关条目归并" })); return; }
+        const plan = studyApi.getPlan();
+        // 读取每个条目的讲解内容（有文件的读文件；无文件的跳过并提示先生成）
+        const topics = [];
+        const missing = [];
+        for (const id of ids) {
+          const item = (plan.items || []).find((i) => i.id === id);
+          if (!item) continue;
+          const filePath = findStudyFile(item);
+          let content = "";
+          if (filePath) { try { content = readFileSync(filePath, "utf8"); } catch { /* ignore */ } }
+          if (content.length < 200) { missing.push(item.topic); continue; }
+          topics.push({ topic: item.topic, content });
+        }
+        if (topics.length < 2) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: `需要至少 2 个有讲解的条目（${missing.length ? "缺讲解：" + missing.join("、") : ""}）。先点「💡 讲解」生成` }));
+          return;
+        }
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "Access-Control-Allow-Origin": "*",
+        });
+        const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+        send({ type: "start", topic: topics.map((t) => t.topic).join(" + ") });
+        let full = "";
+        import("./lib/ai.mjs").then(async ({ clusterStudyStream }) => {
+          full = await clusterStudyStream({ topics }, (delta) => {
+            full += delta;
+            send({ type: "delta", delta });
+          });
+          // 存到 study_notes/主题簇/ 目录（按 AI 给的主题簇名）
+          let savedPath = null;
+          let clusterName = "综合";
+          try {
+            const cm = full.match(/【cluster】\s*([^\n]+)/);
+            if (cm) clusterName = cm[1].trim().slice(0, 40);
+            const notesDir = STUDY_NOTES_DIR();
+            const clusterDir = path.join(notesDir, sanitizeFilename(clusterName));
+            mkdirSync(clusterDir, { recursive: true });
+            const savePath2 = path.join(clusterDir, `${sanitizeFilename(clusterName)}.md`);
+            const header = `# ${clusterName}\n\n> 来源：多条目归并（${topics.map((t) => t.topic).join("、")}） | 归并于 ${new Date().toLocaleString("zh-CN")}\n\n`;
+            writeFileSync(savePath2, header + full.replace(/【cluster】\s*/, "").slice(0, 50000), "utf8");
+            savedPath = savePath2;
+          } catch (e) { /* ignore */ }
+          send({ type: "done", saved: !!savedPath, filePath: savedPath, clusterName });
+          res.end();
+        }).catch((e) => {
+          send({ type: "error", error: e.message });
+          res.end();
+        });
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
   if (url.pathname === "/api/study-detail") {
     // 学习详情：返回条目讲解内容（有文件读文件；无文件现场生成并写入 study_notes 存档）
     const u = new URL(req.url, `http://127.0.0.1:${PORT}`);

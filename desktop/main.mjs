@@ -248,6 +248,68 @@ ipcMain.handle("widget:study-append-stream", async (e, { id, question }) => {
     return { ok: false, error: err.message };
   }
 });
+// 整理讲解全文：main 转发 widget consolidate-stream SSE → 渲染层（独立事件通道）
+ipcMain.handle("widget:study-consolidate-stream", async (e, { id }) => {
+  try {
+    const res = await fetch(`${WIDGET_URL}/api/study-consolidate-stream?id=${encodeURIComponent(id)}`);
+    const ctype = res.headers.get("content-type") || "";
+    if (!ctype.includes("text/event-stream")) {
+      const j = await res.json();
+      e.sender.send("study-consolidate-chunk", JSON.stringify(j));
+      return { ok: true, mode: "json" };
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const event = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        e.sender.send("study-consolidate-chunk", event);
+      }
+    }
+    return { ok: true, mode: "sse" };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+// 多条目归并：main 转发 widget cluster-stream SSE → 渲染层（独立事件通道）
+ipcMain.handle("widget:study-cluster-stream", async (e, { ids }) => {
+  try {
+    const res = await fetch(`${WIDGET_URL}/api/study-cluster-stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    const ctype = res.headers.get("content-type") || "";
+    if (!ctype.includes("text/event-stream")) {
+      const j = await res.json();
+      e.sender.send("study-cluster-chunk", JSON.stringify(j));
+      return { ok: true, mode: "json" };
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const event = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        e.sender.send("study-cluster-chunk", event);
+      }
+    }
+    return { ok: true, mode: "sse" };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
 ipcMain.handle("widget:study-generate", () => widgetPost("/api/study-generate"));
 ipcMain.handle("widget:study-check", (e, { id, done }) => widgetGet(`/api/study-check?id=${encodeURIComponent(id)}&done=${done ? "1" : "0"}`));
 ipcMain.handle("widget:study-review", () => widgetPost("/api/study-review"));

@@ -62,6 +62,44 @@ contextBridge.exposeInMainWorld("kanban", {
         .catch((err) => { ipcRenderer.removeListener("study-append-chunk", listener); reject(err); });
     });
   },
+  studyConsolidate: (id, onChunk) => {
+    // 整理全文：独立事件通道
+    return new Promise((resolve, reject) => {
+      const listener = (event, data) => {
+        if (typeof data !== "string") return;
+        const line = data.startsWith("data:") ? data.slice(5).trim() : data;
+        if (!line) return;
+        let j;
+        try { j = JSON.parse(line); } catch { return; }
+        if (j.type === "done") { ipcRenderer.removeListener("study-consolidate-chunk", listener); resolve({ done: true, saved: j.saved, filePath: j.filePath }); }
+        else if (j.type === "error") { ipcRenderer.removeListener("study-consolidate-chunk", listener); reject(new Error(j.error)); }
+        else if (j.type === "delta") onChunk(j.delta);
+      };
+      ipcRenderer.on("study-consolidate-chunk", listener);
+      ipcRenderer.invoke("widget:study-consolidate-stream", { id })
+        .then((r) => { if (!r?.ok) { ipcRenderer.removeListener("study-consolidate-chunk", listener); reject(new Error(r?.error || "整理启动失败")); } })
+        .catch((err) => { ipcRenderer.removeListener("study-consolidate-chunk", listener); reject(err); });
+    });
+  },
+  studyCluster: (ids, onChunk) => {
+    // 多条目归并：独立事件通道
+    return new Promise((resolve, reject) => {
+      const listener = (event, data) => {
+        if (typeof data !== "string") return;
+        const line = data.startsWith("data:") ? data.slice(5).trim() : data;
+        if (!line) return;
+        let j;
+        try { j = JSON.parse(line); } catch { return; }
+        if (j.type === "done") { ipcRenderer.removeListener("study-cluster-chunk", listener); resolve({ done: true, saved: j.saved, filePath: j.filePath, clusterName: j.clusterName }); }
+        else if (j.type === "error") { ipcRenderer.removeListener("study-cluster-chunk", listener); reject(new Error(j.error)); }
+        else if (j.type === "delta") onChunk(j.delta);
+      };
+      ipcRenderer.on("study-cluster-chunk", listener);
+      ipcRenderer.invoke("widget:study-cluster-stream", { ids })
+        .then((r) => { if (!r?.ok) { ipcRenderer.removeListener("study-cluster-chunk", listener); reject(new Error(r?.error || "归并启动失败")); } })
+        .catch((err) => { ipcRenderer.removeListener("study-cluster-chunk", listener); reject(err); });
+    });
+  },
   studyGenerate: () => ipcRenderer.invoke("widget:study-generate"),
   studyCheck: (id, done) => ipcRenderer.invoke("widget:study-check", { id, done }),
   studyReview: () => ipcRenderer.invoke("widget:study-review"),

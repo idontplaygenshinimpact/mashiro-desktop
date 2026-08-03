@@ -302,6 +302,12 @@ async function loadStudyPlan() {
   list.querySelectorAll(".study-item").forEach((el) => {
     const cb = el.querySelector("input");
     cb.addEventListener("change", async (e) => {
+      // 归并模式：勾选用于归并选择（不改变完成状态）
+      if (clusterMode) {
+        el.classList.toggle("cluster-selected", e.target.checked);
+        updateClusterBtn();
+        return;
+      }
       const r = await window.kanban.studyCheck(el.dataset.id, e.target.checked);
       // 本地更新状态（不整表重渲染，避免闪烁）
       el.classList.toggle("done", e.target.checked);
@@ -313,6 +319,66 @@ async function loadStudyPlan() {
     });
     el.querySelector(".s-learn").addEventListener("click", () => showStudyDetail(el.dataset.id));
   });
+}
+
+// ============ 多条目归并（主题簇） ============
+let clusterMode = false;
+const clusterBtn = () => $("study-cluster-btn");
+
+function updateClusterBtn() {
+  const n = document.querySelectorAll(".study-item.cluster-selected").length;
+  clusterBtn().textContent = n >= 2 ? `🔗 归并(${n})` : "🔗 归并";
+}
+
+clusterBtn().addEventListener("click", async () => {
+  if (!clusterMode) {
+    // 进入多选模式
+    clusterMode = true;
+    clusterBtn().textContent = "✅ 确认归并";
+    clusterBtn().classList.add("cluster-active");
+    // 提示 + 清空之前选择
+    document.querySelectorAll(".study-item.cluster-selected").forEach((el) => el.classList.remove("cluster-selected"));
+    document.querySelectorAll(".study-item input").forEach((cb) => { cb.checked = false; });
+    window.kanban.notify("🔗 归并模式", "勾选 2+ 个相关条目（如 MySQL底层/B+树/回表）后点「确认归并」");
+    return;
+  }
+  // 确认归并
+  const ids = [...document.querySelectorAll(".study-item.cluster-selected")].map((el) => el.dataset.id);
+  if (ids.length < 2) { window.kanban.notify("🔗 归并", "至少选 2 个条目"); return; }
+  // 退出多选模式
+  clusterMode = false;
+  clusterBtn().textContent = "🔗 归并";
+  clusterBtn().classList.remove("cluster-active");
+  document.querySelectorAll(".study-item.cluster-selected").forEach((el) => el.classList.remove("cluster-selected"));
+  // 弹层展示归并结果
+  await showClusterResult(ids);
+});
+
+// 归并结果弹层（复用学习弹层，流式显示）
+async function showClusterResult(ids) {
+  sdCurrentId = "cluster-" + ids.join("-");
+  sdOverlay().classList.remove("hidden");
+  $("sd-modal-title").textContent = "🔗 归并中...";
+  sdBody().innerHTML = '<div style="color:#8a87a8;font-size:13px;padding:12px">📚 正在归并多个讲解为主题簇综合讲解（去重合并 + 扩展关联考点）...</div>';
+  try {
+    let merged = "";
+    const r = await window.kanban.studyCluster(ids, (delta) => {
+      merged += delta;
+      sdBody().innerHTML = renderMd(merged) + '<div class="sd-streaming">⏳ 归并中...</div>';
+      sdBody().scrollTop = sdBody().scrollHeight;
+    });
+    const name = r?.clusterName || "综合讲解";
+    $("sd-modal-title").textContent = "🔗 " + name;
+    studyDetailCache[sdCurrentId] = { content: merged, topic: name };
+    sdBody().innerHTML = renderMd(merged);
+    sdBody().scrollTop = 0;
+    // 提示存档位置
+    if (r?.saved) {
+      window.kanban.notify("🔗 归并完成", `已生成《${name}》综合讲解，存档于 study_notes/`);
+    }
+  } catch (e) {
+    sdBody().innerHTML = `<div style="color:#c05050;font-size:13px;padding:12px">⚠️ ${esc(e.message)}</div>`;
+  }
 }
 
 // ============ 学习详情：全屏弹层展开讲解 + 追问补充 ============
@@ -396,6 +462,51 @@ async function askStudyDetail() {
 
 $("sd-ask-btn").addEventListener("click", askStudyDetail);
 $("sd-ask-input").addEventListener("keydown", (e) => { if (e.key === "Enter") askStudyDetail(); });
+
+// 整理全文：把原始讲解 + 多轮追问整合成结构统一的完整讲解（流式显示 + 写回文件）
+let sdConsolidating = false;
+async function consolidateStudyDetail() {
+  if (!sdCurrentId || sdConsolidating) return;
+  sdConsolidating = true;
+  const btn = $("sd-consolidate-btn");
+  btn.disabled = true;
+  btn.textContent = "整理中...";
+  try {
+    // 初始内容（未生成时先生成）
+    if (!studyDetailCache[sdCurrentId]?.content) {
+      const topic = await streamStudyDetail(sdCurrentId, (c) => {
+        sdBody().innerHTML = renderMd(c) + '<div class="sd-streaming">⏳ 生成中...</div>';
+        sdBody().scrollTop = sdBody().scrollHeight;
+      });
+      $("sd-modal-title").textContent = "📖 " + topic;
+    }
+    const base = studyDetailCache[sdCurrentId]?.content || "";
+    sdBody().innerHTML = '<div style="color:#8a87a8;font-size:13px;padding:12px">📚 正在整合全文（去重合并、统一结构）...</div>';
+    // 流式整合
+    let merged = "";
+    await window.kanban.studyConsolidate(sdCurrentId, (delta) => {
+      merged += delta;
+      sdBody().innerHTML = renderMd(merged) + '<div class="sd-streaming">⏳ 整合中...</div>';
+      sdBody().scrollTop = sdBody().scrollHeight;
+    });
+    // 完成：更新缓存（下次打开看到整理版）
+    const topic = studyDetailCache[sdCurrentId]?.topic || "讲解";
+    studyDetailCache[sdCurrentId] = { content: merged, topic };
+    $("sd-modal-title").textContent = "📖 " + topic + "（已整理）";
+    sdBody().innerHTML = renderMd(merged);
+    sdBody().scrollTop = 0; // 从头阅读整理版
+  } catch (e) {
+    const box = document.createElement("div");
+    box.style.cssText = "color:#c05050;font-size:12px;padding:8px";
+    box.textContent = "⚠️ " + e.message;
+    sdBody().appendChild(box);
+  } finally {
+    sdConsolidating = false;
+    btn.disabled = false;
+    btn.textContent = "📚 整理";
+  }
+}
+$("sd-consolidate-btn").addEventListener("click", consolidateStudyDetail);
 
 // 流式获取讲解（走 IPC 通道，避开渲染层 fetch 的 webSecurity 限制）
 async function streamStudyDetail(id, onUpdate) {
