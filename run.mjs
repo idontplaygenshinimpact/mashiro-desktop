@@ -39,7 +39,13 @@ async function main() {
   for (const p of okPages) {
     const cls = await classifyPage({ title: p.title, text: p.text });
     console.log(`  [${cls.type}] ${cls.company || "-"} | ${p.title.slice(0, 40)} | worth=${cls.worth}`);
-    if (cls.type !== "other" && cls.worth >= 40) {
+    // 标题含"笔试/真题/笔经/机考"→ 强制按笔试处理（classify 可能误判为 other）
+    const looksBishi = /笔试|真题|笔经|机考|在线测评/.test(p.title);
+    const type = looksBishi ? "bishi" : cls.type;
+    // 笔试真题（bishi）强制保留——真题回忆最稀缺；面经需 worth≥40
+    if (type === "bishi") {
+      items.push({ ...p, cls: { ...cls, type } });
+    } else if (type !== "other" && cls.worth >= 40) {
       items.push({ ...p, cls });
     }
   }

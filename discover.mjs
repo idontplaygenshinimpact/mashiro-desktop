@@ -8,6 +8,12 @@ import { fetchPage, fetchPages, closeBrowser } from "./lib/fetch-page.mjs";
 import { classifyPage, solveQuestion, pickPosts, summarizeQiuzhao, detectQuestions } from "./lib/ai.mjs";
 
 const DEFAULT_STARTS = [
+  // ===== 拼多多（PDD）笔试/面经专项——用户近期参加 =====
+  "https://www.nowcoder.com/discuss?type=2&query=%E6%8B%BC%E5%A4%9A%E5%A4%9A%20%E7%AC%94%E8%AF%95",
+  "https://www.nowcoder.com/discuss?type=2&query=%E6%8B%BC%E5%A4%9A%E5%A4%9A%20%E5%89%8D%E7%AB%AF",
+  "https://www.nowcoder.com/discuss?type=2&query=PDD%20%E7%AC%94%E8%AF%95",
+  "https://juejin.cn/search?query=%E6%8B%BC%E5%A4%9A%E5%A4%9A%20%E7%AC%94%E8%AF%95",
+  "https://so.csdn.net/so/search?q=%E6%8B%BC%E5%A4%9A%E5%A4%9A%20%E7%AC%94%E8%AF%95",
   // ===== 牛客（前端/Agent 搜索） =====
   "https://www.nowcoder.com/discuss?type=2&query=%E5%89%8D%E7%AB%AF",
   "https://www.nowcoder.com/discuss?type=2&query=Agent",
