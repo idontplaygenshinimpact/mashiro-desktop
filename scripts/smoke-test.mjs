@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BASE = "http://127.0.0.1:8899";
 const SKIP_LLM = process.argv.includes("--skip-llm");
+const toUrl = (p) => `file:///${p.replace(/\\/g, "/")}`;
 
 let pass = 0, fail = 0;
 const results = [];
@@ -68,24 +69,31 @@ console.log("== 4. 模拟面试 ==");
   check("interview/end 可调用", end && (end.ok === true || end.error), `err=${end.error || "none"}`);
 }
 // 5. 数据文件完整性
-console.log("== 5. 数据文件 ==");
+console.log("== 5. 数据库 ==");
 {
-  for (const f of ["study-plan.json", "review-cards.json", "agent-memory.json", "kp-mastery.json"]) {
-    const fp = path.join(ROOT, "data", f);
-    if (!existsSync(fp)) { check(`data/${f} 存在`, false); continue; }
+  // 主存储已迁移到 SQLite（mianshi.db），JSON 为 .bak 备份
+  const dbFile = path.join(ROOT, "data", "mianshi.db");
+  if (!existsSync(dbFile)) {
+    check("data/mianshi.db 存在", false);
+  } else {
+    check("data/mianshi.db 存在", true);
     try {
-      const j = JSON.parse(readFileSync(fp, "utf8"));
-      check(`data/${f} 可解析`, j && typeof j === "object", "");
+      const { db } = await import(toUrl(path.join(ROOT, "lib/db.mjs")));
+      const tables = db.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE type='table'").get().n;
+      check("db 表数量", tables >= 10, `${tables} 张表`);
+      for (const [t, min] of [["study_plan_items", 1], ["review_cards", 1], ["weak_points", 1], ["kp_mastery", 1]]) {
+        const n = db.prepare(`SELECT COUNT(*) n FROM ${t}`).get().n;
+        check(`表 ${t} 有数据`, n >= min, `${n} 行`);
+      }
     } catch (e) {
-      check(`data/${f} 可解析`, false, e.message);
+      check("db 可查询", false, e.message);
     }
   }
 }
 // 6. 核心模块可导入
 console.log("== 6. 模块导入 ==");
 {
-  const toUrl = (p) => `file:///${p.replace(/\\/g, "/")}`;
-  for (const m of ["lib/memory.mjs", "lib/study.mjs", "lib/review.mjs", "lib/knowledge.mjs", "lib/interview.mjs", "lib/ai.mjs", "lib/llm.mjs", "lib/atomic-json.mjs"]) {
+    for (const m of ["lib/db.mjs", "lib/memory.mjs", "lib/study.mjs", "lib/review.mjs", "lib/knowledge.mjs", "lib/interview.mjs", "lib/ai.mjs", "lib/llm.mjs"]) {
     try {
       await import(toUrl(path.join(ROOT, m)));
       check(`import ${m}`, true);
