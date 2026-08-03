@@ -579,10 +579,11 @@ const server = createServer((req, res) => {
         if (!Array.isArray(raw) || !raw.length) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "topics required" })); return; }
         const added = [], existing = [], skipped = [];
         for (const t of raw.slice(0, 8)) {
-          const topic = String(t).trim().slice(0, 40);
-          if (!topic) continue;
-          // 伪知识点过滤（"综合能力"/"考察维度"等）
-          if (memory._cleanTopic && !memory._cleanTopic(topic)) { skipped.push({ topic, reason: "非具体知识点" }); continue; }
+          const rawTopic = String(t).trim().slice(0, 40);
+          if (!rawTopic) continue;
+          // 伪知识点过滤 + 规范化（返回清洗后的 topic，保证与薄弱点口径一致）
+          const topic = memory._cleanTopic ? memory._cleanTopic(rawTopic) : rawTopic;
+          if (!topic) { skipped.push({ topic: rawTopic, reason: "非具体知识点" }); continue; }
           const r = studyApi.addPlanItems([{
             topic,
             why: "真实面试中被问住，需优先补强",
