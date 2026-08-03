@@ -132,3 +132,37 @@ test("toolSearchPosts 标题过滤（嵌入式方向排除）+ 去重", async ()
   assert.ok(dupe.length <= 1, "跨源同帖去重");
   assert.ok(titles.some((t) => t.includes("React Hooks")), "有效帖保留");
 });
+
+// ---------- 死循环检测 ----------
+test("死循环检测：同工具相同参数连续 3 次 → 注入终止提示不再执行", async () => {
+  // LLM 连续 3 轮重复调 search_posts（相同参数），agent 应在第 3 次拦截
+  setLlmResponses(
+    'TOOLCALL:{"name":"get_study_plan","arguments":"{}"}',
+    'TOOLCALL:{"name":"get_study_plan","arguments":"{}"}',
+    'TOOLCALL:{"name":"get_study_plan","arguments":"{}"}',
+    "好的，我直接总结。"
+  );
+  const r = await chatWithAgent("看清单");
+  assert.ok(r.reply.length > 0);
+  // 只执行了 2 次真实调用（第 3 次被拦截注入提示），trace 里 get_study_plan 成功记录 ≤2
+  const { getRecentTools } = await import("../lib/trace.mjs");
+  const calls = getRecentTools(20).filter((t) => t.tool_name === "get_study_plan");
+  assert.ok(calls.length <= 2, `第3次重复应被拦截（实际执行 ${calls.length} 次）`);
+});
+
+// ---------- 工具结果落盘 ----------
+test("工具结果超长 → 落盘 + 回填预览标记", async () => {
+  const { toolResultContent } = await import("../lib/agent.mjs");
+  // 构造超长工具结果（现有工具结果都 <8K，落盘是防未来工具变大的保险丝）
+  const bigResult = { results: Array.from({ length: 20 }, (_, i) => ({ title: `面经${i}` + "内容".repeat(500), url: `https://x.com/${i}` })) };
+  const content = await toolResultContent(bigResult, "call_test123");
+  const parsed = JSON.parse(content);
+  assert.equal(parsed._truncated, true, "超长结果标记落盘");
+  assert.ok(parsed._file, "回填文件路径");
+  assert.ok(parsed._preview.length <= 2000, "预览 ≤2KB");
+  const { existsSync } = await import("node:fs");
+  assert.ok(existsSync("D:/mianshi-agent/" + parsed._file), "落盘文件存在");
+  // 短结果不落盘
+  const short = await toolResultContent({ ok: true, results: [] }, "call_short");
+  assert.ok(!short.includes("_truncated"), "短结果原样返回");
+});
