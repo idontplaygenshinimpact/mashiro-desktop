@@ -284,11 +284,11 @@ const server = createServer((req, res) => {
     if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
     const filePath = findStudyFile(item);
     if (filePath) {
-      // 有文件：一次性返回（快，无需流式）
+      // 有文件：一次性返回（快，无需流式）——不截断，讲解可无限追问累积
       try {
         const content = readFileSync(filePath, "utf8");
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: true, content: content.slice(0, 12000), filePath }));
+        res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: true, content, filePath }));
         return;
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
@@ -323,7 +323,7 @@ const server = createServer((req, res) => {
         mkdirSync(notesDir, { recursive: true });
         const savePath = path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
         const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
-        writeFileSync(savePath, header + full.slice(0, 12000), "utf8");
+        writeFileSync(savePath, header + full.slice(0, 50000), "utf8");
         savedPath = savePath;
       } catch { /* ignore */ }
       send({ type: "done", saved: !!savedPath, filePath: savedPath });
@@ -403,7 +403,7 @@ const server = createServer((req, res) => {
       try {
         const content = readFileSync(filePath, "utf8");
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: true, content: content.slice(0, 12000), filePath }));
+        res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: true, content, filePath }));
         return;
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });

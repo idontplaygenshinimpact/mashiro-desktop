@@ -343,6 +343,7 @@ ipcMain.handle("window:speak", async (e, { text }) => {
 // 渲染层模型加载完成后，通知主进程显示桌宠窗口（尺寸已固定锁定）
 ipcMain.handle("window:fit", async () => {
   if (!win) return { ok: false };
+  if (mascotHidden) return { ok: true }; // 面板打开中，不显示桌宠
   win.showInactive(); // 不抢焦点（避免透明窗口 isFocused 永久 true 导致全屏不隐藏）
   // show 后延迟强制拉回一次（透明窗口 show 时 DWM 可能调整）
   setTimeout(() => {
@@ -409,16 +410,24 @@ function createPanelWindow() {
   hideMascot();
 }
 
-// 隐藏桌宠（面板打开时调用）
+let mascotHidden = false; // 面板打开时桌宠被隐藏（全屏检测跳过恢复）
+
+// 隐藏桌宠（面板打开时调用）——置 mascotHidden 标记，防止全屏检测定时器弹回来
 function hideMascot() {
-  if (win && !win.isDestroyed() && win.isVisible()) {
-    win.hide();
-    console.log("[kanban] 面板打开，桌宠隐藏");
+  if (win && !win.isDestroyed()) {
+    // 双保险：窗口隐藏 + 强制鼠标穿透（即使未隐藏成功也不挡面板操作）
+    try { win.setIgnoreMouseEvents(true, { forward: true }); } catch { /* ignore */ }
+    if (win.isVisible()) {
+      win.hide();
+      console.log("[kanban] 面板打开，桌宠隐藏");
+    }
   }
+  mascotHidden = true;
 }
 
 // 恢复桌宠显示（面板关闭/隐藏时调用）
 function showMascot() {
+  mascotHidden = false;
   if (win && !win.isDestroyed() && !win.isVisible()) {
     win.showInactive(); // 不抢焦点
     console.log("[kanban] 面板关闭，桌宠恢复");
@@ -477,10 +486,15 @@ function startDesktopScopeCheck() {
     checking = true;
     try {
       const fg = await detectForeground();
+      // 面板打开（mascotHidden）：桌宠保持隐藏，全屏检测不干预
+      if (mascotHidden) {
+        if (win.isVisible()) win.hide(); // 兜底：确保隐藏
+        return;
+      }
       // 显示条件：非全屏（桌面/普通窗口）或面板打开
       // 注意：不用 isFocused() 豁免——透明窗口焦点状态不可靠（fit 时曾 focus 后永远 true）
       // 用户点击桌宠时它自然成为前台窗口（fg=normal 小窗口），不会误隐藏
-      const shouldShow = fg !== "fullscreen" || panelOpen;
+      const shouldShow = fg !== "fullscreen";
       if (shouldShow && !win.isVisible()) {
         win.showInactive();
         console.log("[kanban] 显示桌宠（前台:", fg + "）");
