@@ -566,6 +566,49 @@ const server = createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true }));
     return;
   }
+  if (url.pathname === "/api/interview-notes") {
+    // 面试实录：把真实面试被问住的知识点加入学习清单（必会）+ 建复习卡
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const input = JSON.parse(body || "{}");
+        // topics 支持数组或字符串（逗号/顿号/换行/分号分隔）
+        let raw = input.topics || [];
+        if (typeof raw === "string") raw = raw.split(/[,，、;\n；]+/).map((s) => s.trim()).filter(Boolean);
+        if (!Array.isArray(raw) || !raw.length) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "topics required" })); return; }
+        const added = [], existing = [], skipped = [];
+        for (const t of raw.slice(0, 8)) {
+          const topic = String(t).trim().slice(0, 40);
+          if (!topic) continue;
+          // 伪知识点过滤（"综合能力"/"考察维度"等）
+          if (memory._cleanTopic && !memory._cleanTopic(topic)) { skipped.push({ topic, reason: "非具体知识点" }); continue; }
+          const r = studyApi.addPlanItems([{
+            topic,
+            why: "真实面试中被问住，需优先补强",
+            source: "面试实录",
+            verify_question: `请完整回答并讲清原理：${topic}`,
+            level: "必会",
+          }]);
+          if (r.added > 0) {
+            added.push(topic);
+            // 自动建复习卡（进入间隔复习）
+            try {
+              reviewApi.review.addCard({ topic, question: `请完整回答并讲清原理：${topic}`, answer: "", source: "面试实录" });
+            } catch { /* ignore */ }
+          } else {
+            existing.push(topic);
+          }
+        }
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, added, existing, skipped, hint: `新增 ${added.length} 个知识点（已在清单 ${existing.length} 个${skipped.length ? `，跳过 ${skipped.length} 个非知识点` : ""}），可在「📋 学习清单」查看，点「💡 讲解」生成详细讲解` }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
   if (url.pathname === "/api/run-discover") {
     // 重置进度并后台启动爬取
     try {

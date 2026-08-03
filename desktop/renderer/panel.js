@@ -440,6 +440,35 @@ $("study-gen").addEventListener("click", async () => {
   $("study-gen").textContent = "✨ 从产出生成清单";
 });
 
+// ============ 面试实录：被问住的知识点入清单 ============
+$("iv-notes-btn").addEventListener("click", async () => {
+  const input = $("iv-notes-input").value.trim();
+  if (!input) return;
+  const btn = $("iv-notes-btn");
+  const result = $("iv-notes-result");
+  btn.disabled = true;
+  btn.textContent = "记录中...";
+  result.className = "iv-notes-result";
+  result.textContent = "⏳ 正在加入学习清单...";
+  try {
+    const r = await window.kanban.interviewNotes(input);
+    if (!r?.ok) { result.textContent = "⚠️ " + (r?.error || "记录失败"); return; }
+    result.innerHTML = `
+      <div style="color:#3a8a5a">✅ 新增 ${r.added?.length || 0} 个：${esc((r.added || []).join("、") || "无")}</div>
+      ${r.existing?.length ? `<div style="color:#b07020">已在清单：${esc(r.existing.join("、"))}</div>` : ""}
+      ${r.skipped?.length ? `<div style="color:#8a87a8">跳过非知识点：${esc(r.skipped.map((s) => s.topic).join("、"))}</div>` : ""}
+      <div style="color:#8a87a8;font-size:11px;margin-top:4px">${esc(r.hint || "")}</div>`;
+    $("iv-notes-input").value = "";
+    loadStudyPlan(); // 刷新清单显示新条目
+  } catch (e) {
+    result.textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📌 记录";
+  }
+});
+$("iv-notes-input").addEventListener("keydown", (e) => { if (e.key === "Enter") $("iv-notes-btn").click(); });
+
 $("study-review").addEventListener("click", async () => {
   const r = await window.kanban.studyReview();
   if (!r?.ok) { alert(r?.error || "无复盘内容"); return; }
