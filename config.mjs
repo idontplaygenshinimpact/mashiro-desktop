@@ -34,13 +34,28 @@ function resolveApiKey() {
   return "";
 }
 
+// 备用端点 key：环境变量 > opencode auth.json 的 deepseek key（主端点故障时自动降级官方 API）
+function resolveFallbackApiKey() {
+  if (process.env.DEEPSEEK_FALLBACK_API_KEY) return process.env.DEEPSEEK_FALLBACK_API_KEY;
+  const authPath = path.join(homedir(), ".local", "share", "opencode", "auth.json");
+  try {
+    if (existsSync(authPath)) {
+      const auth = JSON.parse(readFileSync(authPath, "utf8"));
+      if (auth?.deepseek?.key) return auth.deepseek.key;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
 export const config = {
   apiKey: resolveApiKey(),
   // 主端点：OpenCode Go 端点（OpenAI 兼容），走 Go 订阅额度
   baseUrl: process.env.DEEPSEEK_BASE_URL || "https://opencode.ai/zen/go/v1",
   // 备用端点（failover）：主端点连续失败时降级；可用官方 API 兜底
   fallbackBaseUrl: process.env.DEEPSEEK_FALLBACK_BASE_URL || "https://api.deepseek.com/v1",
-  fallbackApiKey: process.env.DEEPSEEK_FALLBACK_API_KEY || "",
+  fallbackApiKey: resolveFallbackApiKey(),
   // 判断/过滤用 flash（便宜快），完整讲解用 flash 亦可，质量不够可切 pro
   model: process.env.MIANSHI_MODEL || "deepseek-v4-flash",
   linksFile: path.join(import.meta.dirname, "links.txt"),
