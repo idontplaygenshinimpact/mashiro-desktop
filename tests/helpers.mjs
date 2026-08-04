@@ -5,7 +5,7 @@
 //   mockLLM();                   // 必须要在动态 import 被测模块之前
 //   const { ... } = await import("../lib/xxx.mjs");
 import { mock } from "node:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -13,6 +13,10 @@ import path from "node:path";
 export function setupTempDb(label) {
   const dir = mkdtempSync(path.join(tmpdir(), `mianshi-${label}-`));
   process.env.MIANSHI_DB_PATH = path.join(dir, "test.db");
+  // 测试默认隔离 MCP：指向空配置（防止 chatWithAgent 连到真实/残留 MCP server 导致子进程挂住测试进程）
+  const mcpCfg = path.join(dir, "mcp-empty.json");
+  process.env.MIANSHI_MCP_CONFIG = mcpCfg;
+  try { writeFileSync(mcpCfg, "[]", "utf8"); } catch { /* ignore */ }
   return dir;
 }
 export function cleanupTempDb(dir) {
