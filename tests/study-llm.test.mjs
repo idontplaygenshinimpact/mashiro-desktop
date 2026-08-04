@@ -45,7 +45,7 @@ test("generateStudyPlan：level 非法值回退必会", async () => {
   assert.equal(r.items[0].level, "必会");
 });
 
-test("generateStudyPlan：不覆盖旧清单（未完成保留/已完成移除/新条目去重）", async () => {
+test("generateStudyPlan：不覆盖旧清单（全部保留/新条目去重）", async () => {
   // 旧清单：1 条面试实录未完成 + 1 条已完成
   addPlanItems([
     { topic: "事件循环", why: "面试被问住", source: "面试实录", verify_question: "q", level: "必会" },
@@ -58,11 +58,11 @@ test("generateStudyPlan：不覆盖旧清单（未完成保留/已完成移除/�
   const r = await generateStudyPlan();
   const topics = r.items.map((i) => i.topic);
   assert.ok(topics.includes("事件循环"), "旧未完成（面试实录）保留");
+  assert.ok(topics.includes("旧知识点"), "已完成条目也保留（学习记录不被删除）");
   assert.ok(topics.includes("新知识点1") && topics.includes("新知识点2"), "新条目加入");
-  assert.ok(!topics.includes("旧知识点"), "已完成条目移除");
   assert.equal(topics.filter((t) => t === "事件循环").length, 1, "重复 topic 只留一条");
   // 入库一致
-  assert.equal(getPlan().items.length, 3);
+  assert.equal(getPlan().items.length, 4);
 });
 
 test("generateStudyPlan：旧条目状态字段保留", async () => {
