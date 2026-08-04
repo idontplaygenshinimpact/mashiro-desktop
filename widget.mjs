@@ -17,6 +17,7 @@ import * as reviewApi from "./lib/review.mjs";
 import { pick as pickEmotion, EMOTIONS } from "./lib/emotions.mjs";
 import { getLLMStats, getRecentTools } from "./lib/trace.mjs";
 import { getPendingApprovals, resolveApproval, getSessionApproved } from "./lib/permission.mjs";
+import { submit as laneSubmit } from "./lib/lane.mjs";
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -268,14 +269,14 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/chat") {
-    // 桌宠对话：用户消息 → agent 工具循环 → 回复
+    // 桌宠对话：用户消息 → agent 工具循环 → 回复（走串行 lane，防并发竞争 memory 镜像）
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", async () => {
       try {
         const { message, history } = JSON.parse(body || "{}");
         if (!message) { res.writeHead(400); res.end(JSON.stringify({ error: "message required" })); return; }
-        const result = await chatWithAgent(message, history || []);
+        const result = await laneSubmit(() => chatWithAgent(message, history || []));
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(result));
       } catch (e) {
@@ -604,8 +605,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/study-generate") {
     // 从产出生成学习清单
-    studyApi
-      .generateStudyPlan()
+    laneSubmit(() => studyApi.generateStudyPlan())
       .then((plan) => {
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ok: true, plan }));
@@ -669,7 +669,7 @@ const server = createServer((req, res) => {
     req.on("data", (c) => (body += c));
     req.on("end", async () => {
       try {
-        const r = await startInterview(JSON.parse(body || "{}"));
+        const r = await laneSubmit(() => startInterview(JSON.parse(body || "{}")));
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(r));
       } catch (e) {
@@ -684,7 +684,7 @@ const server = createServer((req, res) => {
     req.on("data", (c) => (body += c));
     req.on("end", async () => {
       try {
-        const r = await submitAnswer(JSON.parse(body || "{}").answer || "");
+        const r = await laneSubmit(() => submitAnswer(JSON.parse(body || "{}").answer || ""));
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(r));
       } catch (e) {
@@ -695,7 +695,7 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/interview/end") {
-    endInterview()
+    laneSubmit(() => endInterview())
       .then((r) => {
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(r));
