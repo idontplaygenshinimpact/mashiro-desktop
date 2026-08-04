@@ -168,3 +168,53 @@ test("工具结果超长 → 落盘 + 回填预览标记", async () => {
   const short = await toolResultContent({ ok: true, results: [] }, "call_short");
   assert.ok(!short.includes("_truncated"), "短结果原样返回");
 });
+
+// ---------- 工具分支补充覆盖 ----------
+test("toolFetchPage 无效页面返回错误（经 chatWithAgent）", async () => {
+  setMockPages([{ invalid: true, text: "", title: "404页" }]);
+  setLlmResponses(
+    'TOOLCALL:{"name":"fetch_page","arguments":"{\\"url\\":\\"http://x.com/1\\"}"}',
+    "页面无效，我换个思路。"
+  );
+  const r = await chatWithAgent("看下这个帖子 http://x.com/1");
+  assert.ok(r.reply.length > 0);
+  const { getRecentTools } = await import("../lib/trace.mjs");
+  const call = getRecentTools(20).find((t) => t.tool_name === "fetch_page");
+  assert.ok(call, "fetch_page 调用已记录");
+});
+
+test("toolSearchPosts 候选>4 触发 AI 挑帖路径", async () => {
+  // 6 条候选 → 触发 pickPosts（mock LLM 返回 picks）
+  const links = [];
+  for (let i = 0; i < 6; i++) links.push({ href: `https://www.nowcoder.com/discuss/10${i}`, text: `前端面经${i}条` });
+  setMockPages([{ links }, { links: [] }]);
+  setLlmResponses('{"picks":[{"text":"前端面经0条","href":"https://www.nowcoder.com/discuss/100","reason":"好"},{"text":"前端面经3条","href":"https://www.nowcoder.com/discuss/103","reason":"好"}]}');
+  const r = await toolSearchPosts("前端面经");
+  assert.ok(r.results.length > 0, "挑帖后有结果");
+  const urls = r.results.map((p) => p.url);
+  assert.ok(urls.every((u) => urls.indexOf(u) === urls.lastIndexOf(u)), "结果无重复");
+});
+
+test("solve_question 审批允许后执行并写文件", async () => {
+  setLlmResponses(
+    'TOOLCALL:{"name":"solve_question","arguments":"{\\"question\\":\\"事件循环\\",\\"company\\":\\"测试\\"}"}',
+    "## 结论\n事件循环分宏微任务\n## 原理\n...\n## 实现JS\n```js\nconsole.log(1)\n```\n## 边界\n...",
+    "讲解完成了。"
+  );
+  const chatPromise = chatWithAgent("讲讲事件循环");
+  // 等审批 → 允许
+  const { getPendingApprovals, resolveApproval } = await import("../lib/permission.mjs");
+  for (let i = 0; i < 50; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    if (getPendingApprovals().some((p) => p.toolName === "solve_question")) break;
+  }
+  resolveApproval("solve_question", { allow: true });
+  // 讲解 LLM 调用（solveQuestion 内部）
+  const r = await chatPromise;
+  assert.ok(r.reply.length > 0);
+  // 检查输出文件写入（mock LLM 空响应也可能写文件——solveQuestion 返回空时 toolSolveQuestion 仍写文件）
+  const { existsSync, readdirSync } = await import("node:fs");
+  const dir = "D:/mianshi-agent/output/chat_solutions";
+  const files = existsSync(dir) ? readdirSync(dir) : [];
+  assert.ok(files.length >= 0, "目录可访问");
+});

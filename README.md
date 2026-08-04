@@ -235,7 +235,7 @@ mianshi-agent/
 | 单元/集成测试 | `npm test` | ✅ 156/156 通过 |
 | 类型检查 | `npm run typecheck`（tsc --noEmit + checkJs） | ✅ 0 错误 |
 | Lint | `npm run lint`（ESLint flat config） | ✅ 0 error |
-| 覆盖率 | `npm run coverage` | 核心模块 93–100%（memory/study/review/knowledge/ai/interview/permission/mcp-client/trace）；fetch-page 需真浏览器为人工验证域 |
+| 覆盖率 | `npm run coverage` | 12 个核心模块 **93–100%**（ai/interview/knowledge/memory/mcp-client/permission/review/study/trace/atomic-json/emotions/db）；agent.mjs（工具循环）**86.4%**；fetch-page 需真浏览器为人工验证域；llm.mjs 被测试 mock 隔离（统计失真，单文件实测 67%） |
 | Agent 能力评测 | `npm run bench:agent` | ✅ 10/10 |
 | 模型基线 | `npm run bench` | 综合 94/100（讲解 88 + 分类/检测/静态 100%） |
 | CI | `.github/workflows/ci.yml` | push/PR 自动跑：typecheck + lint + test + bench:agent |
