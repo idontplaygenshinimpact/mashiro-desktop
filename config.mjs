@@ -64,6 +64,9 @@ export const config = {
   navTimeout: 45000,
   // 每题讲解的 max_tokens（长文完整讲解需要足够空间，24000 防截断）
   solveMaxTokens: 24000,
+  // 上下文压缩参数（.env 可覆盖：COMPACT_BUDGET / COMPACT_KEEP_RECENT）
+  compactBudget: Number(process.env.COMPACT_BUDGET) || 18000,
+  compactKeepRecent: Number(process.env.COMPACT_KEEP_RECENT) || 4000,
 };
 
 // 启动自检：key 缺失时明确报错（避免静默失败）

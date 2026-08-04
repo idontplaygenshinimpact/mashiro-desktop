@@ -226,6 +226,18 @@ mianshi-agent/
 
 网关偶发返回 `HTTP 200 + 空 content`（不报错）——`llm.mjs` 已检测并视为可重试错误，自动走重试/failover 链，避免对话静默空白。
 
+### 上下文压缩（compaction）
+
+生产级实现：token 估算触发（中文 1:1 / 英文 4:1 字符粗估）→ 保留最近 `keepRecent` token 的完整消息 → 中间压缩为带时间戳的摘要注入 → 3 次重试 + 失败降级（丢弃最旧 tool 结果）。参数可配：
+
+```bash
+# .env
+COMPACT_BUDGET=18000       # body 估算 token 超此值触发压缩（默认窗口 ~30%）
+COMPACT_KEEP_RECENT=4000   # 保留最近 N token 的完整消息
+```
+
+量化验证（`tests/ai.test.mjs`）：构造超预算对话 → 压缩后 token 减少 70%+ 且保留最近上下文。
+
 ---
 
 ## 工程质量门禁
