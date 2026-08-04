@@ -228,6 +228,20 @@ mianshi-agent/
 
 ---
 
+## 工程质量门禁
+
+| 门禁 | 命令 | 当前状态 |
+|---|---|---|
+| 单元/集成测试 | `npm test` | ✅ 156/156 通过 |
+| 类型检查 | `npm run typecheck`（tsc --noEmit + checkJs） | ✅ 0 错误 |
+| Lint | `npm run lint`（ESLint flat config） | ✅ 0 error |
+| 覆盖率 | `npm run coverage` | 核心模块 93–100%（memory/study/review/knowledge/ai/interview/permission/mcp-client/trace）；fetch-page 需真浏览器为人工验证域 |
+| Agent 能力评测 | `npm run bench:agent` | ✅ 10/10 |
+| 模型基线 | `npm run bench` | 综合 94/100（讲解 88 + 分类/检测/静态 100%） |
+| CI | `.github/workflows/ci.yml` | push/PR 自动跑：typecheck + lint + test + bench:agent |
+
+---
+
 ## 常见问题
 
 **Q：桌宠不显示？**
