@@ -817,6 +817,24 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// ============ 讲解弹层字号调节（localStorage 记忆） ============
+const SD_FONT_MIN = 9, SD_FONT_MAX = 22, SD_FONT_STEP = 1;
+function sdFontSize() {
+  const v = parseInt(localStorage.getItem("sd-font-size") || "", 10);
+  return v >= SD_FONT_MIN && v <= SD_FONT_MAX ? v : 13;
+}
+function applySdFontSize() {
+  document.documentElement.style.setProperty("--sd-font-size", sdFontSize() + "px");
+}
+function changeSdFont(delta) {
+  const next = Math.min(SD_FONT_MAX, Math.max(SD_FONT_MIN, sdFontSize() + delta));
+  localStorage.setItem("sd-font-size", String(next));
+  applySdFontSize();
+}
+document.getElementById("sd-font-plus")?.addEventListener("click", () => changeSdFont(SD_FONT_STEP));
+document.getElementById("sd-font-minus")?.addEventListener("click", () => changeSdFont(-SD_FONT_STEP));
+applySdFontSize();
+
 // ============ 权限审批（human-in-the-loop） ============
 // agent 请求执行敏感工具（solve_question / record_interview_topics）时，
 // 顶部弹出确认条，用户决定 拒绝/允许/本会话允许（对标 Claude Code permission）

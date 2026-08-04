@@ -31,7 +31,7 @@ function latestOutputs(limit = 12) {
   return readdirSync(outDir, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => ({ dir: d.name, mtime: statSync(path.join(outDir, d.name)).mtime }))
-    .sort((a, b) => b.mtime - a.mtime)
+    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
     .slice(0, limit);
 }
 
@@ -57,7 +57,7 @@ function scanNewestFiles(limit = 20) {
 }
 
 // 文件名规范化：忽略空格/下划线/括号差异，用于模糊匹配
-const normName = (s) => String(s || "").toLowerCase().replace(/[\s_\-（）()【】\[\]．.]/g, "");
+const normName = (s) => String(s || "").toLowerCase().replace(/[\s_\-（）()【】[].]/g, "");
 
 // 学习讲解文件专用目录（AI 生成的讲解存档）
 const STUDY_NOTES_DIR = () => path.join(config.outputDir, "study_notes");
@@ -134,7 +134,7 @@ function getStudyPlan() {
 
 function sendNotification(title, message, { wait = false } = {}) {
   if (NO_NOTIFY) return;
-  return new Promise((resolve) => {
+  return /** @type {Promise<void>} */ (new Promise((resolve) => {
     notifier.notify(
       {
         title,
@@ -144,9 +144,9 @@ function sendNotification(title, message, { wait = false } = {}) {
         appID: "MianshiAgent",
         icon: path.join(config.outputDir, "..", "icon.png"),
       },
-      (err) => resolve()
+      (err) => resolve(undefined)
     );
-  });
+  }));
 }
 
 // Windows toast 备用（node-notifier 在某些环境 silent）
@@ -229,7 +229,7 @@ async function checkReviewReminder() {
     const h = new Date().getHours();
     if (h < 9) return;
     reviewReminded.add(todayKey);
-    const topics = due.slice(0, 3).map((c) => c.topic.slice(0, 18)).join("、");
+    const topics = due.slice(0, 3).map((c) => String(c.topic).slice(0, 18)).join("、");
     console.log(`[widget] 复习到期提醒：${due.length} 张`);
     await sendNotification(
       "🔁 复习时间到",
@@ -337,6 +337,7 @@ const server = createServer((req, res) => {
         title: item.verify_question || `请完整讲解：${item.topic}`,
         text: `这是一道前端面试题，请完整讲解：${item.topic}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
         company: "真白讲解",
+        position: "前端",
         sourceUrl: "学习清单",
       }, (delta) => {
         full += delta;
@@ -511,9 +512,12 @@ const server = createServer((req, res) => {
         send({ type: "start", topic: topics.map((t) => t.topic).join(" + ") });
         let full = "";
         import("./lib/ai.mjs").then(async ({ clusterStudyStream }) => {
-          full = await clusterStudyStream({ topics }, (delta) => {
-            full += delta;
-            send({ type: "delta", delta });
+          full = await clusterStudyStream({
+            topics,
+            onChunk: (delta) => {
+              full += delta;
+              send({ type: "delta", delta });
+            },
           });
           // 存到 study_notes/主题簇/ 目录（按 AI 给的主题簇名）
           let savedPath = null;
@@ -568,6 +572,7 @@ const server = createServer((req, res) => {
         title: item.verify_question || `请完整讲解：${item.topic}`,
         text: `这是一道前端面试题，请完整讲解：${item.topic}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
         company: "真白讲解",
+        position: "前端",
         sourceUrl: "学习清单",
       })).slice(0, 12000);
       // 写入存档（下次直接读文件，不再生成）

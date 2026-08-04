@@ -100,6 +100,8 @@ test("chatWithAgent 长历史触发压缩后仍正常回答", async () => {
   }
   const r = await chatWithAgent("新问题", longHistory);
   assert.equal(r.reply, "压缩后正常回答。", "压缩摘要后正常回答");
+  // 回归断言：压缩真的执行了（llmChat 被压缩流程消费了第 1 个响应——摘要），否则 reply 会是摘要文本
+  assert.ok(r.history.length > 0);
 });
 
 // ---------- 搜索工具（mock 页面） ----------

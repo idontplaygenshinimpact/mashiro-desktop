@@ -85,6 +85,52 @@ test("solveQuestionStream 逐 chunk 回调", async () => {
   assert.equal(full, received);
 });
 
+test("solveAppendStream 追问补充流式", async () => {
+  setLlmResponses("补充内容：Hooks 闭包陷阱的具体例子。");
+  let received = "";
+  const full = await ai.solveAppendStream(
+    { question: "Hooks 原理", existing: "已有讲解", ask: "再讲讲闭包陷阱" },
+    (chunk) => { received += chunk; }
+  );
+  assert.ok(received.length > 0);
+  assert.equal(full, received);
+});
+
+test("consolidateStudyStream 多轮问答整理成完整讲解", async () => {
+  setLlmResponses("## 完整讲解\n这是整理后的内容，覆盖所有轮次。");
+  let received = "";
+  const full = await ai.consolidateStudyStream(
+    { topic: "事件循环", content: "第一轮讲解…\n追问补充…" },
+    (chunk) => { received += chunk; }
+  );
+  assert.ok(full.includes("完整讲解"));
+  assert.equal(full, received);
+});
+
+test("clusterStudyStream 多条目归并主题簇", async () => {
+  setLlmResponses("## 主题簇综合讲解\nMySQL 索引与 B+ 树相关知识。");
+  let received = "";
+  const full = await ai.clusterStudyStream({
+    topics: [{ topic: "B树", content: "B+树原理" }, { topic: "回表", content: "回表查询" }],
+    onChunk: (chunk) => { received += chunk; },
+  });
+  assert.ok(full.includes("主题簇"));
+  assert.equal(full, received);
+});
+
+test("summarizeQiuzhao 招聘信息摘要", async () => {
+  setLlmResponses("字节2026秋招启动，前端岗8月1日开投。");
+  const r = await ai.summarizeQiuzhao({ title: "字节招聘", text: "字节跳动2026届秋招正式启动……", company: "字节", sourceUrl: "u" });
+  assert.ok(r.length > 0);
+  assert.ok(r.includes("字节"));
+});
+
+test("chat 简单 LLM 调用返回文本", async () => {
+  setLlmResponses("简单回答。");
+  const r = await ai.chat([{ role: "user", content: "hi" }], { maxTokens: 100 });
+  assert.equal(r, "简单回答。");
+});
+
 // ---------- compactMessages ----------
 test("compactMessages 不超预算不压缩", async () => {
   const msgs = [{ role: "system", content: "s" }, { role: "user", content: "hi" }, { role: "assistant", content: "hello" }];

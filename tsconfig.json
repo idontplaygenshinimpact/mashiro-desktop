@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "noImplicitAny": false
+  },
+  "include": ["lib/**/*.mjs", "config.mjs", "widget.mjs", "scripts/**/*.mjs", "mcp-server.mjs"]
+}

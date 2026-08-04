@@ -1,49 +1,64 @@
-// memory.mjs 单测：画像/关注点/薄弱点/已掌握/对话历史/复盘回流（临时 DB + 干净实例）
+// memory.mjs 单测：画像/关注点/薄弱点/已掌握/对话历史/复盘回流
+// 策略：静态单例 + resetMemoryState（保持模块 URL 稳定，让 V8 coverage 全量统计）；
+//       持久化验证用 freshMemory 重载实例（少数）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { setupTempDb, cleanupTempDb, clearAllTables, freshMemory } from "./helpers.mjs";
+import { setupTempDb, cleanupTempDb, clearAllTables, resetMemoryState } from "./helpers.mjs";
 
 const dbDir = setupTempDb("memory");
-let memory;
+const { memory } = await import("../lib/memory.mjs");
+const { db } = await import("../lib/db.mjs");
 
 beforeEach(async () => {
   await clearAllTables();
-  memory = await freshMemory(); // 每次测试干净实例（共享 db 单例）
+  resetMemoryState(memory);
 });
 after(() => { cleanupTempDb(dbDir); });
 
 // ---------- 关注点 ----------
-test("addInterests 去重 + trim + 持久化", async () => {
+test("addInterests 去重 + trim + 持久化(DB)", () => {
   memory.addInterests(["React", "字节", "React"]);
   memory.addInterests(["  Event Loop  "]);
   assert.deepEqual(memory.getInterests(), ["React", "字节", "Event Loop"]);
-  const m2 = await freshMemory(); // 重启实例（重新 load 自 DB）
-  assert.deepEqual(m2.getInterests(), ["React", "字节", "Event Loop"]);
+  const rows = db.prepare("SELECT topic FROM interests ORDER BY added_at").all().map((r) => r.topic);
+  assert.deepEqual(rows, ["React", "字节", "Event Loop"], "DB 持久化");
 });
 
 test("addInterests 空值忽略/超长截断到 30 字符", () => {
   memory.addInterests(["", "   ", "x".repeat(50)]);
-  assert.deepEqual(memory.getInterests(), ["x".repeat(30)]); // 截断后保留（设计行为）
+  assert.deepEqual(memory.getInterests(), ["x".repeat(30)]);
 });
 
 // ---------- 已看帖子 ----------
-test("markSeen/isSeen 持久化", async () => {
+test("markSeen/isSeen 持久化(DB)", () => {
   assert.equal(memory.isSeen("http://a"), false);
   memory.markSeen("http://a");
   assert.equal(memory.isSeen("http://a"), true);
-  const m2 = await freshMemory();
-  assert.equal(m2.isSeen("http://a"), true);
+  const row = db.prepare("SELECT url FROM seen_urls WHERE url=?").get("http://a");
+  assert.ok(row, "DB 持久化");
+});
+
+test("markSeen 空值忽略", () => {
+  memory.markSeen("");
+  memory.markSeen(null);
+  assert.equal(memory.get().seenUrls.length, 0);
 });
 
 // ---------- 对话历史 ----------
-test("appendChat/getChatHistory 持久化", async () => {
+test("appendChat/getChatHistory 持久化(DB)", () => {
   memory.appendChat("user", "你好");
   memory.appendChat("assistant", "你好呀");
   const hist = memory.getChatHistory();
   assert.equal(hist.length, 2);
   assert.equal(hist[0].role, "user");
-  const m2 = await freshMemory();
-  assert.equal(m2.getChatHistory().length, 2);
+  const n = db.prepare("SELECT COUNT(*) n FROM chat_history").get().n;
+  assert.equal(n, 2, "DB 持久化");
+});
+
+test("appendChat 上限 40 条", () => {
+  for (let i = 0; i < 50; i++) memory.appendChat("user", `m${i}`);
+  assert.equal(memory.getChatHistory().length, 40);
+  assert.equal(memory.get().stats.chats, 50);
 });
 
 // ---------- 薄弱点 ----------
@@ -52,27 +67,25 @@ test("addWeakPoint 过滤伪知识点", () => {
   memory.addWeakPoint("考察维度：深度", "复盘验证");
   memory.addWeakPoint("", "x");
   memory.addWeakPoint("事件循环", "复盘验证");
-  const wps = memory.getWeakPoints();
-  assert.equal(wps.length, 1);
-  assert.equal(wps[0].topic, "事件循环");
+  assert.equal(memory.getWeakPoints().length, 1);
+  assert.equal(memory.getWeakPoints()[0].topic, "事件循环");
 });
 
-test("addWeakPoint 同主题累加 failCount + 排序", () => {
+test("addWeakPoint 同主题累加 failCount + 排序 + 上限20", () => {
   memory.addWeakPoint("A点", "s1");
   memory.addWeakPoint("A点", "s2");
-  memory.addWeakPoint("B点", "s3");
+  for (let i = 0; i < 25; i++) memory.addWeakPoint(`点${i}`, "s3");
   const wps = memory.getWeakPoints();
-  assert.equal(wps.length, 2);
-  assert.equal(wps[0].topic, "A点"); // failCount 高在前
+  assert.equal(wps.length, 20, "最多保留 20 条");
+  assert.equal(wps[0].topic, "A点");
   assert.equal(wps[0].failCount, 2);
 });
 
-test("addWeakPoint 持久化", async () => {
+test("addWeakPoint 持久化(DB)", () => {
   memory.addWeakPoint("事件循环", "面试实录", "agent");
-  const m2 = await freshMemory();
-  const wp = m2.getWeakPoints()[0];
-  assert.equal(wp.topic, "事件循环");
-  assert.equal(wp.origin, "agent");
+  const row = db.prepare("SELECT * FROM weak_points WHERE topic=?").get("事件循环");
+  assert.equal(row.origin, "agent");
+  assert.equal(row.fail_count, 1);
 });
 
 test("getTrustedWeakPoints 过滤 untrusted", () => {
@@ -101,19 +114,45 @@ test("applyReviewResults：错→薄弱点，答对→已掌握并清薄弱点",
   memory.applyReviewResults([
     { topic: "闭包", verdict: "对" },
     { topic: "事件循环", verdict: "错" },
-    { topic: "综合能力", verdict: "错" }, // 伪知识点跳过
+    { topic: "综合能力", verdict: "错" },
     { topic: "原型链", verdict: "部分对" },
   ]);
   assert.deepEqual(memory.getMastered().map((m) => m.topic), ["闭包"]);
   const weak = memory.getWeakPoints().map((w) => w.topic).sort();
   assert.deepEqual(weak, ["事件循环", "原型链"]);
-  assert.equal(memory.getWeakPoints().some((w) => w.topic === "闭包"), false, "掌握后清除薄弱点");
+  assert.equal(memory.getWeakPoints().some((w) => w.topic === "闭包"), false);
 });
 
 test("applyReviewResults 空结果不崩溃", () => {
   memory.applyReviewResults(null);
   memory.applyReviewResults([]);
   assert.equal(memory.getWeakPoints().length, 0);
+});
+
+test("applyReviewResults 无 topic 条目跳过", () => {
+  memory.applyReviewResults([{ verdict: "错" }, { topic: "综合能力", verdict: "错" }]);
+  assert.equal(memory.getWeakPoints().length, 0);
+});
+
+// ---------- 已掌握 ----------
+test("addMastered 去重 + 上限30 + 清薄弱点", () => {
+  memory.addWeakPoint("闭包", "x");
+  memory.addMastered("闭包");
+  memory.addMastered("闭包");
+  assert.equal(memory.getMastered().length, 1);
+  assert.equal(memory.getWeakPoints().length, 0, "掌握后清除薄弱点");
+  for (let i = 0; i < 35; i++) memory.addMastered(`已掌握${i}`);
+  assert.equal(memory.getMastered().length, 30);
+});
+
+// ---------- 学习进度 ----------
+test("recordProgress 累积次数/状态", () => {
+  memory.recordProgress("事件循环", "done");
+  memory.recordProgress("事件循环", "reviewed");
+  const p = memory.get().studyProgress["事件循环"];
+  assert.equal(p.times, 2);
+  assert.equal(p.done, true);
+  assert.equal(p.reviewed, true);
 });
 
 // ---------- 画像摘要 ----------
@@ -126,20 +165,27 @@ test("getProfileSummary 组装画像", () => {
   assert.ok(s.includes("目标：前端秋招"));
 });
 
+test("getProfileSummary 空状态仅剩目标", () => {
+  // resetMemoryState 后 profile.target 默认"前端秋招"
+  assert.equal(memory.getProfileSummary(), "目标：前端秋招");
+});
+
 // ---------- 面试会话 ----------
-test("setInterview/getInterview/clearInterview 持久化", async () => {
+test("setInterview/getInterview/clearInterview 持久化(DB)", () => {
   assert.equal(memory.getInterview(), null);
   memory.setInterview({ position: "前端" });
   assert.equal(memory.getInterview().position, "前端");
-  const m2 = await freshMemory();
-  assert.equal(m2.getInterview().position, "前端");
+  const row = db.prepare("SELECT value FROM settings WHERE key='interview'").get();
+  assert.ok(row && JSON.parse(row.value).position === "前端", "DB 持久化");
   memory.clearInterview();
   assert.equal(memory.getInterview(), null);
 });
 
-test("saveInterviewHistory 持久化", async () => {
-  memory.saveInterviewHistory({ date: "2026-01-01", position: "前端", rounds: 3, avg: 80, dims: { tech: 80 }, report: "不错" });
-  assert.equal(memory.getInterviewHistory().length, 1);
-  const m2 = await freshMemory();
-  assert.equal(m2.getInterviewHistory().length, 1);
+test("saveInterviewHistory 持久化(DB) + 内存上限20", () => {
+  for (let i = 0; i < 25; i++) {
+    memory.saveInterviewHistory({ date: "2026-01-01", position: `岗${i}`, rounds: 1, avg: 60, dims: {}, report: "r" });
+  }
+  assert.equal(memory.getInterviewHistory().length, 20, "内存镜像保留最近 20 条");
+  const n = db.prepare("SELECT COUNT(*) n FROM interview_history").get().n;
+  assert.ok(n >= 20, "DB 全量保留");
 });

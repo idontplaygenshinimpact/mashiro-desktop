@@ -39,6 +39,7 @@ server.tool(
       title: question,
       text: `这是一道前端面试题，请完整讲解：${question}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
       company: "MCP",
+      position: "前端",
       sourceUrl: "mcp://solve_question",
     });
     return { content: [{ type: "text", text: String(md).slice(0, 8000) }] };
