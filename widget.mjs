@@ -1036,16 +1036,18 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/zhenti/collect") {
-    // 搜集真题清单（POST；可传 { details: 20 } 顺带抓题型详情）
+    // 搜集真题清单（POST；可传 { details: 20 } 顺带抓题型详情；{ company: "拼多多" } 按公司搜索搜集）
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", async () => {
       try {
-        const { details } = JSON.parse(body || "{}");
-        const r = await zhentiApi.collectZhentiList();
+        const { details, company } = JSON.parse(body || "{}");
+        const r = company
+          ? await zhentiApi.collectZhentiByCompany(company)
+          : await zhentiApi.collectZhentiList();
         const detailsResult = details ? await zhentiApi.collectZhentiDetails(details) : null;
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, ...r, details: detailsResult, message: `真题搜集完成：新增 ${r.added} 条（共 ${r.papers.length} 条有效）` }));
+        res.end(JSON.stringify({ ok: true, ...r, details: detailsResult, message: `${company ? `「${company}」真题搜集完成` : "真题搜集完成"}：新增 ${r.added} 条` }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));

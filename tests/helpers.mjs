@@ -37,6 +37,8 @@ export async function clearAllTables() {
     DELETE FROM job_posts; DELETE FROM company_profiles;`);
   // knowledge 表只有 rag 模块的测试才建——表不存在时忽略
   try { db.exec("DELETE FROM knowledge_items; DELETE FROM knowledge_fts;"); } catch { /* ignore */ }
+  // exam_papers 只有 zhenti 测试才建
+  try { db.exec("DELETE FROM exam_papers;"); } catch { /* ignore */ }
 }
 // memory 是模块级单例，cache-bust 重新 import 得到干净实例（共享同一 db 单例）
 export async function freshMemory() {
