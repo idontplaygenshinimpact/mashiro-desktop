@@ -74,6 +74,14 @@ test("collectFromOfficialSites：mock 官网页 → 岗位入库", async () => {
   assert.ok(jobs.getJobs().some((j) => j.company === "测试公司"));
 });
 
+test("非技术岗过滤：运营/营销岗不入推荐", () => {
+  jobs.addJob({ company: "美团", title: "销售招聘实习生", job_type: "实习", direction: "other", summary: "协助招聘经理完成销售岗位招聘" });
+  jobs.addJob({ company: "美团", title: "前端开发实习生", job_type: "实习", direction: "frontend", summary: "负责 Web 前端开发 React" });
+  const rec = jobs.getRecommendedJobs();
+  assert.ok(rec.every((j) => !j.title.includes("销售招聘")), "非技术岗被排除");
+  assert.ok(rec.some((j) => j.title.includes("前端开发")), "技术岗保留");
+});
+
 test("extractJobFromText 从招聘帖提取岗位", async () => {
   setLlmResponses('{"company":"某中厂","title":"前端实习","job_type":"实习","direction":"frontend","apply_url":"","deadline":"","bishi_date":"","summary":"Vue 开发"}');
   const j = await jobs.extractJobFromText({ title: "某中厂实习招聘", text: "招前端实习生，要求 Vue…", url: "u", source: "牛客" });

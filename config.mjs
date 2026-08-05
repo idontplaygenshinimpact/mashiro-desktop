@@ -34,9 +34,9 @@ function resolveApiKey() {
   return "";
 }
 
-// 备用端点 key：环境变量 > opencode auth.json 的 deepseek key（主端点故障时自动降级官方 API）
-function resolveFallbackApiKey() {
-  if (process.env.DEEPSEEK_FALLBACK_API_KEY) return process.env.DEEPSEEK_FALLBACK_API_KEY;
+// 主端点（官方 API）key：opencode auth.json 的 deepseek key 优先（官方 key）
+// → 兜底 .env key（用户若配过官方 key 也能直接用）
+function resolveOfficialApiKey() {
   const authPath = path.join(homedir(), ".local", "share", "opencode", "auth.json");
   try {
     if (existsSync(authPath)) {
@@ -46,18 +46,21 @@ function resolveFallbackApiKey() {
   } catch {
     /* ignore */
   }
-  return "";
+  return resolveApiKey();
 }
 
 export const config = {
+  // 主端点：OpenCode Go 订阅（省钱，网关实测正常）；空响应/超时自动 failover 官方 API
   apiKey: resolveApiKey(),
-  // 主端点：OpenCode Go 端点（OpenAI 兼容），走 Go 订阅额度
   baseUrl: process.env.DEEPSEEK_BASE_URL || "https://opencode.ai/zen/go/v1",
-  // 备用端点（failover）：主端点连续失败时降级；可用官方 API 兜底
+  // 备用端点（failover）：官方 API（稳定），key 用 opencode auth.json 的官方 deepseek key
+  fallbackApiKey: resolveOfficialApiKey(),
   fallbackBaseUrl: process.env.DEEPSEEK_FALLBACK_BASE_URL || "https://api.deepseek.com/v1",
-  fallbackApiKey: resolveFallbackApiKey(),
   // 判断/过滤用 flash（便宜快），完整讲解用 flash 亦可，质量不够可切 pro
   model: process.env.MIANSHI_MODEL || "deepseek-v4-flash",
+  // 官方 API 端点专用模型：实测 deepseek-v4-flash 直连官方 API 稳定空响应(HTTP200+空content)，
+  // deepseek-chat 稳定且被映射到 v4-flash 后端（模型列表没有但兼容旧客户端，调用通）
+  officialModel: process.env.MIANSHI_OFFICIAL_MODEL || "deepseek-chat",
   linksFile: path.join(import.meta.dirname, "links.txt"),
   outputDir: path.join(import.meta.dirname, "output"),
   // Playwright 抓取超时（毫秒）

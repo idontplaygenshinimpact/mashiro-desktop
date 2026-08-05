@@ -2,16 +2,20 @@
 // 通过 preload 的 window.kanban 访问主进程 IPC（与桌宠共享）
 
 // ============ Tab 切换 ============
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+  const btn = document.querySelector(`.tab[data-tab="${name}"]`);
+  if (btn) btn.classList.add("active");
+  const panel = document.getElementById("tab-" + name);
+  if (panel) panel.classList.add("active");
+  if (name === "study") loadStudyPlan();
+  if (name === "crawl") loadCrawlData();
+  if (name === "review") loadReview();
+}
+
 document.querySelectorAll(".tab").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
-    if (btn.dataset.tab === "study") loadStudyPlan();
-    if (btn.dataset.tab === "crawl") loadCrawlData();
-    if (btn.dataset.tab === "review") loadReview();
-  });
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
 });
 
 const $ = (id) => document.getElementById(id);

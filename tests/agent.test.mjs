@@ -121,11 +121,18 @@ test("toolSearchPosts 标题过滤（嵌入式方向排除）+ 去重", async ()
       ],
     },
     {
-      links: [
-        { href: "https://juejin.cn/post/444", text: "字节前端一面面经（转载）" }, // 与第一条同题不同源
-        { href: "https://juejin.cn/post/555", text: "React Hooks 面试题整理" },
+      // 掘金站：走 API 拦截分支
+      links: [],
+      apiResponses: [
+        {
+          data: [
+            { result_model: { article_info: { article_id: "444", title: "字节前端一面面经（转载）" } } },
+            { result_model: { article_info: { article_id: "555", title: "React Hooks 面试题整理" } } },
+          ],
+        },
       ],
     },
+    { links: [] }, // bing 站（mock 空）
   ]);
   const r = await toolSearchPosts("前端面经");
   const titles = r.results.map((p) => p.title);
