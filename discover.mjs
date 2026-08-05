@@ -1,11 +1,14 @@
-// discover 模式：AI 逛牛客
+// discover 模式：AI 逛牛客（管线化：阶段显式、可观测、可测试）
 // 用法: node discover.mjs [起始列表页URL] [要选的帖子数]
-// 流程: 抓列表页 → 提取帖子链接 → AI 根据标题挑选最有价值的 N 篇 → 抓正文 → 分类 → 完整讲解 → 归档
+// 流程管线: init → collect_posts → fetch_pages → classify → solve → finalize
+// 每个阶段是独立函数（导出供测试），中间产物在 ctx 传递；非 fatal 阶段失败不中断
 import { mkdirSync, writeFileSync, appendFileSync, existsSync, readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import path from "node:path";
 import { config } from "./config.mjs";
 import { fetchPage, fetchPages, closeBrowser } from "./lib/fetch-page.mjs";
 import { classifyPage, solveQuestion, pickPosts, summarizeQiuzhao, detectQuestions } from "./lib/ai.mjs";
+import { runPipeline, pipelineSummary } from "./lib/pipeline.mjs";
 
 const DEFAULT_STARTS = [
   // ===== 拼多多（PDD）笔试/面经专项——用户近期参加 =====
@@ -30,14 +33,14 @@ const TARGET_COUNT = 5; // 每个起始页挑几篇（多爬点：3→5）
 const FOCUS = ["前端", "React", "Vue", "浏览器", "CSS", "JavaScript", "TypeScript", "全栈", "Agent", "AI应用", "大模型前端"];
 
 // URL 规范 key（去 query/hash；牛客帖按 discuss id）
-function keyOf(url) {
+export function keyOf(url) {
   const m = String(url || "").match(/\/discuss\/(\d+)/);
   if (m) return "discuss:" + m[1];
   return String(url || "").split("?")[0].split("#")[0];
 }
 
 // 加载历史已爬链接（all_links.md 全部行 + 记忆 seenUrls），用于跨次去重
-function loadHistoryUrls() {
+export function loadHistoryUrls() {
   const seen = new Set();
   try {
     const linksFile = path.join(config.outputDir, "all_links.md");
@@ -58,7 +61,7 @@ function loadHistoryUrls() {
   return seen;
 }
 
-function dedupePosts(posts) {
+export function dedupePosts(posts) {
   const seen = new Set();
   const out = [];
   for (const p of posts) {
@@ -69,7 +72,6 @@ function dedupePosts(posts) {
   }
   return out;
 }
-
 
 // ===== 爬取进度上报（桌宠轮询展示） =====
 const PROGRESS_FILE = "D:/mianshi-agent/progress.json";
@@ -103,15 +105,20 @@ function cleanHref(href) {
     .split("?")[0];
 }
 
-async function main() {
-  const startUrls = (process.argv[2] ? process.argv[2].split(",") : DEFAULT_STARTS).filter(Boolean);
-  const want = parseInt(process.argv[3] || String(TARGET_COUNT), 10);
-  // 历史已爬链接（跨次去重：这次只爬新的）
-  const history = loadHistoryUrls();
-  console.log(`历史已爬链接 ${history.size} 条，本次只挑选新帖子`);
-  writeProgress({ status: "running", step: "start", message: "开始爬取", current: 0, total: startUrls.length });
+// ============ 管线阶段 ============
 
-  // 每个起始页：抓列表 → AI 挑帖
+/** 阶段0：初始化 ctx（参数解析、历史加载、进度初始化） */
+export async function initStage(ctx) {
+  ctx.startUrls = (process.argv[2] ? process.argv[2].split(",") : DEFAULT_STARTS).filter(Boolean);
+  ctx.want = parseInt(process.argv[3] || String(TARGET_COUNT), 10);
+  ctx.history = loadHistoryUrls();
+  console.log(`历史已爬链接 ${ctx.history.size} 条，本次只挑选新帖子`);
+  writeProgress({ status: "running", step: "start", message: "开始爬取", current: 0, total: ctx.startUrls.length });
+}
+
+/** 阶段1：遍历起始页抓列表 → 提取/去重/过滤 → AI 挑帖 */
+export async function collectPostsStage(ctx) {
+  const { startUrls, want, history } = ctx;
   const allPicked = [];
   for (const startUrl of startUrls) {
     const si = startUrls.indexOf(startUrl) + 1;
@@ -142,14 +149,13 @@ async function main() {
     picked.forEach((p, i) => console.log(`  ${i + 1}. [${p.reason?.slice(0, 30) || ""}] ${p.text.slice(0, 45)}`));
     allPicked.push(...picked.map((p) => ({ ...p, from: startUrl })));
   }
+  ctx.allPicked = allPicked;
+}
 
-  if (allPicked.length === 0) {
-    console.log("没有选中任何帖子。");
-    await closeBrowser();
-    return;
-  }
-
-  // 抓取选中的帖子（跨页去重）
+/** 阶段2：抓取选中帖子的正文（跨页去重 + 无效页过滤） */
+export async function fetchPagesStage(ctx) {
+  const { allPicked } = ctx;
+  if (!allPicked?.length) return;
   const seen = new Set();
   const unique = allPicked.filter((p) => {
     const id = p.href.match(/\/discuss\/(\d+)/)?.[1] || p.href;
@@ -157,13 +163,18 @@ async function main() {
     seen.add(id);
     return true;
   });
+  ctx.unique = unique;
   writeProgress({ status: "running", step: "fetch", message: "抓取正文（共 " + unique.length + " 篇）", current: 0, total: unique.length });
   const pages = await fetchPages(unique.map((p) => p.href));
   // 跳过无效页面（404/空内容）
   const okPages = pages.filter((p) => p.ok && !p.invalid && p.text && p.text.length > 100);
   console.log(`\n抓取成功 ${okPages.length}/${unique.length} 篇（跳过无效 ${pages.length - okPages.length}）`);
+  ctx.okPages = okPages;
+}
 
-  // 分类 + 前端方向硬过滤 + 具体题目检测
+/** 阶段3：分类 + 前端方向硬过滤 + 具体题目检测（zhaopin 分流到情报） */
+export async function classifyStage(ctx) {
+  const { okPages = [] } = ctx;
   const items = [];
   const qiuItems = []; // 秋招情报类
   const GOOD_DIRS = ["frontend", "agent"];
@@ -188,10 +199,18 @@ async function main() {
     }
     items.push({ ...p, cls, questions: dq.questions.slice(0, 3) });
   }
+  ctx.items = items;
+  ctx.qiuItems = qiuItems;
+}
 
+/** 阶段4：秋招情报整理 + 完整讲解 → 写产出文件 */
+export async function solveStage(ctx) {
+  const { items = [], qiuItems = [], startUrls = [] } = ctx;
   const date = new Date().toISOString().slice(0, 10);
   const outDir = path.join(config.outputDir, `${date}_discover`);
   mkdirSync(outDir, { recursive: true });
+  ctx.date = date;
+  ctx.outDir = outDir;
 
   // 秋招情报速递（招聘类汇总）
   if (qiuItems.length > 0) {
@@ -216,8 +235,7 @@ async function main() {
   }
 
   if (items.length === 0) {
-    console.log("没有值得讲解的帖子。");
-    await closeBrowser();
+    ctx.summary = [];
     return;
   }
 
@@ -247,11 +265,18 @@ async function main() {
       summary.push(`- [失败] ${it.title}: ${e.message}`);
     }
   }
+  ctx.summary = summary;
+}
 
-  writeFileSync(path.join(outDir, "00_README.md"), summary.join("\n"), "utf8");
-  try {
-    appendFileSync(path.join(config.outputDir, "all_links.md"), `\n## ${date} (discover)\n` + okPages.map((p) => `- ${p.url}`).join("\n") + "\n", "utf8");
-  } catch { /* ignore */ }
+/** 阶段5：收尾（README / all_links / 记忆标记 / 进度完成） */
+export async function finalizeStage(ctx) {
+  const { okPages = [], items = [], qiuItems = [], date, outDir, summary = [] } = ctx;
+  if (date && outDir) {
+    writeFileSync(path.join(outDir, "00_README.md"), summary.join("\n"), "utf8");
+    try {
+      appendFileSync(path.join(config.outputDir, "all_links.md"), `\n## ${date} (discover)\n` + okPages.map((p) => `- ${p.url}`).join("\n") + "\n", "utf8");
+    } catch { /* ignore */ }
+  }
   // 标记本次已看（记忆模块 seenUrls，供 agent 侧去重参考）
   try {
     const { memory } = await import("./lib/memory.mjs");
@@ -259,11 +284,34 @@ async function main() {
   } catch { /* ignore */ }
 
   writeProgress({ status: "done", step: "done", message: "爬取完成！共 " + items.length + " 篇讲解 + " + qiuItems.length + " 条情报", current: items.length, total: items.length, outDir });
-  console.log(`\n✅ 完成！输出目录: ${outDir}`);
+  if (outDir) console.log(`\n✅ 完成！输出目录: ${outDir}`);
+}
+
+/** 管线定义（导出供测试/复用） */
+export const PIPELINE = [
+  { name: "init", run: initStage, fatal: true },
+  { name: "collect_posts", run: collectPostsStage },
+  { name: "fetch_pages", run: fetchPagesStage },
+  { name: "classify", run: classifyStage },
+  { name: "solve", run: solveStage },
+  { name: "finalize", run: finalizeStage },
+];
+
+/** 入口：组装管线执行 */
+export async function main() {
+  const ctx = {};
+  await runPipeline(PIPELINE, ctx, {
+    onStage: (name, c, ms) => console.log(`\n[阶段 ${name}] 完成（${(ms / 1000).toFixed(1)}s）`),
+  });
+  console.log("\n" + pipelineSummary(ctx));
   await closeBrowser();
 }
 
-main().catch((e) => {
-  console.error("运行出错:", e);
-  process.exit(1);
-});
+// 仅 CLI 直接运行时执行（测试 import 时跳过）
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  main().catch((e) => {
+    console.error("运行出错:", e);
+    process.exit(1);
+  });
+}
