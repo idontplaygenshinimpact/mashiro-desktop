@@ -1327,8 +1327,18 @@ if (!DISABLE_PATROL) {
   setInterval(patrolInterests, PATROL_INTERVAL);
 }
 
-// 本地知识库：启动后若为空则后台构建（首次 ~15-60s；增量可手动点面板重建）
-setTimeout(async () => {
+// ============ 后台任务管理（门控 + 互斥 + 优雅关闭） ============
+// 测试/无后台场景：MIANSHI_DISABLE_BACKGROUND=1 关闭所有后台定时任务（RAG 构建/每日搜集）
+const DISABLE_BACKGROUND = process.env.MIANSHI_DISABLE_BACKGROUND === "1";
+const timers = [];
+const registerTimer = (fn, ms, ...args) => { timers.push(setTimeout(fn, ms, ...args)); };
+const registerInterval = (fn, ms, ...args) => { timers.push(setInterval(fn, ms, ...args)); };
+
+// 本地知识库：启动后若为空则后台构建（首次 ~15-60s；增量可手动点面板重建）；互斥防重叠
+let ragBuilding = false;
+const ragBuildTick = async () => {
+  if (ragBuilding) return;
+  ragBuilding = true;
   try {
     const stats = ragApi.getKnowledgeStats();
     if (!stats.total) {
@@ -1342,39 +1352,50 @@ setTimeout(async () => {
     }
   } catch (e) {
     console.log(`[rag] 知识库构建失败：${String(e.message).slice(0, 80)}`);
+  } finally {
+    ragBuilding = false;
   }
-}, 10 * 1000);
-
-// 每 6 小时增量更新一次（新 md/新岗位/新复习卡自动进库，毫秒~秒级）
-setInterval(async () => {
-  try {
-    const r = await ragApi.incrementalRebuild();
-    if (r.changed) console.log(`[rag] 定时增量更新：+${r.added} -${r.removed}（${r.seconds}s）`);
-  } catch { /* 静默 */ }
-}, 6 * 3600 * 1000);
+};
+if (!DISABLE_BACKGROUND) {
+  registerTimer(ragBuildTick, 10 * 1000);
+  registerInterval(ragBuildTick, 6 * 3600 * 1000); // 每 6 小时增量更新（新 md/新岗位/新复习卡自动进库）
+}
 
 // ============ 周期任务 ============
 
 // 初始扫描（不通知）
-setTimeout(checkTrends, 3000);
+registerTimer(checkTrends, 3000);
 // 每 5 分钟检测新趋势
-setInterval(checkTrends, 5 * 60 * 1000);
+registerInterval(checkTrends, 5 * 60 * 1000);
 // 每分钟检查学习提醒
-setInterval(checkStudyReminder, 60 * 1000);
+registerInterval(checkStudyReminder, 60 * 1000);
 // 每 30 分钟检查复习到期（9 点后，有到期卡每天提醒一次）
-setInterval(checkReviewReminder, 30 * 60 * 1000);
-setTimeout(checkReviewReminder, 60 * 1000); // 启动 1 分钟后先查一次
+registerInterval(checkReviewReminder, 30 * 60 * 1000);
+registerTimer(checkReviewReminder, 60 * 1000); // 启动 1 分钟后先查一次
 
-// ---------- 每日自动岗位搜集（24h 门控：白天执行，距上次搜集 >24h 才跑） ----------
+// ---------- 每日自动岗位搜集（24h 门控：白天执行，距上次搜集 >24h 才跑；running 互斥防重叠） ----------
+let collectJobsRunning = false;
 const collectJobsDailyTick = async () => {
+  if (collectJobsRunning) return; // 互斥：手动触发/定时 tick 重叠时跳过
   const h = new Date().getHours();
   if (h < 8 || h > 23) return; // 白天窗口，避免半夜打扰/反爬
+  collectJobsRunning = true;
   try {
     const r = await jobsApi.collectJobsDaily();
     if (r?.ok && r.totalNew > 0) console.log(`[jobs] 每日自动搜集完成：新增 ${r.totalNew} 条岗位`);
   } catch (e) {
     console.log(`[jobs] 每日自动搜集失败：${String(e.message).slice(0, 80)}`);
+  } finally {
+    collectJobsRunning = false;
   }
 };
-setTimeout(collectJobsDailyTick, 2 * 60 * 1000); // 启动 2 分钟后首查
-setInterval(collectJobsDailyTick, 30 * 60 * 1000); // 每 30 分钟 tick（24h 门控幂等）
+if (!DISABLE_BACKGROUND) {
+  registerTimer(collectJobsDailyTick, 2 * 60 * 1000); // 启动 2 分钟后首查
+  registerInterval(collectJobsDailyTick, 30 * 60 * 1000); // 每 30 分钟 tick（24h 门控幂等）
+}
+
+// 优雅关闭：server close / 进程信号时清理所有定时器
+const cleanupTimers = () => { for (const t of timers) clearTimeout(t); };
+server.on("close", cleanupTimers);
+process.on("SIGINT", () => { cleanupTimers(); process.exit(0); });
+process.on("SIGTERM", () => { cleanupTimers(); process.exit(0); });

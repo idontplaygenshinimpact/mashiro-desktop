@@ -23,6 +23,11 @@ document.querySelectorAll(".tab").forEach((btn) => {
 
 const $ = (id) => document.getElementById(id);
 
+// 链接安全：只允许 http/https/mailto（防 javascript: 协议注入）
+function safeUrl(u) {
+  return /^(https?:|mailto:)/i.test(String(u || "")) ? u : "#";
+}
+
 // ============ 简历文件解析（移植 ai-career：txt/md/json/docx/pdf） ============
 const fileBtn = $("iv-file-btn");
 const fileInput = $("iv-file");
@@ -177,10 +182,10 @@ function showQuestion(r) {
   $("iv-status").textContent = `面试中 · 第 ${r.round} 轮`;
   $("iv-question").textContent = r.question || "请继续";
   $("iv-meta").innerHTML = `
-    <div>🎯 维度：${r.dimension || "-"}</div>
-    <div>📌 依据：${r.basis || "-"}</div>
-    <div>✅ 合格标准：${r.criteria || "-"}</div>
-    <div>🚧 边界：${r.boundary || "-"}</div>`;
+    <div>🎯 维度：${esc(r.dimension || "-")}</div>
+    <div>📌 依据：${esc(r.basis || "-")}</div>
+    <div>✅ 合格标准：${esc(r.criteria || "-")}</div>
+    <div>🚧 边界：${esc(r.boundary || "-")}</div>`;
   $("iv-answer").value = "";
   $("iv-answer").focus();
   addIvLog(`轮${r.round} 问题：${(r.question || "").slice(0, 60)}`);
@@ -210,7 +215,7 @@ async function submitAnswer() {
         <div class="score-chip">复盘 <b>${r.scores.reflect}</b></div>
         <div class="score-chip">总分 <b>${r.total}</b></div>`;
     }
-    if (r.comment) $("iv-scores").insertAdjacentHTML("beforeend", `<div class="iv-comment">💬 ${r.comment}</div>`);
+    if (r.comment) $("iv-scores").insertAdjacentHTML("beforeend", `<div class="iv-comment">💬 ${esc(r.comment)}</div>`);
     if (r.finished) {
       $("iv-status").textContent = "面试结束，正在生成复盘...";
       $("iv-answer-area").style.display = "none";
@@ -957,7 +962,7 @@ async function loadJobs() {
         </div>
         ${job.summary ? `<div class="job-summary">${esc(job.summary)}</div>` : ""}
         <div class="job-actions">
-          ${job.applyUrl ? `<a class="job-link" href="${esc(job.applyUrl)}" target="_blank" rel="noopener">🔗 去投递</a>` : ""}
+          ${job.applyUrl ? `<a class="job-link" href="${esc(safeUrl(job.applyUrl))}" target="_blank" rel="noopener">🔗 去投递</a>` : ""}
           <button class="job-btn" data-id="${job.id}" data-status="ready">📮 已投递</button>
           <button class="job-btn" data-id="${job.id}" data-status="ready_bishi">✍️ 待笔试</button>
           <button class="job-btn" data-id="${job.id}" data-status="done">✅ 完成</button>
@@ -1048,8 +1053,8 @@ async function loadDocs() {
             </div>
             <div class="job-meta">${esc(s.desc)}</div>
             <div class="job-actions">
-              <a class="job-link" href="${esc(s.official)}" target="_blank" rel="noopener">🔗 官方文档</a>
-              ${s.versionPage && s.versionPage !== s.official ? `<a class="job-link" href="${esc(s.versionPage)}" target="_blank" rel="noopener">📄 版本页</a>` : ""}
+              <a class="job-link" href="${esc(safeUrl(s.official))}" target="_blank" rel="noopener">🔗 官方文档</a>
+              ${s.versionPage && s.versionPage !== s.official ? `<a class="job-link" href="${esc(safeUrl(s.versionPage))}" target="_blank" rel="noopener">📄 版本页</a>` : ""}
             </div>
           </div>`).join("")}
       </div>`).join("");
@@ -1249,7 +1254,7 @@ $("kb-ask-btn")?.addEventListener("click", async () => {
     });
     const j = await res.json();
     if (!j.ok) { box.innerHTML = '<div class="jobs-advice-box"><h4>📭 未命中</h4><p style="font-size:11px;color:#6a6790;">' + esc(j.message || "") + "</p></div>"; return; }
-    const md = String(j.answer || "").replace(/```/g, "`").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
+    const md = esc(String(j.answer || "")).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
     box.innerHTML = `
       <div class="jobs-advice-box">
         <h4>💬 回答</h4>

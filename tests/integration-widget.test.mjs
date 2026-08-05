@@ -37,6 +37,7 @@ before(async () => {
       MIANSHI_PORT: String(PORT),
       MIANSHI_DB_PATH: path.join(dbDir, "test.db"),
       MIANSHI_DISABLE_PATROL: "1",
+      MIANSHI_DISABLE_BACKGROUND: "1", // 关闭 RAG 构建/每日搜集等后台任务（防测试触发真实网络/模型下载）
       DEEPSEEK_API_KEY: "sk-test-dummy",
     },
   });

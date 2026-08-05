@@ -64,9 +64,12 @@ export function resetMemoryState(mem) {
 //   纯文本 → 正常 assistant content
 //   TOOLCALL:{"name":"xxx","arguments":"{...json...}"} → 构造 tool_calls（模拟模型要调工具）
 let queue = [];
+let lastMessages = []; // 最近一次 llmChat 收到的 messages（供断言 prompt 内容）
+export function getLastMessages() { return lastMessages; }
 export function setLlmResponses(...contents) { queue = contents.map((c) => String(c ?? "")); }
 export function llmQueueLen() { return queue.length; }
 export async function mockLlmChat(messages, opts = {}) {
+  lastMessages = messages;
   const content = queue.shift() ?? "";
   const m = content.match(/^TOOLCALL:(.+)$/s);
   if (m) {
