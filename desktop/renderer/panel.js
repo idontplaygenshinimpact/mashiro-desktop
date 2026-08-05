@@ -1235,6 +1235,32 @@ async function kbSearch() {
 
 $("kb-search-btn")?.addEventListener("click", kbSearch);
 $("kb-input")?.addEventListener("keydown", (e) => { if (e.key === "Enter") kbSearch(); });
+
+// RAG 问答：检索 → 注入 → LLM 生成
+$("kb-ask-btn")?.addEventListener("click", async () => {
+  const q = $("kb-ask-input").value.trim();
+  const box = $("kb-answer");
+  if (!q) { box.innerHTML = ""; return; }
+  box.innerHTML = '<div class="jobs-advice-box"><h4>⏳ 正在检索知识库并生成答案…</h4></div>';
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/knowledge/ask", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: q }),
+    });
+    const j = await res.json();
+    if (!j.ok) { box.innerHTML = '<div class="jobs-advice-box"><h4>📭 未命中</h4><p style="font-size:11px;color:#6a6790;">' + esc(j.message || "") + "</p></div>"; return; }
+    const md = String(j.answer || "").replace(/```/g, "`").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
+    box.innerHTML = `
+      <div class="jobs-advice-box">
+        <h4>💬 回答</h4>
+        <div style="font-size:12px;line-height:1.7;color:#2d2a45;">${md}</div>
+        <div style="font-size:10px;color:#8a87a8;margin-top:8px;">📚 引用 ${j.hits.length} 条：${j.hits.map((h) => esc(h.title.slice(0, 24))).join(" / ")}</div>
+      </div>`;
+  } catch (e) {
+    box.innerHTML = '<div class="jobs-advice-box"><h4>⚠️ 失败</h4><p style="font-size:11px;color:#6a6790;">' + esc(e.message) + "</p></div>";
+  }
+});
+$("kb-ask-input")?.addEventListener("keydown", (e) => { if (e.key === "Enter") $("kb-ask-btn").click(); });
 $("kb-rebuild-btn")?.addEventListener("click", async () => {
   const btn = $("kb-rebuild-btn");
   btn.disabled = true;

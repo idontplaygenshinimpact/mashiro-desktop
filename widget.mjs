@@ -960,6 +960,23 @@ const server = createServer((req, res) => {
     }
     return;
   }
+  if (url.pathname === "/api/knowledge/ask") {
+    // RAG 问答：检索 → 注入 → LLM 生成（POST { query }）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { query } = JSON.parse(body || "{}");
+        const r = await ragApi.askKnowledge(query);
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
   if (url.pathname === "/api/knowledge/search") {
     // 本地知识库混合检索（POST { query, topK }）
     let body = "";
@@ -1318,11 +1335,23 @@ setTimeout(async () => {
       console.log("[rag] 知识库为空，后台构建中…");
       const r = await ragApi.rebuildKnowledgeBase();
       console.log(`[rag] 知识库构建完成：${r.items} 条（${r.seconds}s，embedding=${r.embedding}）`);
+    } else {
+      // 非空：增量更新（新面经 md 自动进库）
+      const r = await ragApi.incrementalRebuild();
+      if (r.changed) console.log(`[rag] 知识库增量更新：+${r.added} -${r.removed}（${r.seconds}s）`);
     }
   } catch (e) {
     console.log(`[rag] 知识库构建失败：${String(e.message).slice(0, 80)}`);
   }
 }, 10 * 1000);
+
+// 每 6 小时增量更新一次（新 md/新岗位/新复习卡自动进库，毫秒~秒级）
+setInterval(async () => {
+  try {
+    const r = await ragApi.incrementalRebuild();
+    if (r.changed) console.log(`[rag] 定时增量更新：+${r.added} -${r.removed}（${r.seconds}s）`);
+  } catch { /* 静默 */ }
+}, 6 * 3600 * 1000);
 
 // ============ 周期任务 ============
 

@@ -233,6 +233,16 @@
         </div>
         <div class="resume-status" id="kb-status"></div>
       </div>
+      <div class="jobs-setup" style="margin-top:8px;">
+        <div class="form-row">
+          <label>💬 问知识库（检索资料 + AI 生成答案）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <input id="kb-ask-input" placeholder="问：事件循环宏任务微任务顺序？React Hooks 原理？" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid rgba(109,79,216,.25);border-radius:6px;background:rgba(255,255,255,.8);font-size:12px;">
+            <button id="kb-ask-btn" class="secondary">💬 提问</button>
+          </div>
+        </div>
+        <div id="kb-answer" class="jobs-advice"></div>
+      </div>
       <div id="kb-results" class="jobs-list"></div>
     </section>
 
