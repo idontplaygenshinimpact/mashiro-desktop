@@ -18,6 +18,7 @@ import { pick as pickEmotion, EMOTIONS } from "./lib/emotions.mjs";
 import { getLLMStats, getRecentTools } from "./lib/trace.mjs";
 import { getPendingApprovals, resolveApproval, getSessionApproved } from "./lib/permission.mjs";
 import { submit as laneSubmit } from "./lib/lane.mjs";
+import * as jobsApi from "./lib/jobs.mjs";
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -799,6 +800,104 @@ const server = createServer((req, res) => {
   if (url.pathname === "/api/notify-test") {
     sendNotification("✅ 通知测试", "mianshi-agent 小组件通知正常");
     res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+  if (url.pathname === "/api/jobs") {
+    // 校招岗位列表（可过滤 status/direction）
+    try {
+      const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
+      const jobs = jobsApi.getJobs({ status: u.searchParams.get("status") || undefined, direction: u.searchParams.get("direction") || undefined });
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, jobs }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/jobs/recommended") {
+    // 推荐岗位（匹配度排序）
+    try {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, recommended: jobsApi.getRecommendedJobs(), stats: jobsApi.getJobStats() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/jobs/status") {
+    // 更新投递状态
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { id, status } = JSON.parse(body || "{}");
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(jobsApi.setJobStatus(id, status)));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/jobs/collect") {
+    // 搜集校招岗位：官网优先 → 公司名单 → 中厂兜底（POST 触发；可传 step）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { step } = JSON.parse(body || "{}");
+        const result = {};
+        if (!step || step === "official") result.official = await jobsApi.collectFromOfficialSites();
+        if (!step || step === "companies") result.companies = await jobsApi.collectCompanyList();
+        if (!step || step === "fallback") result.fallback = await jobsApi.collectJobsForCompaniesWithoutSite();
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, ...result }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/companies") {
+    // 公司档案列表
+    try {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, companies: jobsApi.getCompanies() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/resume-plan") {
+    // 简历项目 → 学习清单（简历拷打准备）：提取项目 → 每个项目作为"必会"清单条目
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { resume } = JSON.parse(body || "{}");
+        if (!resume || !String(resume).trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "resume required" })); return; }
+        const { extractResumeProjects } = await import("./lib/ai.mjs");
+        const projects = await extractResumeProjects(resume);
+        if (!projects.length) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, added: 0, projects: [], message: "未从简历中识别到项目" })); return; }
+        const r = studyApi.addPlanItems(projects.map((p) => ({
+          topic: `项目·${p.name}`,
+          why: `简历项目拷打准备${p.techStack ? `（${p.techStack}）` : ""}：${p.description}`,
+          source: "简历拷打",
+          verify_question: `用 30 秒电梯陈述讲清「${p.name}」，然后准备被深挖：技术选型 trade-off / 架构 / 个人贡献 / 难点踩坑 / 量化指标`,
+          level: "必会",
+        })));
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, added: r.added, projects, message: `已将 ${r.added} 个简历项目加入学习清单` }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
     return;
   }
   if (url.pathname === "/api/approval-pending") {

@@ -78,6 +78,39 @@ fileInput.addEventListener("change", async (e) => {
   }
 });
 
+// ============ 简历项目 → 学习清单（拷打准备） ============
+document.getElementById("resume-plan-btn")?.addEventListener("click", async () => {
+  const resume = (resumeText.value || "").trim();
+  if (!resume || resume.length < 40) {
+    resumeStatus.textContent = "⚠️ 请先上传或粘贴简历（至少 40 字）";
+    resumeStatus.className = "resume-status error";
+    return;
+  }
+  const btn = document.getElementById("resume-plan-btn");
+  btn.disabled = true;
+  btn.textContent = "⏳ 提取项目中…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/resume-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resume }),
+    });
+    const j = await res.json();
+    resumeStatus.textContent = j.message || "完成";
+    resumeStatus.className = "resume-status";
+    if (j.added > 0) {
+      loadStudyPlan(); // 刷新学习清单
+      switchTab("study"); // 跳到清单页
+    }
+  } catch (err) {
+    resumeStatus.textContent = "⚠️ " + err.message;
+    resumeStatus.className = "resume-status error";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🎯 生成拷打清单";
+  }
+});
+
 // 拖拽上传
 const uploadZone = $("resume-upload");
 uploadZone.addEventListener("dragover", (e) => { e.preventDefault(); uploadZone.style.borderColor = "#8a5adc"; });

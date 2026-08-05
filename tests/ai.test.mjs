@@ -131,6 +131,21 @@ test("chat 简单 LLM 调用返回文本", async () => {
   assert.equal(r, "简单回答。");
 });
 
+// ---------- 简历项目提取 ----------
+test("extractResumeProjects 提取项目列表", async () => {
+  setLlmResponses('{"projects":[{"name":"低代码平台","tech_stack":"React,TypeScript","description":"负责渲染引擎"},{"name":"AI面试助手","tech_stack":"Node.js,LLM","description":"负责对话链路"}]}');
+  const projects = await ai.extractResumeProjects("我的简历：做过低代码平台和AI面试助手……");
+  assert.equal(projects.length, 2);
+  assert.equal(projects[0].name, "低代码平台");
+  assert.ok(projects[0].techStack.includes("React"));
+});
+
+test("extractResumeProjects 空/非法返回空数组", async () => {
+  setLlmResponses("不是 JSON");
+  const projects = await ai.extractResumeProjects("简历内容");
+  assert.deepEqual(projects, []);
+});
+
 // ---------- compactMessages ----------
 test("compactMessages 不超预算不压缩", async () => {
   const msgs = [{ role: "system", content: "s" }, { role: "user", content: "hi" }, { role: "assistant", content: "hello" }];

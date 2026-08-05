@@ -1,0 +1,84 @@
+// jobs.mjs 测试：岗位入库/去重/推荐/状态 + 公司档案 + 官网搜集（mock fetch-page/LLM）
+import { test, beforeEach, after } from "node:test";
+import assert from "node:assert/strict";
+import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, mockFetchPage, setLlmResponses, setMockPages } from "./helpers.mjs";
+
+const dbDir = setupTempDb("jobs");
+mockLLM();
+mockFetchPage();
+const jobs = await import("../lib/jobs.mjs");
+
+beforeEach(async () => {
+  await clearAllTables();
+  setMockPages([]);
+});
+after(() => { cleanupTempDb(dbDir); });
+
+// ---------- 岗位入库/去重 ----------
+test("addJob 入库 + 去重（同公司+同岗位+同类型）", () => {
+  const r1 = jobs.addJob({ company: "字节跳动", title: "前端开发工程师", job_type: "校招", direction: "frontend", apply_url: "u1" });
+  assert.ok(r1.id && !r1.dup);
+  const r2 = jobs.addJob({ company: "字节跳动", title: "前端开发工程师", job_type: "校招" });
+  assert.equal(r2.dup, true, "重复入库标记");
+  const r3 = jobs.addJob({ company: "字节跳动", title: "Agent 工程师", job_type: "校招", direction: "agent" });
+  assert.ok(!r3.dup, "不同岗位不重复");
+  assert.equal(jobs.getJobs().length, 2);
+});
+
+test("addJob 缺 company/title 跳过 + 默认值", () => {
+  assert.equal(jobs.addJob({}), null);
+  assert.equal(jobs.addJob({ company: "A" }), null);
+  const r = jobs.addJob({ company: "B", title: "前端" }); // 无 direction/job_type
+  assert.ok(r.id);
+  const j = jobs.getJobs()[0];
+  assert.equal(j.jobType, "校招", "默认校招");
+  assert.equal(j.direction, "other", "默认 other");
+});
+
+// ---------- 推荐排序 ----------
+test("getRecommendedJobs 排序：新岗位 + 高匹配优先", () => {
+  jobs.addJob({ company: "A", title: "前端工程师", job_type: "校招", direction: "frontend", deadline: "2026-09-01" });
+  jobs.addJob({ company: "B", title: "Java 后端", job_type: "校招", direction: "backend" });
+  jobs.addJob({ company: "C", title: "Agent 研发", job_type: "校招", direction: "agent" });
+  const rec = jobs.getRecommendedJobs();
+  assert.equal(rec[0].company, "C", "agent 高匹配优先");
+  assert.ok(rec[0].match >= rec[1].match);
+});
+
+test("setJobStatus 状态流转 + 非法状态拒绝", () => {
+  const r = jobs.addJob({ company: "A", title: "前端", job_type: "校招", direction: "frontend" });
+  assert.equal(jobs.setJobStatus(r.id, "ready").ok, true);
+  assert.equal(jobs.getJobs()[0].status, "ready");
+  assert.equal(jobs.setJobStatus(r.id, "nope").ok, false, "非法状态拒绝");
+  assert.equal(jobs.setJobStatus("不存在", "ready").ok, false);
+});
+
+// ---------- 公司档案 ----------
+test("addCompanyProfile 建档 + 更新 + 列表", () => {
+  jobs.addCompanyProfile({ company: "中厂X", scale: "中厂", description: "做 XX 业务" });
+  jobs.addCompanyProfile({ company: "中厂X", url: "https://career.x.com" }); // 更新补官网
+  const companies = jobs.getCompanies();
+  assert.equal(companies.length, 1);
+  assert.equal(companies[0].hasCareerSite, true);
+  assert.equal(companies[0].scale, "中厂");
+  assert.equal(jobs.getCompanies({ hasCareerSite: false }).length, 0);
+});
+
+// ---------- 官网搜集（mock 页面 + mock LLM 提取） ----------
+test("collectFromOfficialSites：mock 官网页 → 岗位入库", async () => {
+  // 页面返回公司岗位列表文本；LLM 提取岗位
+  setMockPages([{ title: "xx公司校招", text: "前端开发工程师 校招 地点：北京 截止2026-09-01", links: [] }]);
+  setLlmResponses('{"jobs":[{"company":"测试公司","title":"前端开发工程师","job_type":"校招","direction":"frontend","apply_url":"https://career.test.com","deadline":"2026-09-01","summary":"负责前端"}]}');
+  const r = await jobs.collectFromOfficialSites();
+  assert.ok(r.totalNew >= 1, "官网搜集到岗位");
+  assert.ok(jobs.getJobs().some((j) => j.company === "测试公司"));
+});
+
+test("extractJobFromText 从招聘帖提取岗位", async () => {
+  setLlmResponses('{"company":"某中厂","title":"前端实习","job_type":"实习","direction":"frontend","apply_url":"","deadline":"","bishi_date":"","summary":"Vue 开发"}');
+  const j = await jobs.extractJobFromText({ title: "某中厂实习招聘", text: "招前端实习生，要求 Vue…", url: "u", source: "牛客" });
+  assert.equal(j.company, "某中厂");
+  assert.equal(j.direction, "frontend");
+  const r = jobs.addJob(j);
+  assert.ok(r.id);
+});
