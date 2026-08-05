@@ -121,3 +121,41 @@ test("endInterview 无轮次直接结束", async () => {
   assert.equal(r.ok, true);
   assert.equal(memory.getInterview(), null);
 });
+
+// ---------- 轮次编排（项目拷打与八股混合，对标 ai-career） ----------
+test("startInterview 初始化：轮次编排 + 六态字段", async () => {
+  setLlmResponses(FIRST_Q);
+  const r = await startInterview({ position: "前端", resume: "简历内容：做过低代码平台" });
+  assert.equal(r.ok, true);
+  const s = memory.getInterview();
+  assert.equal(s.roundIndex, 0, "从开场轮开始");
+  assert.equal(s.isPreparing, true);
+  assert.equal(s.isCompleted, false);
+  assert.ok(s.resume.includes("低代码平台"), "简历传入");
+});
+
+test("submitAnswer 推进轮次：返回下一轮类型", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端", resume: "做过 AI 助手项目" });
+  setLlmResponses('{"scores":{"tech":70,"expr":70,"depth":70,"edge":70,"reflect":70},"comment":"可以","finish":false,"next_question":"讲讲项目架构","next_basis":"项目追问","next_dimension":"架构","next_criteria":"c","next_boundary":"b","weak_topic":""}');
+  const r = await submitAnswer("项目是我设计的");
+  assert.equal(r.ok, true);
+  assert.equal(r.roundType, "开场与自我介绍", "本轮类型正确");
+  assert.equal(r.stage, "项目拷打", "下一轮进入项目拷打");
+  assert.equal(memory.getInterview().roundIndex, 1, "轮次索引推进");
+});
+
+test("全部轮次结束 → finished", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  // 模拟最后一轮（roundIndex 到末尾）→ finish
+  setLlmResponses('{"scores":{"tech":80,"expr":80,"depth":80,"edge":80,"reflect":80},"comment":"好","finish":true,"next_question":"","next_basis":"","next_dimension":"","next_criteria":"","next_boundary":"","weak_topic":""}');
+  // 把 roundIndex 推到末尾前
+  const s = memory.getInterview();
+  // ROUND_SEQ 长度从 interview.mjs 导出？直接推进到接近末尾：手动设置
+  s.roundIndex = 100; // 超过长度 → 判定结束
+  memory.setInterview(s);
+  const r = await submitAnswer("回答");
+  assert.equal(r.finished, true);
+  assert.equal(memory.getInterview().isCompleted, true);
+});
