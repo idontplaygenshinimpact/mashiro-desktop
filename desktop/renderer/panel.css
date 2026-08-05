@@ -405,3 +405,39 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .approval-btn.allow { background: #f472b6; }
 .approval-btn.allow-session { background: #a78bfa; }
 .approval-btn:hover { filter: brightness(1.1); }
+
+/* ============ 校招 Tab ============ */
+.jobs-setup { padding: 4px 0; }
+.jobs-advice-box {
+  background: rgba(109,79,216,.06); border: 1px solid rgba(109,79,216,.2);
+  border-radius: 8px; padding: 10px 12px; margin-top: 8px;
+}
+.jobs-advice-box h4 { color: #5d48b8; font-size: 13px; margin: 0 0 6px; }
+.jobs-advice-box pre {
+  white-space: pre-wrap; font-family: inherit; font-size: 12px;
+  color: #3a3658; margin: 0; line-height: 1.6;
+}
+.jobs-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.job-item {
+  background: rgba(255,255,255,.75); border: 1px solid rgba(109,79,216,.18);
+  border-radius: 10px; padding: 10px 12px;
+}
+.job-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.job-head b { color: #2d2a45; font-size: 13px; }
+.job-title { color: #6d4fd8; font-size: 12px; font-weight: 600; }
+.job-badge {
+  font-size: 10px; padding: 1px 6px; border-radius: 4px;
+  background: rgba(109,79,216,.12); color: #5d48b8;
+}
+.job-meta { display: flex; gap: 10px; font-size: 11px; color: #8a87a8; margin-top: 6px; flex-wrap: wrap; }
+.job-summary { font-size: 11px; color: #6a6790; margin-top: 6px; line-height: 1.5; }
+.job-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.job-btn {
+  border: 1px solid rgba(109,79,216,.25); background: rgba(255,255,255,.7);
+  color: #5d48b8; border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer;
+}
+.job-btn:hover { background: rgba(109,79,216,.12); }
+.job-link {
+  display: inline-block; padding: 3px 10px; font-size: 11px; text-decoration: none;
+  background: #f472b6; color: #fff; border-radius: 6px;
+}

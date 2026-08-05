@@ -34,6 +34,7 @@
     <button class="tab" data-tab="study">📋 学习清单</button>
     <button class="tab" data-tab="chat">💬 对话</button>
     <button class="tab" data-tab="crawl">🔍 爬取产出</button>
+    <button class="tab" data-tab="jobs">🏢 校招</button>
   </nav>
 
   <main>
@@ -179,6 +180,29 @@
       <div id="file-list" class="file-list"></div>
       <h4>面试历史</h4>
       <div id="interview-history" class="interview-history"></div>
+    </section>
+
+    <!-- ========== 校招 Tab ========== -->
+    <section id="tab-jobs" class="tab-panel">
+      <div class="jobs-setup">
+        <div class="form-row">
+          <label>🎯 想做的方向（用于岗位匹配 + 调整建议）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <select id="jobs-direction">
+              <option value="">未设置</option>
+              <option value="frontend">前端</option>
+              <option value="agent">AI Agent</option>
+              <option value="fullstack">全栈</option>
+              <option value="backend">后端</option>
+            </select>
+            <button id="jobs-direction-btn" class="secondary">设置方向 + 生成建议</button>
+            <button id="jobs-collect-btn" class="secondary">🔍 搜集校招</button>
+          </div>
+        </div>
+        <div id="jobs-direction-advice" class="jobs-advice"></div>
+        <div class="resume-status" id="jobs-status">校招岗位列表（用简历/方向匹配推荐）</div>
+      </div>
+      <div id="jobs-list" class="jobs-list"></div>
     </section>
   </main>
 

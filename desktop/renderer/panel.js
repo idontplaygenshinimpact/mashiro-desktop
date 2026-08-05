@@ -913,9 +913,107 @@ document.querySelectorAll(".approval-btn").forEach((btn) => {
   btn.addEventListener("click", () => sendApproval(btn.dataset.action));
 });
 
+// ============ 校招（简历驱动匹配 + 投递管理） ============
+const STATUS_LABEL = { new: "🆕 未处理", ready: "📮 已投递", ready_bishi: "✍️ 待笔试", done: "✅ 已拿offer/结束" };
+const DIRECTION_LABEL = { frontend: "前端", agent: "AI Agent", fullstack: "全栈", backend: "后端", other: "其他" };
+
+async function loadJobs() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/jobs/recommended");
+    const j = await r.json();
+    const list = document.getElementById("jobs-list");
+    if (!j.recommended?.length) {
+      list.innerHTML = '<div class="empty-hint">暂无岗位——点上方「🔍 搜集校招」抓取，或先设置简历/方向</div>';
+      return;
+    }
+    list.innerHTML = j.recommended.map((job) => `
+      <div class="job-item">
+        <div class="job-head">
+          <b>${esc(job.company)}</b>
+          <span class="job-title">${esc(job.title)}</span>
+          <span class="job-badge">${DIRECTION_LABEL[job.direction] || job.direction}</span>
+          <span class="job-badge" style="background:rgba(80,160,255,.15);color:#3a7bd5;">匹配 ${job.match || "—"}</span>
+        </div>
+        <div class="job-meta">
+          ${job.jobType ? `<span>${esc(job.jobType)}</span>` : ""}
+          ${job.deadline ? `<span>⏰ 截止 ${esc(job.deadline)}</span>` : ""}
+          ${job.bishiDate ? `<span>📝 笔试 ${esc(job.bishiDate)}</span>` : ""}
+          <span>${STATUS_LABEL[job.status] || job.status}</span>
+        </div>
+        ${job.summary ? `<div class="job-summary">${esc(job.summary)}</div>` : ""}
+        <div class="job-actions">
+          ${job.applyUrl ? `<a class="job-link" href="${esc(job.applyUrl)}" target="_blank" rel="noopener">🔗 去投递</a>` : ""}
+          <button class="job-btn" data-id="${job.id}" data-status="ready">📮 已投递</button>
+          <button class="job-btn" data-id="${job.id}" data-status="ready_bishi">✍️ 待笔试</button>
+          <button class="job-btn" data-id="${job.id}" data-status="done">✅ 完成</button>
+        </div>
+      </div>`).join("");
+    document.querySelectorAll(".job-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await fetch("http://127.0.0.1:8899/api/jobs/status", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: btn.dataset.id, status: btn.dataset.status }),
+        });
+        loadJobs();
+      });
+    });
+  } catch (e) {
+    document.getElementById("jobs-list").innerHTML = `<div class="empty-hint">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+// 设置方向 + 生成建议
+document.getElementById("jobs-direction-btn")?.addEventListener("click", async () => {
+  const direction = document.getElementById("jobs-direction").value;
+  const statusEl = document.getElementById("jobs-status");
+  if (!direction) { statusEl.textContent = "⚠️ 请先选择想做的方向"; return; }
+  statusEl.textContent = "⏳ 生成方向建议中…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/jobs/direction", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction }),
+    });
+    const j = await res.json();
+    if (!j.ok) { statusEl.textContent = j.error || "设置失败"; return; }
+    statusEl.textContent = `已设置方向：${j.target}，推荐已按此重排`;
+    document.getElementById("jobs-direction-advice").innerHTML =
+      `<div class="jobs-advice-box"><h4>🎯 ${esc(j.target)} 方向调整建议</h4><pre>${esc(j.advice || "")}</pre></div>`;
+    loadJobs();
+  } catch (e) {
+    statusEl.textContent = "⚠️ " + e.message;
+  }
+});
+
+// 搜集校招（官网 → 公司名单 → 大小厂兜底）
+document.getElementById("jobs-collect-btn")?.addEventListener("click", async () => {
+  const btn = document.getElementById("jobs-collect-btn");
+  const statusEl = document.getElementById("jobs-status");
+  btn.disabled = true;
+  btn.textContent = "⏳ 搜集校招中（可能 1-3 分钟）…";
+  statusEl.textContent = "开始搜集：官网优先 → 公司名单 → 大小厂兜底…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/jobs/collect", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const j = await res.json();
+    const parts = [];
+    if (j.official) parts.push(`官网+${j.official.totalNew}`);
+    if (j.companies) parts.push(`公司+${j.companies.totalNew}`);
+    if (j.fallback) parts.push(`兜底+${j.fallback.totalNew}`);
+    statusEl.textContent = `搜集完成：${parts.join(" / ") || "无新增"}`;
+    loadJobs();
+  } catch (e) {
+    statusEl.textContent = "⚠️ 搜集失败：" + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔍 搜集校招";
+  }
+});
+
 // ============ 初始化 ============
 loadCrawlData();
 loadStudyPlan();
+loadJobs(); // 校招推荐列表
 // 轮询爬取进度
 setInterval(loadCrawlData, 5000);
 // 轮询审批请求（agent 请求敏感操作时弹出确认条）
