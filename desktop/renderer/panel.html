@@ -36,6 +36,7 @@
     <button class="tab" data-tab="crawl">🔍 爬取产出</button>
     <button class="tab" data-tab="jobs">🏢 校招</button>
     <button class="tab" data-tab="docs">📚 官方文档</button>
+    <button class="tab" data-tab="kb">🧠 知识库</button>
     <button class="tab" data-tab="profile">👤 个人主页</button>
   </nav>
 
@@ -217,6 +218,22 @@
         <div class="resume-status" id="docs-status">官方文档清单，点"检查最新版本"更新</div>
       </div>
       <div id="docs-list" class="jobs-list"></div>
+    </section>
+
+    <!-- ========== 知识库 Tab ========== -->
+    <section id="tab-kb" class="tab-panel">
+      <div class="jobs-setup">
+        <div class="form-row">
+          <label>🧠 本地知识库（面经讲解/学习清单/复习卡/岗位/官方文档 · 关键词+语义混合检索）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <input id="kb-input" placeholder="搜索：事件循环 / React Hooks / 防抖节流 / 某公司面经..." style="flex:1;min-width:200px;padding:6px 10px;border:1px solid rgba(109,79,216,.25);border-radius:6px;background:rgba(255,255,255,.8);font-size:12px;">
+            <button id="kb-search-btn" class="secondary">🔍 搜索</button>
+            <button id="kb-rebuild-btn" class="secondary">🔄 重建索引</button>
+          </div>
+        </div>
+        <div class="resume-status" id="kb-status"></div>
+      </div>
+      <div id="kb-results" class="jobs-list"></div>
     </section>
 
     <!-- ========== 个人主页 Tab ========== -->

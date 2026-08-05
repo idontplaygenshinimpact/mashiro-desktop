@@ -13,6 +13,7 @@ function switchTab(name) {
   if (name === "crawl") loadCrawlData();
   if (name === "review") loadReview();
   if (name === "docs") loadDocs();
+  if (name === "kb") loadKbStats();
   if (name === "profile") loadProfileStatus();
 }
 
@@ -1186,12 +1187,80 @@ $("profile-plan-btn")?.addEventListener("click", async () => {
   }
 });
 
+// ============ 本地知识库（RAG 混合检索） ============
+const KIND_LABEL = { mianjing: "📄 面经", jiaocheng: "📘 教程", job: "🏢 岗位", doc: "📚 文档", note: "📝 学习" };
+
+async function loadKbStats() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/knowledge/stats");
+    const j = await r.json();
+    const statusEl = $("kb-status");
+    if (!j.total) {
+      statusEl.textContent = "⏳ 知识库为空——后端启动后会自动构建（约 15-60s），或点「🔄 重建索引」";
+      return;
+    }
+    const kinds = (j.byKind || []).map((k) => `${KIND_LABEL[k.kind] || k.kind} ${k.n}`).join(" · ");
+    statusEl.textContent = `📦 ${j.total} 条（${kinds}）${j.lastBuild ? " · 构建于 " + new Date(j.lastBuild).toLocaleString("zh-CN") : ""}${j.embedding ? " · 语义检索 ✅" : " · 仅关键词检索"}`;
+  } catch (e) {
+    $("kb-status").textContent = "⚠️ " + e.message;
+  }
+}
+
+async function kbSearch() {
+  const q = $("kb-input").value.trim();
+  const list = $("kb-results");
+  if (!q) { list.innerHTML = ""; return; }
+  list.innerHTML = '<div class="empty-hint">🔍 检索中…</div>';
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/knowledge/search", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: q, topK: 8 }),
+    });
+    const j = await res.json();
+    if (!j.hits?.length) { list.innerHTML = '<div class="empty-hint">没有命中——换个说法，或点「🔄 重建索引」</div>'; return; }
+    list.innerHTML = j.hits.map((h) => `
+      <div class="job-item">
+        <div class="job-head">
+          <span class="job-badge">${KIND_LABEL[h.kind] || h.kind}</span>
+          <b style="font-size:12px;">${esc(h.title)}</b>
+          ${h.vectorScore ? `<span class="job-badge" style="background:rgba(80,160,255,.15);color:#3a7bd5;">语义 ${(h.vectorScore * 100).toFixed(0)}%</span>` : ""}
+          ${h.ftsScore ? `<span class="job-badge" style="background:rgba(120,180,120,.15);color:#3a8d5a;">关键词</span>` : ""}
+        </div>
+        <div class="job-summary">${esc(h.content.slice(0, 150))}${h.content.length > 150 ? "…" : ""}</div>
+      </div>`).join("");
+  } catch (e) {
+    list.innerHTML = '<div class="empty-hint">⚠️ ' + esc(e.message) + "</div>";
+  }
+}
+
+$("kb-search-btn")?.addEventListener("click", kbSearch);
+$("kb-input")?.addEventListener("keydown", (e) => { if (e.key === "Enter") kbSearch(); });
+$("kb-rebuild-btn")?.addEventListener("click", async () => {
+  const btn = $("kb-rebuild-btn");
+  btn.disabled = true;
+  btn.textContent = "⏳ 重建中（约 15-60s）…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/knowledge/rebuild", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const j = await res.json();
+    $("kb-status").textContent = j.message || "重建完成";
+    loadKbStats();
+  } catch (e) {
+    $("kb-status").textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔄 重建索引";
+  }
+});
+
 // ============ 初始化 ============
 loadCrawlData();
 loadStudyPlan();
 loadJobs(); // 校招推荐列表
 loadDocs(); // 官方文档清单
 loadProfileStatus(); // 个人主页存档状态
+loadKbStats(); // 知识库统计
 // 轮询爬取进度
 setInterval(loadCrawlData, 5000);
 // 轮询审批请求（agent 请求敏感操作时弹出确认条）

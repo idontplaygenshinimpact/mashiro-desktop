@@ -20,6 +20,7 @@ import { getPendingApprovals, resolveApproval, getSessionApproved } from "./lib/
 import { submit as laneSubmit } from "./lib/lane.mjs";
 import * as jobsApi from "./lib/jobs.mjs";
 import * as learningApi from "./lib/learning.mjs";
+import * as ragApi from "./lib/rag.mjs";
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -959,6 +960,50 @@ const server = createServer((req, res) => {
     }
     return;
   }
+  if (url.pathname === "/api/knowledge/search") {
+    // 本地知识库混合检索（POST { query, topK }）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { query, topK } = JSON.parse(body || "{}");
+        const hits = await ragApi.searchKnowledge(query, Math.min(topK || 5, 10));
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, hits }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/knowledge/stats") {
+    // 知识库统计（GET）
+    try {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, ...ragApi.getKnowledgeStats() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/knowledge/rebuild") {
+    // 重建知识库（POST；全量采集 + embedding，约 15-60s）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const r = await ragApi.rebuildKnowledgeBase();
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, ...r, message: `知识库重建完成：${r.items} 条，耗时 ${r.seconds}s` }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
   if (url.pathname === "/api/learning") {
     // 官方学习文档清单（前端/AI/Agent 三类，含最近检测结果）
     try {
@@ -1264,6 +1309,20 @@ if (!DISABLE_PATROL) {
   setTimeout(() => patrolInterests(), 5 * 60 * 1000);
   setInterval(patrolInterests, PATROL_INTERVAL);
 }
+
+// 本地知识库：启动后若为空则后台构建（首次 ~15-60s；增量可手动点面板重建）
+setTimeout(async () => {
+  try {
+    const stats = ragApi.getKnowledgeStats();
+    if (!stats.total) {
+      console.log("[rag] 知识库为空，后台构建中…");
+      const r = await ragApi.rebuildKnowledgeBase();
+      console.log(`[rag] 知识库构建完成：${r.items} 条（${r.seconds}s，embedding=${r.embedding}）`);
+    }
+  } catch (e) {
+    console.log(`[rag] 知识库构建失败：${String(e.message).slice(0, 80)}`);
+  }
+}, 10 * 1000);
 
 // ============ 周期任务 ============
 
