@@ -1,11 +1,19 @@
 // agent.mjs 单测：工具循环 / 参数校验 / 压缩 / 记忆（mock LLM + mock fetch-page + 临时 DB）
-import { test, beforeEach, after } from "node:test";
+import { test, beforeEach, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, mockFetchPage, setLlmResponses, setMockPages, resetMemoryState } from "./helpers.mjs";
 
 const dbDir = setupTempDb("agent");
 mockLLM();
 mockFetchPage();
+// mock rag 模块：search_knowledge 工具依赖（不加载真实 embedding）
+mock.module(new URL("../lib/rag.mjs", import.meta.url).href, {
+  namedExports: {
+    searchKnowledge: async (q) => [
+      { id: "kb1", title: "学习·事件循环", content: "宏任务执行完清空微任务队列，Promise.then 属于微任务。", source: "study", kind: "note", score: 0.5, vectorScore: 0.5, ftsScore: 0 },
+    ],
+  },
+});
 const { chatWithAgent, toolSearchPosts } = await import("../lib/agent.mjs");
 const { memory } = await import("../lib/memory.mjs");
 
@@ -78,6 +86,16 @@ test("chatWithAgent 记忆类工具：remember 写入关注点", async () => {
   const r = await chatWithAgent("关注 React 和字节");
   assert.ok(r.reply.includes("记住"));
   assert.deepEqual(memory.getInterests(), ["React", "字节"]);
+});
+
+test("chatWithAgent 本地知识库工具：search_knowledge 查库后引用回答", async () => {
+  setLlmResponses(
+    'TOOLCALL:{"name":"search_knowledge","arguments":"{\\"query\\":\\"事件循环\\"}"}',
+    "根据本地知识库：宏任务执行完会清空全部微任务队列。"
+  );
+  const r = await chatWithAgent("讲讲事件循环");
+  assert.ok(r.reply.includes("宏任务"), "回复引用知识库内容");
+  assert.ok(!r.reply.includes("【资料1】"), "工具结果不直接透出（LLM 组织后回答）");
 });
 
 test("chatWithAgent 未知工具名 → 报错不崩溃", async () => {
