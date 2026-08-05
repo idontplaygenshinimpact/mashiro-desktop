@@ -21,6 +21,7 @@ import { submit as laneSubmit } from "./lib/lane.mjs";
 import * as jobsApi from "./lib/jobs.mjs";
 import * as learningApi from "./lib/learning.mjs";
 import * as ragApi from "./lib/rag.mjs";
+import * as zhentiApi from "./lib/zhenti.mjs";
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -1014,6 +1015,90 @@ const server = createServer((req, res) => {
         const r = await ragApi.rebuildKnowledgeBase();
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ok: true, ...r, message: `知识库重建完成：${r.items} 条，耗时 ${r.seconds}s` }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/zhenti") {
+    // 牛客大厂官方真题清单（GET；?company= 过滤）
+    try {
+      const { searchParams } = new URL(req.url, "http://x");
+      const list = zhentiApi.getZhentiList({ company: searchParams.get("company") || "" });
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, papers: list, ...zhentiApi.getZhentiStats() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/zhenti/collect") {
+    // 搜集真题清单（POST；可传 { details: 20 } 顺带抓题型详情）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { details } = JSON.parse(body || "{}");
+        const r = await zhentiApi.collectZhentiList();
+        const detailsResult = details ? await zhentiApi.collectZhentiDetails(details) : null;
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, ...r, details: detailsResult, message: `真题搜集完成：新增 ${r.added} 条（共 ${r.papers.length} 条有效）` }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/zhenti/cookie") {
+    // 保存牛客 Cookie（POST { cookie }，本地落盘）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { cookie } = JSON.parse(body || "{}");
+        const r = zhentiApi.saveNowcoderCookie(cookie);
+        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/zhenti/questions") {
+    // 登录态抓取试卷完整题目（POST { paperTestId }）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { paperTestId } = JSON.parse(body || "{}");
+        if (!paperTestId) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "paperTestId required" })); return; }
+        const r = await zhentiApi.fetchPaperQuestions(paperTestId);
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/zhenti/wrong") {
+    // 错题回流：学习清单 + FSRS 复习卡（POST { paperId, company, paperTitle, question, answer }）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { paperId, company, paperTitle, question, answer } = JSON.parse(body || "{}");
+        if (!question || !String(question).trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "question required" })); return; }
+        const r = await zhentiApi.addWrongQuestion({ paperId, company, paperTitle, question, answer });
+        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));

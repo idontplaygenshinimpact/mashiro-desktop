@@ -1285,6 +1285,132 @@ $("kb-rebuild-btn")?.addEventListener("click", async () => {
   }
 });
 
+// ============ 笔试真题（大厂真题 + 平台模拟卷） ============
+async function loadZhenti() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/zhenti");
+    const j = await r.json();
+    const statusEl = $("zhenti-status");
+    const list = $("zhenti-list");
+    if (!j.papers?.length) {
+      statusEl.textContent = "暂无真题——点「🔍 搜集真题」抓取牛客官方试卷（大厂真题 + 模拟卷）";
+      list.innerHTML = "";
+      return;
+    }
+    const byKind = {};
+    for (const k of j.byKind || []) byKind[k.kind] = k.n;
+    statusEl.textContent = `📦 共 ${j.total} 套（真题 ${byKind.real || 0} / 模拟卷 ${byKind.simulate || 0}）· 练习需牛客账号（免费申请）`;
+    list.innerHTML = j.papers.map((p) => `
+      <div class="job-item">
+        <div class="job-head">
+          <span class="job-badge" style="${p.kind === "simulate" ? "background:rgba(120,180,120,.15);color:#3a8d5a;" : "background:rgba(109,79,216,.12);color:#5d48b8;"}">${p.kind === "simulate" ? "🧪 模拟卷" : "🏢 真题"}</span>
+          <b style="font-size:12px;">${esc(p.company || "平台")}</b>
+          <span class="job-title">${esc(p.title)}</span>
+        </div>
+        <div class="job-meta">
+          ${p.questionCount ? `<span>总 ${p.questionCount} 题</span>` : ""}
+          ${p.singleCount ? `<span>单选 ${p.singleCount}</span>` : ""}
+          ${p.multiCount ? `<span>多选 ${p.multiCount}</span>` : ""}
+          ${p.programCount ? `<span>编程 ${p.programCount}</span>` : ""}
+          ${p.jobTags?.length ? `<span>${esc(p.jobTags.slice(0, 4).join(" / "))}</span>` : ""}
+        </div>
+        <div class="job-actions">
+          <a class="job-link" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">📝 去练习</a>
+          <button class="job-btn zhenti-fetch" data-id="${esc(p.test_id)}" title="登录态抓取完整题目">📖 抓题目</button>
+          <button class="job-btn zhenti-wrong" data-id="${esc(p.test_id)}" data-company="${esc(p.company)}" data-title="${esc(p.title)}" title="练习做错的题 → 入学习清单+复习卡">❌ 记错题</button>
+        </div>
+      </div>`).join("");
+    // 抓题目
+    document.querySelectorAll(".zhenti-fetch").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "⏳ 抓取中…";
+        try {
+          const res = await fetch("http://127.0.0.1:8899/api/zhenti/questions", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paperTestId: btn.dataset.id }),
+          });
+          const j = await res.json();
+          if (!j.ok) { alert("⚠️ " + (j.error || "抓取失败")); }
+          else { alert(`✅ 抓到 ${j.questions.length} 道题（已缓存；完整题目在牛客答题页可回看）`); }
+        } catch (e) { alert("⚠️ " + e.message); }
+        finally { btn.disabled = false; btn.textContent = "📖 抓题目"; }
+      });
+    });
+    // 记错题 → 学习清单 + 复习卡
+    document.querySelectorAll(".zhenti-wrong").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const question = prompt(`记录你做错的题（题干，来自 ${btn.dataset.title}）：`);
+        if (!question || !question.trim()) return;
+        const answer = prompt("你的错误答案/卡壳点（可跳过，留空即可）：") || "";
+        try {
+          const res = await fetch("http://127.0.0.1:8899/api/zhenti/wrong", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paperId: btn.dataset.id, company: btn.dataset.company, paperTitle: btn.dataset.title, question, answer }),
+          });
+          const j = await res.json();
+          alert(j.ok ? `✅ 已入学习清单 + 复习卡：${j.topic}` : "⚠️ " + (j.error || "失败"));
+        } catch (e) { alert("⚠️ " + e.message); }
+      });
+    });
+  } catch (e) {
+    $("zhenti-status").textContent = "⚠️ " + e.message;
+  }
+}
+
+$("zhenti-collect-btn")?.addEventListener("click", async () => {
+  const btn = $("zhenti-collect-btn");
+  btn.disabled = true;
+  btn.textContent = "⏳ 搜集真题中（约 10s）…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/zhenti/collect", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const j = await res.json();
+    $("zhenti-status").textContent = j.message || "完成";
+    loadZhenti();
+  } catch (e) {
+    $("zhenti-status").textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔍 搜集真题";
+  }
+});
+
+$("zhenti-details-btn")?.addEventListener("click", async () => {
+  const btn = $("zhenti-details-btn");
+  btn.disabled = true;
+  btn.textContent = "⏳ 抓题型分布中（约 1 分钟）…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/zhenti/collect", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ details: 20 }),
+    });
+    const j = await res.json();
+    $("zhenti-status").textContent = `${j.message || "完成"} · 题型 ${(j.details || []).length} 套`;
+    loadZhenti();
+  } catch (e) {
+    $("zhenti-status").textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📊 抓题型分布";
+  }
+});
+
+// 保存牛客 Cookie
+$("zhenti-cookie-btn")?.addEventListener("click", async () => {
+  const cookie = $("zhenti-cookie").value.trim();
+  if (!cookie) { alert("请先粘贴 Cookie"); return; }
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/zhenti/cookie", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cookie }),
+    });
+    const j = await res.json();
+    alert(j.ok ? `✅ Cookie 已保存（${j.count} 个字段）——真题项点「📖 抓题目」抓完整题干` : "⚠️ " + (j.error || "保存失败"));
+  } catch (e) { alert("⚠️ " + e.message); }
+});
+
 // ============ 初始化 ============
 loadCrawlData();
 loadStudyPlan();
@@ -1292,6 +1418,7 @@ loadJobs(); // 校招推荐列表
 loadDocs(); // 官方文档清单
 loadProfileStatus(); // 个人主页存档状态
 loadKbStats(); // 知识库统计
+loadZhenti(); // 笔试真题
 // 轮询爬取进度
 setInterval(loadCrawlData, 5000);
 // 轮询审批请求（agent 请求敏感操作时弹出确认条）

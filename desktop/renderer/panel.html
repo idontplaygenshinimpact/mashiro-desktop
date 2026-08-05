@@ -206,6 +206,28 @@
         <div class="resume-status" id="jobs-status">校招岗位列表（用简历/方向匹配推荐）</div>
       </div>
       <div id="jobs-list" class="jobs-list"></div>
+
+      <!-- 笔试真题区块：大厂官方真题 + 平台模拟卷（中厂笔试同源） -->
+      <div class="jobs-setup" style="margin-top:14px;">
+        <div class="form-row">
+          <label>📝 笔试真题（牛客官方试卷：大厂历年真题 + 平台模拟卷，中厂笔试同源）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button id="zhenti-collect-btn" class="secondary">🔍 搜集真题</button>
+            <button id="zhenti-details-btn" class="secondary">📊 抓题型分布</button>
+          </div>
+        </div>
+        <div class="resume-status" id="zhenti-status">真题清单（练习需牛客账号，牛客免费申请）</div>
+      </div>
+      <div class="jobs-setup" style="margin-top:8px;">
+        <div class="form-row">
+          <label>🔑 牛客 Cookie（登录后可抓完整题目）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;width:100%;">
+            <input id="zhenti-cookie" placeholder="浏览器登录牛客后，F12 → Application → Cookies → 复制 Cookie 头粘贴到这里" style="flex:1;min-width:220px;padding:6px 10px;border:1px solid rgba(109,79,216,.25);border-radius:6px;background:rgba(255,255,255,.8);font-size:11px;">
+            <button id="zhenti-cookie-btn" class="secondary">💾 保存 Cookie</button>
+          </div>
+        </div>
+      </div>
+      <div id="zhenti-list" class="jobs-list"></div>
     </section>
 
     <!-- ========== 官方文档 Tab ========== -->
