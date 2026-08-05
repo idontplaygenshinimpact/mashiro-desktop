@@ -19,6 +19,7 @@ import { getLLMStats, getRecentTools } from "./lib/trace.mjs";
 import { getPendingApprovals, resolveApproval, getSessionApproved } from "./lib/permission.mjs";
 import { submit as laneSubmit } from "./lib/lane.mjs";
 import * as jobsApi from "./lib/jobs.mjs";
+import * as learningApi from "./lib/learning.mjs";
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -908,6 +909,34 @@ const server = createServer((req, res) => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
     }
+    return;
+  }
+  if (url.pathname === "/api/learning") {
+    // 官方学习文档清单（前端/AI/Agent 三类，含最近检测结果）
+    try {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, ...learningApi.getLearningDocs() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/learning/check") {
+    // 检查各文档最新版本（POST；可传 { only: [名称...] } 只检查指定项）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { only } = JSON.parse(body || "{}");
+        const results = await learningApi.checkDocVersions(Array.isArray(only) ? only : []);
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, results }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
     return;
   }
   if (url.pathname === "/api/resume-plan") {

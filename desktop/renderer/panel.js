@@ -12,6 +12,7 @@ function switchTab(name) {
   if (name === "study") loadStudyPlan();
   if (name === "crawl") loadCrawlData();
   if (name === "review") loadReview();
+  if (name === "docs") loadDocs();
 }
 
 document.querySelectorAll(".tab").forEach((btn) => {
@@ -1014,10 +1015,67 @@ document.getElementById("jobs-collect-btn")?.addEventListener("click", async () 
   }
 });
 
+// ============ 官方学习文档（前端/AI/Agent 三类 + 版本检测） ============
+async function loadDocs() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/learning");
+    const j = await r.json();
+    const list = document.getElementById("docs-list");
+    if (!j.categories?.length) {
+      list.innerHTML = '<div class="empty-hint">暂无文档清单</div>';
+      return;
+    }
+    const statusEl = document.getElementById("docs-status");
+    statusEl.textContent = j.lastCheck ? `上次检查：${new Date(j.lastCheck).toLocaleString("zh-CN")}` : "官方文档清单，点「检查最新版本」更新";
+    list.innerHTML = j.categories.map((cat) => `
+      <div class="jobs-cat">
+        <div class="jobs-cat-title">${esc(cat.category)}</div>
+        ${cat.sites.map((s) => `
+          <div class="job-item">
+            <div class="job-head">
+              <b>${esc(s.name)}</b>
+              <span class="job-badge" style="background:rgba(120,180,120,.15);color:#3a8d5a;">${s.check?.ok ? "✅ v" + esc(s.check.version || "?") + (s.check.date ? " · " + esc(s.check.date) : "") : s.check ? "⚠️ 未提取到" : "未检测"}</span>
+            </div>
+            <div class="job-meta">${esc(s.desc)}</div>
+            <div class="job-actions">
+              <a class="job-link" href="${esc(s.official)}" target="_blank" rel="noopener">🔗 官方文档</a>
+              ${s.versionPage && s.versionPage !== s.official ? `<a class="job-link" href="${esc(s.versionPage)}" target="_blank" rel="noopener">📄 版本页</a>` : ""}
+            </div>
+          </div>`).join("")}
+      </div>`).join("");
+  } catch (e) {
+    document.getElementById("docs-list").innerHTML = `<div class="empty-hint">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+document.getElementById("docs-check-btn")?.addEventListener("click", async () => {
+  const btn = document.getElementById("docs-check-btn");
+  const statusEl = document.getElementById("docs-status");
+  btn.disabled = true;
+  btn.textContent = "⏳ 检查中（约 1 分钟）…";
+  statusEl.textContent = "正在抓取各官方文档版本页…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/learning/check", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const j = await res.json();
+    const ok = Object.entries(j.results || {}).filter(([, v]) => v?.ok).length;
+    const total = Object.entries(j.results || {}).filter(([k]) => k !== "_lastCheck").length;
+    statusEl.textContent = `检查完成：${ok}/${total} 个文档提取到最新版本`;
+    loadDocs();
+  } catch (e) {
+    statusEl.textContent = "⚠️ 检查失败：" + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔄 检查最新版本";
+  }
+});
+
 // ============ 初始化 ============
 loadCrawlData();
 loadStudyPlan();
 loadJobs(); // 校招推荐列表
+loadDocs(); // 官方文档清单
 // 轮询爬取进度
 setInterval(loadCrawlData, 5000);
 // 轮询审批请求（agent 请求敏感操作时弹出确认条）

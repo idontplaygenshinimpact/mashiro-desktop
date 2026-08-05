@@ -441,3 +441,9 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
   display: inline-block; padding: 3px 10px; font-size: 11px; text-decoration: none;
   background: #f472b6; color: #fff; border-radius: 6px;
 }
+.jobs-cat { margin-bottom: 12px; }
+.jobs-cat-title {
+  font-size: 12px; font-weight: 700; color: #5d48b8; margin: 6px 0 6px 2px;
+  display: flex; align-items: center; gap: 6px;
+}
+.jobs-cat-title::after { content: ""; flex: 1; height: 1px; background: rgba(109,79,216,.15); }
