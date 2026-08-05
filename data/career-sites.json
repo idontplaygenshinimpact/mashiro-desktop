@@ -1,0 +1,25 @@
+{
+  "_说明": "校招官网源（优先于牛客等二手源）。url 为校招/招聘主页，抓取后 LLM 提取岗位入库。可自行增删。",
+  "sites": [
+    { "company": "字节跳动", "url": "https://jobs.bytedance.com/campus/position", "direction": "frontend" },
+    { "company": "腾讯", "url": "https://join.qq.com/post.html", "direction": "frontend" },
+    { "company": "阿里巴巴", "url": "https://talent.alibaba.com/campus", "direction": "frontend" },
+    { "company": "美团", "url": "https://campus.meituan.com/positions", "direction": "frontend" },
+    { "company": "拼多多", "url": "https://campus.pinduoduo.com/position", "direction": "frontend" },
+    { "company": "百度", "url": "https://talent.baidu.com/jobs/campus-list", "direction": "frontend" },
+    { "company": "京东", "url": "https://campus.jd.com/#/jobs", "direction": "frontend" },
+    { "company": "网易", "url": "https://campus.163.com/applicant/jobs", "direction": "frontend" },
+    { "company": "快手", "url": "https://zhaopin.kuaishou.com/web/campus", "direction": "frontend" },
+    { "company": "小米", "url": "https://xiaomi.jobs.feishu.cn/campus", "direction": "frontend" },
+    { "company": "华为", "url": "https://career.huawei.com/reccampportal/portal5/campus-recruitment.html", "direction": "frontend" },
+    { "company": "bilibili", "url": "https://jobs.bilibili.com/campus/positions", "direction": "frontend" },
+    { "company": "小红书", "url": "https://jobs.xiaohongshu.com/campus/position", "direction": "frontend" },
+    { "company": "OPPO", "url": "https://careers.oppo.com/campus", "direction": "frontend" },
+    { "company": "vivo", "url": "https://hr.vivo.com/wt/vivo/web/index/CompvivoPageindex", "direction": "frontend" },
+    { "company": "携程", "url": "https://campus.ctrip.com/campus-recruitment", "direction": "frontend" },
+    { "company": "米哈游", "url": "https://jobs.mihoyo.com/campus/position", "direction": "frontend" },
+    { "company": "得物", "url": "https://job.dewu.com/campus", "direction": "frontend" },
+    { "company": "中兴", "url": "https://job.zte.com.cn/campus-recruitment", "direction": "frontend" },
+    { "company": "SHEIN", "url": "https://app.mokahr.com/campus-recruitment/shein", "direction": "frontend" }
+  ]
+}

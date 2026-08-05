@@ -803,8 +803,28 @@ const server = createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true }));
     return;
   }
+  if (url.pathname === "/api/jobs/profile" && req.method === "GET") {
+    // 查询简历状态（画像 + 原文是否已保存）
+    try {
+      const profile = jobsApi.getResumeProfile();
+      const raw = jobsApi.getResumeRaw();
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({
+        ok: true,
+        profile,
+        rawSaved: !!raw,
+        rawText: raw?.text || "",
+        rawLength: raw?.text?.length || 0,
+        rawUpdatedAt: raw?.updatedAt || 0,
+      }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
   if (url.pathname === "/api/jobs/profile") {
-    // 简历技能画像（驱动岗位匹配）
+    // 简历技能画像（驱动岗位匹配；原文一并保存供后续复用）
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", async () => {
@@ -873,6 +893,34 @@ const server = createServer((req, res) => {
         const { id, status } = JSON.parse(body || "{}");
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(jobsApi.setJobStatus(id, status)));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/jobs/daily-collect") {
+    // 每日自动搜集（POST 手动触发一次；GET 查询状态）
+    if (req.method === "GET") {
+      try {
+        const last = jobsApi.getJobsLastCollect();
+        const due = !last || Date.now() - last >= 24 * 3600 * 1000;
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, lastCollect: last || 0, due, nextIn: last ? Math.max(0, 24 * 3600 * 1000 - (Date.now() - last)) : 0 }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const r = await jobsApi.collectJobsDaily();
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r.skipped ? { ok: true, skipped: true, message: "距上次搜集不足 24h，跳过（可等定时器或清空时间戳强制）" } : { ok: true, ...r, message: `新增 ${r.totalNew} 条岗位` }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
@@ -1211,9 +1259,11 @@ async function processPatrolPosts(posts) {
   return { saved, skipped };
 }
 
-// 启动巡检（首次 5 分钟后，之后每 30 分钟）
-setTimeout(() => patrolInterests(), 5 * 60 * 1000);
-setInterval(patrolInterests, PATROL_INTERVAL);
+// 启动巡检（首次 5 分钟后，之后每 PATROL_INTERVAL；测试设 MIANSHI_DISABLE_PATROL=1 可关）
+if (!DISABLE_PATROL) {
+  setTimeout(() => patrolInterests(), 5 * 60 * 1000);
+  setInterval(patrolInterests, PATROL_INTERVAL);
+}
 
 // ============ 周期任务 ============
 
@@ -1226,3 +1276,17 @@ setInterval(checkStudyReminder, 60 * 1000);
 // 每 30 分钟检查复习到期（9 点后，有到期卡每天提醒一次）
 setInterval(checkReviewReminder, 30 * 60 * 1000);
 setTimeout(checkReviewReminder, 60 * 1000); // 启动 1 分钟后先查一次
+
+// ---------- 每日自动岗位搜集（24h 门控：白天执行，距上次搜集 >24h 才跑） ----------
+const collectJobsDailyTick = async () => {
+  const h = new Date().getHours();
+  if (h < 8 || h > 23) return; // 白天窗口，避免半夜打扰/反爬
+  try {
+    const r = await jobsApi.collectJobsDaily();
+    if (r?.ok && r.totalNew > 0) console.log(`[jobs] 每日自动搜集完成：新增 ${r.totalNew} 条岗位`);
+  } catch (e) {
+    console.log(`[jobs] 每日自动搜集失败：${String(e.message).slice(0, 80)}`);
+  }
+};
+setTimeout(collectJobsDailyTick, 2 * 60 * 1000); // 启动 2 分钟后首查
+setInterval(collectJobsDailyTick, 30 * 60 * 1000); // 每 30 分钟 tick（24h 门控幂等）

@@ -13,6 +13,7 @@ function switchTab(name) {
   if (name === "crawl") loadCrawlData();
   if (name === "review") loadReview();
   if (name === "docs") loadDocs();
+  if (name === "profile") loadProfileStatus();
 }
 
 document.querySelectorAll(".tab").forEach((btn) => {
@@ -83,7 +84,7 @@ fileInput.addEventListener("change", async (e) => {
   }
 });
 
-// ============ 简历项目 → 学习清单（拷打准备） ============
+// ============ 简历项目 → 学习清单（拷打准备）+ 简历存档（画像+原文） ============
 document.getElementById("resume-plan-btn")?.addEventListener("click", async () => {
   const resume = (resumeText.value || "").trim();
   if (!resume || resume.length < 40) {
@@ -95,13 +96,21 @@ document.getElementById("resume-plan-btn")?.addEventListener("click", async () =
   btn.disabled = true;
   btn.textContent = "⏳ 提取项目中…";
   try {
+    // 1) 存档简历：画像（岗位匹配）+ 原文（后续复用/拷打）
+    const profileRes = await fetch("http://127.0.0.1:8899/api/jobs/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resume }),
+    });
+    const profileJ = await profileRes.json();
+    // 2) 简历项目 → 学习清单
     const res = await fetch("http://127.0.0.1:8899/api/resume-plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ resume }),
     });
     const j = await res.json();
-    resumeStatus.textContent = j.message || "完成";
+    resumeStatus.textContent = profileJ.ok ? `📄 简历已存档（技能 ${(profileJ.skills || []).length} 个）· ${j.message || "完成"}` : j.message || "完成";
     resumeStatus.className = "resume-status";
     if (j.added > 0) {
       loadStudyPlan(); // 刷新学习清单
@@ -1071,11 +1080,118 @@ document.getElementById("docs-check-btn")?.addEventListener("click", async () =>
   }
 });
 
+// ============ 个人主页（简历存档中心：上传/粘贴/保存/拷打清单） ============
+const profileStatus = $("profile-status");
+const profileResume = $("profile-resume");
+
+// 加载已存档简历状态（画像 + 原文）
+async function loadProfileStatus() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/jobs/profile");
+    const j = await r.json();
+    const savedBox = $("profile-saved");
+    if (!j.profile) {
+      savedBox.innerHTML = '<div class="empty-hint">📭 还没有存档简历——上传或粘贴后点「💾 保存简历」</div>';
+      profileStatus.textContent = "";
+      return;
+    }
+    const skills = (j.profile.skills || []).join("、");
+    const dirs = (j.profile.directions || []).map((d) => DIRECTION_LABEL[d] || d).join("、");
+    const upd = j.rawUpdatedAt ? new Date(j.rawUpdatedAt).toLocaleString("zh-CN") : "—";
+    savedBox.innerHTML = `
+      <div class="jobs-advice-box">
+        <h4>📄 已存档简历 <span style="font-weight:400;color:#8a87a8;">（${upd} 更新 · 原文 ${j.rawLength} 字）</span></h4>
+        <div class="job-meta">技能：${esc(skills || "—")}</div>
+        <div class="job-meta">方向：${esc(dirs || "—")}</div>
+      </div>`;
+    profileStatus.textContent = "✅ 简历已存档（修改后点「💾 保存简历」更新）";
+    // 原文回填（便于修改；用户没填过时）
+    if (j.rawSaved && !profileResume.value.trim()) profileResume.value = j.rawText || "";
+  } catch (e) {
+    profileStatus.textContent = "⚠️ 加载失败：" + e.message;
+  }
+}
+
+// 上传文件 → 填到主页文本框
+$("profile-file-btn")?.addEventListener("click", () => $("profile-file").click());
+$("profile-file")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const r = await parseResumeFile(file);
+    profileResume.value = r.text;
+    profileStatus.textContent = "✅ " + r.msg + "（点「💾 保存简历」存档）";
+    profileStatus.className = "resume-status";
+  } catch (err) {
+    profileStatus.textContent = "⚠️ " + err.message;
+    profileStatus.className = "resume-status error";
+  }
+});
+
+// 保存简历（画像 + 原文）
+$("profile-save-btn")?.addEventListener("click", async () => {
+  const resume = (profileResume.value || "").trim();
+  if (!resume || resume.length < 40) {
+    profileStatus.textContent = "⚠️ 请先上传或粘贴简历（至少 40 字）";
+    profileStatus.className = "resume-status error";
+    return;
+  }
+  const btn = $("profile-save-btn");
+  btn.disabled = true;
+  btn.textContent = "⏳ 保存中…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/jobs/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resume }),
+    });
+    const j = await res.json();
+    profileStatus.className = "resume-status";
+    profileStatus.textContent = j.ok ? `✅ 已存档：技能 ${(j.skills || []).length} 个 · 方向 ${(j.directions || []).join(",") || "未识别"}` : "⚠️ " + (j.error || "保存失败");
+    loadProfileStatus();
+  } catch (e) {
+    profileStatus.textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "💾 保存简历";
+  }
+});
+
+// 生成拷打清单（简历项目 → 学习清单）
+$("profile-plan-btn")?.addEventListener("click", async () => {
+  const resume = (profileResume.value || "").trim();
+  if (!resume || resume.length < 40) {
+    profileStatus.textContent = "⚠️ 请先上传或粘贴简历（至少 40 字）";
+    profileStatus.className = "resume-status error";
+    return;
+  }
+  const btn = $("profile-plan-btn");
+  btn.disabled = true;
+  btn.textContent = "⏳ 提取项目中…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/resume-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resume }),
+    });
+    const j = await res.json();
+    profileStatus.className = "resume-status";
+    profileStatus.textContent = j.message || "完成";
+    loadStudyPlan();
+  } catch (e) {
+    profileStatus.textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🎯 生成拷打清单";
+  }
+});
+
 // ============ 初始化 ============
 loadCrawlData();
 loadStudyPlan();
 loadJobs(); // 校招推荐列表
 loadDocs(); // 官方文档清单
+loadProfileStatus(); // 个人主页存档状态
 // 轮询爬取进度
 setInterval(loadCrawlData, 5000);
 // 轮询审批请求（agent 请求敏感操作时弹出确认条）

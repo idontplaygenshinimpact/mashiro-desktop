@@ -118,3 +118,33 @@ test("setTargetDirection + generateDirectionAdvice", async () => {
   assert.ok(advice.advice.includes("差距分析"));
   assert.ok(advice.advice.includes("Agent"));
 });
+
+test("setResumeProfile 存档原文（resume_raw）", async () => {
+  setLlmResponses('{"skills":["React"],"directions":["frontend"]}');
+  const r = await jobs.setResumeProfile("我的简历原文：React 项目经历……");
+  assert.equal(r.ok, true);
+  assert.equal(r.savedRaw, true);
+  const raw = jobs.getResumeRaw();
+  assert.ok(raw, "原文已保存");
+  assert.ok(raw.text.includes("React 项目经历"), "原文内容完整");
+  assert.ok(raw.updatedAt > 0, "记录更新时间");
+});
+
+test("collectJobsDaily 24h 门控（幂等：短间隔内跳过）", async () => {
+  // mock LLM 返回空岗位/空公司（无新增）；mock 页面给官网抓取用
+  setLlmResponses(
+    '{"jobs":[]}',  // collectFromOfficialSites 提取
+    '{"companies":[]}', // collectCompanyList
+    '{"jobs":[]}'   // collectJobsForCompaniesWithoutSite
+  );
+  setMockPages([{ text: "校招岗位列表内容足够长，用于抓取", invalid: false, links: [] }]);
+  const r1 = await jobs.collectJobsDaily();
+  assert.equal(r1.ok, true);
+  assert.ok(!r1.skipped, "首次执行不跳过");
+  assert.ok(jobs.getJobsLastCollect() > 0, "持久化上次搜集时间");
+
+  // 24h 内再次调用 → 跳过
+  const r2 = await jobs.collectJobsDaily();
+  assert.equal(r2.ok, true);
+  assert.equal(r2.skipped, true, "24h 内跳过");
+});

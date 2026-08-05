@@ -36,6 +36,7 @@
     <button class="tab" data-tab="crawl">🔍 爬取产出</button>
     <button class="tab" data-tab="jobs">🏢 校招</button>
     <button class="tab" data-tab="docs">📚 官方文档</button>
+    <button class="tab" data-tab="profile">👤 个人主页</button>
   </nav>
 
   <main>
@@ -216,6 +217,25 @@
         <div class="resume-status" id="docs-status">官方文档清单，点"检查最新版本"更新</div>
       </div>
       <div id="docs-list" class="jobs-list"></div>
+    </section>
+
+    <!-- ========== 个人主页 Tab ========== -->
+    <section id="tab-profile" class="tab-panel">
+      <div class="jobs-setup">
+        <div class="form-row">
+          <label>📄 我的简历（存档后驱动岗位匹配 + 面试拷打，随时可改）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button id="profile-file-btn" class="secondary">📂 上传简历文件</button>
+            <input type="file" id="profile-file" accept=".txt,.md,.json,.docx,.pdf" hidden />
+            <button id="profile-save-btn" class="secondary">💾 保存简历</button>
+            <button id="profile-plan-btn" class="secondary" title="把简历项目加入学习清单，逐个准备拷打档案">🎯 生成拷打清单</button>
+          </div>
+          <div style="font-size:11px;color:#8a87a8;margin-top:4px;">支持 .txt / .md / .json / .docx / .pdf，或直接粘贴文本</div>
+        </div>
+        <textarea id="profile-resume" placeholder="粘贴简历文本：项目经历、实习、技能、教育背景..."></textarea>
+        <div class="resume-status" id="profile-status"></div>
+        <div id="profile-saved" class="jobs-advice"></div>
+      </div>
     </section>
   </main>
 
