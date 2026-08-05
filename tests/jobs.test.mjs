@@ -82,3 +82,31 @@ test("extractJobFromText 从招聘帖提取岗位", async () => {
   const r = jobs.addJob(j);
   assert.ok(r.id);
 });
+
+// ---------- 简历画像驱动匹配 + 意向方向 ----------
+test("setResumeProfile 提取技能画像 + 影响推荐排序", async () => {
+  setLlmResponses('{"skills":["React","TypeScript","AI Agent","LLM"],"directions":["agent"]}');
+  const r = await jobs.setResumeProfile("简历：用过 React/TS，做过 AI Agent 项目");
+  assert.equal(r.ok, true);
+  assert.ok(r.skills.includes("React"));
+
+  // 两个岗位：一个 Agent 相关（技能命中），一个纯后端
+  jobs.addJob({ company: "A", title: "AI Agent 研发工程师", job_type: "校招", direction: "agent", summary: "LLM 应用开发，React 前端" });
+  jobs.addJob({ company: "B", title: "Java 后端开发", job_type: "校招", direction: "backend" });
+  const rec = jobs.getRecommendedJobs();
+  assert.equal(rec[0].company, "A", "简历技能命中的岗位优先");
+});
+
+test("setTargetDirection + generateDirectionAdvice", async () => {
+  setLlmResponses('{"skills":["Vue","JavaScript"],"directions":["frontend"]}');
+  await jobs.setResumeProfile("简历：Vue 前端");
+  assert.equal(jobs.setTargetDirection("nope").ok, false, "非法方向拒绝");
+  assert.equal(jobs.setTargetDirection("agent").ok, true);
+  assert.equal(jobs.getTargetDirection(), "agent");
+
+  setLlmResponses("## 差距分析\n当前偏传统前端，需补充 LLM/Agent 相关技能\n## 简历调整建议\n突出 Agent 项目\n## 需补充\n1. LangChain 2. MCP");
+  const advice = await jobs.generateDirectionAdvice();
+  assert.equal(advice.ok, true);
+  assert.ok(advice.advice.includes("差距分析"));
+  assert.ok(advice.advice.includes("Agent"));
+});

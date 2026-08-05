@@ -802,6 +802,43 @@ const server = createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true }));
     return;
   }
+  if (url.pathname === "/api/jobs/profile") {
+    // 简历技能画像（驱动岗位匹配）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { resume } = JSON.parse(body || "{}");
+        if (!resume || !String(resume).trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "resume required" })); return; }
+        const r = await jobsApi.setResumeProfile(resume);
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/jobs/direction") {
+    // 设置意向方向 + 返回调整建议
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { direction } = JSON.parse(body || "{}");
+        const set = jobsApi.setTargetDirection(direction);
+        if (!set.ok) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify(set)); return; }
+        const advice = await jobsApi.generateDirectionAdvice();
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, ...advice }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
   if (url.pathname === "/api/jobs") {
     // 校招岗位列表（可过滤 status/direction）
     try {
