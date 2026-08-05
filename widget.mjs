@@ -1108,6 +1108,24 @@ const server = createServer((req, res) => {
     });
     return;
   }
+  if (url.pathname === "/api/zhenti/plan") {
+    // 整套真题加入学习清单（POST { paperTestId }）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { paperTestId } = JSON.parse(body || "{}");
+        if (!paperTestId) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "paperTestId required" })); return; }
+        const r = await zhentiApi.addPaperToPlan(paperTestId);
+        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
   if (url.pathname === "/api/learning") {
     // 官方学习文档清单（前端/AI/Agent 三类，含最近检测结果）
     try {

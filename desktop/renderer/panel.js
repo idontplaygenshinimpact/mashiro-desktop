@@ -1316,11 +1316,25 @@ async function loadZhenti() {
         </div>
         <div class="job-actions">
           <a class="job-link" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">📝 去练习</a>
-          <button class="job-btn zhenti-fetch" data-id="${esc(p.test_id)}" title="登录态抓取完整题目">📖 抓题目</button>
+          <button class="job-btn zhenti-plan" data-id="${esc(p.test_id)}" title="整套真题加入学习清单（练完用记错题回流）">➕ 入清单</button>
           <button class="job-btn zhenti-wrong" data-id="${esc(p.test_id)}" data-company="${esc(p.company)}" data-title="${esc(p.title)}" title="练习做错的题 → 入学习清单+复习卡">❌ 记错题</button>
         </div>
       </div>`).join("");
-    // 抓题目
+    // 整套真题 → 学习清单
+    document.querySelectorAll(".zhenti-plan").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          const res = await fetch("http://127.0.0.1:8899/api/zhenti/plan", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paperTestId: btn.dataset.id }),
+          });
+          const j = await res.json();
+          alert(j.ok ? `✅ 已加入学习清单：${j.topic}\n（练习后做错的题点「❌ 记错题」回流）` : "⚠️ " + (j.error || "失败"));
+          loadStudyPlan();
+        } catch (e) { alert("⚠️ " + e.message); }
+      });
+    });
+    // 抓题目（保留能力：同会话扫码可用）
     document.querySelectorAll(".zhenti-fetch").forEach((btn) => {
       btn.addEventListener("click", async () => {
         btn.disabled = true;

@@ -96,3 +96,22 @@ test("saveNowcoderCookie 解析保存 + getNowcoderCookie 读回；非法格式�
   assert.equal(pairs.length, 3);
   assert.equal(pairs[0].name, "NOWCODER_UID");
 });
+
+test("addPaperToPlan 整套真题 → 学习清单（练习入口条目）", async () => {
+  setMockPages([{ text: "mock", links: EXAMS.slice(0, 2) }]);
+  await zhenti.collectZhentiList();
+  const r = await zhenti.addPaperToPlan("62105698");
+  assert.equal(r.ok, true);
+  assert.ok(r.topic.includes("阿里"), "topic 带公司");
+  const { db } = await import("../lib/db.mjs");
+  const plan = db.prepare("SELECT * FROM study_plan_items WHERE source='牛客真题'").all();
+  assert.equal(plan.length, 1, "入学习清单");
+  assert.equal(plan[0].level, "必会");
+  assert.ok(String(plan[0].verify_question).includes("nowcoder.com"), "验证题含练习链接");
+  // 重复加入去重（study addPlanItems 按 topic 去重）
+  const r2 = await zhenti.addPaperToPlan("62105698");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM study_plan_items WHERE source='牛客真题'").get().n, 1, "重复不新增");
+  // 不存在的试卷
+  const r3 = await zhenti.addPaperToPlan("99999999");
+  assert.equal(r3.ok, false);
+});
