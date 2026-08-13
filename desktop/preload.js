@@ -133,7 +133,6 @@ contextBridge.exposeInMainWorld("kanban", {
   setPanelState: (open) => ipcRenderer.invoke("window:panel-state", { open }),
   fitWindow: (w, h) => ipcRenderer.invoke("window:fit", { w, h }),
   moveWindow: (x, y) => ipcRenderer.invoke("window:move", { x, y }),
-  stabilizeWindow: (x, y) => ipcRenderer.invoke("window:stabilize", { x, y }),
   onOpenPanel: (cb) => ipcRenderer.on("open-panel", () => cb()),
   onRunDiscover: (cb) => ipcRenderer.on("run-discover", () => cb()),
 });

@@ -612,7 +612,6 @@ ipcMain.handle("window:move", (e, { x, y }) => {
   win.setBounds({ x: Math.round(x), y: Math.round(y), width: 220, height: 360 });
   return { ok: true };
 });
-ipcMain.handle("window:stabilize", () => ({ ok: false }));
 
 // ---------- 全屏检测：全屏应用（游戏/视频）时隐藏桌宠，其余情况保持显示 ----------
 // 用 koffi FFI 直调 Win32（毫秒级，替代慢速 PowerShell）
