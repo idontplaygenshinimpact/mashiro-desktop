@@ -88,3 +88,18 @@ test("getPlan 空库返回空清单", () => {
   assert.deepEqual(plan.items, []);
   assert.equal(plan.date, "");
 });
+
+test("normalizeTopic/isSimilarTopic 相似去重（防表述漂移重复 + 层级降级）", async () => {
+  const { normalizeTopic, isSimilarTopic } = await import("../lib/study.mjs");
+  // 归一化：去括号内容/标点/词尾
+  assert.equal(normalizeTopic("事件循环（浏览器环境）"), "事件循环", "去括号内容");
+  // 相似判定：归一化后相等或互相包含
+  assert.ok(isSimilarTopic(normalizeTopic("浏览器渲染机制与性能优化"), normalizeTopic("浏览器渲染性能优化")), "同知识点不同表述");
+  assert.ok(isSimilarTopic(normalizeTopic("React Fiber 调度原理"), normalizeTopic("Fiber 调度机制")), "包含关系");
+  assert.ok(isSimilarTopic(normalizeTopic("事件循环"), normalizeTopic("事件循环与微任务")), "包含关系");
+  assert.ok(isSimilarTopic(normalizeTopic("防抖与节流原理"), normalizeTopic("防抖节流")), "词尾去除后相等");
+  // 不误判：不同知识点
+  assert.ok(!isSimilarTopic(normalizeTopic("深拷贝"), normalizeTopic("浅拷贝")), "深拷贝≠浅拷贝");
+  assert.ok(!isSimilarTopic(normalizeTopic("防抖"), normalizeTopic("节流")), "防抖≠节流");
+  assert.ok(!isSimilarTopic("", ""), "空串不相似");
+});

@@ -22,21 +22,43 @@ test("generateStudyPlan：LLM 返回代码块 JSON → 生成清单入库", asyn
   assert.equal(r.items.length, 2);
   assert.equal(r.items[0].topic, "事件循环");
   assert.equal(r.items[0].level, "必会");
+  // LLM 未返回 group → grp 缺省空串（展示层归"未分类"）
+  assert.equal(r.items[0].grp, "");
+  assert.equal(r.items[1].grp, "");
   // 已入库
   assert.equal(getPlan().items.length, 2);
 });
 
-test("generateStudyPlan：LLM 返回非法内容 → 报错不崩溃", async () => {
-  setLlmResponses("这不是 JSON");
+test("generateStudyPlan：LLM 返回 group → grp 入库，同组可多条", async () => {
+  setLlmResponses('{"items":[{"topic":"RAG 混合检索策略","why":"高频","source":"a.md","verify_question":"q","level":"必会","group":"RAG 与 LLM"},{"topic":"向量数据库选型","why":"大厂","source":"a.md","verify_question":"q","level":"进阶","group":"RAG 与 LLM"},{"topic":"宏任务与微任务执行顺序","why":"高频","source":"b.md","verify_question":"q","level":"必会","group":"事件循环与异步"}]}');
   const r = await generateStudyPlan();
-  assert.ok(r.error, "应返回 error");
-  assert.equal(r.items.length, 0);
+  assert.equal(r.error, undefined);
+  assert.equal(r.items.length, 3);
+  assert.equal(r.items[0].grp, "RAG 与 LLM");
+  assert.equal(r.items[1].grp, "RAG 与 LLM", "同一主题簇多条子知识点用同一 group 名");
+  assert.equal(r.items[2].grp, "事件循环与异步");
+  // 入库一致
+  const plan = getPlan();
+  assert.equal(plan.items.find((i) => i.topic === "向量数据库选型").grp, "RAG 与 LLM");
+  // 旧条目（addPlanItems 无 group）grp 为空不受影响
+  const old = plan.items.find((i) => i.topic === "事件循环");
+  assert.equal(old, undefined, "旧清单为空，无残留干扰");
 });
 
-test("generateStudyPlan：返回空 items → 报错", async () => {
+test("generateStudyPlan：LLM 返回非法内容 → 不崩溃，返回 note（非 error）", async () => {
+  setLlmResponses("这不是 JSON");
+  const r = await generateStudyPlan();
+  assert.equal(r.error, undefined, "非法内容不再报 error（自动重试后仍失败 → 空结果 note）");
+  assert.equal(r.addedCount, 0);
+  assert.ok(r.note, "带说明 note");
+});
+
+test("generateStudyPlan：返回空 items → note 提示无新知识点（非报错）", async () => {
   setLlmResponses('{"items":[]}');
   const r = await generateStudyPlan();
-  assert.ok(r.error);
+  assert.equal(r.error, undefined);
+  assert.equal(r.addedCount, 0);
+  assert.ok(r.note.includes("未提炼"), "提示未提炼到新知识点");
 });
 
 test("generateStudyPlan：level 非法值回退必会", async () => {
@@ -70,10 +92,12 @@ test("generateStudyPlan：旧条目状态字段保留", async () => {
   // 旧条目先复习过
   const { db } = await import("../lib/db.mjs");
   db.prepare("UPDATE study_plan_items SET reviewed=1 WHERE topic='闭包'").run();
-  setLlmResponses('{"items":[{"topic":"新知识点","why":"w","source":"a","verify_question":"q","level":"必会"}]}');
+  setLlmResponses('{"items":[{"topic":"新知识点","why":"w","source":"a","verify_question":"q","level":"必会","group":"算法与手写"}]}');
   const r = await generateStudyPlan();
   const old = r.items.find((i) => i.topic === "闭包");
   assert.equal(old.reviewed, true, "旧条目复习状态保留");
+  assert.equal(old.grp, "", "旧条目无 group → grp 保持空（归未分类），不被新条目 group 覆盖");
+  assert.equal(r.items.find((i) => i.topic === "新知识点").grp, "算法与手写", "新条目按 LLM group 入库");
 });
 
 test("answerReview：判分 + 回流薄弱点 + 标记已复盘", async () => {
