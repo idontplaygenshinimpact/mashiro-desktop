@@ -236,6 +236,14 @@
         <div id="jobs-direction-advice" class="jobs-advice"></div>
         <div class="resume-status" id="jobs-status">校招岗位列表（用简历/方向匹配推荐）</div>
       </div>
+      <div id="jobs-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
+        <button class="job-chip active" data-status="">全部</button>
+        <button class="job-chip" data-status="new">未投递</button>
+        <button class="job-chip" data-status="ready">已投递</button>
+        <button class="job-chip" data-status="ready_bishi">待笔试</button>
+        <button class="job-chip" data-status="done">已完成</button>
+        <button class="job-chip" data-fav="1">⭐ 收藏</button>
+      </div>
       <div id="jobs-list" class="jobs-list"></div>
 
       <!-- 笔试真题区块：大厂官方真题 + 平台模拟卷（中厂笔试同源） -->

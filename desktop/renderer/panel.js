@@ -1188,16 +1188,31 @@ document.querySelectorAll(".approval-btn").forEach((btn) => {
 const STATUS_LABEL = { new: "🆕 未处理", ready: "📮 已投递", ready_bishi: "✍️ 待笔试", done: "✅ 已拿offer/结束" };
 const DIRECTION_LABEL = { frontend: "前端", agent: "AI Agent", fullstack: "全栈", backend: "后端", other: "其他" };
 
+let jobsFilter = { status: "", fav: false }; // 校招筛选：status 走后端过滤，fav 客户端过滤
+
+// 已投天数文案（applied_at 为毫秒时间戳）
+function appliedDaysText(job) {
+  if (!job.appliedAt) return "";
+  const days = Math.floor((Date.now() - job.appliedAt) / 86400000);
+  return days > 0 ? `已投 ${days} 天` : "今天投递";
+}
+
 async function loadJobs() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/jobs/recommended");
+    // 非"全部"状态 → 走 GET /api/jobs?status=；否则用推荐列表（技术岗 + 匹配排序）
+    const url = jobsFilter.status
+      ? `http://127.0.0.1:8899/api/jobs?status=${encodeURIComponent(jobsFilter.status)}`
+      : "http://127.0.0.1:8899/api/jobs/recommended";
+    const r = await fetch(url);
     const j = await r.json();
+    let jobs = j.recommended || j.jobs || [];
+    if (jobsFilter.fav) jobs = jobs.filter((x) => x.favorite); // 收藏客户端过滤
     const list = document.getElementById("jobs-list");
-    if (!j.recommended?.length) {
+    if (!jobs.length) {
       list.innerHTML = '<div class="empty-hint">暂无岗位——点上方「🔍 搜集校招」抓取，或先设置简历/方向</div>';
       return;
     }
-    list.innerHTML = j.recommended.map((job) => `
+    list.innerHTML = jobs.map((job) => `
       <div class="job-item">
         <div class="job-head">
           <b>${esc(job.company)}</b>
@@ -1209,11 +1224,13 @@ async function loadJobs() {
           ${job.jobType ? `<span>${esc(job.jobType)}</span>` : ""}
           ${job.deadline ? `<span>⏰ 截止 ${esc(job.deadline)}</span>` : ""}
           ${job.bishiDate ? `<span>📝 笔试 ${esc(job.bishiDate)}</span>` : ""}
+          ${job.appliedAt ? `<span>📅 ${esc(appliedDaysText(job))}</span>` : ""}
           <span>${STATUS_LABEL[job.status] || job.status}</span>
         </div>
         ${job.summary ? `<div class="job-summary">${esc(job.summary)}</div>` : ""}
         ${job.jdText ? `<div class="job-jd" id="jd-${job.id}" hidden><pre>${esc(job.jdText)}</pre></div>` : ""}
         <div class="job-actions">
+          <button class="job-btn job-fav" data-id="${job.id}" data-fav="${job.favorite ? 1 : 0}" title="收藏/取消收藏">${job.favorite ? "⭐" : "☆"}</button>
           ${job.applyUrl ? `<a class="job-link" href="${esc(safeUrl(job.applyUrl))}" target="_blank" rel="noopener">🔗 去投递</a>` : ""}
           ${job.jdText ? `<button class="job-btn jd-toggle" data-id="${job.id}">📋 JD</button>` : ""}
           <button class="job-btn" data-id="${job.id}" data-status="ready">📮 已投递</button>
@@ -1231,8 +1248,20 @@ async function loadJobs() {
         btn.textContent = open ? "📕 收起" : "📋 JD";
       });
     });
+    // ⭐ 收藏/取消收藏
+    document.querySelectorAll(".job-fav").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const fav = btn.dataset.fav === "1" ? 0 : 1;
+        await fetch("http://127.0.0.1:8899/api/jobs/favorite", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: btn.dataset.id, favorite: fav }),
+        });
+        loadJobs();
+      });
+    });
     document.querySelectorAll(".job-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
+        if (!btn.dataset.status) return; // 收藏/其它无 data-status 的按钮不触发状态更新
         await fetch("http://127.0.0.1:8899/api/jobs/status", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: btn.dataset.id, status: btn.dataset.status }),
@@ -1244,6 +1273,16 @@ async function loadJobs() {
     document.getElementById("jobs-list").innerHTML = `<div class="empty-hint">加载失败：${esc(e.message)}</div>`;
   }
 }
+
+// 校招状态筛选 chips（全部/未投递/已投递/待笔试/已完成 + 收藏）
+document.querySelectorAll("#jobs-filter .job-chip").forEach((chip) => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll("#jobs-filter .job-chip").forEach((c) => c.classList.remove("active"));
+    chip.classList.add("active");
+    jobsFilter = { status: chip.dataset.status || "", fav: chip.dataset.fav === "1" };
+    loadJobs();
+  });
+});
 
 // 设置方向 + 生成建议
 document.getElementById("jobs-direction-btn")?.addEventListener("click", async () => {

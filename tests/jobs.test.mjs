@@ -46,26 +46,29 @@ test("addJob URL 去重：同公司+同详情页 URL 视为同一岗位（列表
   assert.equal(jobs.getJobs().length, 3);
 });
 
-test("fetchJobDetails：官网详情页抓 JD 正文入库 + 列表页/非官网跳过 + 24h 幂等", async () => {
+test("fetchJobDetails：非官网详情页也抓 JD 正文 + 列表页/哈希跳过 + 24h 幂等", async () => {
   setMockPages([
     { title: "岗位详情", text: "前端开发工程师（校招）\n岗位职责：负责 Web 前端开发、性能优化与工程化建设，参与核心业务迭代。\n任职要求：精通 JavaScript、TypeScript、React，熟悉 Node.js，有组件库或脚手架开发经验者优先。\n工作地点：北京。\n截止时间：2026-09-30。" },
+    { title: "牛客讨论帖", text: "后端开发工程师（校招）\n岗位职责：负责服务端架构设计、接口开发、数据库设计与优化，参与高并发系统的构建与迭代。\n任职要求：精通 Java，熟悉 Spring Boot、MySQL、Redis，有分布式系统开发经验者优先。\n工作地点：上海。" },
   ]);
   setLlmResponses('{"deadline":"2026-09-30","bishi_date":"","city":"北京","batch":"秋招"}');
   const r1 = jobs.addJob({ company: "字节跳动", title: "前端开发工程师", job_type: "校招", source: "字节跳动官网", apply_url: "https://jobs.bytedance.com/campus/position/123/detail" });
   jobs.addJob({ company: "美团", title: "前端实习", job_type: "实习", source: "美团官网", apply_url: "https://campus.meituan.com/positions" }); // 列表兜底
   jobs.addJob({ company: "京东", title: "前端", job_type: "校招", source: "京东官网", apply_url: "https://campus.jd.com/#/jobs" }); // hash
-  jobs.addJob({ company: "牛客公司", title: "后端", job_type: "校招", source: "牛客", apply_url: "https://www.nowcoder.com/discuss/123" }); // 非官网 source
+  const r2 = jobs.addJob({ company: "牛客公司", title: "后端", job_type: "校招", source: "牛客", apply_url: "https://www.nowcoder.com/discuss/123" }); // 非官网 source，但详情页
   const res = await jobs.fetchJobDetails();
-  assert.equal(res.total, 1, "只有字节详情页计入");
-  assert.equal(res.done, 1, "详情页抓取成功");
+  assert.equal(res.total, 2, "字节详情页 + 牛客详情页计入（source 不再作为门槛）");
+  assert.equal(res.done, 2, "两个详情页均抓取成功");
   assert.equal(res.failed, 0);
-  const j = jobs.getJobs().find((x) => x.id === r1.id);
-  assert.ok(j.jdText.includes("前端开发工程师"), "JD 正文已入库");
-  assert.ok(j.jdText.length <= 4000, "正文截断 4000 字符");
-  assert.equal(j.deadline, "2026-09-30", "LLM 提取的截止日期已覆盖");
+  const j1 = jobs.getJobs().find((x) => x.id === r1.id);
+  assert.ok(j1.jdText.includes("前端开发工程师"), "JD 正文已入库");
+  assert.ok(j1.jdText.length <= 4000, "正文截断 4000 字符");
+  assert.equal(j1.deadline, "2026-09-30", "LLM 提取的截止日期已覆盖");
+  const j2 = jobs.getJobs().find((x) => x.id === r2.id);
+  assert.ok(j2.jdText.includes("后端开发工程师"), "非官网来源（牛客）详情页也抓取 JD");
   // 幂等：jd_text 非空且 updated_at 24h 内 → 跳过
   const res2 = await jobs.fetchJobDetails();
-  assert.equal(res2.skipped, 1, "24h 内幂等跳过");
+  assert.equal(res2.skipped, 2, "24h 内幂等跳过");
   assert.equal(res2.done, 0);
 });
 
@@ -95,6 +98,47 @@ test("setJobStatus 状态流转 + 非法状态拒绝", () => {
   assert.equal(jobs.getJobs()[0].status, "ready");
   assert.equal(jobs.setJobStatus(r.id, "nope").ok, false, "非法状态拒绝");
   assert.equal(jobs.setJobStatus("不存在", "ready").ok, false);
+});
+
+test("setJobStatus 转 ready 记录 applied_at（重复投递不刷新首次时间）", () => {
+  const r = jobs.addJob({ company: "A", title: "前端", job_type: "校招", direction: "frontend" });
+  const before = Date.now();
+  assert.equal(jobs.setJobStatus(r.id, "ready").ok, true);
+  const j = jobs.getJobs()[0];
+  assert.ok(j.appliedAt, "applied_at 已记录");
+  assert.ok(j.appliedAt >= before, "投递时间不早于操作时间");
+  const first = j.appliedAt;
+  // 状态流转到 ready_bishi 再回 ready：applied_at 保留首次投递时间
+  jobs.setJobStatus(r.id, "ready_bishi");
+  jobs.setJobStatus(r.id, "ready");
+  assert.equal(jobs.getJobs()[0].appliedAt, first, "重复投递保留首次投递时间");
+  // 未投递岗位 applied_at 为 null
+  const r2 = jobs.addJob({ company: "B", title: "后端", job_type: "校招" });
+  assert.equal(jobs.getJobs().find((x) => x.id === r2.id).appliedAt, null, "未投递无 applied_at");
+});
+
+test("setJobFavorite 收藏/取消收藏持久化 + 非法 id 拒绝", () => {
+  const r = jobs.addJob({ company: "A", title: "前端", job_type: "校招", direction: "frontend" });
+  assert.equal(jobs.setJobFavorite(r.id, 1).ok, true);
+  assert.equal(jobs.getJobs()[0].favorite, true, "收藏已持久化");
+  assert.equal(jobs.setJobFavorite(r.id, 0).ok, true);
+  assert.equal(jobs.getJobs()[0].favorite, false, "取消收藏");
+  assert.equal(jobs.setJobFavorite("不存在", 1).ok, false);
+});
+
+test("getUpcomingJobDeadlines：3 天内截止/笔试的未完成岗位（纯函数过滤）", () => {
+  const now = Date.UTC(2026, 7, 1); // 2026-08-01
+  const list = [
+    { id: "a", company: "A", title: "前端", status: "new", deadline: "2026-08-03", bishiDate: null }, // 2 天内截止
+    { id: "b", company: "B", title: "后端", status: "new", deadline: null, bishiDate: "2026-08-04" }, // 3 天内笔试
+    { id: "c", company: "C", title: "Agent", status: "new", deadline: "2026-08-10" }, // 超 3 天
+    { id: "d", company: "D", title: "全栈", status: "done", deadline: "2026-08-02" }, // 已完成跳过
+    { id: "e", company: "E", title: "测试", status: "new", deadline: "已过期无效日期" }, // 非法日期跳过
+  ];
+  const up = jobs.getUpcomingJobDeadlines(list, now);
+  assert.equal(up.length, 2);
+  assert.ok(up.some((j) => j.id === "a" && j.kind === "截止"));
+  assert.ok(up.some((j) => j.id === "b" && j.kind === "笔试"));
 });
 
 // ---------- 公司档案 ----------

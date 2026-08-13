@@ -261,6 +261,28 @@ async function checkReviewReminder() {
   } catch { /* ignore */ }
 }
 
+// ============ 校招岗位截止/笔试提醒（3 天内主动提示，9 点后 + 6 小时冷却防骚扰） ============
+let lastJobDeadlineNotify = 0; // 上次岗位提醒时间戳（ms），6 小时冷却
+
+async function checkJobDeadline() {
+  try {
+    const upcoming = jobsApi.getUpcomingJobDeadlines(jobsApi.getJobs());
+    if (upcoming.length === 0) return;
+    // 9 点后才提醒（避免半夜打扰）；距上次提醒 >6 小时才再次提醒
+    const h = new Date().getHours();
+    if (h < 9) return;
+    const now = Date.now();
+    if (now - lastJobDeadlineNotify < 6 * 3600 * 1000) return;
+    lastJobDeadlineNotify = now;
+    console.log(`[widget] 岗位截止/笔试提醒：${upcoming.length} 个`);
+    const lines = upcoming.slice(0, 5).map((j) => `${j.company}·${j.title}（${j.dueDate} ${j.kind}）`);
+    await sendNotification(
+      "⏰ 校招岗位提醒",
+      `${upcoming.length} 个岗位即将截止/笔试：\n${lines.join("\n")}${upcoming.length > 5 ? `\n…等 ${upcoming.length} 个` : ""}`
+    );
+  } catch { /* ignore */ }
+}
+
 // ============ HTTP 服务 ============
 
 const server = createServer((req, res) => {
@@ -944,6 +966,22 @@ const server = createServer((req, res) => {
         const { id, status } = JSON.parse(body || "{}");
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(jobsApi.setJobStatus(id, status)));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/jobs/favorite") {
+    // 收藏/取消收藏岗位（body {id, favorite}）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const { id, favorite } = JSON.parse(body || "{}");
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(jobsApi.setJobFavorite(id, favorite ? 1 : 0)));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
@@ -1740,6 +1778,9 @@ registerInterval(checkStudyReminder, 60 * 1000);
 // 每 30 分钟检查复习到期（9 点后，有到期卡每天提醒一次）
 registerInterval(checkReviewReminder, 30 * 60 * 1000);
 registerTimer(checkReviewReminder, 60 * 1000); // 启动 1 分钟后先查一次
+// 每小时检查岗位截止/笔试（3 天内，9 点后 + 6 小时冷却）
+registerInterval(checkJobDeadline, 60 * 60 * 1000);
+registerTimer(checkJobDeadline, 3 * 60 * 1000); // 启动 3 分钟后先查一次
 
 // ---------- 每日自动岗位搜集（24h 门控：白天执行，距上次搜集 >24h 才跑；running 互斥防重叠） ----------
 let collectJobsRunning = false;
