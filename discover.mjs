@@ -105,6 +105,33 @@ function cleanHref(href) {
     .split("?")[0];
 }
 
+/**
+ * 从掘金搜索 API 响应中提取帖子链接
+ * 掘金搜索 API 响应结构（api.juejin.cn/search_api/v1/search）常见字段路径：
+ *   resp.data[].result_model = "article" → result.article_info.{article_id, title}
+ * 兼容不同版本的响应包裹结构
+ */
+function extractJuejinLinks(apiResponses) {
+  const links = [];
+  for (const resp of apiResponses) {
+    const dataArr = resp?.data || resp?.result || [];
+    const items = Array.isArray(dataArr) ? dataArr : (dataArr?.data || []);
+    for (const item of items) {
+      const resultObj = item?.result || item?.result_model || item;
+      const articleInfo = resultObj?.article_info || resultObj || item;
+      const articleId = articleInfo?.article_id;
+      const title = articleInfo?.title || "";
+      if (articleId && title) {
+        links.push({
+          text: String(title).slice(0, 120),
+          href: `https://juejin.cn/post/${articleId}`,
+        });
+      }
+    }
+  }
+  return links;
+}
+
 // ============ 管线阶段 ============
 
 /** 阶段0：初始化 ctx（参数解析、历史加载、进度初始化） */
@@ -124,19 +151,39 @@ export async function collectPostsStage(ctx) {
     const si = startUrls.indexOf(startUrl) + 1;
     writeProgress({ status: "running", step: "list", message: "抓取列表页 " + si + "/" + startUrls.length, current: si, total: startUrls.length });
     console.log(`\n🔍 起始页: ${startUrl}\n抓取列表页...`);
-    const list = await fetchPage(startUrl, { maxTextChars: 4000, collectLinks: true });
-    if (!list || !list.text || list.length === 0) {
+
+    // 掘金搜索页：SPA 渲染，用 apiPattern 拦截搜索 XHR API + 延长等待
+    const isJuejinSearch = startUrl.includes("juejin.cn/search");
+    const listOpts = { maxTextChars: 4000, collectLinks: true };
+    if (isJuejinSearch) {
+      listOpts.waitUntil = "networkidle";
+      listOpts.waitMs = 4000;
+      listOpts.apiPattern = "api.juejin.cn/search_api";
+    }
+
+    const list = await fetchPage(startUrl, listOpts);
+    if (!list || (!list.text && list.length === 0)) {
       console.error("列表页抓取失败:", list?.error || "无正文内容");
       continue;
     }
 
+    // 掘金搜索：若 DOM 链接为空但 API 响应有数据，从 API 响应提取链接
+    let allLinks = list.links;
+    if (isJuejinSearch && allLinks.length === 0 && list.apiResponses?.length) {
+      const apiLinks = extractJuejinLinks(list.apiResponses);
+      if (apiLinks.length > 0) {
+        console.log(`  掘金 API 拦截成功，提取 ${apiLinks.length} 条链接`);
+        allLinks = apiLinks;
+      }
+    }
+
     // 提取帖子链接（通用模式），去重 + 清洗 + 过滤已爬过的 + 标题方向过滤
     const posts = dedupePosts(
-      list.links
+      allLinks
         .filter((l) => POST_URL_RE.test(l.href) && l.text.length > 5 && !EXCLUDE_TITLE.test(l.text))
         .map((l) => ({ text: l.text.slice(0, 120), href: cleanHref(l.href) }))
     ).filter((p) => !history.has(keyOf(p.href)));
-    console.log(`列表页发现 ${posts.length} 篇新帖子（过滤已爬 ${list.links.filter((l) => POST_URL_RE.test(l.href)).length - posts.length} 篇）`);
+    console.log(`列表页发现 ${posts.length} 篇新帖子（过滤已爬 ${allLinks.filter((l) => POST_URL_RE.test(l.href)).length - posts.length} 篇）`);
     if (posts.length === 0) {
       console.log("⏭️ 该页没有新帖子，跳过");
       continue;
@@ -152,7 +199,8 @@ export async function collectPostsStage(ctx) {
   ctx.allPicked = allPicked;
 }
 
-/** 阶段2：抓取选中帖子的正文（跨页去重 + 无效页过滤） */
+/** 阶段2：抓取选中帖子的正文（跨页去重 + 无效页过滤）
+ *  牛客链接走 Edge 登录态会话（复用真实浏览器登录态），其他域走原 headless 逻辑 */
 export async function fetchPagesStage(ctx) {
   const { allPicked } = ctx;
   if (!allPicked?.length) return;
@@ -165,8 +213,54 @@ export async function fetchPagesStage(ctx) {
   });
   ctx.unique = unique;
   writeProgress({ status: "running", step: "fetch", message: "抓取正文（共 " + unique.length + " 篇）", current: 0, total: unique.length });
-  const pages = await fetchPages(unique.map((p) => p.href));
-  // 跳过无效页面（404/空内容）
+
+  // 分流：牛客 → Edge 会话；其他 → 原 headless
+  const nowcoderUrls = unique.filter((p) => p.href.includes("nowcoder.com"));
+  const otherUrls = unique.filter((p) => !p.href.includes("nowcoder.com"));
+  const pages = [];
+
+  // 牛客链接走 Edge 登录态
+  if (nowcoderUrls.length > 0) {
+    let edgeSession = null;
+    try {
+      const { getEdgeSession } = await import("./lib/edge-session.mjs");
+      edgeSession = await getEdgeSession();
+    } catch (e) {
+      console.log(`[Edge 会话] 加载失败: ${e.message}，降级到 headless`);
+    }
+
+    if (edgeSession?.ok) {
+      for (const url of nowcoderUrls.map((p) => p.href)) {
+        try {
+          const r = await edgeSession.fetchWithEdge(url);
+          pages.push({ ok: true, ...r });
+          console.log(`  [Edge] ${r.title?.slice(0, 40) || url.slice(0, 50)} | ${r.length} 字符${r.invalid ? " (无效)" : ""}`);
+        } catch (e) {
+          console.log(`  [Edge 失败] ${url.slice(0, 50)}: ${e.message} → 降级 headless`);
+          // 降级回原 fetchPage
+          try {
+            const r = await fetchPage(url);
+            pages.push({ ok: true, ...r });
+          } catch (e2) {
+            pages.push({ ok: false, url, error: e2.message });
+          }
+        }
+        await new Promise((r) => setTimeout(r, 800)); // 串行+延迟（避免触发牛客风控）
+      }
+    } else {
+      console.log(`[Edge 会话] 不可用（${edgeSession?.reason || "未知"}），牛客链接降级到 headless`);
+      const regular = await fetchPages(nowcoderUrls.map((p) => p.href));
+      pages.push(...regular);
+    }
+  }
+
+  // 其他域走原逻辑
+  if (otherUrls.length > 0) {
+    const regular = await fetchPages(otherUrls.map((p) => p.href));
+    pages.push(...regular);
+  }
+
+  // 跳过无效页面（404/空内容/安全验证页）
   const okPages = pages.filter((p) => p.ok && !p.invalid && p.text && p.text.length > 100);
   console.log(`\n抓取成功 ${okPages.length}/${unique.length} 篇（跳过无效 ${pages.length - okPages.length}）`);
   ctx.okPages = okPages;

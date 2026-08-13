@@ -13,6 +13,7 @@ const EXAMS = [
   { text: "2025年秋招-美团-技术岗-第一批笔试", href: "https://www.nowcoder.com/exam/test/63140272/summary" },
   { text: "中国银行2025春招笔试-模拟卷", href: "https://www.nowcoder.com/exam/test/59813724/summary" },
   { text: "中国移动2025春招笔试-模拟卷", href: "https://www.nowcoder.com/exam/test/59814106/summary" },
+  { text: "2025秋招-美团-技术岗-模拟卷", href: "https://www.nowcoder.com/exam/test/61980001/summary" }, // 技术类模拟卷应收录
   { text: "2025春招-美团-综合能力测试-产品&运营笔试", href: "https://www.nowcoder.com/exam/test/61979867/summary" }, // 非技术应排除
   { text: "某小公司2025校招笔试", href: "https://www.nowcoder.com/exam/test/77777777/summary" }, // 非大厂非模拟排除
 ];
@@ -20,19 +21,21 @@ const EXAMS = [
 beforeEach(async () => { await clearAllTables(); });
 after(() => { cleanupTempDb(dbDir); });
 
-test("collectZhentiList 双轨收录：大厂技术真题 + 模拟卷；排除非技术/非目标", async () => {
+test("collectZhentiList 双轨收录：大厂技术真题 + 技术模拟卷；排除非技术/非目标/银行模拟卷", async () => {
   setMockPages([{ text: "mock", links: [...EXAMS, { text: "无关链接", href: "https://x.com/other" }] }]);
   const r = await zhenti.collectZhentiList();
-  assert.equal(r.added, 5, "入库 5：阿里/华为/美团真题 + 银行/移动模拟卷");
+  assert.equal(r.added, 4, "入库 4：阿里/华为/美团真题 + 美团技术模拟卷");
   const list = zhenti.getZhentiList();
-  assert.equal(list.length, 5);
+  assert.equal(list.length, 4);
   const real = list.filter((p) => p.kind === "real");
   const simulate = list.filter((p) => p.kind === "simulate");
   assert.equal(real.length, 3, "3 套大厂真题");
-  assert.equal(simulate.length, 2, "2 套模拟卷");
+  assert.equal(simulate.length, 1, "仅 1 套技术类模拟卷");
   assert.ok(real.some((p) => p.title.includes("阿里巴巴")), "阿里真题");
   assert.ok(!list.some((p) => p.title.includes("产品&运营")), "非技术岗排除");
   assert.ok(!list.some((p) => p.title.includes("某小公司")), "非目标公司排除");
+  assert.ok(!list.some((p) => p.title.includes("中国银行")), "银行行测模拟卷排除");
+  assert.ok(!list.some((p) => p.title.includes("中国移动")), "运营商行测模拟卷排除");
 });
 
 test("collectZhentiList 去重（testId 相同不重复入库）", async () => {
@@ -50,9 +53,9 @@ test("getZhentiStats 按 kind 统计", async () => {
   setMockPages([{ text: "mock", links: EXAMS }]);
   await zhenti.collectZhentiList();
   const s = zhenti.getZhentiStats();
-  assert.equal(s.total, 5);
+  assert.equal(s.total, 4);
   assert.equal(s.byKind.find((k) => k.kind === "real").n, 3);
-  assert.equal(s.byKind.find((k) => k.kind === "simulate").n, 2);
+  assert.equal(s.byKind.find((k) => k.kind === "simulate").n, 1);
   assert.ok(s.byCompany.some((c) => c.company === "华为"), "按公司统计");
 });
 
@@ -114,4 +117,16 @@ test("addPaperToPlan 整套真题 → 学习清单（练习入口条目）", asy
   // 不存在的试卷
   const r3 = await zhenti.addPaperToPlan("99999999");
   assert.equal(r3.ok, false);
+});
+
+test("cleanQuestionHtml 公式图取 alt、标签剥离、实体还原", () => {
+  const html = '<img src="/equation?tex=U" alt="U" />预算为 <img src="/equation?tex=B" alt="B" />。<br/>保证 1&le;B&le;10<sup>11</sup>。';
+  const out = zhenti.cleanQuestionHtml(html);
+  assert.ok(out.includes("U"), "公式图 alt 保留");
+  assert.ok(out.includes("预算为 B"), "多个公式图顺序正确");
+  assert.ok(out.includes("\n"), "br 转换行");
+  assert.ok(!out.includes("<"), "无残留标签（保留 < 实体还原后的真实小于号除外——此处 10^11 无 <）");
+  assert.ok(out.includes("1≤B≤10"), "实体还原 &le; → ≤");
+  assert.equal(zhenti.cleanQuestionHtml(""), "", "空输入安全");
+  assert.equal(zhenti.cleanQuestionHtml(null), "", "null 输入安全");
 });

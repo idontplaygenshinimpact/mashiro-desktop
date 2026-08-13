@@ -15,14 +15,58 @@ beforeEach(async () => {
 after(() => { cleanupTempDb(dbDir); });
 
 // ---------- 岗位入库/去重 ----------
-test("addJob 入库 + 去重（同公司+同岗位+同类型）", () => {
-  const r1 = jobs.addJob({ company: "字节跳动", title: "前端开发工程师", job_type: "校招", direction: "frontend", apply_url: "u1" });
+test("addJob 入库 + 覆盖更新（同公司+同岗位+同类型刷新字段，保留 jd_text）", () => {
+  const r1 = jobs.addJob({ company: "字节跳动", title: "前端开发工程师", job_type: "校招", direction: "frontend", apply_url: "u1", deadline: "2026-08-01", summary: "旧摘要" });
   assert.ok(r1.id && !r1.dup);
-  const r2 = jobs.addJob({ company: "字节跳动", title: "前端开发工程师", job_type: "校招" });
+  // 同三键重复 → 覆盖更新（刷新 deadline/summary；新值缺失时旧链接保留；jd_text 保留已有）
+  const r2 = jobs.addJob({ company: "字节跳动", title: "前端开发工程师", job_type: "校招", deadline: "2026-09-15", summary: "新摘要" });
   assert.equal(r2.dup, true, "重复入库标记");
+  assert.equal(r2.updated, true, "覆盖更新标记");
+  const j = jobs.getJobs().find((x) => x.id === r1.id);
+  assert.equal(j.deadline, "2026-09-15", "截止日期已刷新");
+  assert.equal(j.summary, "新摘要", "摘要已刷新");
+  assert.equal(j.applyUrl, "u1", "新值缺失时旧链接保留");
   const r3 = jobs.addJob({ company: "字节跳动", title: "Agent 工程师", job_type: "校招", direction: "agent" });
   assert.ok(!r3.dup, "不同岗位不重复");
   assert.equal(jobs.getJobs().length, 2);
+});
+
+test("addJob URL 去重：同公司+同详情页 URL 视为同一岗位（列表页 URL 不算）", () => {
+  const a = jobs.addJob({ company: "字节跳动", title: "后端开发工程师", job_type: "校招", apply_url: "https://jobs.bytedance.com/campus/position/123/detail" });
+  assert.ok(!a.dup);
+  const b = jobs.addJob({ company: "字节跳动", title: "后端开发工程师（可内推）", job_type: "校招", apply_url: "https://jobs.bytedance.com/campus/position/123/detail" });
+  assert.equal(b.updated, true, "同详情页 URL → 覆盖更新");
+  assert.equal(b.dup, true);
+  assert.equal(jobs.getJobs().length, 1, "同 URL 不新增行");
+  // 列表兜底 URL（多岗位共用）不算同一岗位
+  const c = jobs.addJob({ company: "美团", title: "岗位A", job_type: "校招", apply_url: "https://campus.meituan.com/positions" });
+  const d = jobs.addJob({ company: "美团", title: "岗位B", job_type: "校招", apply_url: "https://campus.meituan.com/positions" });
+  assert.ok(c.id && !c.dup);
+  assert.equal(d.dup, false, "列表页 URL 不触发去重");
+  assert.equal(jobs.getJobs().length, 3);
+});
+
+test("fetchJobDetails：官网详情页抓 JD 正文入库 + 列表页/非官网跳过 + 24h 幂等", async () => {
+  setMockPages([
+    { title: "岗位详情", text: "前端开发工程师（校招）\n岗位职责：负责 Web 前端开发、性能优化与工程化建设，参与核心业务迭代。\n任职要求：精通 JavaScript、TypeScript、React，熟悉 Node.js，有组件库或脚手架开发经验者优先。\n工作地点：北京。\n截止时间：2026-09-30。" },
+  ]);
+  setLlmResponses('{"deadline":"2026-09-30","bishi_date":"","city":"北京","batch":"秋招"}');
+  const r1 = jobs.addJob({ company: "字节跳动", title: "前端开发工程师", job_type: "校招", source: "字节跳动官网", apply_url: "https://jobs.bytedance.com/campus/position/123/detail" });
+  jobs.addJob({ company: "美团", title: "前端实习", job_type: "实习", source: "美团官网", apply_url: "https://campus.meituan.com/positions" }); // 列表兜底
+  jobs.addJob({ company: "京东", title: "前端", job_type: "校招", source: "京东官网", apply_url: "https://campus.jd.com/#/jobs" }); // hash
+  jobs.addJob({ company: "牛客公司", title: "后端", job_type: "校招", source: "牛客", apply_url: "https://www.nowcoder.com/discuss/123" }); // 非官网 source
+  const res = await jobs.fetchJobDetails();
+  assert.equal(res.total, 1, "只有字节详情页计入");
+  assert.equal(res.done, 1, "详情页抓取成功");
+  assert.equal(res.failed, 0);
+  const j = jobs.getJobs().find((x) => x.id === r1.id);
+  assert.ok(j.jdText.includes("前端开发工程师"), "JD 正文已入库");
+  assert.ok(j.jdText.length <= 4000, "正文截断 4000 字符");
+  assert.equal(j.deadline, "2026-09-30", "LLM 提取的截止日期已覆盖");
+  // 幂等：jd_text 非空且 updated_at 24h 内 → 跳过
+  const res2 = await jobs.fetchJobDetails();
+  assert.equal(res2.skipped, 1, "24h 内幂等跳过");
+  assert.equal(res2.done, 0);
 });
 
 test("addJob 缺 company/title 跳过 + 默认值", () => {
