@@ -1,4 +1,4 @@
-// mianshi-agent 桌面小组件
+﻿// mianshi-agent 桌面小组件
 // 功能：
 //   1. 本地面板 http://127.0.0.1:8799 —— 展示今日新趋势、学习任务、秋招情报
 //   2. 系统通知 —— 爬取到新趋势/新产出时弹通知
@@ -14,6 +14,7 @@ import * as studyApi from "./lib/study.mjs";
 import { chatWithAgent } from "./lib/agent.mjs";
 import { startInterview, submitAnswer, endInterview } from "./lib/interview.mjs";
 import * as reviewApi from "./lib/review.mjs";
+import * as knowledgeApi from "./lib/knowledge.mjs";
 import { pick as pickEmotion, EMOTIONS } from "./lib/emotions.mjs";
 import { getLLMStats, getRecentTools } from "./lib/trace.mjs";
 import { getPendingApprovals, resolveApproval, getSessionApproved } from "./lib/permission.mjs";
@@ -22,6 +23,7 @@ import * as jobsApi from "./lib/jobs.mjs";
 import * as learningApi from "./lib/learning.mjs";
 import * as ragApi from "./lib/rag.mjs";
 import * as zhentiApi from "./lib/zhenti.mjs";
+import * as ojApi from "./lib/oj.mjs";
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -154,9 +156,26 @@ function sendNotification(title, message, { wait = false } = {}) {
   }));
 }
 
+// 后台运行 discover.mjs（隐藏窗口 + 日志重定向 widget-run.log，不弹终端）
+async function runDiscoverHidden() {
+  try {
+    const { spawn } = await import("node:child_process");
+    const { openSync } = await import("node:fs");
+    const logFd = openSync(path.join(config.outputDir, "..", "widget-run.log"), "a");
+    const child = spawn("node", ["discover.mjs"], {
+      cwd: import.meta.dirname,
+      windowsHide: true,
+      detached: true,
+      stdio: ["ignore", logFd, logFd],
+    });
+    child.unref();
+  } catch (e) {
+    console.log(`[widget] 后台爬取启动失败: ${String(e.message).slice(0, 80)}`);
+  }
+}
+
 // Windows toast 备用（node-notifier 在某些环境 silent）
-function toastFallback(title, message) {
-  const ps = `
+function toastFallback(title, message) {  const ps = `
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
 $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
 $textNodes = $template.GetElementsByTagName('text')
@@ -164,7 +183,7 @@ $textNodes.Item(0).AppendChild($template.CreateTextNode('${title}')) > $null
 $textNodes.Item(1).AppendChild($template.CreateTextNode('${message}')) > $null
 $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
 [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('MianshiAgent').Show($toast)`;
-  exec(`powershell -NoProfile -Command "${ps.replace(/"/g, '\\"')}"`, () => {});
+  exec(`powershell -NoProfile -Command "${ps.replace(/"/g, '\\"')}"`, { windowsHide: true }, () => {});
 }
 
 // ============ 状态跟踪（检测新趋势） ============
@@ -221,24 +240,23 @@ async function checkStudyReminder() {
   }
 }
 
-// ============ 复习到期提醒（有到期卡主动提示，每天一次） ============
-const reviewReminded = new Set(); // 已提醒日期
+// ============ 复习到期提醒（有到期卡主动提示，30 分钟检查 + 2 小时冷却防骚扰） ============
+let lastReviewNotify = 0; // 上次复习提醒时间戳（ms），2 小时冷却
 
 async function checkReviewReminder() {
-  const todayKey = new Date().toISOString().slice(0, 10);
-  if (reviewReminded.has(todayKey)) return; // 今天已提醒过
   try {
     const due = reviewApi.review.getDueCards();
     if (due.length === 0) return;
-    // 首次提醒时间：卡片到期当天 9 点后（避免半夜打扰）；之后每小时检查
+    // 9 点后才提醒（避免半夜打扰）；距上次提醒 >2 小时才再次提醒（最易忘的先复习——getDueCards 已按稳定性升序）
     const h = new Date().getHours();
     if (h < 9) return;
-    reviewReminded.add(todayKey);
-    const topics = due.slice(0, 3).map((c) => String(c.topic).slice(0, 18)).join("、");
+    const now = Date.now();
+    if (now - lastReviewNotify < 2 * 3600 * 1000) return;
+    lastReviewNotify = now;
     console.log(`[widget] 复习到期提醒：${due.length} 张`);
     await sendNotification(
-      "🔁 复习时间到",
-      `有 ${due.length} 张复习卡片到期${due.length > 3 ? `（${topics} 等）` : `：${topics}`}\n在面板「🔁 复习」Tab 完成，答对会自动拉长下次间隔`
+      "📚 复习提醒",
+      `${due.length} 张复习卡到期（最易忘的优先）\n在面板「🔁 复习」Tab 完成，答对会自动拉长下次间隔`
     );
   } catch { /* ignore */ }
 }
@@ -248,8 +266,17 @@ async function checkReviewReminder() {
 const server = createServer((req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
 
-  // CORS：允许面板渲染层（file:// 页面）直接 fetch 流式接口
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // CORS 白名单（安全）：仅允许面板渲染层（Electron file:// 页面，Origin 为 null/缺失）
+  // 与本机调用；拒绝任意网页跨域读取简历/驱动 agent/批准工具（防 CSRF + 数据泄露）
+  const reqOrigin = req.headers.origin;
+  const originOk = !reqOrigin || reqOrigin === "null" || /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(reqOrigin);
+  if (!originOk) {
+    res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Forbidden: unknown origin");
+    return;
+  }
+  const corsOrigin = reqOrigin || "*";
+  res.setHeader("Access-Control-Allow-Origin", corsOrigin);
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
@@ -332,9 +359,10 @@ const server = createServer((req, res) => {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": corsOrigin,
     });
-    const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    res.on("error", () => {}); // 客户端断开时避免无监听 error 崩溃进程
+    const send = (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
     send({ type: "start", topic: item.topic });
     let full = "";
     import("./lib/ai.mjs").then(async ({ solveQuestionStream }) => {
@@ -394,9 +422,10 @@ const server = createServer((req, res) => {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": corsOrigin,
     });
-    const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    res.on("error", () => {}); // 客户端断开时避免无监听 error 崩溃进程
+    const send = (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
     send({ type: "start", topic: item.topic });
     let full = "";
     import("./lib/ai.mjs").then(async ({ solveAppendStream }) => {
@@ -450,9 +479,10 @@ const server = createServer((req, res) => {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": corsOrigin,
     });
-    const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    res.on("error", () => {}); // 客户端断开时避免无监听 error 崩溃进程
+    const send = (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
     send({ type: "start", topic: item.topic });
     let full = "";
     import("./lib/ai.mjs").then(async ({ consolidateStudyStream }) => {
@@ -511,9 +541,10 @@ const server = createServer((req, res) => {
           "Content-Type": "text/event-stream; charset=utf-8",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": corsOrigin,
         });
-        const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+        res.on("error", () => {}); // 客户端断开时避免无监听 error 崩溃进程
+    const send = (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
         send({ type: "start", topic: topics.map((t) => t.topic).join(" + ") });
         let full = "";
         import("./lib/ai.mjs").then(async ({ clusterStudyStream }) => {
@@ -752,6 +783,24 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ ok: true, due: reviewApi.review.getDailySession(), stats: reviewApi.review.getStats() }));
     return;
   }
+  if (url.pathname === "/api/mastery") {
+    // 知识点掌握度（弱项优先）+ 统计（面板「复习」Tab 掌握度区块）
+    try {
+      const mastery = knowledgeApi.getMastery();
+      const weak = knowledgeApi.getWeakKps(5);
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({
+        ok: true,
+        mastery,
+        weak,
+        stats: { total: mastery.length, weakCount: mastery.filter((k) => k.score < 50).length },
+      }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
   if (url.pathname === "/api/review/add") {
     // 添加复习卡（学习清单/薄弱点回流用）
     let body = "";
@@ -931,18 +980,39 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/jobs/collect") {
-    // 搜集校招岗位：官网优先 → 公司名单 → 中厂兜底（POST 触发；可传 step）
+    // 搜集校招岗位：官网优先 → 公司名单 → 中厂兜底（POST 触发；可传 step / skipDetails）
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", async () => {
       try {
-        const { step } = JSON.parse(body || "{}");
+        const { step, skipDetails } = JSON.parse(body || "{}");
         const result = {};
-        if (!step || step === "official") result.official = await jobsApi.collectFromOfficialSites();
+        if (!step || step === "official") {
+          result.official = await jobsApi.collectFromOfficialSites();
+          // 官网步骤跑完自动补 JD 详情（可选 skipDetails=true 跳过）
+          if (!skipDetails) result.details = await jobsApi.fetchJobDetails();
+        }
         if (!step || step === "companies") result.companies = await jobsApi.collectCompanyList();
         if (!step || step === "fallback") result.fallback = await jobsApi.collectJobsForCompaniesWithoutSite();
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ok: true, ...result }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/jobs/fetch-details") {
+    // 手动触发：抓官网岗位详情页 JD 正文入库（POST；返回 {ok,total,done,failed,updated,skipped}）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        JSON.parse(body || "{}"); // 仅校验 body 合法（预留参数位）
+        const r = await jobsApi.fetchJobDetails();
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, ...r }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
@@ -1013,6 +1083,11 @@ const server = createServer((req, res) => {
     req.on("end", async () => {
       try {
         const r = await ragApi.rebuildKnowledgeBase();
+        if (r === null) {
+          res.writeHead(409, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: false, error: "已有知识库重建/增量任务在进行中，请稍后再试" }));
+          return;
+        }
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ok: true, ...r, message: `知识库重建完成：${r.items} 条，耗时 ${r.seconds}s` }));
       } catch (e) {
@@ -1033,6 +1108,70 @@ const server = createServer((req, res) => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
     }
+    return;
+  }
+  if (url.pathname === "/api/oj/problems") {
+    // 牛客专项练习 TOP101 题目清单（GET；?category=&difficulty= 过滤）
+    try {
+      const { searchParams } = new URL(req.url, "http://x");
+      const list = ojApi.getOjProblems({
+        category: searchParams.get("category") || "",
+        difficulty: searchParams.get("difficulty") || "",
+      });
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, problems: list, ...ojApi.getOjStats() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/oj/detail") {
+    // 抓取单题内容到本地（GET ?url=；懒加载 + 缓存）
+    const { searchParams } = new URL(req.url, "http://x");
+    const u = String(searchParams.get("url") || "").trim();
+    if (!/^https?:\/\/(www\.)?nowcoder\.com\/practice\//i.test(u)) {
+      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: "仅支持牛客题目页链接" }));
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    ojApi.fetchOjDetail(u).then((r) => {
+      res.end(JSON.stringify(r));
+    }).catch((e) => {
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
+    return;
+  }
+  if (url.pathname === "/api/oj/collect-all-stream") {
+    // 批量下载全部题目内容到本地（SSE 进度流，串行防反爬，约 5-8 分钟）
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": corsOrigin,
+    });
+    res.on("error", () => {}); // 客户端断开兜底
+    const send = (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
+    ojApi.collectAllOjDetails((done, total, title) => {
+      send({ type: "progress", done, total, title: String(title).slice(0, 30) });
+    }).then((r) => {
+      send({ type: "done", ...r });
+      res.end();
+    }).catch((e) => {
+      send({ type: "error", error: e.message });
+      res.end();
+    });
+    return;
+  }
+  if (url.pathname === "/api/oj/collect") {
+    // 抓取/更新 TOP101 清单（POST）
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    ojApi.collectOjProblems().then((r) => {
+      res.end(JSON.stringify(r));
+    }).catch((e) => {
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
     return;
   }
   if (url.pathname === "/api/zhenti/collect") {
@@ -1256,12 +1395,72 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/run-discover") {
-    // 重置进度并后台启动爬取
+    // 重置进度并后台启动爬取（spawn 隐藏窗口 + 日志重定向，不弹终端）
     try {
       writeFileSync(path.join(config.outputDir, "..", "progress.json"), JSON.stringify({ status: "running", step: "start", message: "爬取启动中...", current: 0, total: 0 }), "utf8");
     } catch { /* ignore */ }
-    exec('start cmd /c "cd /d D:\\mianshi-agent && node discover.mjs > widget-run.log 2>&1"', { windowsHide: true });
+    runDiscoverHidden();
     res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, msg: "后台已触发" }));
+    return;
+  }
+  if (url.pathname === "/api/patrol-config") {
+    // 巡检配置：GET 读取（enabled/intervalMin/lastRun/nextRun），POST 修改（即时重排定时器）
+    if (req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(getPatrolConfig()));
+      return;
+    }
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        try {
+          const cfg = JSON.parse(body || "{}");
+          if (cfg.enabled !== undefined && typeof cfg.enabled !== "boolean") {
+            res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ error: "enabled 必须是布尔值" })); return;
+          }
+          if (cfg.intervalMin !== undefined) {
+            const n = Math.round(Number(cfg.intervalMin));
+            if (!Number.isInteger(n) || n < PATROL_MIN_MINUTES || n > PATROL_MAX_MINUTES) {
+              res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+              res.end(JSON.stringify({ error: `intervalMin 必须是 ${PATROL_MIN_MINUTES}-${PATROL_MAX_MINUTES} 之间的整数分钟` })); return;
+            }
+            patrolState.intervalMin = n;
+            writePatrolSetting("patrol_interval_min", String(n));
+          }
+          if (cfg.enabled !== undefined) {
+            if (DISABLE_PATROL && cfg.enabled) {
+              res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+              res.end(JSON.stringify({ error: "环境变量 MIANSHI_DISABLE_PATROL=1 已强制关闭巡检，无法在面板开启" })); return;
+            }
+            patrolState.enabled = cfg.enabled;
+            writePatrolSetting("patrol_enabled", cfg.enabled ? "1" : "0");
+          }
+          scheduleNextPatrol(); // 改配置：取消旧 timer 重排
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify(getPatrolConfig()));
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+    res.writeHead(405, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Method Not Allowed" }));
+    return;
+  }
+  if (url.pathname === "/api/patrol-run" && req.method === "POST") {
+    // 立即手动巡检一次（不重排定时器、不更新 lastRun）
+    if (DISABLE_PATROL) {
+      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "环境变量 MIANSHI_DISABLE_PATROL=1 已强制关闭巡检" }));
+      return;
+    }
+    patrolInterests().catch(() => {});
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: true, msg: "已触发巡检" }));
     return;
   }
   if (url.pathname === "/api/progress") {
@@ -1303,9 +1502,79 @@ server.listen(PORT, "127.0.0.1", () => {
 
 // ============ 主动推送：按关注点定时巡检新内容 ============
 import { memory } from "./lib/memory.mjs";
+import { db } from "./lib/db.mjs";
 
-// 巡检间隔：60 分钟一次（无新帖时触发全量爬取，2 小时限频，不宜太频繁）
-const PATROL_INTERVAL = 60 * 60 * 1000;
+// ---------- 巡检配置（面板可改，持久化到 settings 表） ----------
+// patrol_enabled: "1"/"0"（默认开启；MIANSHI_DISABLE_PATROL=1 环境变量强制关闭且忽略面板开关）
+// patrol_interval_min: 分钟（默认 60，合法 15-1440 整数）
+// patrol_last_run: 上次定时巡检完成时间戳（毫秒，widget 重启不丢）
+const PATROL_MIN_MINUTES = 15;
+const PATROL_MAX_MINUTES = 1440;
+const PATROL_DEFAULT_MINUTES = 60;
+
+function readPatrolSetting(key, fallback) {
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key);
+    return row && row.value != null ? String(row.value) : fallback;
+  } catch { /* settings 表暂不可用时走默认值 */ }
+  return fallback;
+}
+function writePatrolSetting(key, value) {
+  try {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(key, String(value), Date.now());
+  } catch { /* ignore */ }
+}
+function normalizePatrolInterval(v) {
+  const n = Math.round(Number(v));
+  return Number.isInteger(n) && n >= PATROL_MIN_MINUTES && n <= PATROL_MAX_MINUTES ? n : PATROL_DEFAULT_MINUTES;
+}
+
+const patrolState = {
+  enabled: !DISABLE_PATROL && readPatrolSetting("patrol_enabled", "1") !== "0",
+  intervalMin: normalizePatrolInterval(readPatrolSetting("patrol_interval_min", String(PATROL_DEFAULT_MINUTES))),
+  lastRun: Number(readPatrolSetting("patrol_last_run", "0")) || 0,
+  startedAt: Date.now(),
+  timer: null,
+  nextRun: null,
+};
+
+function getPatrolConfig() {
+  const forceOff = DISABLE_PATROL;
+  return {
+    ok: true,
+    enabled: forceOff ? false : patrolState.enabled,
+    intervalMin: patrolState.intervalMin,
+    lastRun: patrolState.lastRun || null,
+    nextRun: forceOff || !patrolState.enabled ? null : patrolState.nextRun,
+    note: forceOff ? "环境变量 MIANSHI_DISABLE_PATROL=1 已强制关闭巡检（面板开关不可用）" : undefined,
+  };
+}
+
+// 动态排程：读配置 → setTimeout 到下次触发 → 触发后重新排程（递归，替代固定 setInterval）
+function scheduleNextPatrol() {
+  if (patrolState.timer) { clearTimeout(patrolState.timer); patrolState.timer = null; }
+  if (DISABLE_PATROL || !patrolState.enabled) { patrolState.nextRun = null; return; }
+  const base = patrolState.lastRun || patrolState.startedAt;
+  const at = base + patrolState.intervalMin * 60 * 1000;
+  patrolState.nextRun = at;
+  const delay = Math.max(at - Date.now(), 1000);
+  patrolState.timer = setTimeout(async () => {
+    patrolState.timer = null;
+    try {
+      await patrolInterests();
+      patrolState.lastRun = Date.now();
+      writePatrolSetting("patrol_last_run", String(patrolState.lastRun));
+    } catch (e) {
+      console.log(`[widget] 巡检异常: ${String(e.message).slice(0, 80)}`);
+    }
+    scheduleNextPatrol();
+  }, delay);
+  console.log(`[widget] 自动巡检已排程: ${new Date(at).toLocaleString("zh-CN")} 触发（每 ${patrolState.intervalMin} 分钟）`);
+}
+
+// 启动巡检：读配置动态排程（首次 = 启动时间 + interval；环境变量强制关闭或面板关闭时不排程）
+scheduleNextPatrol();
+console.log(`[widget] 自动巡检: ${DISABLE_PATROL ? "关闭（环境变量 MIANSHI_DISABLE_PATROL=1）" : patrolState.enabled ? `开启（每 ${patrolState.intervalMin} 分钟）` : "关闭（面板设置）"}`);
 
 async function patrolInterests() {
   const interests = memory.getInterests();
@@ -1365,8 +1634,7 @@ async function patrolInterests() {
         lastFullCrawl = now;
         console.log("[widget] 巡检无新帖，触发全量爬取");
         try {
-          const { exec } = await import("node:child_process");
-          exec('start cmd /c "cd /d D:\\mianshi-agent && node discover.mjs > widget-run.log 2>&1"', { windowsHide: true });
+          runDiscoverHidden();
         } catch { /* ignore */ }
       } else {
         console.log("[widget] 巡检无新帖，全量爬取冷却中（2 小时限频）");
@@ -1426,12 +1694,6 @@ async function processPatrolPosts(posts) {
   return { saved, skipped };
 }
 
-// 启动巡检（首次 5 分钟后，之后每 PATROL_INTERVAL；测试设 MIANSHI_DISABLE_PATROL=1 可关）
-if (!DISABLE_PATROL) {
-  setTimeout(() => patrolInterests(), 5 * 60 * 1000);
-  setInterval(patrolInterests, PATROL_INTERVAL);
-}
-
 // ============ 后台任务管理（门控 + 互斥 + 优雅关闭） ============
 // 测试/无后台场景：MIANSHI_DISABLE_BACKGROUND=1 关闭所有后台定时任务（RAG 构建/每日搜集）
 const DISABLE_BACKGROUND = process.env.MIANSHI_DISABLE_BACKGROUND === "1";
@@ -1449,11 +1711,12 @@ const ragBuildTick = async () => {
     if (!stats.total) {
       console.log("[rag] 知识库为空，后台构建中…");
       const r = await ragApi.rebuildKnowledgeBase();
-      console.log(`[rag] 知识库构建完成：${r.items} 条（${r.seconds}s，embedding=${r.embedding}）`);
+      if (r) console.log(`[rag] 知识库构建完成：${r.items} 条（${r.seconds}s，embedding=${r.embedding}）`);
+      else console.log("[rag] 知识库构建被跳过（已有重建进行中）");
     } else {
       // 非空：增量更新（新面经 md 自动进库）
       const r = await ragApi.incrementalRebuild();
-      if (r.changed) console.log(`[rag] 知识库增量更新：+${r.added} -${r.removed}（${r.seconds}s）`);
+      if (r?.changed) console.log(`[rag] 知识库增量更新：+${r.added} -${r.removed}（${r.seconds}s）`);
     }
   } catch (e) {
     console.log(`[rag] 知识库构建失败：${String(e.message).slice(0, 80)}`);

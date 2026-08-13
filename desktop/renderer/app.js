@@ -201,7 +201,8 @@ async function handleClick(e) {
     reaction = pool[Math.floor(Math.random() * pool.length)];
   }
   showBubble(reaction, 5000);
-  if (voiceOn) window.kanban.speak(reaction);
+  // 点击 = 真白被戳 → 播固定日语台词（ん？なに？），零延迟
+  if (voiceOn) window.kanban.playScene("click");
 }
 
 // ---------- 打开大面板 ----------

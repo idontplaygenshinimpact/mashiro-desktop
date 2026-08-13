@@ -41,30 +41,14 @@ function ext(name) {
 
 async function parseResumeFile(file) {
   const extension = ext(file.name);
-  if (extension === ".pdf") {
-    const pdfjsLib = await import("pdfjs-dist");
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  if (extension === ".pdf" || extension === ".docx") {
+    // 主进程本地解析（pdfjs/mammoth Node 端；浏览器端 bare import + CDN worker 不可靠）
     const buffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-    const pages = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      pages.push(content.items.map((it) => (it.str || "")).filter(Boolean).join(" "));
-    }
-    const text = pages.join("\n").trim();
-    if (!text) throw new Error("PDF 没有可提取文本，可能是图片型 PDF，请复制文本粘贴");
-    return { text, msg: `已解析 PDF 简历（${pdf.numPages} 页）` };
+    const r = await window.kanban.parseResumeFile(file.name, buffer);
+    if (!r?.ok) throw new Error(r?.error || "解析失败");
+    return { text: r.text, msg: r.msg };
   }
   if (extension === ".doc") throw new Error("暂不支持旧版 .doc，请另存为 .docx");
-  if (extension === ".docx") {
-    const mammoth = await import("mammoth/mammoth.browser");
-    const buffer = await file.arrayBuffer();
-    const result = await mammoth.default.extractRawText({ arrayBuffer: buffer });
-    const text = result.value.trim();
-    if (!text) throw new Error("Word 文件中没有可分析文本");
-    return { text, msg: "已解析 Word 简历" };
-  }
   if (extension === ".txt" || extension === ".md" || extension === "") {
     return { text: (await file.text()).trim(), msg: "已读取文本简历" };
   }
@@ -205,15 +189,16 @@ async function submitAnswer() {
   try {
     const r = await window.kanban.invAnswer(answer);
     if (r.error) { alert(r.error); return; }
-    // 评分展示
+    // 评分展示（数值可能被 LLM 输出污染，统一转义）
     if (r.scores) {
+      const num = (v) => esc(String(Number(v) || 0));
       $("iv-scores").innerHTML = `
-        <div class="score-chip">技术 <b>${r.scores.tech}</b></div>
-        <div class="score-chip">表达 <b>${r.scores.expr}</b></div>
-        <div class="score-chip">深度 <b>${r.scores.depth}</b></div>
-        <div class="score-chip">边界 <b>${r.scores.edge}</b></div>
-        <div class="score-chip">复盘 <b>${r.scores.reflect}</b></div>
-        <div class="score-chip">总分 <b>${r.total}</b></div>`;
+        <div class="score-chip">技术 <b>${num(r.scores.tech)}</b></div>
+        <div class="score-chip">表达 <b>${num(r.scores.expr)}</b></div>
+        <div class="score-chip">深度 <b>${num(r.scores.depth)}</b></div>
+        <div class="score-chip">边界 <b>${num(r.scores.edge)}</b></div>
+        <div class="score-chip">复盘 <b>${num(r.scores.reflect)}</b></div>
+        <div class="score-chip">总分 <b>${num(r.total)}</b></div>`;
     }
     if (r.comment) $("iv-scores").insertAdjacentHTML("beforeend", `<div class="iv-comment">💬 ${esc(r.comment)}</div>`);
     if (r.finished) {
@@ -275,7 +260,49 @@ async function loadReview() {
     $("review-card").classList.add("hidden");
     $("review-empty").classList.remove("hidden");
   }
+  loadMastery(); // 掌握度区块（弱项优先，默认收起）
 }
+
+// ============ 掌握度（知识点 23 项，弱项优先） ============
+async function loadMastery() {
+  const r = await window.kanban.getMastery();
+  if (!r?.ok || !r.mastery) return;
+  const mastery = r.mastery || [];
+  const weak = r.weak || mastery.filter((k) => k.score < 50).slice(0, 5);
+  const weakCount = r.stats?.weakCount ?? mastery.filter((k) => k.score < 50).length;
+  const weakSpan = $("mastery-weak-count");
+  if (weakSpan) weakSpan.textContent = weakCount;
+  const weakBox = $("mastery-weak");
+  if (weakBox) {
+    weakBox.innerHTML = weak.length
+      ? `<h4 class="mastery-sub">🔥 弱项优先（${weakCount} 个）</h4>` + weak.map(masteryBar).join("")
+      : `<div class="mastery-none">🎉 暂无弱项，继续保持</div>`;
+  }
+  const allBox = $("mastery-all");
+  if (allBox) {
+    allBox.innerHTML = `<h4 class="mastery-sub">🗺️ 全部知识点（${mastery.length} 项）</h4>` + mastery.map(masteryBar).join("");
+  }
+}
+
+// 单个知识点条形：颜色按 score（<50 红 / 50-70 黄 / >=70 绿），宽度按 score%
+function masteryBar(k) {
+  const score = Math.max(0, Math.min(100, Number(k.score) || 0));
+  const color = score < 50 ? "#d9534f" : score < 70 ? "#e0a800" : "#3a8d5a";
+  return `<div class="mastery-item" title="${esc(k.id)}">
+    <span class="mastery-name">${esc(k.title)}</span>
+    <span class="mastery-bar"><i style="width:${score}%;background:${color}"></i></span>
+    <span class="mastery-score" style="color:${color}">${score}</span>
+  </div>`;
+}
+
+$("mastery-toggle").addEventListener("click", () => {
+  const body = $("mastery-body");
+  const hidden = body.classList.toggle("hidden");
+  const toggle = $("mastery-toggle");
+  const count = $("mastery-weak-count")?.textContent || "-";
+  toggle.textContent = `📊 掌握度（${count} 弱项）${hidden ? "▸" : "▾"}`;
+  if (!hidden) loadMastery(); // 展开时刷新数据
+});
 
 function showReviewCard() {
   const card = reviewQueue[reviewIdx];
@@ -321,38 +348,85 @@ async function loadStudyPlan() {
   if (!r?.ok) return;
   const items = r.plan?.items || [];
   const list = $("study-list");
+  const doneToggle = $("study-done-toggle");
+  const doneList = $("study-done-list");
   if (!items.length) {
     list.innerHTML = '<div style="color:#7c7c7c;font-size:12px">未生成，点「✨ 从产出生成清单」</div>';
+    doneToggle.style.display = "none";
+    doneList.style.display = "none";
     return;
   }
-  // 按层级分组：必会 → 进阶 → 拓展（未标 level 的归必会）
-  const groups = [
-    { level: "必会", label: "🔴 必会 · 高频核心", cls: "lv-must", items: [] },
-    { level: "进阶", label: "🟡 进阶 · 原理深挖", cls: "lv-adv", items: [] },
-    { level: "拓展", label: "🟢 拓展 · 加分新方向", cls: "lv-ext", items: [] },
-  ];
-  for (const it of items) {
-    const g = groups.find((x) => x.level === (it.level || "必会")) || groups[0];
-    g.items.push(it);
+  // 已完成条目从主清单隐藏（避免无限膨胀），折叠在「📜 已完成」里可查看/恢复
+  const doneItems = items.filter((it) => it.done);
+  const visible = items.filter((it) => !it.done);
+  const doneCount = doneItems.length;
+  doneToggle.style.display = doneCount ? "" : "none";
+  if (doneCount) doneToggle.textContent = `📜 已完成条目（${doneCount}，点击${doneList.style.display === "none" ? "展开" : "收起"}）`;
+  if (doneList.style.display !== "none") {
+    doneList.innerHTML = renderPlanItems(doneItems, true);
+    bindPlanItems(doneList, true);
   }
+  if (!visible.length) {
+    list.innerHTML = '<div style="color:#3a8d5a;font-size:12px">🎉 全部学完！点「✨ 从产出生成清单」补充新知识点</div>';
+    doneToggle.style.display = doneCount ? "" : "none";
+    return;
+  }
+  list.innerHTML = renderPlanItems(visible, false);
+  bindPlanItems(list, false);
+}
+
+function renderPlanItems(items, isDone) {
+  const lvCls = { "必会": "lv-must", "进阶": "lv-adv", "拓展": "lv-ext" };
   const renderItem = (it) => `
     <div class="study-item ${it.done ? "done" : ""}" data-id="${it.id}">
       <input type="checkbox" ${it.done ? "checked" : ""} />
       <div style="flex:1">
-        <div class="s-topic">${esc(it.topic)} ${it.fromInterview ? '<span class="s-src">面试</span>' : ""}</div>
+        <div class="s-topic">${esc(it.topic)} ${it.level ? `<span class="s-lv ${lvCls[it.level] || "lv-must"}">${esc(it.level)}</span>` : ""} ${it.fromInterview ? '<span class="s-src">面试</span>' : ""}</div>
         <div class="s-why">${esc(it.why || "")}</div>
       </div>
       <button class="s-learn" data-id="${it.id}">${it.hasFile ? "📖 学习" : "💡 讲解"}</button>
       <span class="s-badge ${it.reviewed ? "reviewed" : ""}">${it.reviewed ? "已复盘" : "待学"}</span>
     </div>`;
-  list.innerHTML = groups
-    .filter((g) => g.items.length)
-    .map((g) => `
+  if (isDone) {
+    // 已完成折叠区：保持原层级分组（必会 → 进阶 → 拓展）
+    const groups = [
+      { level: "必会", label: "🔴 必会 · 高频核心", cls: "lv-must", items: [] },
+      { level: "进阶", label: "🟡 进阶 · 原理深挖", cls: "lv-adv", items: [] },
+      { level: "拓展", label: "🟢 拓展 · 加分新方向", cls: "lv-ext", items: [] },
+    ];
+    for (const it of items) {
+      const g = groups.find((x) => x.level === (it.level || "必会")) || groups[0];
+      g.items.push(it);
+    }
+    return groups
+      .filter((g) => g.items.length)
+      .map((g) => `
       <div class="study-group">
         <div class="sg-head ${g.cls}">${g.label} <span class="sg-count">${g.items.length}</span></div>
         ${g.items.map(renderItem).join("")}
       </div>`).join("");
-  list.querySelectorAll(".study-item").forEach((el) => {
+  }
+  // 主清单：按主题簇 grp 分组（未分类置最后）；组内保留 level 徽章
+  const byGrp = new Map();
+  for (const it of items) {
+    const g = String(it.grp || "").trim() || "未分类";
+    if (!byGrp.has(g)) byGrp.set(g, []);
+    byGrp.get(g).push(it);
+  }
+  if (byGrp.size > 1 && byGrp.has("未分类")) {
+    const uncat = byGrp.get("未分类");
+    byGrp.delete("未分类");
+    byGrp.set("未分类", uncat); // 未分类组放最后
+  }
+  return [...byGrp].map(([g, its]) => `
+      <div class="study-group" data-grp="${esc(g)}">
+        <div class="study-group-head" data-grp="${esc(g)}">📁 ${esc(g)}（${its.length}）</div>
+        <div class="study-group-body">${its.map(renderItem).join("")}</div>
+      </div>`).join("");
+}
+
+function bindPlanItems(root, isDone) {
+  root.querySelectorAll(".study-item").forEach((el) => {
     const cb = el.querySelector("input");
     cb.addEventListener("change", async (e) => {
       // 归并模式：勾选用于归并选择（不改变完成状态）
@@ -362,8 +436,8 @@ async function loadStudyPlan() {
         return;
       }
       const r = await window.kanban.studyCheck(el.dataset.id, e.target.checked);
-      // 本地更新状态（不整表重渲染，避免闪烁）
-      el.classList.toggle("done", e.target.checked);
+      // 勾选/取消后重新渲染（完成项移入/移出"已完成"折叠区）
+      loadStudyPlan();
       // 真白情感反馈（庆祝/安慰）+ 语音
       if (r?.emotion) {
         window.kanban.notify("🎀 真白", r.emotion);
@@ -372,15 +446,44 @@ async function loadStudyPlan() {
     });
     el.querySelector(".s-learn").addEventListener("click", () => showStudyDetail(el.dataset.id));
   });
+  // 主题簇组头：点击折叠/展开（状态存内存，重渲染后按状态恢复；默认展开）
+  root.querySelectorAll(".study-group-head").forEach((head) => {
+    const grp = head.dataset.grp;
+    const body = head.parentElement?.querySelector(".study-group-body");
+    if (!body) return;
+    const apply = () => {
+      if (groupCollapsed.has(grp)) { body.style.display = "none"; head.classList.add("collapsed"); }
+      else { body.style.display = ""; head.classList.remove("collapsed"); }
+    };
+    apply();
+    head.addEventListener("click", () => {
+      if (groupCollapsed.has(grp)) groupCollapsed.delete(grp);
+      else groupCollapsed.add(grp);
+      apply();
+    });
+  });
 }
+
+$("study-done-toggle")?.addEventListener("click", () => {
+  const dl = $("study-done-list");
+  const show = dl.style.display === "none";
+  dl.style.display = show ? "" : "none";
+  if (show) loadStudyPlan(); // 重新渲染以填充已完成列表
+  else $("study-done-toggle").textContent = `📜 已完成条目（${dl.querySelectorAll(".study-item").length}，点击展开）`;
+});
 
 // ============ 多条目归并（主题簇） ============
 let clusterMode = false;
+// 主题簇组折叠状态（内存变量：仅影响主清单 visible 区渲染，默认展开）
+const groupCollapsed = new Set();
 const clusterBtn = () => $("study-cluster-btn");
 
 function updateClusterBtn() {
   const n = document.querySelectorAll(".study-item.cluster-selected").length;
-  clusterBtn().textContent = n >= 2 ? `🔗 归并(${n})` : "🔗 归并";
+  // 归并模式下保持「确认」语义；非归并模式显示普通归并入口
+  clusterBtn().textContent = clusterMode
+    ? (n >= 2 ? `✅ 确认归并(${n})` : "✅ 确认归并")
+    : (n >= 2 ? `🔗 归并(${n})` : "🔗 归并");
 }
 
 clusterBtn().addEventListener("click", async () => {
@@ -389,10 +492,13 @@ clusterBtn().addEventListener("click", async () => {
     clusterMode = true;
     clusterBtn().textContent = "✅ 确认归并";
     clusterBtn().classList.add("cluster-active");
-    // 提示 + 清空之前选择
+    // 清空之前选择：只清 cluster-selected 视觉类，不动 checkbox 勾选态
+    // （已完成条目的勾选显示是完成态，退出模式时由 loadStudyPlan() 重渲染统一恢复）
     document.querySelectorAll(".study-item.cluster-selected").forEach((el) => el.classList.remove("cluster-selected"));
-    document.querySelectorAll(".study-item input").forEach((cb) => { cb.checked = false; });
-    window.kanban.notify("🔗 归并模式", "勾选 2+ 个相关条目（如 MySQL底层/B+树/回表）后点「确认归并」");
+    // 自动展开已完成折叠区，让已完成条目也能参与归并选择
+    $("study-done-list").style.display = "";
+    loadStudyPlan();
+    window.kanban.notify("🔗 归并模式", "勾选=归并选择，不会标记完成；已完成条目已展开，也可选入归并");
     return;
   }
   // 确认归并
@@ -403,6 +509,8 @@ clusterBtn().addEventListener("click", async () => {
   clusterBtn().textContent = "🔗 归并";
   clusterBtn().classList.remove("cluster-active");
   document.querySelectorAll(".study-item.cluster-selected").forEach((el) => el.classList.remove("cluster-selected"));
+  // 重渲染：恢复主清单与已完成区的 checkbox 正确显示（已完成条目重新显示为勾选态）
+  loadStudyPlan();
   // 弹层展示归并结果
   await showClusterResult(ids);
 });
@@ -424,6 +532,7 @@ async function showClusterResult(ids) {
     $("sd-modal-title").textContent = "🔗 " + name;
     studyDetailCache[sdCurrentId] = { content: merged, topic: name };
     sdBody().innerHTML = renderMd(merged);
+    buildToc(); // 锚点目录（归并版）
     sdBody().scrollTop = 0;
     // 提示存档位置
     if (r?.saved) {
@@ -450,6 +559,7 @@ async function showStudyDetail(id) {
     if (studyDetailCache[id]?.content) {
       $("sd-modal-title").textContent = "📖 " + studyDetailCache[id].topic;
       sdBody().innerHTML = renderMd(studyDetailCache[id].content);
+      buildToc(); // 锚点目录
       sdBody().scrollTop = 0;
       return;
     }
@@ -459,6 +569,7 @@ async function showStudyDetail(id) {
       sdBody().scrollTop = sdBody().scrollHeight; // 生成中跟随最新内容
     });
     $("sd-modal-title").textContent = "📖 " + topic;
+    buildToc(); // 锚点目录（流式生成完成）
     // 生成完成：回到顶部（从头阅读，不留在末尾）
     sdBody().scrollTop = 0;
   } catch (e) {
@@ -500,6 +611,7 @@ async function askStudyDetail() {
     const topic = studyDetailCache[sdCurrentId]?.topic || "讲解";
     studyDetailCache[sdCurrentId] = { content: base + `\n\n## 💬 追问：${question}\n\n` + extra, topic };
     sdBody().innerHTML = renderMd(studyDetailCache[sdCurrentId].content);
+    buildToc(); // 锚点目录（含新追问章节）
     sdBody().scrollTop = sdBody().scrollHeight; // 停留在补充处
   } catch (e) {
     const box = document.createElement("div");
@@ -547,6 +659,7 @@ async function consolidateStudyDetail() {
     studyDetailCache[sdCurrentId] = { content: merged, topic };
     $("sd-modal-title").textContent = "📖 " + topic + "（已整理）";
     sdBody().innerHTML = renderMd(merged);
+    buildToc(); // 锚点目录（整理版）
     sdBody().scrollTop = 0; // 从头阅读整理版
   } catch (e) {
     const box = document.createElement("div");
@@ -586,6 +699,54 @@ sdOverlay().addEventListener("click", (e) => {
 });
 
 // 轻量 Markdown 渲染：标题/代码块/列表/表格/引用/加粗/斜体/行内代码/分隔线
+let tocSeq = 0; // 锚点 id 计数器（讲解内容标题用）
+
+/**
+ * 构建讲解锚点目录：扫描弹层内的标题（.sd-h）与追问块（.sd-ask-q），
+ * 生成可点击 chips（横向滚动），点击平滑滚动定位 + 高亮闪烁
+ */
+function buildToc() {
+  const body = sdBody();
+  const toc = $("sd-toc");
+  if (!body || !toc) return;
+  const items = [];
+  body.querySelectorAll(".sd-h, .sd-ask-q").forEach((el) => {
+    if (!el.id) { tocSeq++; el.id = `sd-anchor-${tocSeq}`; }
+    const isQ = el.classList.contains("sd-ask-q");
+    const hl = isQ ? 1 : Number(el.dataset.hl || 1);
+    let text = (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 26);
+    if (isQ) text = text.replace(/^💬\s*追问[：:]\s*/, ""); // 目录已有 💬 图标，去掉前缀
+    items.push({ id: el.id, text, hl, q: isQ });
+  });
+  if (items.length <= 1) {
+    toc.classList.add("hidden");
+    toc.innerHTML = "";
+    return;
+  }
+  toc.classList.remove("hidden");
+  // 滚轮横向滚动（chips 横向容器用滚轮滚动，绑定一次）
+  if (!toc.dataset.wheelBound) {
+    toc.dataset.wheelBound = "1";
+    toc.addEventListener("wheel", (e) => {
+      if (e.deltaY && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        toc.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }
+    }, { passive: false });
+  }
+  toc.innerHTML = items.map((it) => `
+    <button class="sd-toc-item" data-target="${it.id}" data-hl="${it.hl}" title="${esc(it.text)}">${it.q ? "💬 " : ""}${esc(it.text)}</button>`).join("");
+  toc.querySelectorAll(".sd-toc-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = document.getElementById(btn.dataset.target);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      target.classList.add("sd-anchor-flash");
+      setTimeout(() => target.classList.remove("sd-anchor-flash"), 1600);
+    });
+  });
+}
+
 function renderMd(md) {
   const lines = String(md || "").split("\n");
   let html = "";
@@ -632,9 +793,15 @@ function renderMd(md) {
     if (!t) { html += "<div class='sd-blank'></div>"; continue; }
     // 分隔线
     if (/^(-{3,}|\*{3,})$/.test(t)) { html += "<hr class='sd-hr'>"; continue; }
-    // 标题
+    // 标题（带层级 data-hl + 锚点 id，供目录导航跳转）
     const h = t.match(/^(#{1,4})\s+(.*)$/);
-    if (h) { html += `<h4>${inlineMd(h[2])}</h4>`; continue; }
+    if (h) {
+      const lv = h[1].length;
+      const tag = `h${Math.min(lv + 2, 5)}`; // h1→h3、h2→h4、h3/h4→h5
+      tocSeq++;
+      html += `<${tag} class="sd-h" data-hl="${lv <= 2 ? 1 : 2}" id="sd-anchor-${tocSeq}">${inlineMd(h[2])}</${tag}>`;
+      continue;
+    }
     // 列表
     if (/^[-*•]\s/.test(t)) { html += `<div class="sd-li">• ${inlineMd(t.replace(/^[-*•]\s/, ""))}</div>`; continue; }
     if (/^\d+\.\s/.test(t)) { html += `<div class="sd-li">${inlineMd(t)}</div>`; continue; }
@@ -649,20 +816,35 @@ function renderMd(md) {
 // 行内格式：**加粗** / *斜体* / `行内代码` / [文字](链接)
 function inlineMd(s) {
   const escaped = esc(s);
+  // 链接 href 二次净化：esc() 已把引号转成 &quot;，若直接拼进 href，浏览器解析时解码回引号 → 属性逃逸（XSS）。
+  // 这里清掉引号/尖括号类实体 + 截断长度，保证 href 内不再出现任何可闭合属性的字符。
+  const cleanHref = (u) => u.replace(/&quot;|&#34;|&#x22;|&#39;|&apos;|&lt;|&gt;|&#60;|&#62;/gi, "").slice(0, 2048);
   return escaped
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
     .replace(/`([^`]+)`/g, "<code class='sd-inline-code'>$1</code>")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_m, t, u) => `<a href="${cleanHref(u)}" target="_blank" rel="noopener">${t}</a>`);
 }
 
 $("study-gen").addEventListener("click", async () => {
   $("study-gen").disabled = true;
   $("study-gen").textContent = "生成中...";
-  await window.kanban.studyGenerate();
+  const r = await window.kanban.studyGenerate();
   loadStudyPlan();
   $("study-gen").disabled = false;
   $("study-gen").textContent = "✨ 从产出生成清单";
+  // 反馈生成结果：新增 N 条 / 全部与现有清单重复
+  const p = r?.plan;
+  if (p?.error) {
+    window.kanban.notify("✨ 生成清单", `生成失败：${p.error}`);
+  } else if (p?.addedCount > 0) {
+    window.kanban.notify("✨ 生成清单", `已新增 ${p.addedCount} 个知识点${(p.skippedSimilar || p.skippedExact) ? `，${(p.skippedSimilar || 0) + (p.skippedExact || 0)} 条与现有重复已跳过` : ""}`);
+  } else {
+    const dup = (p?.skippedSimilar || 0) + (p?.skippedExact || 0);
+    window.kanban.notify("✨ 生成清单", dup > 0
+      ? `本次提炼 ${dup} 条知识点全部与现有清单重复，已跳过（清单已覆盖这些考点，无需膨胀）`
+      : "未提炼到新知识点");
+  }
 });
 
 // ============ 面试实录：被问住的知识点入清单 ============
@@ -832,6 +1014,8 @@ async function loadCrawlData() {
         </div>`).join("") || '<div style="color:#7c7c7c;font-size:12px">暂无调用记录</div>';
     }
   } catch { /* ignore */ }
+  // 自动巡检配置（开关/频率/状态）
+  loadPatrolConfig();
   // 面试历史
   try {
     const h = await window.kanban.interviewHistory();
@@ -852,6 +1036,72 @@ $("crawl-run").addEventListener("click", async () => {
   $("crawl-progress").textContent = "🔍 爬取已启动...";
 });
 $("crawl-output").addEventListener("click", () => window.kanban.openOutput());
+
+// ============ 自动巡检设置 ============
+async function loadPatrolConfig() {
+  try {
+    const r = await window.kanban.patrolConfig();
+    if (!r?.ok) { $("patrol-status").textContent = "⚠️ " + (r?.error || "读取失败"); return; }
+    const sel = $("patrol-interval");
+    $("patrol-enabled").checked = !!r.enabled;
+    sel.value = String(r.intervalMin);
+    if (sel.value !== String(r.intervalMin)) { // 自定义频率不在预设下拉里 → 追加选项
+      const opt = document.createElement("option");
+      opt.value = String(r.intervalMin);
+      opt.textContent = `${r.intervalMin} 分钟`;
+      sel.appendChild(opt);
+      sel.value = String(r.intervalMin);
+    }
+    renderPatrolStatus(r);
+  } catch (e) {
+    $("patrol-status").textContent = "⚠️ " + String(e.message || e).slice(0, 60);
+  }
+}
+function renderPatrolStatus(cfg) {
+  const fmt = (ts) => (ts ? new Date(ts).toLocaleString("zh-CN", { hour12: false }) : "—");
+  const parts = [
+    `当前配置：${cfg.enabled ? "开启" : "关闭"} · 每 ${cfg.intervalMin} 分钟`,
+    `上次巡检：${fmt(cfg.lastRun)}`,
+    `下次巡检：${cfg.enabled && cfg.nextRun ? fmt(cfg.nextRun) : "—"}`,
+  ];
+  if (cfg.note) parts.push(`（${cfg.note}）`);
+  $("patrol-status").innerHTML = parts.join("　");
+}
+async function savePatrolConfig(patch, tip) {
+  try {
+    const r = await window.kanban.patrolConfig(patch);
+    if (!r?.ok) {
+      window.kanban.notify("🛰️ 自动巡检", "保存失败：" + (r?.error || "未知错误"));
+      loadPatrolConfig(); // 回滚到服务端实际配置
+      return;
+    }
+    renderPatrolStatus(r);
+    if (tip) window.kanban.notify("🛰️ 自动巡检", tip);
+  } catch (e) {
+    window.kanban.notify("🛰️ 自动巡检", "保存失败：" + String(e.message || e).slice(0, 60));
+    loadPatrolConfig();
+  }
+}
+$("patrol-enabled").addEventListener("change", () => {
+  savePatrolConfig({ enabled: $("patrol-enabled").checked }, $("patrol-enabled").checked ? "自动巡检已开启" : "自动巡检已关闭");
+});
+$("patrol-interval").addEventListener("change", () => {
+  savePatrolConfig({ intervalMin: parseInt($("patrol-interval").value, 10) }, `巡检频率已改为每 ${$("patrol-interval").value} 分钟`);
+});
+$("patrol-run").addEventListener("click", async () => {
+  try {
+    const r = await window.kanban.patrolRun();
+    if (r?.ok) {
+      $("patrol-run").textContent = "⏳ 已触发…";
+      setTimeout(() => { $("patrol-run").textContent = "🚀 立即巡检"; }, 2000);
+      window.kanban.notify("🛰️ 自动巡检", "已触发一次巡检，可在爬取产出/日志查看结果");
+    } else {
+      window.kanban.notify("🛰️ 自动巡检", "触发失败：" + (r?.error || "未知错误"));
+    }
+  } catch (e) {
+    window.kanban.notify("🛰️ 自动巡检", "触发失败：" + String(e.message || e).slice(0, 60));
+  }
+});
 
 // ============ 语音开关 ============
 let voiceOn = true;
@@ -961,13 +1211,25 @@ async function loadJobs() {
           <span>${STATUS_LABEL[job.status] || job.status}</span>
         </div>
         ${job.summary ? `<div class="job-summary">${esc(job.summary)}</div>` : ""}
+        ${job.jdText ? `<div class="job-jd" id="jd-${job.id}" hidden><pre>${esc(job.jdText)}</pre></div>` : ""}
         <div class="job-actions">
           ${job.applyUrl ? `<a class="job-link" href="${esc(safeUrl(job.applyUrl))}" target="_blank" rel="noopener">🔗 去投递</a>` : ""}
+          ${job.jdText ? `<button class="job-btn jd-toggle" data-id="${job.id}">📋 JD</button>` : ""}
           <button class="job-btn" data-id="${job.id}" data-status="ready">📮 已投递</button>
           <button class="job-btn" data-id="${job.id}" data-status="ready_bishi">✍️ 待笔试</button>
           <button class="job-btn" data-id="${job.id}" data-status="done">✅ 完成</button>
         </div>
       </div>`).join("");
+    // 📋 JD 展开/收起（jd_text 来自外部页面，渲染已 esc() 转义防 XSS）
+    document.querySelectorAll(".jd-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const box = document.getElementById(`jd-${btn.dataset.id}`);
+        if (!box) return;
+        const open = box.hidden;
+        box.hidden = !open;
+        btn.textContent = open ? "📕 收起" : "📋 JD";
+      });
+    });
     document.querySelectorAll(".job-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         await fetch("http://127.0.0.1:8899/api/jobs/status", {
@@ -1372,6 +1634,161 @@ async function loadZhenti() {
   }
 }
 
+// ============ 专项练习（牛客面试 TOP101） ============
+let ojCategory = "";
+
+async function loadOj() {
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/oj/problems?category=" + encodeURIComponent(ojCategory));
+    const j = await res.json();
+    const statusEl = $("oj-status");
+    const cats = $("oj-cats");
+    const list = $("oj-list");
+    if (!j.problems?.length) {
+      statusEl.textContent = "题库为空——点「🔄 更新题库」抓取牛客面试 TOP101（101 道高频算法题）";
+      cats.innerHTML = "";
+      list.innerHTML = "";
+      return;
+    }
+    statusEl.textContent = `📦 共 ${j.total} 道（${(j.byCategory || []).length} 个分类）· 免登录随时刷，点击题目直达牛客答题页`;
+    // 分类筛选 chips
+    cats.innerHTML = `<button class="oj-cat-chip" data-cat="" style="${!ojCategory ? activeChip : ""}">全部</button>` +
+      (j.byCategory || []).map((c) =>
+        `<button class="oj-cat-chip" data-cat="${esc(c.category)}" style="${ojCategory === c.category ? activeChip : ""}">${esc(c.category)} (${c.count})</button>`
+      ).join("");
+    document.querySelectorAll(".oj-cat-chip").forEach((btn) => {
+      btn.addEventListener("click", () => { ojCategory = btn.dataset.cat; loadOj(); });
+    });
+    // 题目列表
+    list.innerHTML = j.problems.map((p) => `
+      <div class="job-item" id="oj-${esc(p.bm_no)}">
+        <div class="job-head">
+          <span class="job-badge" style="background:rgba(109,79,216,.12);color:#5d48b8;">${esc(p.bm_no)}</span>
+          <b style="font-size:12px;">${esc(p.category)}</b>
+          <span class="job-title">${esc(p.title)}</span>
+        </div>
+        <div class="job-meta">
+          <span style="color:${diffColor(p.difficulty)}">${esc(p.difficulty || "—")}</span>
+          <span>通过 ${esc(p.people || "—")}</span>
+        </div>
+        <div class="job-actions">
+          <button class="job-btn oj-view" data-url="${esc(safeUrl(p.url))}" data-title="${esc(p.title)}" title="抓取题目内容到本地（缓存，二次查看秒开）">📖 看题</button>
+          <a class="job-link" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">✍️ 去刷题</a>
+        </div>
+      </div>`).join("");
+    // 看题：懒加载题目内容 → 内联展开（本地缓存）
+    document.querySelectorAll(".oj-view").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const item = btn.closest(".job-item");
+        const body = item.querySelector(".oj-body");
+        if (body) { body.remove(); return; } // 再点收起
+        btn.disabled = true;
+        btn.textContent = "⏳ 加载中…";
+        try {
+          const res = await fetch("http://127.0.0.1:8899/api/oj/detail?url=" + encodeURIComponent(btn.dataset.url));
+          const j = await res.json();
+          if (!j.ok) { alert("⚠️ " + (j.error || "抓取失败")); return; }
+          const samples = (() => { try { return JSON.parse(j.samples || "[]"); } catch { return []; } })();
+          const div = document.createElement("div");
+          div.className = "oj-body";
+          div.style.cssText = "padding:10px;margin:8px 0;background:rgba(109,79,216,.06);border:1px solid rgba(109,79,216,.18);border-radius:8px;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-all;";
+          let html = `<div style="color:#5d48b8;font-weight:bold;margin-bottom:4px;">📖 ${esc(btn.dataset.title)}${j.cached ? ' <span style="color:#8a87a8;font-weight:normal;">(本地缓存)</span>' : ""}</div>`;
+          if (j.meta) html += `<div style="color:#8a87a8;margin-bottom:6px;">${esc(j.meta)}</div>`;
+          html += `<div>${esc(j.content || "")}</div>`;
+          if (samples.length) {
+            html += `<div style="margin-top:8px;font-weight:bold;color:#5d48b8;">示例</div>`;
+            for (const s of samples) {
+              html += `<div style="margin:4px 0;">【${esc(s.title)}】`;
+              if (s.input) html += `<div style="color:#3a8d5a;">输入：${esc(s.input)}</div>`;
+              if (s.output) html += `<div style="color:#b07020;">输出：${esc(s.output)}</div>`;
+              if (s.note) html += `<div style="color:#8a87a8;">说明：${esc(s.note)}</div>`;
+              html += `</div>`;
+            }
+          }
+          html += `<div style="margin-top:8px;color:#8a87a8;font-size:11px;">看题不消耗牛客额度；去牛客在线答题可自测运行。</div>`;
+          div.innerHTML = html;
+          item.appendChild(div);
+        } catch (e) { alert("⚠️ " + e.message); }
+        finally { btn.disabled = false; btn.textContent = "📖 看题"; }
+      });
+    });
+  } catch (e) {
+    $("oj-status").textContent = "⚠️ " + e.message;
+  }
+}
+
+const activeChip = "background:linear-gradient(135deg,#8a5adc,#6d4fd8);color:#fff;";
+function diffColor(d) {
+  if (!d) return "#8a87a8";
+  if (d.includes("入门")) return "#3a8d5a";
+  if (d.includes("简单")) return "#3a8d5a";
+  if (d.includes("中等")) return "#b07020";
+  return "#c93a3f";
+}
+
+$("oj-collect-btn")?.addEventListener("click", async () => {
+  const btn = $("oj-collect-btn");
+  btn.disabled = true;
+  btn.textContent = "⏳ 更新题库中（约 10s）…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/oj/collect", { method: "POST" });
+    const j = await res.json();
+    $("oj-status").textContent = j.ok ? `✅ 更新完成：共 ${j.total} 道（新增 ${j.added}，更新 ${j.updated}）` : "⚠️ " + (j.error || "更新失败");
+    loadOj();
+  } catch (e) {
+    $("oj-status").textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔄 更新题库";
+  }
+});
+
+// 全部下载：SSE 进度流（101 道题干/示例落本地，串行防反爬）
+$("oj-download-btn")?.addEventListener("click", async () => {
+  const btn = $("oj-download-btn");
+  const status = $("oj-status");
+  btn.disabled = true;
+  btn.textContent = "⬇️ 下载中…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/oj/collect-all-stream");
+    if (!res.ok || !res.body) throw new Error("下载流启动失败");
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const evt = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        for (const line of evt.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            const j = JSON.parse(line.slice(5).trim());
+            if (j.type === "progress") {
+              status.textContent = `⬇️ 正在下载 ${j.done}/${j.total}：${esc(j.title || "")}`;
+            } else if (j.type === "done") {
+              status.textContent = j.allCached
+                ? "✅ 全部题目已在本地缓存"
+                : `✅ 下载完成：${j.done}/${j.total} 道（失败 ${j.failed}）——离线可看`;
+              loadOj();
+            } else if (j.type === "error") {
+              status.textContent = "⚠️ " + (j.error || "下载失败");
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    }
+  } catch (e) {
+    status.textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "⬇️ 全部下载";
+  }
+});
+
 $("zhenti-collect-btn")?.addEventListener("click", async () => {
   const btn = $("zhenti-collect-btn");
   btn.disabled = true;
@@ -1425,6 +1842,75 @@ $("zhenti-cookie-btn")?.addEventListener("click", async () => {
   } catch (e) { alert("⚠️ " + e.message); }
 });
 
+// ============ 语音输入（🎤）：本地 whisper 转写 → 回填输入框 ============
+// 点击开始录音（16kHz 单声道，浏览器自动重采样）→ 再点停止 → IPC 送主进程转写
+let micStream = null, micCtx = null, micSource = null, micProc = null;
+let micChunks = [], micRecording = false, micAutoStop = null;
+
+async function stopRecording() {
+  micRecording = false;
+  clearTimeout(micAutoStop);
+  const micBtn = $("chat-mic");
+  micBtn.classList.remove("recording");
+  micBtn.textContent = "🎤";
+  micBtn.title = "语音输入（点击开始录音，再点停止；识别结果回填输入框）";
+  try { micSource?.disconnect(); micProc?.disconnect(); } catch { /* ignore */ }
+  try { micCtx?.close(); } catch { /* ignore */ }
+  if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+  if (!micChunks.length) return;
+  // 拼接 PCM → IPC 转写（首次会下载 whisper 模型 ~250MB，可能需 1-2 分钟）
+  const total = micChunks.reduce((n, c) => n + c.length, 0);
+  const pcm = new Float32Array(total);
+  let off = 0;
+  for (const c of micChunks) { pcm.set(c, off); off += c.length; }
+  micChunks = [];
+  micBtn.textContent = "⏳";
+  micBtn.disabled = true;
+  try {
+    const r = await window.kanban.speechToText(pcm);
+    if (r?.ok && r.text) {
+      $("chat-input").value = r.text;
+      $("chat-input").focus();
+    } else {
+      window.kanban.notify("语音输入", r?.error || "识别失败，请重试");
+    }
+  } catch (err) {
+    window.kanban.notify("语音输入", "调用失败: " + String(err?.message || err).slice(0, 80));
+  } finally {
+    micBtn.disabled = false;
+    micBtn.textContent = "🎤";
+  }
+}
+
+async function startRecording() {
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+    });
+  } catch (err) {
+    window.kanban.notify("语音输入", "麦克风不可用: " + (err?.name || "请检查系统麦克风权限"));
+    return;
+  }
+  micChunks = [];
+  micCtx = new AudioContext({ sampleRate: 16000 }); // 16k（whisper 期望采样率，浏览器自动重采样）
+  micSource = micCtx.createMediaStreamSource(micStream);
+  micProc = micCtx.createScriptProcessor(4096, 1, 1);
+  micProc.onaudioprocess = (e) => {
+    if (!micRecording) return;
+    micChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  };
+  micSource.connect(micProc);
+  micProc.connect(micCtx.destination);
+  micRecording = true;
+  const micBtn = $("chat-mic");
+  micBtn.classList.add("recording");
+  micBtn.textContent = "⏹";
+  micBtn.title = "点击停止录音";
+  micAutoStop = setTimeout(() => { if (micRecording) stopRecording(); }, 60000); // 60s 上限自动停
+}
+
+$("chat-mic").addEventListener("click", () => { micRecording ? stopRecording() : startRecording(); });
+
 // ============ 初始化 ============
 loadCrawlData();
 loadStudyPlan();
@@ -1433,6 +1919,7 @@ loadDocs(); // 官方文档清单
 loadProfileStatus(); // 个人主页存档状态
 loadKbStats(); // 知识库统计
 loadZhenti(); // 笔试真题
+loadOj(); // 专项练习 TOP101
 // 轮询爬取进度
 setInterval(loadCrawlData, 5000);
 // 轮询审批请求（agent 请求敏感操作时弹出确认条）

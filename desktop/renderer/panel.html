@@ -109,6 +109,15 @@
         </div>
       </div>
       <div id="review-empty" class="empty-hint">🎉 今日没有到期的复习卡片</div>
+
+      <!-- 掌握度区块（默认收起，点击展开——弱项优先） -->
+      <div class="mastery-box" id="mastery-box">
+        <button class="mastery-toggle" id="mastery-toggle" type="button">📊 掌握度（<span id="mastery-weak-count">-</span> 弱项）▸</button>
+        <div class="mastery-body hidden" id="mastery-body">
+          <div class="mastery-weak" id="mastery-weak"></div>
+          <div class="mastery-all" id="mastery-all"></div>
+        </div>
+      </div>
     </section>
 
     <!-- ========== 学习清单 Tab ========== -->
@@ -116,7 +125,7 @@
       <div class="study-toolbar">
         <button id="study-gen" class="primary">✨ 从产出生成清单</button>
         <button id="study-review" class="secondary">📝 复盘验证</button>
-        <button id="study-cluster-btn" class="secondary" title="勾选 2+ 个相关条目（如 MySQL底层/B+树/回表），归并成主题簇综合讲解并扩展关联考点">🔗 归并</button>
+        <button id="study-cluster-btn" class="secondary" title="归并模式：勾选 2+ 条目（不标记完成，含已完成条目）后确认，生成主题簇综合讲解">🔗 归并</button>
       </div>
       <div class="iv-notes-box">
         <div class="iv-notes-head">🎤 面试实录：刚被问住的知识点，一键加入必学清单</div>
@@ -127,6 +136,8 @@
         <div id="iv-notes-result" class="iv-notes-result"></div>
       </div>
       <div id="study-list" class="study-list"></div>
+      <button id="study-done-toggle" class="secondary" style="margin-top:10px;display:none;width:100%;font-size:11px;">📜 已完成条目（点击展开）</button>
+      <div id="study-done-list" class="study-list" style="display:none;opacity:.75;"></div>
       <div id="review-box" class="review-box hidden">
         <h4>复盘验证</h4>
         <div id="review-questions"></div>
@@ -145,6 +156,7 @@
           </div>
           <button id="sd-modal-close" class="sd-close" title="关闭">✕</button>
         </div>
+        <div id="sd-toc" class="sd-toc hidden"></div>
         <div class="sd-modal-body" id="sd-modal-body">加载中...</div>
         <div class="sd-modal-ask">
           <input id="sd-ask-input" type="text" placeholder="继续追问：如「常见 Hook 有哪些？useState 和 useReducer 的区别？」" />
@@ -158,6 +170,7 @@
     <section id="tab-chat" class="tab-panel">
       <div id="chat-log" class="chat-log"></div>
       <div class="chat-input-row">
+        <button id="chat-mic" title="语音输入（点击开始录音，再点停止；识别结果回填输入框）">🎤</button>
         <input id="chat-input" type="text" placeholder="问真白：找面经 / 讲题 / 开始模拟面试..." />
         <button id="chat-send">➤</button>
       </div>
@@ -179,6 +192,24 @@
       <h4>📊 运行监控（LLM 调用）</h4>
       <div id="obs-row" class="obs-row"></div>
       <div id="obs-list" class="obs-list"></div>
+      <div class="patrol-card">
+        <h4>🛰️ 自动巡检</h4>
+        <div class="patrol-row">
+          <label class="patrol-toggle" title="开启后按设定频率自动搜关注点新面经">
+            <input type="checkbox" id="patrol-enabled" />
+            <span>开启自动巡检</span>
+          </label>
+          <select id="patrol-interval" title="巡检频率（保存后立即生效）">
+            <option value="30">30 分钟</option>
+            <option value="60">1 小时</option>
+            <option value="120">2 小时</option>
+            <option value="240">4 小时</option>
+            <option value="480">8 小时</option>
+          </select>
+          <button id="patrol-run" class="secondary">🚀 立即巡检</button>
+        </div>
+        <div class="patrol-status" id="patrol-status">加载中…</div>
+      </div>
       <h4>最近产出</h4>
       <div id="file-list" class="file-list"></div>
       <h4>面试历史</h4>
@@ -228,6 +259,21 @@
         </div>
       </div>
       <div id="zhenti-list" class="jobs-list"></div>
+
+      <!-- 专项练习区块：牛客面试 TOP101（免登录、无时间窗，随时可刷） -->
+      <div class="jobs-setup" style="margin-top:14px;">
+        <div class="form-row">
+          <label>💻 专项练习（牛客面试 TOP101：101 道高频算法题，免登录随时刷）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button id="oj-collect-btn" class="secondary">🔄 更新题库</button>
+            <button id="oj-download-btn" class="secondary" title="把全部题目的题干/示例下载到本地（串行防反爬，约 5-8 分钟；下载后可离线看题）">⬇️ 全部下载</button>
+            <a id="oj-open-btn" href="https://www.nowcoder.com/exam/oj?tab=%E9%9D%A2%E8%AF%95TOP101" target="_blank" rel="noopener" style="padding:5px 10px;background:linear-gradient(135deg,#8a5adc,#6d4fd8);color:#fff;border-radius:8px;text-decoration:none;font-size:12px;">🚀 去牛客刷题</a>
+          </div>
+        </div>
+        <div class="resume-status" id="oj-status">专项题库（首次点"更新题库"抓取 101 道题）</div>
+        <div id="oj-cats" style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0;"></div>
+      </div>
+      <div id="oj-list" class="jobs-list"></div>
     </section>
 
     <!-- ========== 官方文档 Tab ========== -->

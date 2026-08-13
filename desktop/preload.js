@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld("kanban", {
   interviewHistory: () => ipcRenderer.invoke("widget:interview-history"),
   getStats: () => ipcRenderer.invoke("widget:stats"),
   getObservability: () => ipcRenderer.invoke("widget:observability"),
+  patrolConfig: (cfg) => ipcRenderer.invoke("widget:patrol-config", cfg || {}),
+  patrolRun: () => ipcRenderer.invoke("widget:patrol-run"),
   interviewNotes: (topics) => ipcRenderer.invoke("widget:interview-notes", { topics }),
   studyDetail: (id) => ipcRenderer.invoke("widget:study-detail", { id }),
   studyDetailStream: (id, onChunk) => {
@@ -112,6 +114,7 @@ contextBridge.exposeInMainWorld("kanban", {
   // 复习
   reviewDue: () => ipcRenderer.invoke("review:due"),
   reviewSubmit: (id, rating) => ipcRenderer.invoke("review:submit", { id, rating }),
+  getMastery: () => ipcRenderer.invoke("widget:mastery"),
   runDiscover: () => ipcRenderer.invoke("widget:run-discover"),
   quit: () => ipcRenderer.invoke("window:quit"),
   openOutput: () => ipcRenderer.invoke("window:open-output"),
@@ -119,6 +122,9 @@ contextBridge.exposeInMainWorld("kanban", {
   togglePanel: () => ipcRenderer.invoke("window:toggle-panel"),
   setIgnoreMouse: (ignore) => ipcRenderer.invoke("window:set-ignore", { ignore }),
   speak: (text) => ipcRenderer.invoke("window:speak", { text }),
+  playScene: (scene) => ipcRenderer.invoke("window:play-scene", { scene }),
+  parseResumeFile: (name, data) => ipcRenderer.invoke("resume:parse-file", { name, data }),
+  speechToText: (audio) => ipcRenderer.invoke("speech:transcribe", { audio }),
   setVoiceEnabled: (on) => { voiceEnabled = !!on; },
   isVoiceEnabled: () => voiceEnabled,
   setPanelState: (open) => ipcRenderer.invoke("window:panel-state", { open }),

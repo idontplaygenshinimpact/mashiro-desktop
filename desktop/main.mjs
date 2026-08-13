@@ -42,6 +42,20 @@ function ensureWidgetServer() {
 // 持续守护：每 30 秒探测，挂了自动重启
 setInterval(ensureWidgetServer, 30000);
 
+// 退出时清理：杀 widget 数据服务 + 其拉起的爬虫进程（用户期望"退出桌宠=全部停止"）
+function cleanupWidget() {
+  try {
+    spawnSync(
+      "powershell",
+      ["-NoProfile", "-Command",
+        "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match '(widget|discover)\\.mjs' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"],
+      { windowsHide: true, timeout: 15000, stdio: "ignore" }
+    );
+    console.log("[kanban] 已停止后台服务与爬虫进程");
+  } catch { /* ignore */ }
+}
+app.on("before-quit", () => { cleanupWidget(); });
+
 // ---------- 托盘图标（用字符画生成简单图标） ----------
 function createTrayIcon() {
   // 生成一个 16x16 的图标：紫色圆点 + 白边，表示"看板娘在线"
@@ -187,6 +201,9 @@ ipcMain.handle("widget:study-plan", () => widgetGet("/api/study-plan"));
 ipcMain.handle("widget:interview-history", () => widgetGet("/api/interview/history"));
 ipcMain.handle("widget:stats", () => widgetGet("/api/stats"));
 ipcMain.handle("widget:observability", () => widgetGet("/api/observability"));
+// 自动巡检配置：无参数 GET 读取，有参数 POST 修改（即时重排定时器）
+ipcMain.handle("widget:patrol-config", (e, cfg) => (cfg && Object.keys(cfg).length ? widgetPost("/api/patrol-config", cfg) : widgetGet("/api/patrol-config")));
+ipcMain.handle("widget:patrol-run", () => widgetPost("/api/patrol-run", {}));
 ipcMain.handle("widget:interview-notes", (e, { topics }) => widgetPost("/api/interview-notes", { topics }));
 ipcMain.handle("widget:study-detail", (e, { id }) => widgetGet(`/api/study-detail?id=${encodeURIComponent(id)}`));
 // 流式讲解：main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）
@@ -322,8 +339,9 @@ ipcMain.handle("interview:answer", (e, { answer }) => widgetPost("/api/interview
 ipcMain.handle("interview:end", () => widgetPost("/api/interview/end", {}));
 
 // 复习转发
-ipcMain.handle("review:due", () => widgetGet("/api/review/due"));
-ipcMain.handle("review:submit", (e, { id, rating }) => widgetPost("/api/review/submit", { id, rating }));
+        ipcMain.handle("review:due", () => widgetGet("/api/review/due"));
+        ipcMain.handle("review:submit", (e, { id, rating }) => widgetPost("/api/review/submit", { id, rating }));
+        ipcMain.handle("widget:mastery", () => widgetGet("/api/mastery"));
 
 ipcMain.handle("widget:notify", async (e, { title, message }) => {
   // 系统通知（复用 node-notifier 同款 toast）
@@ -369,6 +387,69 @@ async function getTtsEdge() {
   }
   return ttsEdge;
 }
+// 固定语音包场景播放（无文本事件：点击/托盘等 → 直接播预设日语台词，零延迟）
+ipcMain.handle("window:play-scene", async (e, { scene }) => {
+  try {
+    const vp = await import("./voice-pack.mjs");
+    const r = vp.playScene(String(scene || ""));
+    return r || { ok: false };
+  } catch {
+    return { ok: false };
+  }
+});
+// 语音输入：本地 whisper 转写（面板 🎤 → Float32Array → 文本）
+ipcMain.handle("speech:transcribe", async (e, { audio }) => {
+  try {
+    const { transcribeAudio } = await import("../lib/speech.mjs");
+    return await transcribeAudio(audio);
+  } catch (err) {
+    return { ok: false, error: `语音模块异常: ${String(err?.message || err).slice(0, 120)}` };
+  }
+});
+
+// 简历文件解析（PDF/docx）：Node 端本地解析
+// 原因：浏览器端 bare specifier import + CDN worker 不可靠（无网络/被墙即失败）
+ipcMain.handle("resume:parse-file", async (e, { name, data }) => {
+  const n = String(name || "");
+  const ext = n.slice(n.lastIndexOf(".")).toLowerCase();
+  try {
+    if (ext === ".pdf") {
+      const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      const { pathToFileURL } = await import("node:url");
+      // 中文 PDF 需要 cmap 数据（CID 字体映射）；Node 端要求 file:// URL（含尾斜杠）
+      const pdfjsRoot = path.join(import.meta.dirname, "..", "node_modules", "pdfjs-dist");
+      const pdf = await getDocument({
+        data: new Uint8Array(data),
+        cMapUrl: pathToFileURL(path.join(pdfjsRoot, "cmaps") + path.sep).toString(),
+        cMapPacked: true,
+        standardFontDataUrl: pathToFileURL(path.join(pdfjsRoot, "standard_fonts") + path.sep).toString(),
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        disableFontFace: true,
+      }).promise;
+      const pages = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        pages.push(content.items.map((it) => (it.str || "")).filter(Boolean).join(" "));
+      }
+      const text = pages.join("\n").trim();
+      if (!text) return { ok: false, error: "PDF 没有可提取文本，可能是图片型 PDF，请复制文本粘贴" };
+      return { ok: true, text, msg: `已解析 PDF 简历（${pdf.numPages} 页）` };
+    }
+    if (ext === ".docx") {
+      const mammoth = (await import("mammoth")).default;
+      const result = await mammoth.extractRawText({ buffer: Buffer.from(data) });
+      const text = (result.value || "").trim();
+      if (!text) return { ok: false, error: "Word 文件中没有可分析文本" };
+      return { ok: true, text, msg: "已解析 Word 简历" };
+    }
+    return { ok: false, error: "unsupported" };
+  } catch (err) {
+    return { ok: false, error: `解析失败: ${String(err?.message || err).slice(0, 120)}` };
+  }
+});
+
 ipcMain.handle("window:speak", async (e, { text }) => {
   if (!text || !String(text).trim()) return { ok: false };
   // 优先 edge-tts（神经语音）
