@@ -123,6 +123,29 @@ test("answerReview：答对 → 已掌握", async () => {
   assert.ok(memory.getMastered().some((m) => m.topic === "闭包"));
 });
 
+test("answerReview：答错自动建复习卡（question=verify_question）", async () => {
+  addPlanItems([{ topic: "事件循环", why: "w", source: "s", verify_question: "讲一下事件循环", level: "必会" }]);
+  const item = getPlan().items[0];
+  setLlmResponses('{"results":[{"topic":"事件循环","verdict":"错","comment":"浅","reference":"要点A"}]}');
+  await answerReview([{ id: item.id, answer: "我的回答" }]);
+  const { review } = await import("../lib/review.mjs");
+  const cards = review.loadCards().cards.filter((c) => c.topic === "事件循环");
+  assert.equal(cards.length, 1, "答错建复习卡（同 topic 合并为一张）");
+  assert.equal(cards[0].question, "讲一下事件循环", "复习卡 question 用 verify_question");
+  assert.equal(cards[0].answer, "要点A", "复习卡 answer 用参考答案");
+});
+
+test("answerReview：部分对也建复习卡", async () => {
+  addPlanItems([{ topic: "事件循环", why: "w", source: "s", verify_question: "讲一下事件循环", level: "必会" }]);
+  const item = getPlan().items[0];
+  setLlmResponses('{"results":[{"topic":"事件循环","verdict":"部分对","comment":"缺核心","reference":"要点B"}]}');
+  await answerReview([{ id: item.id, answer: "我的回答" }]);
+  const { review } = await import("../lib/review.mjs");
+  const card = review.loadCards().cards.find((c) => c.topic === "事件循环");
+  assert.ok(card, "部分对自动建复习卡");
+  assert.equal(card.question, "讲一下事件循环");
+});
+
 test("answerReview：无答案 → 错误", async () => {
   const r = await answerReview([]);
   assert.equal(r.ok, false);

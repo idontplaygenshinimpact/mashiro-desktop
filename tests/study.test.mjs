@@ -46,10 +46,11 @@ test("checkItem 勾选完成：doneAt + 自动建复习卡", async () => {
   assert.equal(r.ok, true);
   assert.equal(r.item.done, true);
   assert.ok(r.item.doneAt);
-  // 学习闭环：自动建 FSRS 复习卡
+  // 学习闭环：自动建 FSRS 复习卡（新卡有 1 天首复习缓冲，不进到期队列，直接查卡片表）
   const { review } = await import("../lib/review.mjs");
-  const due = review.getDueCards();
-  assert.ok(due.some((c) => c.topic === item.topic), "勾选完成自动建复习卡");
+  const card = review.loadCards().cards.find((c) => c.topic === item.topic);
+  assert.ok(card, "勾选完成自动建复习卡");
+  assert.equal(card.answer, item.verify_question, "复习卡 answer 用 verify_question 兜底");
 });
 
 test("checkItem 取消勾选", () => {

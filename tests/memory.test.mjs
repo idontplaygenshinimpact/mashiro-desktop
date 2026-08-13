@@ -88,6 +88,30 @@ test("addWeakPoint 持久化(DB)", () => {
   assert.equal(row.fail_count, 1);
 });
 
+test("addWeakPoint 自动建复习卡（source=薄弱点，同 topic+question 去重）", async () => {
+  const { review } = await import("../lib/review.mjs"); // 预热模块，保证后续动态 import 立即 resolve
+  memory.addWeakPoint("事件循环", "复盘验证");
+  await new Promise((r) => setImmediate(r)); // 等 fire-and-forget 复习卡创建完成
+  const cards = review.loadCards().cards.filter((c) => c.topic === "事件循环");
+  assert.equal(cards.length, 1, "薄弱点自动建复习卡");
+  assert.equal(cards[0].source, "薄弱点");
+  assert.equal(cards[0].question, "事件循环", "无原题时 question 回退 topic");
+  // 再次记录同主题：不重复建卡（同 topic+question）
+  memory.addWeakPoint("事件循环", "复盘验证");
+  await new Promise((r) => setImmediate(r));
+  assert.equal(review.loadCards().cards.filter((c) => c.topic === "事件循环").length, 1, "同 topic+question 去重");
+});
+
+test("addWeakPoint 带原题/答案的复习卡", async () => {
+  const { review } = await import("../lib/review.mjs");
+  memory.addWeakPoint("防抖节流", "模拟面试", "agent", { question: "讲讲防抖", answer: "闭包定时器" });
+  await new Promise((r) => setImmediate(r));
+  const card = review.loadCards().cards.find((c) => c.topic === "防抖节流");
+  assert.ok(card, "薄弱点自动建复习卡");
+  assert.equal(card.question, "讲讲防抖");
+  assert.equal(card.answer, "闭包定时器");
+});
+
 test("getTrustedWeakPoints 过滤 untrusted", () => {
   memory.addWeakPoint("可信点", "x", "agent");
   memory.addWeakPoint("不可信点", "x", "untrusted");

@@ -21,17 +21,18 @@ test("addCard 新建卡片并持久化", () => {
   const card = review.addCard({ topic: "事件循环", question: "讲一下事件循环", answer: "答案", source: "测试" });
   assert.ok(card.id);
   assert.equal(card.topic, "事件循环");
-  // 重新读（getDueCards 内部 loadCards 自 DB）
-  const due = review.getDueCards();
-  assert.equal(due.length, 1);
-  assert.equal(due[0].topic, "事件循环");
+  // 重新读（loadCards 自 DB）
+  const cards = review.loadCards().cards;
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].topic, "事件循环");
 });
 
 test("addCard 同 topic 更新不重复建卡", () => {
   review.addCard({ topic: "闭包", question: "q1" });
   review.addCard({ topic: "闭包", question: "q2" });
-  assert.equal(review.getDueCards().length, 1);
-  assert.equal(review.getDueCards()[0].question, "q2");
+  const cards = review.loadCards().cards;
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].question, "q2");
 });
 
 test("reviewCard 不存在返回错误", () => {
@@ -64,18 +65,20 @@ test("reviewCard(0) Again：不清除薄弱点", () => {
   assert.equal(memory.getWeakPoints().length, 1);
 });
 
-test("getStats 统计 total/due", () => {
+test("getStats 统计 total/due（新卡有 1 天缓冲不进到期）", () => {
   review.addCard({ topic: "A", question: "q" });
   review.addCard({ topic: "B", question: "q" });
   const stats = review.getStats();
   assert.equal(stats.total, 2);
-  assert.ok(stats.due >= 2, "新卡都在到期列表");
+  assert.equal(stats.due, 0, "新卡创建当天不进到期队列");
   assert.equal(typeof stats.mastered, "number");
   assert.equal(typeof stats.learning, "number");
 });
 
-test("getDailySession 返回到期卡片子集", () => {
+test("getDailySession 返回到期卡片子集（越过首复习缓冲）", async () => {
   for (let i = 0; i < 5; i++) review.addCard({ topic: `点${i}`, question: "q" });
+  // 回拨创建时间到 2 天前，使其越过 1 天首复习缓冲
+  db.prepare("UPDATE review_cards SET created_at = ?").run(Date.now() - 2 * 24 * 60 * 60 * 1000);
   const session = review.getDailySession(3);
   assert.equal(session.length, 3);
 });
@@ -84,4 +87,24 @@ test("getStats 空库不崩溃", () => {
   const stats = review.getStats();
   assert.equal(stats.total, 0);
   assert.equal(stats.due, 0);
+});
+
+test("getDueCards：新卡 1 天缓冲，创建超 1 天才到期", () => {
+  const card = review.addCard({ topic: "新卡", question: "q" });
+  // 刚创建：不进到期队列
+  assert.equal(review.getDueCards().length, 0);
+  // 回拨创建时间到 2 天前 → 到期
+  db.prepare("UPDATE review_cards SET created_at = ? WHERE id = ?").run(Date.now() - 2 * 24 * 60 * 60 * 1000, card.id);
+  const due = review.getDueCards();
+  assert.equal(due.length, 1);
+  assert.equal(due[0].topic, "新卡");
+});
+
+test("loadCards：history 记录复习次数", () => {
+  const card = review.addCard({ topic: "闭包", question: "q" });
+  assert.equal(review.loadCards().cards.find((c) => c.id === card.id).history.length, 0);
+  review.reviewCard(card.id, 2); // Good
+  review.reviewCard(card.id, 2); // Good
+  const c2 = review.loadCards().cards.find((c) => c.id === card.id);
+  assert.equal(c2.history.length, 2, "已复习 2 次");
 });

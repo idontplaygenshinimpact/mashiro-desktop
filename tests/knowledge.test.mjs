@@ -25,9 +25,24 @@ test("matchKp 关键词命中", () => {
   assert.equal(matchKp("原型链"), "js-prototype");
   assert.equal(matchKp("Webpack 配置"), "eng-build");
   assert.equal(matchKp("XSS 跨域 CORS"), "br-security");
-  assert.equal(matchKp("完全不相关的内容"), null);
+  // 兜底：无静态知识点命中 → 返回归一化后的主题自身（动态知识点）
+  assert.equal(matchKp("完全不相关的内容"), "完全不相关的内容");
   assert.equal(matchKp(""), null);
   assert.equal(matchKp(null), null);
+});
+
+test("matchKp 兜底：动态主题归一化（trim/小写/截断）+ recordKp 注册进掌握度", async () => {
+  // 归一化：小写 + trim
+  assert.equal(matchKp("  RAG 混合检索  "), "rag 混合检索");
+  // 截断到 60 字符
+  const long = "x".repeat(100);
+  assert.equal(matchKp(long), "x".repeat(60));
+  // 动态主题写入 kp_mastery（不再永远 50）
+  recordKp(matchKp("RAG 检索"), { correct: true });
+  const { db } = await import("../lib/db.mjs");
+  const row = db.prepare("SELECT * FROM kp_mastery WHERE topic=?").get("rag 检索");
+  assert.ok(row, "动态主题注册进 kp_mastery");
+  assert.equal(row.score, 58); // 50 + 8
 });
 
 test("recordKp 答对加分 / 答错扣分 / 边界", () => {
