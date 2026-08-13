@@ -1107,7 +1107,8 @@ $("patrol-run").addEventListener("click", async () => {
 let voiceOn = true;
 $("voice-btn").addEventListener("click", () => {
   voiceOn = !voiceOn;
-  window.kanban.setVoiceEnabled(voiceOn);
+  window.kanban.setVoiceEnabled(voiceOn);   // 面板本地语音（对话/复习反馈）
+  window.kanban.setGlobalVoice?.(voiceOn);  // 全局广播（桌宠同步静音）
   $("voice-btn").textContent = voiceOn ? "🔊" : "🔇";
 });
 $("refresh-btn").addEventListener("click", () => {
@@ -1578,6 +1579,7 @@ async function loadZhenti() {
         </div>
         <div class="job-actions">
           <a class="job-link" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">📝 去练习</a>
+          <button class="job-btn zhenti-fetch" data-id="${esc(p.test_id)}" title="登录态抓取完整题目（牛客账号，首次弹扫码窗口）">📖 抓题目</button>
           <button class="job-btn zhenti-plan" data-id="${esc(p.test_id)}" title="整套真题加入学习清单（练完用记错题回流）">➕ 入清单</button>
           <button class="job-btn zhenti-wrong" data-id="${esc(p.test_id)}" data-company="${esc(p.company)}" data-title="${esc(p.title)}" title="练习做错的题 → 入学习清单+复习卡">❌ 记错题</button>
         </div>

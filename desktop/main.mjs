@@ -397,6 +397,14 @@ ipcMain.handle("window:play-scene", async (e, { scene }) => {
     return { ok: false };
   }
 });
+// 语音全局开关：面板 🔊 切换 → 广播到所有窗口（桌宠 app.js 订阅同步静音/恢复）
+ipcMain.handle("voice:set", (e, enabled) => {
+  const on = !!enabled;
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w && !w.isDestroyed()) w.webContents.send("voice-changed", on);
+  }
+  return { ok: true, enabled: on };
+});
 // 语音输入：本地 whisper 转写（面板 🎤 → Float32Array → 文本）
 ipcMain.handle("speech:transcribe", async (e, { audio }) => {
   try {

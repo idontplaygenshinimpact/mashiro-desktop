@@ -127,6 +127,9 @@ contextBridge.exposeInMainWorld("kanban", {
   speechToText: (audio) => ipcRenderer.invoke("speech:transcribe", { audio }),
   setVoiceEnabled: (on) => { voiceEnabled = !!on; },
   isVoiceEnabled: () => voiceEnabled,
+  // 全局语音开关：面板切换 → main 广播 voice-changed 到所有窗口（桌宠同步静音）
+  setGlobalVoice: (enabled) => ipcRenderer.invoke("voice:set", enabled),
+  onVoiceChanged: (cb) => ipcRenderer.on("voice-changed", (e, enabled) => cb(!!enabled)),
   setPanelState: (open) => ipcRenderer.invoke("window:panel-state", { open }),
   fitWindow: (w, h) => ipcRenderer.invoke("window:fit", { w, h }),
   moveWindow: (x, y) => ipcRenderer.invoke("window:move", { x, y }),

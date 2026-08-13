@@ -112,9 +112,10 @@ canvas.addEventListener("pointerup", (e) => {
   }
 });
 
-// 双击角色 → 打开大面板（单击=人设反应，双击=面板）
+// 双击角色 → 打开大面板（单击=人设反应，双击=面板；双击会取消挂起的单击戳反应）
 let lastClickTs = 0;
 canvas.addEventListener("dblclick", (e) => {
+  clearTimeout(clickTimer); // 取消单击的延迟语音/气泡
   window.kanban.togglePanel();
 });
 
@@ -176,6 +177,10 @@ const MASHIRO_REACTIONS = {
 };
 
 let lastTapTs = 0, tapCount = 0, voiceOn = true;
+let clickTimer = null; // 单击反应延迟器：等待确认不是双击
+
+// 订阅全局语音开关（面板 🔊 切换 → main 广播 → 桌宠同步静音/恢复）
+window.kanban?.onVoiceChanged?.((enabled) => { voiceOn = !!enabled; });
 
 async function handleClick(e) {
   // 命中部位检测
@@ -200,9 +205,13 @@ async function handleClick(e) {
     const pool = MASHIRO_REACTIONS[hitArea] || MASHIRO_REACTIONS.default;
     reaction = pool[Math.floor(Math.random() * pool.length)];
   }
-  showBubble(reaction, 5000);
-  // 点击 = 真白被戳 → 播固定日语台词（ん？なに？），零延迟
-  if (voiceOn) window.kanban.playScene("click");
+
+  // 延迟触发：280ms 内若出现第二次点击（双击开面板），取消戳反应，避免误语音
+  clearTimeout(clickTimer);
+  clickTimer = setTimeout(() => {
+    showBubble(reaction, 5000);
+    if (voiceOn) window.kanban.playScene("click");
+  }, 280);
 }
 
 // ---------- 打开大面板 ----------
