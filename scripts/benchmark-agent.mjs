@@ -22,6 +22,19 @@ const { getPlan, addPlanItems, answerReview } = await import("../lib/study.mjs")
 const { startInterview, submitAnswer, endInterview } = await import("../lib/interview.mjs");
 const { db } = await import("../lib/db.mjs");
 const { getRecentTools } = await import("../lib/trace.mjs");
+const { getPendingApprovals, resolveApproval } = await import("../lib/permission.mjs");
+
+/** 模拟用户在面板批准 confirm 级工具的审批请求（deny-first 权限系统） */
+async function autoApproveDuring(task) {
+  const checker = setInterval(() => {
+    for (const a of getPendingApprovals()) resolveApproval(a.toolName, { allow: true, session: false });
+  }, 50);
+  try {
+    return await task();
+  } finally {
+    clearInterval(checker);
+  }
+}
 
 // 场景框架
 const scenarios = [];
@@ -102,7 +115,7 @@ scenario("语音稿分离：【语音】标记正确解析", async () => {
 scenario("闭环-面试实录：被问住的知识点 → 学习清单(必会) + 复习卡", async () => {
   await resetState();
   setLlmResponses('TOOLCALL:{"name":"record_interview_topics","arguments":"{\\"topics\\":[\\"事件循环\\",\\"综合能力\\"],\\"company\\":\\"字节\\"}"}', "记好啦。");
-  await chatWithAgent("面试被问住了事件循环");
+  await autoApproveDuring(() => chatWithAgent("面试被问住了事件循环"));
   const plan = getPlan();
   const inPlan = plan.items.some((i) => i.topic === "事件循环" && i.level === "必会");
   const pseudoSkipped = !plan.items.some((i) => i.topic === "综合能力");

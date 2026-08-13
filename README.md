@@ -256,6 +256,12 @@ COMPACT_KEEP_RECENT=4000   # 保留最近 N token 的完整消息
 
 ## 常见问题
 
+**Q：每次怎么启动？**
+双击 `D:\mianshi-agent\start-kanban.bat`（最小化启动 Electron 桌宠）。桌宠主进程会自动拉起后台数据服务（widget，端口 8899）并守护它，**不需要单独启动 widget**。若设置了开机自启（`shell:startup` 里的 `mianshi-kanban.bat`），平时开机即自动运行，无需手动操作。
+
+**Q：改完代码后功能没生效 / 面板报 "Not Found" / "is not valid JSON"？**
+运行中的 widget 是旧代码进程（桌宠一直没重启）。**每次代码改动后请重启桌宠**：托盘退出或 `Get-Process electron | Stop-Process -Force`，再双击 `start-kanban.bat`。验证是否新版：浏览器打开 `http://127.0.0.1:8899/api/learning`——返回 JSON 文档清单 = 新版；返回 `Not Found` = 旧进程，重启桌宠即可。
+
 **Q：桌宠不显示？**
 杀掉 electron 进程重启：`Get-Process electron | Stop-Process -Force`，再运行启动命令。
 
