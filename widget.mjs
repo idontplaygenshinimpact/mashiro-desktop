@@ -24,6 +24,7 @@ import * as learningApi from "./lib/learning.mjs";
 import * as ragApi from "./lib/rag.mjs";
 import * as zhentiApi from "./lib/zhenti.mjs";
 import * as ojApi from "./lib/oj.mjs";
+import * as rssApi from "./lib/rss.mjs";
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -281,6 +282,28 @@ async function checkJobDeadline() {
       `${upcoming.length} 个岗位即将截止/笔试：\n${lines.join("\n")}${upcoming.length > 5 ? `\n…等 ${upcoming.length} 个` : ""}`
     );
   } catch { /* ignore */ }
+}
+
+// ============ 每日技术资讯摘要（8:00-10:00 窗口内每天一次） ============
+
+async function checkRssDigest() {
+  const h = new Date().getHours();
+  if (h < 8 || h >= 10) return; // 只在早上 8-10 点窗口内摘要，避免半夜打扰
+  const today = rssApi.localToday();
+  const last = rssApi.getLastDigestAt();
+  if (last && rssApi.localToday(new Date(last)) === today) return; // 今天已摘要过（幂等门控）
+  try {
+    console.log("[widget] 开始今日技术资讯摘要…");
+    const r = await rssApi.runDailyDigest();
+    if (r.digest.length) {
+      const top3 = r.digest.slice(0, 3).map((d) => d.title.slice(0, 24)).join("\n");
+      await sendNotification("📰 今日技术资讯", `${top3}\n面板查看全部`);
+    } else {
+      console.log("[widget] 今日资讯摘要为空（各源无新条目）");
+    }
+  } catch (e) {
+    console.log(`[widget] 资讯摘要失败: ${String(e.message).slice(0, 80)}`);
+  }
 }
 
 // ============ HTTP 服务 ============
@@ -1511,6 +1534,59 @@ const server = createServer((req, res) => {
     }
     return;
   }
+  if (url.pathname === "/api/rss/digest") {
+    // 今日技术资讯摘要（读取，不触发抓取）
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({
+      ok: true,
+      today: rssApi.localToday(),
+      digest: rssApi.getDigest(),
+      lastDigestAt: rssApi.getLastDigestAt() || null,
+      feeds: rssApi.getFeeds().length,
+    }));
+    return;
+  }
+  if (url.pathname === "/api/rss/check" && req.method === "POST") {
+    // 手动触发：抓取 + LLM 摘要（同步等待结果返回给面板）
+    (async () => {
+      try {
+        const r = await rssApi.runDailyDigest();
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, ...r }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: String(e.message || e).slice(0, 200), digest: rssApi.getDigest(), lastDigestAt: rssApi.getLastDigestAt() || null }));
+      }
+    })();
+    return;
+  }
+  if (url.pathname === "/api/rss/config") {
+    // feed 列表：GET 读取，POST 修改（持久化到 settings）
+    if (req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, feeds: rssApi.getFeeds(), defaultFeeds: rssApi.DEFAULT_FEEDS }));
+      return;
+    }
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        try {
+          const { feeds } = JSON.parse(body || "{}");
+          const r = rssApi.setFeeds(feeds);
+          res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify(r));
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+    res.writeHead(405, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Method Not Allowed" }));
+    return;
+  }
   if (url.pathname === "/" || url.pathname === "/index.html") {
     // 最小状态页（健康检查/浏览器访问）：真实 UI 在 Electron 面板
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -1781,6 +1857,11 @@ registerTimer(checkReviewReminder, 60 * 1000); // 启动 1 分钟后先查一次
 // 每小时检查岗位截止/笔试（3 天内，9 点后 + 6 小时冷却）
 registerInterval(checkJobDeadline, 60 * 60 * 1000);
 registerTimer(checkJobDeadline, 3 * 60 * 1000); // 启动 3 分钟后先查一次
+// 每日技术资讯摘要：每 30 分钟 tick（8-10 点窗口 + 每天一次门控）；启动 5 分钟后 catch-up
+if (!DISABLE_BACKGROUND) {
+  registerInterval(checkRssDigest, 30 * 60 * 1000);
+  registerTimer(checkRssDigest, 5 * 60 * 1000);
+}
 
 // ---------- 每日自动岗位搜集（24h 门控：白天执行，距上次搜集 >24h 才跑；running 互斥防重叠） ----------
 let collectJobsRunning = false;

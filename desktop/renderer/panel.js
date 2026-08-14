@@ -13,6 +13,7 @@ function switchTab(name) {
   if (name === "crawl") loadCrawlData();
   if (name === "review") loadReview();
   if (name === "docs") loadDocs();
+  if (name === "rss") loadRss();
   if (name === "kb") loadKbStats();
   if (name === "profile") loadProfileStatus();
 }
@@ -1388,6 +1389,106 @@ document.getElementById("docs-check-btn")?.addEventListener("click", async () =>
   }
 });
 
+// ============ 每日技术资讯（RSS 摘要） ============
+async function loadRss() {
+  const list = $("rss-list");
+  const statusEl = $("rss-status");
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/rss/digest");
+    const j = await r.json();
+    const last = j.lastDigestAt ? new Date(j.lastDigestAt).toLocaleString("zh-CN", { hour12: false }) : "—";
+    statusEl.textContent = j.digest?.length
+      ? `📰 今日 ${j.digest.length} 条 · ${j.feeds ?? "?"} 个源 · 上次摘要 ${last}`
+      : `还没有今日摘要（${j.feeds ?? "?"} 个源）· 点「🔄 立即刷新」生成`;
+    if (!j.digest?.length) {
+      list.innerHTML = '<div class="empty-hint">暂无今日资讯，点「🔄 立即刷新」抓取并 AI 摘要</div>';
+      return;
+    }
+    list.innerHTML = j.digest.map((d) => `
+      <div class="job-item">
+        <div class="job-head">
+          <b style="font-size:12px;">${esc(d.title)}</b>
+          ${d.feed ? `<span class="job-badge">${esc(d.feed)}</span>` : ""}
+        </div>
+        <div class="job-meta">${esc(d.reason)}</div>
+        <div class="job-actions">
+          <a class="job-link" href="${esc(safeUrl(d.link))}" target="_blank" rel="noopener">🔗 阅读原文</a>
+        </div>
+      </div>`).join("");
+  } catch (e) {
+    statusEl.textContent = "⚠️ " + e.message;
+    list.innerHTML = `<div class="empty-hint">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+async function loadRssConfig() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/rss/config");
+    const j = await r.json();
+    $("rss-feeds-input").value = (j.feeds || []).join("\n");
+  } catch {
+    $("rss-feeds-input").value = "";
+  }
+}
+
+$("rss-refresh-btn")?.addEventListener("click", async () => {
+  const btn = $("rss-refresh-btn");
+  const statusEl = $("rss-status");
+  btn.disabled = true;
+  btn.textContent = "⏳ 抓取摘要中（约 1 分钟）…";
+  statusEl.textContent = "正在抓取 RSS 源并 AI 摘要…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/rss/check", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const j = await res.json();
+    if (!j.ok) statusEl.textContent = "⚠️ " + (j.error || "摘要失败");
+  } catch (e) {
+    statusEl.textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔄 立即刷新";
+    loadRss();
+  }
+});
+
+$("rss-config-btn")?.addEventListener("click", () => {
+  const box = $("rss-config-box");
+  box.classList.toggle("hidden");
+  if (!box.classList.contains("hidden")) loadRssConfig();
+});
+
+$("rss-feeds-save-btn")?.addEventListener("click", async () => {
+  const feeds = $("rss-feeds-input").value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/rss/config", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feeds }),
+    });
+    const j = await res.json();
+    if (j.ok) { $("rss-config-box").classList.add("hidden"); loadRss(); }
+    else $("rss-status").textContent = "⚠️ " + (j.error || "保存失败");
+  } catch (e) {
+    $("rss-status").textContent = "⚠️ " + e.message;
+  }
+});
+
+$("rss-feeds-reset-btn")?.addEventListener("click", async () => {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/rss/config");
+    const j = await r.json();
+    const res = await fetch("http://127.0.0.1:8899/api/rss/config", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feeds: j.defaultFeeds || [] }),
+    });
+    const j2 = await res.json();
+    if (j2.ok) loadRssConfig();
+    else $("rss-status").textContent = "⚠️ " + (j2.error || "恢复默认失败");
+  } catch (e) {
+    $("rss-status").textContent = "⚠️ " + e.message;
+  }
+});
+
 // ============ 个人主页（简历存档中心：上传/粘贴/保存/拷打清单） ============
 const profileStatus = $("profile-status");
 const profileResume = $("profile-resume");
@@ -1957,6 +2058,7 @@ loadCrawlData();
 loadStudyPlan();
 loadJobs(); // 校招推荐列表
 loadDocs(); // 官方文档清单
+loadRss(); // 今日技术资讯
 loadProfileStatus(); // 个人主页存档状态
 loadKbStats(); // 知识库统计
 loadZhenti(); // 笔试真题
