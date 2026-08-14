@@ -16,6 +16,7 @@ function switchTab(name) {
   if (name === "rss") loadRss();
   if (name === "kb") loadKbStats();
   if (name === "profile") loadProfileStatus();
+  if (name === "focus") loadFocus();
 }
 
 document.querySelectorAll(".tab").forEach((btn) => {
@@ -2052,6 +2053,122 @@ async function startRecording() {
 }
 
 $("chat-mic").addEventListener("click", () => { micRecording ? stopRecording() : startRecording(); });
+
+// ============ 专注监督（番茄钟） ============
+let focusPollTimer = null;
+
+async function loadFocus() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/focus/status");
+    const j = await r.json();
+    renderFocus(j);
+    // 专注中每秒刷新倒计时；空闲时停止轮询
+    if (j.active && !focusPollTimer) {
+      focusPollTimer = setInterval(loadFocus, 1000);
+    } else if (!j.active && focusPollTimer) {
+      clearInterval(focusPollTimer);
+      focusPollTimer = null;
+    }
+  } catch (e) {
+    $("focus-status").textContent = "⚠️ " + e.message;
+  }
+}
+
+function fmtCountdown(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function renderFocus(j) {
+  const status = $("focus-status");
+  const cd = $("focus-countdown");
+  const stopBtn = $("focus-stop");
+  if (j.active) {
+    status.textContent = `🍅 专注中（${j.mode} 分钟）· 已分心 ${j.distracts ?? 0} 次`;
+    cd.classList.remove("hidden");
+    cd.textContent = "⏳ " + fmtCountdown(j.remainingSeconds ?? 0);
+    stopBtn.hidden = false;
+  } else {
+    status.textContent = "未开始专注";
+    cd.classList.add("hidden");
+    cd.textContent = "";
+    stopBtn.hidden = true;
+  }
+  $("focus-stats-row").innerHTML = `
+    <div class="stat-chip">⏱️ 今日专注 <b>${j.todayMinutes ?? 0}</b> 分钟</div>
+    <div class="stat-chip">✅ 完成 <b>${j.todayCount ?? 0}</b> 次</div>
+    <div class="stat-chip">🚫 分心 <b>${j.todayDistracts ?? 0}</b> 次</div>`;
+}
+
+async function focusStart(mode) {
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/focus/start", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+    const j = await res.json();
+    if (!j.ok) { $("focus-status").textContent = "⚠️ " + (j.error || "开始失败"); return; }
+    loadFocus();
+  } catch (e) { $("focus-status").textContent = "⚠️ " + e.message; }
+}
+
+async function focusStop() {
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/focus/stop", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completed: false }), // 手动结束 = 中断（未完成）
+    });
+    const j = await res.json();
+    if (j?.ok) window.kanban.notify("⏱️ 专注", `已结束，本次专注 ${j.durationMinutes} 分钟`);
+    loadFocus();
+  } catch (e) { $("focus-status").textContent = "⚠️ " + e.message; }
+}
+
+$("focus-25").addEventListener("click", () => focusStart("25"));
+$("focus-45").addEventListener("click", () => focusStart("45"));
+$("focus-stop").addEventListener("click", focusStop);
+
+// 分心黑名单编辑
+$("focus-blacklist-toggle").addEventListener("click", () => {
+  const box = $("focus-blacklist-box");
+  box.classList.toggle("hidden");
+  if (!box.classList.contains("hidden")) loadFocusBlacklist();
+});
+
+async function loadFocusBlacklist() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/focus/blacklist");
+    const j = await r.json();
+    $("focus-blacklist").value = (j.blacklist || []).join("\n");
+  } catch { /* ignore */ }
+}
+
+async function saveFocusBlacklist(list) {
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/focus/blacklist", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blacklist: list }),
+    });
+    const j = await res.json();
+    if (j.ok) { window.kanban.notify("🚫 分心黑名单", "已保存"); loadFocusBlacklist(); }
+    else $("focus-status").textContent = "⚠️ " + (j.error || "保存失败");
+  } catch (e) { $("focus-status").textContent = "⚠️ " + e.message; }
+}
+
+$("focus-blacklist-save").addEventListener("click", () => {
+  const list = $("focus-blacklist").value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  saveFocusBlacklist(list);
+});
+
+$("focus-blacklist-reset").addEventListener("click", async () => {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/focus/blacklist");
+    const j = await r.json();
+    const defaults = Array.isArray(j.defaults) ? j.defaults : [];
+    $("focus-blacklist").value = defaults.join("\n");
+    saveFocusBlacklist(defaults);
+  } catch (e) { $("focus-status").textContent = "⚠️ " + e.message; }
+});
 
 // ============ 初始化 ============
 loadCrawlData();

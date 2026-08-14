@@ -182,6 +182,12 @@ let clickTimer = null; // 单击反应延迟器：等待确认不是双击
 // 订阅全局语音开关（面板 🔊 切换 → main 广播 → 桌宠同步静音/恢复）
 window.kanban?.onVoiceChanged?.((enabled) => { voiceOn = !!enabled; });
 
+// 订阅专注监督事件（主进程 pet-say 广播）：气泡 + 场景语音（focus-start/focus-done/focus-nudge）
+window.kanban?.onPetSay?.(({ text, scene }) => {
+  if (text) showBubble(text, 6000);
+  if (scene) { try { window.kanban.playScene(scene); } catch { /* ignore */ } }
+});
+
 async function handleClick(e) {
   // 命中部位检测
   let hitArea = null;

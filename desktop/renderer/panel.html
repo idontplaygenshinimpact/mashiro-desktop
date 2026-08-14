@@ -39,6 +39,7 @@
     <button class="tab" data-tab="rss">📰 资讯</button>
     <button class="tab" data-tab="kb">🧠 知识库</button>
     <button class="tab" data-tab="profile">👤 个人主页</button>
+    <button class="tab" data-tab="focus">⏱️ 专注</button>
   </nav>
 
   <main>
@@ -364,6 +365,33 @@
         <textarea id="profile-resume" placeholder="粘贴简历文本：项目经历、实习、技能、教育背景..."></textarea>
         <div class="resume-status" id="profile-status"></div>
         <div id="profile-saved" class="jobs-advice"></div>
+      </div>
+    </section>
+    <!-- ========== 专注 Tab ========== -->
+    <section id="tab-focus" class="tab-panel">
+      <div class="jobs-setup">
+        <div class="form-row">
+          <label>⏱️ 专注监督（番茄钟）：开始专注后真白陪伴你，检测到分心应用（B站/Steam/游戏等）会气泡 + 语音提醒</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button id="focus-25" class="secondary" title="25 分钟专注">🍅 25 分钟</button>
+            <button id="focus-45" class="secondary" title="45 分钟专注">🍅 45 分钟</button>
+            <button id="focus-stop" class="danger" hidden>⏹ 结束专注</button>
+            <button id="focus-blacklist-toggle" class="secondary" title="编辑分心应用黑名单">🚫 黑名单</button>
+          </div>
+        </div>
+        <div class="resume-status" id="focus-status">未开始专注</div>
+        <div class="focus-countdown hidden" id="focus-countdown"></div>
+        <div class="stats-row" id="focus-stats-row" style="margin-top:8px;"></div>
+      </div>
+      <div class="jobs-setup hidden" id="focus-blacklist-box" style="margin-top:8px;">
+        <div class="form-row">
+          <label>分心应用黑名单（每行一个关键词，命中前台窗口标题即提醒，大小写不敏感）</label>
+          <textarea id="focus-blacklist" rows="6" style="font-size:11px;font-family:Consolas,monospace;"></textarea>
+          <div style="display:flex;gap:6px;margin-top:6px;">
+            <button id="focus-blacklist-save" class="primary">💾 保存黑名单</button>
+            <button id="focus-blacklist-reset" class="secondary">↩️ 恢复默认</button>
+          </div>
+        </div>
       </div>
     </section>
   </main>

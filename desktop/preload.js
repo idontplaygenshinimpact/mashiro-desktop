@@ -135,4 +135,6 @@ contextBridge.exposeInMainWorld("kanban", {
   moveWindow: (x, y) => ipcRenderer.invoke("window:move", { x, y }),
   onOpenPanel: (cb) => ipcRenderer.on("open-panel", () => cb()),
   onRunDiscover: (cb) => ipcRenderer.on("run-discover", () => cb()),
+  // 专注监督气泡/语音事件（主进程 pet-say 广播 → 桌宠 app.js 订阅）
+  onPetSay: (cb) => ipcRenderer.on("pet-say", (e, { text, scene }) => cb({ text, scene })),
 });

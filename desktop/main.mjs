@@ -615,7 +615,8 @@ ipcMain.handle("window:move", (e, { x, y }) => {
 
 // ---------- 全屏检测：全屏应用（游戏/视频）时隐藏桌宠，其余情况保持显示 ----------
 // 用 koffi FFI 直调 Win32（毫秒级，替代慢速 PowerShell）
-import { detectForegroundSync } from "./foreground.mjs";
+import { detectForegroundSync, getForegroundInfo } from "./foreground.mjs";
+import { isDistractingTitle } from "../lib/focus.mjs";
 
 function detectForeground() {
   return new Promise((resolve) => {
@@ -661,12 +662,89 @@ function startDesktopScopeCheck() {
   }, 1000);
 }
 
+// ---------- 专注监督（番茄钟）：陪伴 + 分心应用检测 + 气泡/语音提醒 ----------
+// 轮询 widget /api/focus/status（每 5 秒）：专注中检测前台窗口标题，命中黑名单 → 记录分心 + 真白提醒
+// 状态跃迁：开始 → focus-start 气泡；完成结束 → focus-done 气泡（"监督"核心价值）
+const FOCUS_NUDGE_COOLDOWN = 3 * 60 * 1000; // 分心提醒冷却（3 分钟，防骚扰）
+
+let focusBlacklist = [];          // 分心黑名单（从 widget 拉取缓存）
+let focusPrevActive = null;       // 上一次专注状态（null=首轮，跳过跃迁判断）
+let focusLastNudge = 0;           // 上次分心提醒时间戳
+let focusLastNudgeSession = null; // 分心提醒冷却所属会话 id（新会话重置冷却）
+
+// 广播 pet-say 到所有窗口（桌宠 app.js 订阅显示气泡 + 播语音；面板未订阅则忽略）
+function petSay(text, scene) {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w && !w.isDestroyed()) {
+      try { w.webContents.send("pet-say", { text, scene }); } catch { /* ignore */ }
+    }
+  }
+}
+
+async function fetchFocusBlacklist() {
+  try {
+    const res = await fetch(`${WIDGET_URL}/api/focus/blacklist`);
+    const j = await res.json();
+    if (j?.ok && Array.isArray(j.blacklist)) focusBlacklist = j.blacklist;
+  } catch { /* widget 未启动忽略 */ }
+}
+
+async function checkFocusSupervision() {
+  let status = null;
+  try {
+    const res = await fetch(`${WIDGET_URL}/api/focus/status`);
+    status = await res.json();
+  } catch { /* widget 未启动忽略 */ }
+  if (!status || status.ok === false) return;
+
+  const active = !!status.active;
+  const prev = focusPrevActive;
+  focusPrevActive = active;
+
+  // 黑名单懒加载（首次成功拿到后缓存；每 5 分钟刷新一次由独立定时器兜底）
+  if (!focusBlacklist.length) await fetchFocusBlacklist();
+
+  // 状态跃迁：开始 → 陪伴气泡；完成结束 → 慰劳气泡
+  if (prev === null) return; // 首轮仅记录，避免启动时误触发问候
+  if (active && !prev) {
+    petSay("集中して。真白も一緒にいるよ。", "focus-start");
+  } else if (!active && prev) {
+    if (status.lastCompleted) petSay("お疲れさま。よく頑張ったね。", "focus-done");
+  }
+
+  if (!active) return;
+  // 专注中：检测前台窗口是否命中分心黑名单
+  let title = "";
+  try { title = getForegroundInfo().title; } catch { /* 检测失败跳过 */ }
+  if (!title || !isDistractingTitle(title, focusBlacklist)) return;
+
+  const now = Date.now();
+  // 冷却：同一会话内 3 分钟只提醒一次；新会话重置
+  if (status.sessionId !== focusLastNudgeSession) {
+    focusLastNudgeSession = status.sessionId;
+    focusLastNudge = 0;
+  }
+  if (now - focusLastNudge < FOCUS_NUDGE_COOLDOWN) return;
+  focusLastNudge = now;
+
+  // 记录分心 + 真白提醒
+  fetch(`${WIDGET_URL}/api/focus/distract`, { method: "POST" }).catch(() => {});
+  petSay("集中して。", "focus-nudge");
+}
+
+function startFocusSupervision() {
+  fetchFocusBlacklist(); // 启动即拉一次黑名单
+  setInterval(checkFocusSupervision, 5000);
+  setInterval(fetchFocusBlacklist, 5 * 60 * 1000); // 每 5 分钟刷新黑名单（面板改黑名单后生效）
+}
+
 // ---------- 生命周期 ----------
 app.whenReady().then(() => {
   ensureWidgetServer();
   setTimeout(createWindow, 800); // 等 widget 服务起来
   createTray();
   startDesktopScopeCheck();
+  startFocusSupervision();
 });
 
 app.on("window-all-closed", (e) => {

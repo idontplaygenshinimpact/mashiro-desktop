@@ -25,6 +25,7 @@ import * as ragApi from "./lib/rag.mjs";
 import * as zhentiApi from "./lib/zhenti.mjs";
 import * as ojApi from "./lib/oj.mjs";
 import * as rssApi from "./lib/rss.mjs";
+import * as focusApi from "./lib/focus.mjs";
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -304,6 +305,20 @@ async function checkRssDigest() {
   } catch (e) {
     console.log(`[widget] 资讯摘要失败: ${String(e.message).slice(0, 80)}`);
   }
+}
+
+// ============ 专注结束自动结算（到点自动完成 + 通知，30 秒检查一次） ============
+
+async function checkFocusEnd() {
+  try {
+    const s = focusApi.getFocusStatus();
+    if (!s.active) return;
+    if (Date.now() >= s.endAt) {
+      focusApi.stopFocus(true);
+      console.log("[widget] 专注结束自动结算");
+      await sendNotification("⏰ 专注结束", `${s.mode} 分钟到了，休息一下`);
+    }
+  } catch { /* ignore */ }
 }
 
 // ============ HTTP 服务 ============
@@ -1587,6 +1602,105 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ error: "Method Not Allowed" }));
     return;
   }
+  if (url.pathname === "/api/focus/start" && req.method === "POST") {
+    // 开始专注（番茄钟 25/45 分钟）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { mode } = JSON.parse(body || "{}");
+        const r = focusApi.startFocus(String(mode || ""));
+        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/focus/stop" && req.method === "POST") {
+    // 结束专注（completed=true 表示完成，false 表示中断）
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { completed } = JSON.parse(body || "{}");
+        const r = focusApi.stopFocus(!!completed);
+        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/focus/status") {
+    // 专注状态（桌宠主进程轮询 + 面板倒计时）
+    try {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, ...focusApi.getFocusStatus() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/focus/distract" && req.method === "POST") {
+    // 记录一次分心（桌宠主进程检测到分心应用时上报）
+    try {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(focusApi.recordDistract()));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/focus/stats") {
+    // 今日专注统计
+    try {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, ...focusApi.getFocusStats() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/focus/blacklist") {
+    // 分心黑名单：GET 读取（含默认值），POST 修改（持久化到 settings）
+    if (req.method === "GET") {
+      try {
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, blacklist: focusApi.getBlacklist(), defaults: focusApi.DEFAULT_BLACKLIST }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+      return;
+    }
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        try {
+          const { blacklist } = JSON.parse(body || "{}");
+          const r = focusApi.setBlacklist(blacklist);
+          res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify(r));
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+      });
+      return;
+    }
+    res.writeHead(405, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Method Not Allowed" }));
+    return;
+  }
   if (url.pathname === "/" || url.pathname === "/index.html") {
     // 最小状态页（健康检查/浏览器访问）：真实 UI 在 Electron 面板
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -1862,6 +1976,9 @@ if (!DISABLE_BACKGROUND) {
   registerInterval(checkRssDigest, 30 * 60 * 1000);
   registerTimer(checkRssDigest, 5 * 60 * 1000);
 }
+// 专注结束自动结算：每 30 秒检查；启动 1 分钟后 catch-up
+registerInterval(checkFocusEnd, 30 * 1000);
+registerTimer(checkFocusEnd, 60 * 1000);
 
 // ---------- 每日自动岗位搜集（24h 门控：白天执行，距上次搜集 >24h 才跑；running 互斥防重叠） ----------
 let collectJobsRunning = false;
