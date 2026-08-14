@@ -123,6 +123,33 @@ test("chatWithAgent 长历史触发压缩后仍正常回答", async () => {
 });
 
 // ---------- 搜索工具（mock 页面） ----------
+test("agent 工具注册：TOOLS 含 web_search（query 必填）", async () => {
+  const { TOOLS } = await import("../lib/agent.mjs");
+  const t = TOOLS.find((x) => x.function?.name === "web_search");
+  assert.ok(t, "web_search 工具已注册");
+  assert.equal(t.function.parameters.required[0], "query", "query 参数必填");
+  assert.ok(t.function.description.includes("实时"), "描述提示用于实时信息");
+});
+
+test("chatWithAgent web_search 工具：联网搜索后基于结果回答", async () => {
+  setMockPages([{
+    links: [
+      { text: "React 19 新特性发布", href: "https://react.dev/blog/react-19" },
+      { text: "下一页", href: "https://cn.bing.com/search?q=x&first=10" },
+    ],
+    text: "React 19 新特性发布\nActions 与 Server Components 稳定\nreact.dev",
+  }]);
+  setLlmResponses(
+    'TOOLCALL:{"name":"web_search","arguments":"{\\"query\\":\\"React 19 新特性\\"}"}',
+    "React 19 已稳定，Actions 与 Server Components 转正。"
+  );
+  const r = await chatWithAgent("React 19 有什么新特性");
+  assert.ok(r.reply.includes("Server Components"), "回复引用搜索结果");
+  const { getRecentTools } = await import("../lib/trace.mjs");
+  const call = getRecentTools(20).find((t) => t.tool_name === "web_search");
+  assert.ok(call && call.ok, "web_search 工具执行成功记录");
+});
+
 test("toolSearchPosts 空页面返回空结果", async () => {
   setMockPages([{ links: [] }, { links: [] }]); // nowcoder + juejin 两个站
   const r = await toolSearchPosts("React 面经");
