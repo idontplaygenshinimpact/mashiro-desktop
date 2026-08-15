@@ -158,6 +158,19 @@ test("applyReviewResults 无 topic 条目跳过", () => {
   assert.equal(memory.getWeakPoints().length, 0);
 });
 
+// F2 回归：同 tick 批量薄弱点 id 不碰撞（旧版 `wp_${Date.now()}` 同毫秒重复 → PRIMARY KEY 冲突 → 全部丢弃）
+test("multiple weak points in one applyReviewResults batch all persist", () => {
+  memory.applyReviewResults([
+    { topic: "闭包", verdict: "错" },
+    { topic: "事件循环", verdict: "错" },
+    { topic: "原型链", verdict: "部分对" },
+    { topic: "Promise", verdict: "部分对" },
+  ]);
+  const rows = db.prepare("SELECT topic FROM weak_points ORDER BY rowid").all().map((r) => r.topic);
+  assert.equal(rows.length, 4, "4 个薄弱点全部入库（不被同 id 覆盖丢弃）");
+  assert.deepEqual(rows.sort(), ["Promise", "原型链", "事件循环", "闭包"].sort());
+});
+
 // ---------- 已掌握 ----------
 test("addMastered 去重 + 上限30 + 清薄弱点", () => {
   memory.addWeakPoint("闭包", "x");

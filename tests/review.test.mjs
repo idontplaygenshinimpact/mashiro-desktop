@@ -35,6 +35,37 @@ test("addCard 同 topic 更新不重复建卡", () => {
   assert.equal(cards[0].question, "q2");
 });
 
+// F3 回归：同 tick 批量建卡 id 不碰撞（旧版 `c${Date.now()}` 同毫秒重复 → INSERT OR IGNORE 丢弃后续卡）
+test("multiple addCard calls in one tick all persist", () => {
+  const topics = ["闭包", "事件循环", "原型链", "Promise", "防抖节流"];
+  for (const t of topics) review.addCard({ topic: t, question: `讲讲${t}` });
+  const cards = review.loadCards().cards;
+  assert.equal(cards.length, topics.length, "5 张卡全部入库");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM review_cards").get().n, topics.length, "DB 持久化一致");
+});
+
+// F8 回归：非法 rating 归一化为 Good(2)，DB 不存脏值
+test("reviewCard 非法 rating 回退 Good 且 DB 存归一化值", () => {
+  memory.addWeakPoint("闭包", "测试");
+  const card = review.addCard({ topic: "闭包", question: "q" });
+  const r = review.reviewCard(card.id, 99);
+  assert.equal(r.ok, true);
+  const log = db.prepare("SELECT rating FROM card_reviews WHERE card_id=?").get(card.id);
+  assert.equal(log.rating, 2, "越界 rating 归一化为 Good(2)，不存脏值 99");
+  // 非法 rating 按 Good 处理（答对）→ 清除薄弱点，与合法 Good 行为一致
+  assert.equal(memory.getWeakPoints().length, 0, "非法 rating 按 Good 处理清除薄弱点");
+});
+
+// F9 回归：fsrs 列损坏 → 回退空卡，不拖垮全部读取
+test("loadCards：损坏 fsrs JSON 回退空卡不崩溃", () => {
+  review.addCard({ topic: "正常卡", question: "q" });
+  db.prepare("UPDATE review_cards SET fsrs='{corrupt' WHERE topic='正常卡'").run();
+  const cards = review.loadCards().cards;
+  assert.equal(cards.length, 1, "坏数据不拖垮整表读取");
+  assert.ok(cards[0].fsrs && typeof cards[0].fsrs === "object", "回退为合法空卡对象");
+  assert.equal(review.getStats().total, 1, "getStats 依赖 loadCards 也不崩溃");
+});
+
 test("reviewCard 不存在返回错误", () => {
   const r = review.reviewCard("nope", 0);
   assert.equal(r.ok, false);

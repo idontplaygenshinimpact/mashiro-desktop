@@ -1,10 +1,11 @@
 // study.mjs 单测（无 LLM 部分）：清单 CRUD / 勾选 / 复习出题（临时 DB 隔离）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
+import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses } from "./helpers.mjs";
 
 const dbDir = setupTempDb("study");
-const { getPlan, addPlanItems, checkItem, startReview } = await import("../lib/study.mjs");
+mockLLM(); // F1 回归测试需要 generateStudyPlan（mock 必须在 import study 之前）
+const { getPlan, addPlanItems, checkItem, startReview, generateStudyPlan } = await import("../lib/study.mjs");
 
 beforeEach(async () => { await clearAllTables(); });
 after(() => { cleanupTempDb(dbDir); });
@@ -103,4 +104,30 @@ test("normalizeTopic/isSimilarTopic 相似去重（防表述漂移重复 + 层�
   assert.ok(!isSimilarTopic(normalizeTopic("深拷贝"), normalizeTopic("浅拷贝")), "深拷贝≠浅拷贝");
   assert.ok(!isSimilarTopic(normalizeTopic("防抖"), normalizeTopic("节流")), "防抖≠节流");
   assert.ok(!isSimilarTopic("", ""), "空串不相似");
+});
+
+// F1 回归：重新生成清单时新条目 id 不能与旧条目碰撞（旧版 `s${i+1}` 会覆盖旧行 → 抹掉完成/复盘进度）
+test("regenerateStudyPlan keeps old items' done/reviewed state", async () => {
+  // 首次生成：2 条入库
+  setLlmResponses('{"items":[{"topic":"事件循环","why":"高频","source":"a.md","verify_question":"q","level":"必会"},{"topic":"Fiber 原理","why":"区分度","source":"b.md","verify_question":"q","level":"进阶"}]}');
+  const r1 = await generateStudyPlan();
+  assert.equal(r1.error, undefined);
+  assert.equal(r1.items.length, 2);
+  // 勾选完成 + 复盘第一条（模拟用户学习进度）
+  const item = getPlan().items.find((i) => i.topic === "事件循环");
+  checkItem(item.id, true);
+  const { db } = await import("../lib/db.mjs");
+  db.prepare("UPDATE study_plan_items SET reviewed=1, reviewed_at=? WHERE topic=?").run(new Date().toISOString(), "事件循环");
+  // 二次生成：新条目 topic 不同（旧版会生成与旧条目同 id 的 `s1`，INSERT OR REPLACE 抹掉旧行）
+  setLlmResponses('{"items":[{"topic":"防抖节流","why":"高频","source":"c.md","verify_question":"q","level":"必会"}]}');
+  const r2 = await generateStudyPlan();
+  assert.equal(r2.error, undefined);
+  assert.equal(r2.addedCount, 1, "新条目加入");
+  // 从 DB 重读（savePlan 全量重写后）——旧条目仍在且进度未丢
+  const plan = getPlan();
+  assert.equal(plan.items.length, 3, "旧 2 条 + 新 1 条全部保留");
+  const kept = plan.items.find((i) => i.topic === "事件循环");
+  assert.ok(kept, "旧条目仍在（未被新条目覆盖）");
+  assert.equal(kept.done, true, "done 状态保留");
+  assert.equal(kept.reviewed, true, "reviewed 状态保留");
 });
