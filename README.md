@@ -60,7 +60,7 @@ node D:\mianshi-agent\node_modules\electron\dist\electron.exe D:\mianshi-agent\d
 D:\mianshi-agent\start-kanban.bat
 ```
 
-开机自启：脚本已复制到 Windows 启动文件夹（`shell:startup`），如需取消删除 `mianshi-kanban.bat`。
+开机自启：通过注册表 Run 键实现（`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `mianshi-agent` 项，指向启动脚本），如需取消删除该注册表项。重复启动会被单实例锁拦截（聚焦到已运行窗口，不会出现双托盘/双后台）。
 
 ---
 
@@ -257,7 +257,7 @@ COMPACT_KEEP_RECENT=4000   # 保留最近 N token 的完整消息
 ## 常见问题
 
 **Q：每次怎么启动？**
-双击 `D:\mianshi-agent\start-kanban.bat`（最小化启动 Electron 桌宠）。桌宠主进程会自动拉起后台数据服务（widget，端口 8899）并守护它，**不需要单独启动 widget**。若设置了开机自启（`shell:startup` 里的 `mianshi-kanban.bat`），平时开机即自动运行，无需手动操作。
+双击 `D:\mianshi-agent\start-kanban.bat`（最小化启动 Electron 桌宠）。桌宠主进程会自动拉起后台数据服务（widget，端口 8899）并守护它，**不需要单独启动 widget**。若设置了开机自启（注册表 Run 键 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `mianshi-agent` 项），平时开机即自动运行，无需手动操作；重复双击启动会被单实例锁拦截，聚焦到已运行窗口。
 
 **Q：改完代码后功能没生效 / 面板报 "Not Found" / "is not valid JSON"？**
 运行中的 widget 是旧代码进程（桌宠一直没重启）。**每次代码改动后请重启桌宠**：托盘退出或 `Get-Process electron | Stop-Process -Force`，再双击 `start-kanban.bat`。验证是否新版：浏览器打开 `http://127.0.0.1:8899/api/learning`——返回 JSON 文档清单 = 新版；返回 `Not Found` = 旧进程，重启桌宠即可。
