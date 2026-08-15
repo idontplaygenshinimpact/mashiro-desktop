@@ -97,6 +97,81 @@ server.tool(
   }
 );
 
+// ---------- 工具 5-8: 个人数据环境（简历/校招/日程/学习进度） ----------
+// 数据源统一走 lib/context-providers.mjs（单数据源），桌宠内部 agent 与外部 agent 同通道
+// 内联模式与既有工具一致（避免 helper 类型推断影响 server.tool overload 匹配）
+server.tool(
+  "get_personal_profile",
+  "查看用户在个人主页上传的简历（教育背景/项目经历/技能栈/求职目标）",
+  {},
+  async () => {
+    try {
+      const { executeProviderTool } = await import("./lib/context-providers.mjs");
+      const r = /** @type {any} */ (await executeProviderTool("get_personal_profile"));
+      if (!r.ok) return { content: [{ type: "text", text: `⚠️ ${r.error || "读取失败"}` }], isError: true };
+      if (r.empty) return { content: [{ type: "text", text: `${r.message || "暂无数据"}` }] };
+      return { content: [{ type: "text", text: JSON.stringify(r.data, null, 2).slice(0, 6000) }] };
+    } catch (e) {
+      console.error(`[mcp] get_personal_profile 失败: ${e && e.message ? e.message : String(e)}`);
+      return { content: [{ type: "text", text: `⚠️ 读取简历失败: ${e && e.message ? e.message : String(e)}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "get_jobs_status",
+  "查看校招推荐岗位/投递状态/收藏/公司统计",
+  {},
+  async () => {
+    try {
+      const { executeProviderTool } = await import("./lib/context-providers.mjs");
+      const r = /** @type {any} */ (await executeProviderTool("get_jobs_status"));
+      if (!r.ok) return { content: [{ type: "text", text: `⚠️ ${r.error || "读取失败"}` }], isError: true };
+      if (r.empty) return { content: [{ type: "text", text: `${r.message || "暂无数据"}` }] };
+      return { content: [{ type: "text", text: JSON.stringify(r.data, null, 2).slice(0, 6000) }] };
+    } catch (e) {
+      console.error(`[mcp] get_jobs_status 失败: ${e && e.message ? e.message : String(e)}`);
+      return { content: [{ type: "text", text: `⚠️ 读取校招数据失败: ${e && e.message ? e.message : String(e)}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "get_schedule_events",
+  "查看面试/笔试日程安排（邮箱邀约识别）",
+  {},
+  async () => {
+    try {
+      const { executeProviderTool } = await import("./lib/context-providers.mjs");
+      const r = /** @type {any} */ (await executeProviderTool("get_schedule_events"));
+      if (!r.ok) return { content: [{ type: "text", text: `⚠️ ${r.error || "读取失败"}` }], isError: true };
+      if (r.empty) return { content: [{ type: "text", text: `${r.message || "暂无数据"}` }] };
+      return { content: [{ type: "text", text: JSON.stringify(r.data, null, 2).slice(0, 6000) }] };
+    } catch (e) {
+      console.error(`[mcp] get_schedule_events 失败: ${e && e.message ? e.message : String(e)}`);
+      return { content: [{ type: "text", text: `⚠️ 读取日程失败: ${e && e.message ? e.message : String(e)}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "get_study_progress",
+  "查看学习进度总览（学习清单/复习卡/专项练习/真题/专注统计）",
+  {},
+  async () => {
+    try {
+      const { executeProviderTool } = await import("./lib/context-providers.mjs");
+      const r = /** @type {any} */ (await executeProviderTool("get_study_progress"));
+      if (!r.ok) return { content: [{ type: "text", text: `⚠️ ${r.error || "读取失败"}` }], isError: true };
+      if (r.empty) return { content: [{ type: "text", text: `${r.message || "暂无数据"}` }] };
+      return { content: [{ type: "text", text: JSON.stringify(r.data, null, 2).slice(0, 6000) }] };
+    } catch (e) {
+      console.error(`[mcp] get_study_progress 失败: ${e && e.message ? e.message : String(e)}`);
+      return { content: [{ type: "text", text: `⚠️ 读取学习进度失败: ${e && e.message ? e.message : String(e)}` }], isError: true };
+    }
+  }
+);
+
 // ---------- 启动（stdio 传输，供 MCP 客户端连接） ----------
 const transport = new StdioServerTransport();
 await server.connect(transport);
