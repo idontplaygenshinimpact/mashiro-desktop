@@ -7,6 +7,39 @@ let voiceEnabled = true; // 语音开关（渲染层可切换）
 const modelArg = process.argv.find((a) => a.startsWith("--model-path="));
 const modelPath = modelArg ? modelArg.split("=").slice(1).join("=") : "";
 
+// SSE 流封装：订阅 chunk 事件 + 120s 安全超时（防止 invoke 永不 settle 时监听器泄漏）
+function streamPromise({ channel, invokeName, args, onChunk, jsonMode = false, extraDone = null }) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+    const cleanup = () => {
+      ipcRenderer.removeListener(channel, listener);
+      if (timer) clearTimeout(timer);
+    };
+    const finish = (fn, val) => { if (settled) return; settled = true; cleanup(); fn(val); };
+    const listener = (event, data) => {
+      if (typeof data !== "string") return;
+      const line = data.startsWith("data:") ? data.slice(5).trim() : data;
+      if (!line) return;
+      let j;
+      try { j = JSON.parse(line); } catch { return; }
+      if (j.type === "done") finish(resolve, Object.assign({ done: true, saved: j.saved, filePath: j.filePath }, extraDone ? extraDone(j) : {}));
+      else if (j.type === "error") finish(reject, new Error(j.error));
+      else if (j.type === "delta") onChunk(j.delta);
+      else if (j.type === "start") { /* 忽略 start */ }
+      else if (jsonMode && j.ok) { // JSON 模式（有文件）：直接完成
+        onChunk(j.content);
+        finish(resolve, { done: true, fromFile: true, topic: j.topic, content: j.content });
+      }
+    };
+    timer = setTimeout(() => finish(reject, new Error("流式响应超时（120 秒无最终事件）")), 120000);
+    ipcRenderer.on(channel, listener);
+    ipcRenderer.invoke(invokeName, args)
+      .then((r) => { if (!r?.ok) finish(reject, new Error(r?.error || "流式启动失败")); })
+      .catch((err) => finish(reject, err));
+  });
+}
+
 contextBridge.exposeInMainWorld("kanban", {
   modelPath,
   getData: () => ipcRenderer.invoke("widget:data"),
@@ -21,88 +54,19 @@ contextBridge.exposeInMainWorld("kanban", {
   patrolRun: () => ipcRenderer.invoke("widget:patrol-run"),
   interviewNotes: (topics) => ipcRenderer.invoke("widget:interview-notes", { topics }),
   studyDetail: (id) => ipcRenderer.invoke("widget:study-detail", { id }),
-  studyDetailStream: (id, onChunk) => {
-    // 订阅 chunk 事件；返回 promise，结束（done/error）时 resolve
-    return new Promise((resolve, reject) => {
-      const listener = (event, data) => {
-        if (typeof data !== "string") return;
-        const line = data.startsWith("data:") ? data.slice(5).trim() : data;
-        if (!line) return;
-        let j;
-        try { j = JSON.parse(line); } catch { return; }
-        if (j.type === "done") { ipcRenderer.removeListener("study-detail-chunk", listener); resolve({ done: true, saved: j.saved, filePath: j.filePath }); }
-        else if (j.type === "error") { ipcRenderer.removeListener("study-detail-chunk", listener); reject(new Error(j.error)); }
-        else if (j.type === "delta") onChunk(j.delta);
-        else if (j.type === "start") onChunk(""); // 忽略 start
-        else if (j.ok) { // JSON 模式（有文件）：直接完成
-          ipcRenderer.removeListener("study-detail-chunk", listener);
-          onChunk(j.content);
-          resolve({ done: true, fromFile: true, topic: j.topic, content: j.content });
-        }
-      };
-      ipcRenderer.on("study-detail-chunk", listener);
-      ipcRenderer.invoke("widget:study-detail-stream", { id })
-        .then((r) => { if (!r?.ok) { ipcRenderer.removeListener("study-detail-chunk", listener); reject(new Error(r?.error || "流式启动失败")); } })
-        .catch((err) => { ipcRenderer.removeListener("study-detail-chunk", listener); reject(err); });
-    });
-  },
-  studyDetailAppend: (id, question, onChunk) => {
-    // 追问补充：独立事件通道（避免与初始讲解串流）
-    return new Promise((resolve, reject) => {
-      const listener = (event, data) => {
-        if (typeof data !== "string") return;
-        const line = data.startsWith("data:") ? data.slice(5).trim() : data;
-        if (!line) return;
-        let j;
-        try { j = JSON.parse(line); } catch { return; }
-        if (j.type === "done") { ipcRenderer.removeListener("study-append-chunk", listener); resolve({ done: true, saved: j.saved, filePath: j.filePath }); }
-        else if (j.type === "error") { ipcRenderer.removeListener("study-append-chunk", listener); reject(new Error(j.error)); }
-        else if (j.type === "delta") onChunk(j.delta);
-      };
-      ipcRenderer.on("study-append-chunk", listener);
-      ipcRenderer.invoke("widget:study-append-stream", { id, question })
-        .then((r) => { if (!r?.ok) { ipcRenderer.removeListener("study-append-chunk", listener); reject(new Error(r?.error || "补充启动失败")); } })
-        .catch((err) => { ipcRenderer.removeListener("study-append-chunk", listener); reject(err); });
-    });
-  },
-  studyConsolidate: (id, onChunk) => {
-    // 整理全文：独立事件通道
-    return new Promise((resolve, reject) => {
-      const listener = (event, data) => {
-        if (typeof data !== "string") return;
-        const line = data.startsWith("data:") ? data.slice(5).trim() : data;
-        if (!line) return;
-        let j;
-        try { j = JSON.parse(line); } catch { return; }
-        if (j.type === "done") { ipcRenderer.removeListener("study-consolidate-chunk", listener); resolve({ done: true, saved: j.saved, filePath: j.filePath }); }
-        else if (j.type === "error") { ipcRenderer.removeListener("study-consolidate-chunk", listener); reject(new Error(j.error)); }
-        else if (j.type === "delta") onChunk(j.delta);
-      };
-      ipcRenderer.on("study-consolidate-chunk", listener);
-      ipcRenderer.invoke("widget:study-consolidate-stream", { id })
-        .then((r) => { if (!r?.ok) { ipcRenderer.removeListener("study-consolidate-chunk", listener); reject(new Error(r?.error || "整理启动失败")); } })
-        .catch((err) => { ipcRenderer.removeListener("study-consolidate-chunk", listener); reject(err); });
-    });
-  },
-  studyCluster: (ids, onChunk) => {
-    // 多条目归并：独立事件通道
-    return new Promise((resolve, reject) => {
-      const listener = (event, data) => {
-        if (typeof data !== "string") return;
-        const line = data.startsWith("data:") ? data.slice(5).trim() : data;
-        if (!line) return;
-        let j;
-        try { j = JSON.parse(line); } catch { return; }
-        if (j.type === "done") { ipcRenderer.removeListener("study-cluster-chunk", listener); resolve({ done: true, saved: j.saved, filePath: j.filePath, clusterName: j.clusterName }); }
-        else if (j.type === "error") { ipcRenderer.removeListener("study-cluster-chunk", listener); reject(new Error(j.error)); }
-        else if (j.type === "delta") onChunk(j.delta);
-      };
-      ipcRenderer.on("study-cluster-chunk", listener);
-      ipcRenderer.invoke("widget:study-cluster-stream", { ids })
-        .then((r) => { if (!r?.ok) { ipcRenderer.removeListener("study-cluster-chunk", listener); reject(new Error(r?.error || "归并启动失败")); } })
-        .catch((err) => { ipcRenderer.removeListener("study-cluster-chunk", listener); reject(err); });
-    });
-  },
+  studyDetailStream: (id, onChunk) => streamPromise({
+    channel: "study-detail-chunk", invokeName: "widget:study-detail-stream", args: { id }, onChunk, jsonMode: true,
+  }),
+  studyDetailAppend: (id, question, onChunk) => streamPromise({
+    channel: "study-append-chunk", invokeName: "widget:study-append-stream", args: { id, question }, onChunk,
+  }),
+  studyConsolidate: (id, onChunk) => streamPromise({
+    channel: "study-consolidate-chunk", invokeName: "widget:study-consolidate-stream", args: { id }, onChunk,
+  }),
+  studyCluster: (ids, onChunk) => streamPromise({
+    channel: "study-cluster-chunk", invokeName: "widget:study-cluster-stream", args: { ids }, onChunk,
+    extraDone: (j) => ({ clusterName: j.clusterName }),
+  }),
   studyGenerate: () => ipcRenderer.invoke("widget:study-generate"),
   studyCheck: (id, done) => ipcRenderer.invoke("widget:study-check", { id, done }),
   studyReview: () => ipcRenderer.invoke("widget:study-review"),

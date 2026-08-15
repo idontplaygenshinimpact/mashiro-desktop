@@ -7,6 +7,7 @@ import { spawn } from "node:child_process";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { resolveFfplay } from "./voice-pack.mjs";
 
 // ---------- 配置 ----------
 const VOICE_ZH = process.env.MIASHI_TTS_VOICE || "zh-CN-XiaoyiNeural";
@@ -44,6 +45,7 @@ async function voicevoxReady(timeoutMs = 90000) {
         cwd: VV_DIR, windowsHide: true, detached: true, stdio: "ignore",
       });
       vvProc.unref();
+      vvProc.on("error", (err) => console.log(`[tts] VoiceVox 启动失败: ${err.message}`));
       // 低优先级：不抢桌宠/其他应用 CPU
       try {
         const { execFileSync } = await import("node:child_process");
@@ -145,17 +147,23 @@ export async function speak(text) {
   }
 }
 
-// ---------- 播放（ffplay 直接播，最可靠；mp3 同样走 ffplay） ----------
-const FFPLAY = "D:\\hfut\\file\\Videopro\\exp01\\exp01_ffmpeg\\ffmpeg\\ffmpeg\\bin\\ffplay.exe";
-
+// ---------- 播放（ffplay 直接播，最可靠；mp3 同样走 ffplay；路径可配置/自动探测） ----------
 function playWav(wav) {
+  const ff = resolveFfplay();
+  if (!ff) { console.log("[tts] ffplay 不可用，跳过播放"); return; }
   try {
-    spawn(FFPLAY, ["-autoexit", "-nodisp", "-loglevel", "quiet", wav], { windowsHide: true, detached: true, stdio: "ignore" }).unref();
+    const child = spawn(ff, ["-autoexit", "-nodisp", "-loglevel", "quiet", wav], { windowsHide: true, detached: true, stdio: "ignore" });
+    child.on("error", (err) => console.log(`[tts] ffplay 播放失败: ${err.message}`));
+    child.unref();
   } catch { /* ignore */ }
 }
 
 function playMp3(mp3) {
+  const ff = resolveFfplay();
+  if (!ff) { console.log("[tts] ffplay 不可用，跳过播放"); return; }
   try {
-    spawn(FFPLAY, ["-autoexit", "-nodisp", "-loglevel", "quiet", mp3], { windowsHide: true, detached: true, stdio: "ignore" }).unref();
+    const child = spawn(ff, ["-autoexit", "-nodisp", "-loglevel", "quiet", mp3], { windowsHide: true, detached: true, stdio: "ignore" });
+    child.on("error", (err) => console.log(`[tts] ffplay 播放失败: ${err.message}`));
+    child.unref();
   } catch { /* ignore */ }
 }

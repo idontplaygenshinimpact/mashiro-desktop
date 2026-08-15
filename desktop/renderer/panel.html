@@ -40,6 +40,7 @@
     <button class="tab" data-tab="kb">🧠 知识库</button>
     <button class="tab" data-tab="profile">👤 个人主页</button>
     <button class="tab" data-tab="focus">⏱️ 专注</button>
+    <button class="tab" data-tab="schedule">📅 日程</button>
   </nav>
 
   <main>
@@ -393,6 +394,24 @@
           </div>
         </div>
       </div>
+    </section>
+    <!-- ========== 日程 Tab ========== -->
+    <section id="tab-schedule" class="tab-panel">
+      <div class="jobs-setup">
+        <div class="form-row">
+          <label>📅 面试邀约识别 + 日程提醒（QQ 邮箱 IMAP：拉未读邮件 → AI 识别面试/笔试邀约 → 提前提醒）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;width:100%;">
+            <input id="mail-email" type="text" placeholder="QQ 邮箱地址（如 xxx@qq.com）" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid rgba(109,79,216,.25);border-radius:6px;background:rgba(255,255,255,.8);font-size:11px;">
+            <input id="mail-authcode" type="password" placeholder="IMAP 授权码（QQ 邮箱设置→账户→开启 IMAP 后生成）" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid rgba(109,79,216,.25);border-radius:6px;background:rgba(255,255,255,.8);font-size:11px;">
+            <button id="mail-save-btn" class="primary">💾 保存</button>
+            <button id="mail-test-btn" class="secondary">🔌 测试连接</button>
+            <button id="mail-check-btn" class="secondary">📥 立即检查</button>
+          </div>
+          <div style="font-size:11px;color:#8a87a8;margin-top:4px;">授权码在 QQ 邮箱「设置 → 账户 → 开启 IMAP/SMTP 服务」里生成；仅保存在本机本地数据库，不上传。配置后桌宠每 30 分钟自动检查，24 小时内提前提醒。</div>
+        </div>
+        <div class="resume-status" id="mail-status">加载中…</div>
+      </div>
+      <div id="schedule-list" class="jobs-list"></div>
     </section>
   </main>
 

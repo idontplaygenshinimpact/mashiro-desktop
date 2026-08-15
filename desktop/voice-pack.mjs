@@ -3,7 +3,7 @@
 // 模式2：playScene(scene) 直接按场景播放（点击/托盘等无文本事件）
 // 未命中 → 返回 null，由调用方走实时 TTS 兜底
 import { readFileSync, existsSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -69,12 +69,41 @@ export function playScene(scene) {
   return playVoicePack(file);
 }
 
+// ---------- ffplay 路径解析（可配置 + 自动探测 + 硬编码兜底，找不到则不崩溃） ----------
+const HARDCODED_FFPLAY = "D:\\hfut\\file\\Videopro\\exp01\\exp01_ffmpeg\\ffmpeg\\ffmpeg\\bin\\ffplay.exe";
+let ffplayPath = null; // null=未探测；string=路径；false=不可用
+
+/** 解析 ffplay 可执行路径：FFPLAY_PATH 覆盖 → where 探测（缓存）→ 硬编码兜底 → 不可用 */
+export function resolveFfplay() {
+  if (ffplayPath !== null) return ffplayPath;
+  // 1) 环境变量显式覆盖
+  if (process.env.FFPLAY_PATH && existsSync(process.env.FFPLAY_PATH)) {
+    ffplayPath = process.env.FFPLAY_PATH;
+    return ffplayPath;
+  }
+  // 2) 自动探测 where ffplay（同步，结果缓存）
+  try {
+    const r = spawnSync("where", ["ffplay"], { windowsHide: true, timeout: 3000 });
+    if (r.status === 0 && r.stdout) {
+      const line = String(r.stdout).split(/\r?\n/).map((s) => s.trim()).find((s) => s && existsSync(s));
+      if (line) { ffplayPath = line; return ffplayPath; }
+    }
+  } catch { /* ignore */ }
+  // 3) 回退硬编码路径
+  if (existsSync(HARDCODED_FFPLAY)) { ffplayPath = HARDCODED_FFPLAY; return ffplayPath; }
+  ffplayPath = false; // 不可用
+  return ffplayPath;
+}
+
 /** 播放语音包音频（ffplay 直接播，最可靠——MediaPlayer/SoundPlayer 后台不可靠） */
 export function playVoicePack(file) {
+  const ff = resolveFfplay();
+  if (!ff) return { ok: false, error: "ffplay 不可用" };
   mkdirSync(TMP_DIR, { recursive: true });
-  const FFPLAY = "D:\\hfut\\file\\Videopro\\exp01\\exp01_ffmpeg\\ffmpeg\\ffmpeg\\bin\\ffplay.exe";
   try {
-    spawn(FFPLAY, ["-autoexit", "-nodisp", "-loglevel", "quiet", file], { windowsHide: true, detached: true, stdio: "ignore" }).unref();
+    const child = spawn(ff, ["-autoexit", "-nodisp", "-loglevel", "quiet", file], { windowsHide: true, detached: true, stdio: "ignore" });
+    child.on("error", (err) => console.log(`[voice] ffplay 播放失败: ${err.message}`));
+    child.unref();
   } catch { /* ignore */ }
   return { ok: true, engine: "voicepack", file };
 }

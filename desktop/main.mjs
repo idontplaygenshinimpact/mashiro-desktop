@@ -1,10 +1,10 @@
 // 看板娘 Electron 主进程
 // 透明无边框窗口 + 置顶 + 拖拽 + 系统托盘
-import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell } from "electron";
+import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell, session } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, exec, spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { writeFileSync, readFileSync } from "node:fs";
 
 // ---------- 启动加速 ----------
 // 注意：透明窗口 + disable-gpu 会导致窗口不渲染（看不到）。
@@ -22,34 +22,73 @@ let panelWin = null;
 let tray = null;
 let widgetProc = null; // 后端数据服务（widget.mjs）
 const WIDGET_URL = "http://127.0.0.1:8899";
+let fitReceived = false; // 渲染层是否已上报 window:fit（用于兜底显示）
+
+// 本实例拉起的 widget 子进程 pid 集合（退出清理只杀自己拉起的，避免误杀其他 node 实例/开发进程）
+const spawnedWidgetPids = new Set();
+
+// ---------- 单实例锁（防注册表自启 + 用户双击 → 双托盘/双守护） ----------
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    // 已有实例：聚焦现有窗口（优先面板，其次桌宠）
+    if (panelWin && !panelWin.isDestroyed()) {
+      panelWin.show();
+      panelWin.focus();
+    } else if (win && !win.isDestroyed()) {
+      win.show();
+    }
+  });
+}
+
+// ---------- 安全 spawn：始终挂 error 处理器，避免子进程 'error' 未捕获导致主进程崩溃 ----------
+function safeSpawn(cmd, args, opts = {}) {
+  try {
+    const child = spawn(cmd, args, { windowsHide: true, detached: true, stdio: "ignore", ...opts });
+    child.on("error", (err) => console.log(`[kanban] spawn ${cmd} 失败: ${err.message}`));
+    try { child.unref(); } catch { /* ignore */ }
+    return child;
+  } catch (err) {
+    console.log(`[kanban] spawn ${cmd} 异常: ${err.message}`);
+    return null;
+  }
+}
 
 // ---------- 启动/复用后端 widget 服务（含守护：死了自动拉起） ----------
 function ensureWidgetServer() {
-  fetch(`${WIDGET_URL}/api/refresh`)
+  // 5s 超时：widget 卡死时不再无限挂起，超时视为未启动
+  fetch(`${WIDGET_URL}/api/refresh`, { signal: AbortSignal.timeout(5000) })
     .then((r) => { if (!r.ok) throw new Error("bad status"); })
     .catch(() => {
-      widgetProc = spawn("node", ["widget.mjs"], {
-        cwd: ROOT,
-        windowsHide: true,
-        stdio: "ignore",
-        detached: true,
-      });
-      widgetProc.unref();
-      console.log("[kanban] widget.mjs 已后台拉起");
+      if (widgetProc && widgetProc.exitCode === null) return; // 已在运行，不重复启动
+      const child = safeSpawn("node", ["widget.mjs"], { cwd: ROOT });
+      widgetProc = child;
+      if (child) {
+        spawnedWidgetPids.add(child.pid);
+        child.on("exit", () => { spawnedWidgetPids.delete(child.pid); if (widgetProc === child) widgetProc = null; });
+        console.log("[kanban] widget.mjs 已后台拉起");
+      }
     });
 }
 
 // 持续守护：每 30 秒探测，挂了自动重启
-setInterval(ensureWidgetServer, 30000);
+if (gotSingleInstanceLock) setInterval(ensureWidgetServer, 30000);
 
-// 退出时清理：杀 widget 数据服务 + 其拉起的爬虫进程（用户期望"退出桌宠=全部停止"）
+// 退出时清理：只杀本实例拉起的 widget 数据服务 + 其拉起的 discover 爬虫子进程
+// （不再用 CommandLine 匹配，避免误杀其他 node 实例/开发进程）
 function cleanupWidget() {
+  const pids = [...spawnedWidgetPids];
+  if (!pids.length) return;
+  const parentCond = pids.map((p) => `($_.ParentProcessId -eq ${p})`).join(" -or ");
+  const selfCond = pids.map((p) => `($_.ProcessId -eq ${p})`).join(" -or ");
   try {
     spawnSync(
       "powershell",
       ["-NoProfile", "-Command",
-        "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match '(widget|discover)\\.mjs' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"],
-      { windowsHide: true, timeout: 15000, stdio: "ignore" }
+        `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { ${parentCond} -or ${selfCond} } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`],
+      { windowsHide: true, timeout: 5000, stdio: "ignore" }
     );
     console.log("[kanban] 已停止后台服务与爬虫进程");
   } catch { /* ignore */ }
@@ -78,14 +117,52 @@ function createTrayIcon() {
   return nativeImage.createFromBitmap(canvasData, { width: size, height: size });
 }
 
+// ---------- 窗口位置持久化（data/window-state.json，防抖保存） ----------
+const STATE_FILE = path.join(ROOT, "data", "window-state.json");
+let mascotState = { x: null, y: null };
+let panelState = { x: null, y: null, width: null, height: null };
+let stateSaveTimer = null;
+
+function readWindowState() {
+  try { return JSON.parse(readFileSync(STATE_FILE, "utf8")); } catch { return {}; }
+}
+function saveWindowState() {
+  try {
+    writeFileSync(STATE_FILE, JSON.stringify({ mascot: mascotState, panel: panelState }, null, 2), "utf8");
+  } catch { /* ignore */ }
+}
+function scheduleSaveWindowState() {
+  clearTimeout(stateSaveTimer);
+  stateSaveTimer = setTimeout(saveWindowState, 400); // 防抖，避免拖动时频繁写盘
+}
+// 校验位置是否在屏内（至少露出 40px，避免恢复到屏幕外）
+function isOnScreen(x, y, w, h) {
+  try {
+    const { workArea } = screen.getPrimaryDisplay();
+    const minVisible = 40;
+    return (
+      x + minVisible <= workArea.x + workArea.width &&
+      x + w - minVisible >= workArea.x &&
+      y + minVisible <= workArea.y + workArea.height &&
+      y + h - minVisible >= workArea.y
+    );
+  } catch { return false; }
+}
+
 // ---------- 创建透明悬浮窗 ----------
 function createWindow() {
   const { workArea } = screen.getPrimaryDisplay();
   // 固定窗口尺寸（创建即锁定，绝不做 setSize——透明窗口 setSize 会被系统二次调整导致"长按增大"）
   const W = 220, H = 360;
   console.log(`[kanban] workArea: x=${workArea.x} y=${workArea.y} w=${workArea.width} h=${workArea.height}`);
-  const winX = workArea.x + workArea.width - W - 12;
-  const winY = workArea.y + workArea.height - H - 12;
+  // 恢复上次保存的桌宠位置（校验在屏内，避免恢复到屏幕外）
+  let winX = workArea.x + workArea.width - W - 12;
+  let winY = workArea.y + workArea.height - H - 12;
+  const savedMascot = readWindowState().mascot;
+  if (savedMascot && Number.isFinite(savedMascot.x) && Number.isFinite(savedMascot.y) && isOnScreen(savedMascot.x, savedMascot.y, W, H)) {
+    winX = Math.round(savedMascot.x);
+    winY = Math.round(savedMascot.y);
+  }
   console.log(`[kanban] window pos: ${winX}, ${winY}`);
 
   win = new BrowserWindow({
@@ -126,7 +203,22 @@ function createWindow() {
   win.webContents.on("console-message", (e, level, message) => console.log(`[renderer] ${message}`));
 
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
-  win.on("closed", () => { win = null; });
+  // 兜底：渲染层 15s 内未上报 window:fit（模型加载失败/渲染层崩溃）→ 强制显示，避免应用永远不可见
+  const fitFallbackTimer = setTimeout(() => {
+    if (win && !win.isDestroyed() && !win.isVisible() && !fitReceived) {
+      win.showInactive();
+      console.log("[kanban] 渲染层未上报就绪，兜底显示窗口");
+    }
+  }, 15000);
+  // 位置持久化：拖动后防抖保存
+  win.on("moved", () => {
+    try {
+      const [x, y] = win.getPosition();
+      mascotState = { x, y };
+      scheduleSaveWindowState();
+    } catch { /* ignore */ }
+  });
+  win.on("closed", () => { clearTimeout(fitFallbackTimer); win = null; });
 }
 
 // ---------- 托盘 ----------
@@ -139,7 +231,7 @@ function createTray() {
     { label: "显示/隐藏", click: () => { if (win) { win.isVisible() ? win.hide() : win.show(); } } },
     { label: "打开面板", click: () => { createPanelWindow(); } },
     { label: "立即爬取", click: () => { widgetPost("/api/run-discover", {}).catch(() => {}); } },
-    { label: "打开输出目录", click: () => { spawn("explorer", [path.join(ROOT, "output")], { detached: true }).unref(); } },
+    { label: "打开输出目录", click: () => { safeSpawn("explorer", [path.join(ROOT, "output")]); } },
     { type: "separator" },
     { label: "退出", click: () => { app.quit(); } },
   ]);
@@ -354,7 +446,7 @@ $textNodes.Item(0).AppendChild($template.CreateTextNode('${String(title).replace
 $textNodes.Item(1).AppendChild($template.CreateTextNode('${String(message).replace(/'/g, "")}')) > $null
 $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
 [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('MianshiAgent').Show($toast)`;
-    spawn("powershell", ["-NoProfile", "-Command", ps], { windowsHide: true, detached: true }).unref();
+    safeSpawn("powershell", ["-NoProfile", "-Command", ps]);
   } catch { /* ignore */ }
   return { ok: true };
 });
@@ -364,8 +456,13 @@ ipcMain.handle("window:quit", () => app.quit());
 // 打开指定文件（用系统默认程序，如 md 编辑器/浏览器）
 ipcMain.handle("window:open-file", (e, { filePath }) => {
   if (!filePath) return { ok: false, error: "no path" };
+  // 白名单：仅允许打开 ROOT/output 与 ROOT/data 内的文件（防任意路径打开/执行）
+  const target = path.resolve(String(filePath));
+  const allowed = [path.join(ROOT, "output"), path.join(ROOT, "data")];
+  const inAllowed = allowed.some((dir) => target === dir || target.startsWith(dir + path.sep));
+  if (!inAllowed) return { ok: false, error: "路径不在允许范围" };
   try {
-    shell.openPath(String(filePath));
+    shell.openPath(target);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -374,7 +471,7 @@ ipcMain.handle("window:open-file", (e, { filePath }) => {
 
 // 打开输出目录（explorer）
 ipcMain.handle("window:open-output", () => {
-  spawn("explorer", [path.join(ROOT, "output")], { detached: true }).unref();
+  safeSpawn("explorer", [path.join(ROOT, "output")]);
   return { ok: true };
 });
 
@@ -474,13 +571,7 @@ ipcMain.handle("window:speak", async (e, { text }) => {
     writeFileSync(tmpFile, String(text).slice(0, 200), "utf8");
     const ps1 = path.join(__dirname, "speak.ps1");
     const run = (shell) => {
-      try {
-        spawn(
-          shell,
-          ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, "-TextFile", tmpFile],
-          { windowsHide: true, detached: true, stdio: "ignore" }
-        ).unref();
-      } catch { /* ignore */ }
+      safeSpawn(shell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, "-TextFile", tmpFile]);
     };
     try {
       const probe = spawnSync("pwsh", ["-NoProfile", "-Command", "exit 0"], { timeout: 3000, windowsHide: true });
@@ -496,17 +587,20 @@ ipcMain.handle("window:speak", async (e, { text }) => {
 ipcMain.handle("window:fit", async () => {
   if (!win) return { ok: false };
   if (mascotHidden) return { ok: true }; // 面板打开中，不显示桌宠
+  const firstShow = !fitReceived;
+  fitReceived = true;
   win.showInactive(); // 不抢焦点（避免透明窗口 isFocused 永久 true 导致全屏不隐藏）
+  if (!firstShow) return { ok: true }; // 仅首次显示时校正位置，之后不强制拉回（用户已拖动的不要再弹回）
   // show 后延迟强制拉回一次（透明窗口 show 时 DWM 可能调整）
   setTimeout(() => {
     if (!win || win.isDestroyed()) return;
     const { workArea } = screen.getPrimaryDisplay();
-    win.setBounds({
-      x: workArea.x + workArea.width - 220 - 12,
-      y: workArea.y + workArea.height - 360 - 12,
-      width: 220,
-      height: 360,
-    });
+    const expectX = workArea.x + workArea.width - 220 - 12;
+    const expectY = workArea.y + workArea.height - 360 - 12;
+    // 若用户在延迟期内已拖动，则不强制复位
+    const [cx, cy] = win.getPosition();
+    if (Math.abs(cx - expectX) > 2 || Math.abs(cy - expectY) > 2) return;
+    win.setBounds({ x: expectX, y: expectY, width: 220, height: 360 });
     win.setMinimumSize(220, 360);
     win.setMaximumSize(220, 360);
   }, 1200);
@@ -525,11 +619,21 @@ function createPanelWindow() {
   const { workArea } = screen.getPrimaryDisplay();
   // 面板尺寸：宽 560 适合模拟面试（问题+评分+回答并排），高 720 内容不挤
   // 上限不超过屏幕 90%，小屏自动缩小
-  const W = Math.min(560, Math.round(workArea.width * 0.9));
-  const H = Math.min(720, Math.round(workArea.height * 0.9));
+  let W = Math.min(560, Math.round(workArea.width * 0.9));
+  let H = Math.min(720, Math.round(workArea.height * 0.9));
   // 屏幕居中
-  const x = Math.round(workArea.x + (workArea.width - W) / 2);
-  const y = Math.round(workArea.y + (workArea.height - H) / 2);
+  let x = Math.round(workArea.x + (workArea.width - W) / 2);
+  let y = Math.round(workArea.y + (workArea.height - H) / 2);
+  // 恢复上次保存的面板位置/尺寸（校验在屏内，避免恢复到屏幕外）
+  const savedPanel = readWindowState().panel;
+  if (savedPanel && Number.isFinite(savedPanel.x) && Number.isFinite(savedPanel.y) &&
+      Number.isFinite(savedPanel.width) && Number.isFinite(savedPanel.height) &&
+      isOnScreen(savedPanel.x, savedPanel.y, savedPanel.width, savedPanel.height)) {
+    x = Math.round(savedPanel.x);
+    y = Math.round(savedPanel.y);
+    W = Math.round(savedPanel.width);
+    H = Math.round(savedPanel.height);
+  }
   panelWin = new BrowserWindow({
     width: W,
     height: H,
@@ -554,6 +658,17 @@ function createPanelWindow() {
   panelWin.webContents.on("console-message", (e, level, message) => {
     console.log(`[panel] ${message}`);
   });
+  // 面板位置/尺寸持久化：移动/缩放后防抖保存
+  const trackPanelBounds = () => {
+    try {
+      const [px, py] = panelWin.getPosition();
+      const [pw, ph] = panelWin.getSize();
+      panelState = { x: px, y: py, width: pw, height: ph };
+      scheduleSaveWindowState();
+    } catch { /* ignore */ }
+  };
+  panelWin.on("moved", trackPanelBounds);
+  panelWin.on("resized", trackPanelBounds);
   panelWin.on("closed", () => {
     panelWin = null;
     showMascot(); // 面板被关闭 → 恢复桌宠
@@ -738,14 +853,46 @@ function startFocusSupervision() {
   setInterval(fetchFocusBlacklist, 5 * 60 * 1000); // 每 5 分钟刷新黑名单（面板改黑名单后生效）
 }
 
+// ---------- widget 鉴权：给面板/桌宠对 8899 的请求注入 Bearer token ----------
+// widget.mjs（另一任务）会写入 data/widget-token.json；此处读取并注入（缺失则轮询 ~10s 等待）
+let widgetToken = "";
+async function loadWidgetToken() {
+  const tokenFile = path.join(ROOT, "data", "widget-token.json");
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    try {
+      const raw = readFileSync(tokenFile, "utf8").trim();
+      let t = "";
+      try {
+        const parsed = JSON.parse(raw);
+        t = typeof parsed === "string" ? parsed : (parsed?.token || parsed?.value || "");
+      } catch { t = raw; } // 非 JSON 视为裸字符串
+      if (t) { widgetToken = String(t); console.log("[kanban] widget token 已加载"); return; }
+    } catch { /* 文件尚未生成，轮询等待 */ }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+function registerWidgetAuth() {
+  session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    const url = details.url || "";
+    if (widgetToken && (url.startsWith("http://127.0.0.1:8899") || url.startsWith("http://localhost:8899"))) {
+      details.requestHeaders["Authorization"] = "Bearer " + widgetToken;
+    }
+    callback({ requestHeaders: details.requestHeaders });
+  });
+}
+
 // ---------- 生命周期 ----------
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return;
+  registerWidgetAuth();
+  loadWidgetToken();
   ensureWidgetServer();
   setTimeout(createWindow, 800); // 等 widget 服务起来
   createTray();
   startDesktopScopeCheck();
   startFocusSupervision();
-});
+}).catch(() => { /* 单实例锁未获取时提前退出，ready 可能 reject，忽略 */ });
 
 app.on("window-all-closed", (e) => {
   // 看板娘关窗口不退出（托盘常驻）

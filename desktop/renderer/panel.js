@@ -17,6 +17,7 @@ function switchTab(name) {
   if (name === "kb") loadKbStats();
   if (name === "profile") loadProfileStatus();
   if (name === "focus") loadFocus();
+  if (name === "schedule") loadSchedule();
 }
 
 document.querySelectorAll(".tab").forEach((btn) => {
@@ -2168,6 +2169,105 @@ $("focus-blacklist-reset").addEventListener("click", async () => {
     $("focus-blacklist").value = defaults.join("\n");
     saveFocusBlacklist(defaults);
   } catch (e) { $("focus-status").textContent = "⚠️ " + e.message; }
+});
+
+// ============ 日程（面试邀约识别 + 提醒） ============
+function fmtEventTime(ts) {
+  if (!ts) return "时间待定";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "时间待定";
+  return d.toLocaleString("zh-CN", { hour12: false });
+}
+
+async function loadSchedule() {
+  const statusEl = $("mail-status");
+  const list = $("schedule-list");
+  try {
+    // 配置（脱敏，只回邮箱与是否已配置）+ 日程列表
+    const [cfgRes, schedRes] = await Promise.all([
+      fetch("http://127.0.0.1:8899/api/mail/config"),
+      fetch("http://127.0.0.1:8899/api/schedule"),
+    ]);
+    const cfgJ = await cfgRes.json();
+    const schedJ = await schedRes.json();
+    if (cfgJ.config?.email) $("mail-email").value = cfgJ.config.email;
+    const events = schedJ.events || [];
+    statusEl.textContent = cfgJ.config?.configured
+      ? `✅ 邮箱已配置：${cfgJ.config.email} · 未来日程 ${events.length} 条`
+      : "尚未配置邮箱，填写地址与授权码后点「💾 保存」并「🔌 测试连接」";
+    if (!events.length) {
+      list.innerHTML = '<div class="empty-hint">暂无未来的面试/笔试邀约，点「📥 立即检查」从邮箱识别</div>';
+      return;
+    }
+    list.innerHTML = events.map((ev) => `
+      <div class="job-item">
+        <div class="job-head">
+          <b style="font-size:12px;">${esc(ev.company)}${ev.role ? " · " + esc(ev.role) : ""}</b>
+          ${ev.form ? `<span class="job-badge">${esc(ev.form)}</span>` : ""}
+        </div>
+        <div class="job-meta">🕐 ${esc(fmtEventTime(ev.interviewAt))}${ev.location ? " · 📍 " + esc(ev.location) : ""}</div>
+        <div class="job-actions">
+          ${ev.link ? `<a class="job-link" href="${esc(safeUrl(ev.link))}" target="_blank" rel="noopener">🔗 会议/链接</a>` : ""}
+        </div>
+      </div>`).join("");
+  } catch (e) {
+    statusEl.textContent = "⚠️ " + e.message;
+    list.innerHTML = `<div class="empty-hint">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+$("mail-save-btn")?.addEventListener("click", async () => {
+  const statusEl = $("mail-status");
+  const email = $("mail-email").value.trim();
+  const authCode = $("mail-authcode").value.trim();
+  if (!email || !authCode) { statusEl.textContent = "⚠️ 请填写邮箱地址和授权码"; return; }
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/mail/config", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, authCode }),
+    });
+    const j = await res.json();
+    if (j.ok) { statusEl.textContent = "✅ 已保存：" + email; $("mail-authcode").value = ""; }
+    else statusEl.textContent = "⚠️ " + (j.error || "保存失败");
+  } catch (e) { statusEl.textContent = "⚠️ " + e.message; }
+});
+
+$("mail-test-btn")?.addEventListener("click", async () => {
+  const statusEl = $("mail-status");
+  const email = $("mail-email").value.trim();
+  const authCode = $("mail-authcode").value.trim();
+  if (!email || !authCode) { statusEl.textContent = "⚠️ 请先填写邮箱地址和授权码"; return; }
+  statusEl.textContent = "正在连接邮箱服务器…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/mail/test", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, authCode }),
+    });
+    const j = await res.json();
+    statusEl.textContent = j.ok ? "✅ 连接成功" : "⚠️ " + (j.error || "连接失败");
+  } catch (e) { statusEl.textContent = "⚠️ " + e.message; }
+});
+
+$("mail-check-btn")?.addEventListener("click", async () => {
+  const btn = $("mail-check-btn");
+  const statusEl = $("mail-status");
+  btn.disabled = true;
+  btn.textContent = "⏳ 检查中…";
+  statusEl.textContent = "正在拉取未读邮件并 AI 识别邀约…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/mail/check", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const j = await res.json();
+    if (j.ok) statusEl.textContent = `✅ 检查 ${j.emails} 封，新增 ${j.added} 条日程`;
+    else statusEl.textContent = "⚠️ " + (j.error || "检查失败");
+  } catch (e) {
+    statusEl.textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📥 立即检查";
+    loadSchedule();
+  }
 });
 
 // ============ 初始化 ============

@@ -69,6 +69,8 @@ async function loadModel() {
     setTimeout(maybeTimeGreeting, 5000);
   } catch (e) {
     showBubble("😢 Live2D 加载失败: " + e.message, 8000);
+    // 模型加载失败也必须让窗口可见（否则错误气泡永远在隐藏窗口里，应用看起来像没启动）
+    try { await window.kanban.fitWindow(); } catch { /* ignore */ }
   }
 }
 

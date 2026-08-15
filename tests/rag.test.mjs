@@ -1,9 +1,17 @@
 // rag.mjs 测试：混合检索（FTS5 id 关联 + 向量通道）/ RAG 问答降级 / 增量更新
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
 
 const dbDir = setupTempDb("rag");
+// 隔离真实 output/ 与真实 embedding 模型（必须在 import rag.mjs 之前设置——模块顶层求值 OUTPUT_DIR/EMBED_MODEL）
+const outDir = mkdtempSync(path.join(tmpdir(), "rag-test-out-"));
+mkdirSync(outDir, { recursive: true });
+process.env.RAG_OUTPUT_DIR = outDir;
+process.env.RAG_EMBED_MODEL = "Xenova/nonexistent-model-for-test"; // 强制 embedding 降级，避免加载真实模型拖慢测试
 const { searchKnowledge, getKnowledgeStats, incrementalRebuild, getIndexedMtimes } = await import("../lib/rag.mjs");
 const { db } = await import("../lib/db.mjs");
 
@@ -38,7 +46,7 @@ beforeEach(async () => {
     { id: "kb_s3", source: "doc", kind: "doc", title: "文档·React", content: "React 官方文档", text: "React 前端" },
   ]);
 });
-after(() => { cleanupTempDb(dbDir); });
+after(() => { cleanupTempDb(dbDir); rmSync(outDir, { recursive: true, force: true }); });
 
 test("searchKnowledge 命中相关条目（FTS 通道按 id 关联）", async () => {
   const hits = await searchKnowledge("事件循环", 3);
@@ -67,4 +75,13 @@ test("incrementalRebuild md 未变化时只重刷 DB 资产（不崩）", async 
   assert.equal(typeof r.changed, "boolean");
   assert.ok(r.added >= 0 && r.removed >= 0);
   assert.ok(getIndexedMtimes() instanceof Object, "mtime 索引可读");
+});
+
+test("weak_points 索引入库（regression: note 列不存在导致薄弱点从未入库）", async () => {
+  db.prepare("INSERT INTO weak_points (id, topic, fail_count, last_failed_at, source, origin, updated_at) VALUES ('wp_ev','事件循环',3,NULL,'复盘','agent',1)").run();
+  const r = await incrementalRebuild();
+  assert.equal(typeof r.changed, "boolean");
+  const weakRows = db.prepare("SELECT title, content FROM knowledge_items WHERE source='weak'").all();
+  assert.ok(weakRows.length >= 1, "薄弱点已索引进知识库");
+  assert.ok(weakRows.some((w) => w.title.includes("事件循环")), "薄弱点主题存在");
 });
