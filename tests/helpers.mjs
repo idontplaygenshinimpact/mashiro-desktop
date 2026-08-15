@@ -33,7 +33,7 @@ export async function clearAllTables() {
     DELETE FROM chat_history; DELETE FROM weak_points; DELETE FROM mastered_points;
     DELETE FROM interview_history; DELETE FROM study_plan_items; DELETE FROM review_cards;
     DELETE FROM card_reviews; DELETE FROM kp_mastery; DELETE FROM schema_meta;
-    DELETE FROM trace_llm; DELETE FROM trace_tools;
+    DELETE FROM trace_llm; DELETE FROM trace_tools; DELETE FROM decision_ledger;
     DELETE FROM job_posts; DELETE FROM company_profiles;`);
   // knowledge 表只有 rag 模块的测试才建——表不存在时忽略
   try { db.exec("DELETE FROM knowledge_items; DELETE FROM knowledge_fts;"); } catch { /* ignore */ }

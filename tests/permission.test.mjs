@@ -9,6 +9,7 @@ mockFetchPage();
 const { chatWithAgent } = await import("../lib/agent.mjs");
 const { memory } = await import("../lib/memory.mjs");
 const permission = await import("../lib/permission.mjs");
+const { getRecentDecisions } = await import("../lib/trace.mjs");
 
 // 清理审批状态（模块级单例：pending 队列 + sessionApproved）
 function resetPermission() {
@@ -67,6 +68,24 @@ test("resolveApproval 不存在请求 → error", () => {
   assert.equal(r.ok, false);
 });
 
+test("resolveApprovalDecision 规范化 allow/deny 并写账本", () => {
+  const { resolveApprovalDecision } = permission;
+  assert.equal(resolveApprovalDecision({ toolName: "solve_question", sessionId: "s1" }, "allow", "用户批准"), "allow");
+  assert.equal(resolveApprovalDecision({ toolName: "solve_question" }, "deny", "用户拒绝"), "deny");
+  assert.equal(resolveApprovalDecision({ toolName: "solve_question" }, "timeout", "审批超时"), "deny", "非 allow 一律 deny-first");
+  assert.equal(resolveApprovalDecision({ toolName: "solve_question" }, false), "deny");
+  assert.equal(resolveApprovalDecision({ toolName: "solve_question" }, true), "allow");
+  // 已写账本（metadata only）
+  const recent = getRecentDecisions(10);
+  const allowRows = recent.filter((d) => d.decision === "allow" && d.tool_name === "solve_question");
+  assert.equal(allowRows.length, 2, "2 次 allow 均记录");
+  assert.ok(allowRows.some((d) => d.session_id === "s1"), "含 sessionId 的 allow 记录");
+  assert.ok(allowRows.every((d) => d.approved_by === "user"), "批准人默认 user");
+  const denyRows = recent.filter((d) => d.decision === "deny" && d.tool_name === "solve_question");
+  assert.equal(denyRows.length, 3, "3 次 deny 均记录");
+  assert.ok(denyRows.every((d) => d.approved_by === null), "deny 无批准人");
+});
+
 test("同工具并发请求合并为一个 pending", async () => {
   const p1 = permission.requestApproval({ toolName: "t_merge", args: {} });
   const p2 = permission.requestApproval({ toolName: "t_merge", args: {} });
@@ -119,6 +138,47 @@ test("agent：审批允许后工具正常执行", async () => {
   const { getPlan } = await import("../lib/study.mjs");
   assert.ok(getPlan().items.some((i) => i.topic === "闭包"), "允许后清单写入");
   assert.ok(r.reply.length > 0);
+});
+
+// ---------- agent 接入：决策写入审计账本 ----------
+test("agent：拒绝 confirm 工具 → 记录 decision=deny", async () => {
+  setLlmResponses(
+    'TOOLCALL:{"name":"record_interview_topics","arguments":"{\\"topics\\":[\\"X点\\"]}"}',
+    "好的，那我不记录了。"
+  );
+  const chatPromise = chatWithAgent("记一下 X点");
+  let pend = null;
+  for (let i = 0; i < 50; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    pend = pendingOf("record_interview_topics");
+    if (pend) break;
+  }
+  assert.ok(pend, "应发起审批");
+  permission.resolveApproval("record_interview_topics", { allow: false });
+  await chatPromise;
+  const deny = getRecentDecisions(20).find((d) => d.tool_name === "record_interview_topics" && d.decision === "deny");
+  assert.ok(deny, "deny 决策已记录");
+  assert.equal(deny.approved_by, null, "拒绝无批准人");
+});
+
+test("agent：批准 confirm 工具 → 记录 decision=allow + approvedBy=user", async () => {
+  setLlmResponses(
+    'TOOLCALL:{"name":"record_interview_topics","arguments":"{\\"topics\\":[\\"Y点\\"]}"}',
+    "记录完成啦。"
+  );
+  const chatPromise = chatWithAgent("记一下 Y点");
+  let pend = null;
+  for (let i = 0; i < 50; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    pend = pendingOf("record_interview_topics");
+    if (pend) break;
+  }
+  assert.ok(pend, "应发起审批");
+  permission.resolveApproval("record_interview_topics", { allow: true });
+  await chatPromise;
+  const allow = getRecentDecisions(20).find((d) => d.tool_name === "record_interview_topics" && d.decision === "allow");
+  assert.ok(allow, "allow 决策已记录");
+  assert.equal(allow.approved_by, "user", "批准人=user");
 });
 
 test("agent：solve_question 需审批（confirm 分级生效）", async () => {

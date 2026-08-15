@@ -6,6 +6,17 @@ import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, mockFetchPage, set
 const dbDir = setupTempDb("agent");
 mockLLM();
 mockFetchPage();
+// mock web-search：正常 query 委托真实实现（其内部 fetchPage 已被 mockFetchPage 接管），
+// 含 "TOOL_ERROR" 的 sentinel query 抛异常 → 用于验证 tool_error 决策路径（ledger 记账）
+const realWebSearch = await import("../lib/web-search.mjs");
+mock.module(new URL("../lib/web-search.mjs", import.meta.url).href, {
+  namedExports: {
+    searchWeb: async (query, opts) => {
+      if (String(query || "").includes("TOOL_ERROR")) throw new Error("模拟工具执行异常");
+      return realWebSearch.searchWeb(query, opts);
+    },
+  },
+});
 // mock rag 模块：search_knowledge 工具依赖（不加载真实 embedding）
 mock.module(new URL("../lib/rag.mjs", import.meta.url).href, {
   namedExports: {
@@ -299,4 +310,36 @@ test("工具返回 {error} 时 trace 记为失败（不再无条件 ok:true）",
   const calls = getRecentTools(20).filter((t) => t.tool_name === "fetch_page");
   assert.ok(calls.length >= 1, "fetch_page 已执行");
   assert.ok(calls.every((c) => !c.ok), "返回 {error} 的工具应记为失败");
+});
+
+// ---------- 决策账本（audit ledger）agent 集成 ----------
+test("auto_allow：只读工具自动放行 → 记录 decision=auto_allow + policyRef", async () => {
+  setLlmResponses(
+    'TOOLCALL:{"name":"get_study_plan","arguments":"{}"}',
+    "清单已经看过了。"
+  );
+  const r = await chatWithAgent("看看学习清单");
+  assert.equal(r.reply, "清单已经看过了。");
+  const { getRecentDecisions } = await import("../lib/trace.mjs");
+  const decs = getRecentDecisions(20);
+  const auto = decs.find((d) => d.tool_name === "get_study_plan");
+  assert.ok(auto, "auto_allow 决策已记录");
+  assert.equal(auto.decision, "auto_allow");
+  assert.ok(auto.policy_ref, "含策略引用 policy_ref");
+  assert.equal(auto.approved_by, null, "自动放行无批准人");
+});
+
+test("tool_error：工具执行抛异常 → 记录 decision=tool_error（不破坏循环）", async () => {
+  setLlmResponses(
+    'TOOLCALL:{"name":"web_search","arguments":"{\\"query\\":\\"TOOL_ERROR 触发异常\\"}"}',
+    "搜索出错了，我换个方式回答。"
+  );
+  const r = await chatWithAgent("触发一个工具异常");
+  assert.ok(r.reply.length > 0, "工具异常后 agent 正常收束（ledger 不破坏循环）");
+  const { getRecentDecisions } = await import("../lib/trace.mjs");
+  const decs = getRecentDecisions(20);
+  const err = decs.find((d) => d.tool_name === "web_search" && d.decision === "tool_error");
+  assert.ok(err, "tool_error 决策已记录");
+  assert.equal(err.reason, "模拟工具执行异常", "reason 为异常消息（截断 ≤200）");
+  assert.equal(err.approved_by, null);
 });
