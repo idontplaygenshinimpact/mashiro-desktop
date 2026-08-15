@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, exec, spawnSync } from "node:child_process";
 import { writeFileSync, readFileSync } from "node:fs";
+import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, healthUrl } from "../lib/widget-auth.mjs";
 
 // ---------- 启动加速 ----------
 // 注意：透明窗口 + disable-gpu 会导致窗口不渲染（看不到）。
@@ -21,7 +22,6 @@ let win = null;
 let panelWin = null;
 let tray = null;
 let widgetProc = null; // 后端数据服务（widget.mjs）
-const WIDGET_URL = "http://127.0.0.1:8899";
 let fitReceived = false; // 渲染层是否已上报 window:fit（用于兜底显示）
 
 // 本实例拉起的 widget 子进程 pid 集合（退出清理只杀自己拉起的，避免误杀其他 node 实例/开发进程）
@@ -61,7 +61,7 @@ function ensureWidgetServer() {
   // 探测 /api/health：认证豁免端点（主进程 fetch 不走 webRequest token 注入，
   // 探测 /api/refresh 会被 401 误判 widget 未启动 → 疯狂重复 spawn）
   // 5s 超时：widget 卡死时不再无限挂起，超时视为未启动
-  widgetFetch(`${WIDGET_URL}/api/health`, { signal: AbortSignal.timeout(5000) })
+  widgetFetch(healthUrl(), { signal: AbortSignal.timeout(5000) })
     .then((r) => { if (!r.ok) throw new Error("bad status"); })
     .catch(() => {
       if (widgetProc && widgetProc.exitCode === null) return; // 已在运行，不重复启动
@@ -843,29 +843,19 @@ function startFocusSupervision() {
 }
 
 // ---------- widget 鉴权：给面板/桌宠对 8899 的请求注入 Bearer token ----------
-// widget.mjs 会写入 data/widget-token.json；此处读取并注入
-// widget 冷启动要 15-30s 才写 token 文件 → 持续轮询直到读到（不能 10s 放弃，
-// 否则面板所有请求永远 401，学习清单/复习/对话全部加载不出来）
+// 核心逻辑抽到 lib/widget-auth.mjs（纯函数、可单测）：token 轮询 / 注入判断 / fetch 包装 / 健康探测 URL。
+// 主进程这里只保留 Electron 相关的 session API 绑定与 token 变量。
 let widgetToken = "";
 async function loadWidgetToken() {
   const tokenFile = path.join(ROOT, "data", "widget-token.json");
-  for (;;) {
-    try {
-      const raw = readFileSync(tokenFile, "utf8").trim();
-      let t = "";
-      try {
-        const parsed = JSON.parse(raw);
-        t = typeof parsed === "string" ? parsed : (parsed?.token || parsed?.value || "");
-      } catch { t = raw; } // 非 JSON 视为裸字符串
-      if (t) { widgetToken = String(t); console.log("[kanban] widget token 已加载"); return; }
-    } catch { /* 文件尚未生成，继续轮询 */ }
-    await new Promise((r) => setTimeout(r, 500));
-  }
+  // widget 冷启动要 15-30s 才写 token 文件 → 持续轮询直到读到（不能 10s 放弃，
+  // 否则面板所有请求永远 401，学习清单/复习/对话全部加载不出来）
+  widgetToken = await loadTokenFromFile(tokenFile);
+  console.log("[kanban] widget token 已加载");
 }
 function registerWidgetAuth() {
   session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-    const url = details.url || "";
-    if (widgetToken && (url.startsWith("http://127.0.0.1:8899") || url.startsWith("http://localhost:8899"))) {
+    if (shouldInjectAuth(details.url || "", widgetToken)) {
       details.requestHeaders["Authorization"] = "Bearer " + widgetToken;
     }
     callback({ requestHeaders: details.requestHeaders });
@@ -876,9 +866,7 @@ function registerWidgetAuth() {
 // 关键：IPC handler（getData/studyPlan/reviewDue/chat 等）在主进程用 fetch 调 widget，
 // 主进程 fetch 不经过 webRequest 注入 → 必须显式带 header，否则全部 401
 function widgetFetch(url, opts = {}) {
-  const headers = { ...(opts.headers || {}) };
-  if (widgetToken) headers["Authorization"] = "Bearer " + widgetToken;
-  return fetch(url, { ...opts, headers });
+  return widgetFetchFactory(widgetToken, fetch)(url, opts);
 }
 
 // ---------- 生命周期 ----------
