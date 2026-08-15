@@ -1,0 +1,78 @@
+{
+  "ts": "2026-08-15T06:59:29.666Z",
+  "mode": "judge-check",
+  "judgeAgreement": {
+    "total": 10,
+    "compared": 20,
+    "exact": 17,
+    "adjacent": 20,
+    "exactRate": 85,
+    "adjacentRate": 100,
+    "interJudgeRate": 90,
+    "warning": false
+  },
+  "details": {
+    "judgeCheck": [
+      {
+        "id": "g1",
+        "gold": "correct",
+        "j1": "correct",
+        "j2": "correct"
+      },
+      {
+        "id": "g2",
+        "gold": "correct",
+        "j1": "correct",
+        "j2": "correct"
+      },
+      {
+        "id": "g3",
+        "gold": "correct",
+        "j1": "correct",
+        "j2": "correct"
+      },
+      {
+        "id": "g4",
+        "gold": "acceptable",
+        "j1": "correct",
+        "j2": "acceptable"
+      },
+      {
+        "id": "g5",
+        "gold": "acceptable",
+        "j1": "correct",
+        "j2": "correct"
+      },
+      {
+        "id": "g6",
+        "gold": "missing",
+        "j1": "missing",
+        "j2": "missing"
+      },
+      {
+        "id": "g7",
+        "gold": "missing",
+        "j1": "missing",
+        "j2": "missing"
+      },
+      {
+        "id": "g8",
+        "gold": "incorrect",
+        "j1": "incorrect",
+        "j2": "incorrect"
+      },
+      {
+        "id": "g9",
+        "gold": "incorrect",
+        "j1": "incorrect",
+        "j2": "incorrect"
+      },
+      {
+        "id": "g10",
+        "gold": "incorrect",
+        "j1": "incorrect",
+        "j2": "incorrect"
+      }
+    ]
+  }
+}

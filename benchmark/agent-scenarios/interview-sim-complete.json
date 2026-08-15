@@ -1,0 +1,74 @@
+{
+  "id": "interview-sim-complete",
+  "name": "模拟面试官·收官：低分结束 → 复盘报告 + 清单 + 复习卡回流",
+  "kind": "interviewer",
+  "description": "面试低分结束：agent 需调用 end_interview，复盘报告写入面试历史，薄弱点回流学习清单与复习卡。",
+  "turns": [
+    {
+      "userMessage": "开始模拟面试",
+      "interviewerResponse": [
+        "TOOLCALL:{\"name\":\"start_interview\",\"arguments\":\"{\\\"position\\\":\\\"前端\\\"}\"}",
+        "{\"question\":\"讲讲事件循环\",\"basis\":\"高频\",\"dimension\":\"原理\",\"criteria\":\"要点\",\"boundary\":\"边界\"}",
+        "面试开始。"
+      ],
+      "expectedToolCalls": [
+        "start_interview"
+      ]
+    },
+    {
+      "userMessage": "回答：不太会",
+      "interviewerResponse": [
+        "TOOLCALL:{\"name\":\"submit_answer\",\"arguments\":\"{\\\"answer\\\":\\\"不太会\\\"}\"}",
+        "{\"scores\":{\"tech\":20,\"expr\":20,\"depth\":20,\"edge\":20,\"reflect\":20},\"comment\":\"基础薄弱\",\"finish\":true,\"next_question\":\"\",\"next_basis\":\"\",\"next_dimension\":\"\",\"next_criteria\":\"\",\"next_boundary\":\"\",\"weak_topic\":\"防抖节流\"}",
+        "好的，可以结束面试了。"
+      ],
+      "expectedToolCalls": [
+        "submit_answer"
+      ]
+    },
+    {
+      "userMessage": "结束面试吧",
+      "interviewerResponse": [
+        "TOOLCALL:{\"name\":\"end_interview\",\"arguments\":\"{}\"}",
+        "## 面试复盘\n### 总体评价\n基础较薄弱\n### 短板\n防抖节流不熟",
+        "面试已结束，复盘完成。"
+      ],
+      "expectedToolCalls": [
+        "end_interview"
+      ],
+      "expectedStateAfter": {
+        "interview_history": {
+          "min": 1
+        },
+        "study_plan_items": [
+          {
+            "topic": "防抖节流"
+          }
+        ],
+        "review_cards": [
+          {
+            "topic": "防抖节流"
+          }
+        ]
+      }
+    }
+  ],
+  "goalState": {
+    "interview": {
+      "active": false
+    },
+    "interview_history": {
+      "min": 1
+    },
+    "study_plan_items": [
+      {
+        "topic": "防抖节流"
+      }
+    ],
+    "review_cards": [
+      {
+        "topic": "防抖节流"
+      }
+    ]
+  }
+}

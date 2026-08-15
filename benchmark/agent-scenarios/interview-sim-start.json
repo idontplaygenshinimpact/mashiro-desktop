@@ -1,0 +1,33 @@
+{
+  "id": "interview-sim-start",
+  "name": "模拟面试官·启动：面试官出题，agent 调用 start_interview",
+  "kind": "interviewer",
+  "description": "模拟面试官 LLM 出题：agent 需调用 start_interview 启动面试，面试官生成第一问并写入会话状态。",
+  "turns": [
+    {
+      "userMessage": "来一场前端模拟面试，重点考事件循环",
+      "interviewerResponse": [
+        "TOOLCALL:{\"name\":\"start_interview\",\"arguments\":\"{\\\"position\\\":\\\"前端\\\",\\\"focus\\\":\\\"事件循环\\\"}\"}",
+        "{\"question\":\"讲讲事件循环\",\"basis\":\"高频\",\"dimension\":\"原理\",\"criteria\":\"宏任务与微任务执行顺序\",\"boundary\":\"不涉及Node服务端\"}",
+        "面试已开始，请先自我介绍并简述你最熟悉的项目。"
+      ],
+      "expectedToolCalls": [
+        "start_interview"
+      ],
+      "expectedStateAfter": {
+        "interview": {
+          "active": true,
+          "position": "前端",
+          "question": "讲讲事件循环"
+        }
+      }
+    }
+  ],
+  "goalState": {
+    "interview": {
+      "active": true,
+      "position": "前端",
+      "question": "讲讲事件循环"
+    }
+  }
+}

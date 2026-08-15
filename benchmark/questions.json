@@ -79,6 +79,38 @@
       "question": "讲解 Server-Sent Events 原理（与 WebSocket 区别）、fetch 流式读取（ReadableStream）、在 AI Agent 应用中的实践。",
       "type": "coverage",
       "must_cover": ["SSE", "WebSocket", "ReadableStream", "流式", "打字机"]
+    },
+    {
+      "id": "t1",
+      "title": "事件循环（材料题）",
+      "type": "trace",
+      "context": "JavaScript 是单线程语言，通过事件循环（Event Loop）协调异步任务。任务分为两类：宏任务（macrotask，如 setTimeout、setInterval、I/O 事件）和微任务（microtask，如 Promise.then、MutationObserver）。每次执行完一个宏任务后，事件循环会清空当前所有微任务队列，之后才进行渲染或进入下一个宏任务。",
+      "question": "根据下面材料回答问题：一段同步代码执行完毕后，一个 setTimeout(0) 回调和一个 Promise.resolve().then() 回调，哪个会先执行？请依据材料说明原因。",
+      "must_cover": ["事件循环", "微任务", "宏任务", "setTimeout", "Promise.then"]
+    },
+    {
+      "id": "t2",
+      "title": "HTTP 缓存（材料题）",
+      "type": "trace",
+      "context": "HTTP 缓存分为强缓存和协商缓存两类。强缓存由响应头 Cache-Control 的 max-age 或 Expires 控制，命中后浏览器直接使用本地缓存，不发请求。协商缓存由 ETag/If-None-Match 或 Last-Modified/If-Modified-Since 控制，浏览器需要发送请求，由服务器判断资源是否变化，未变化则返回 304 让浏览器继续用缓存。",
+      "question": "根据下面材料回答问题：强缓存和协商缓存的核心区别是什么？它们分别使用哪些 HTTP 头？请依据材料回答。",
+      "must_cover": ["强缓存", "协商缓存", "Cache-Control", "ETag", "Last-Modified"]
+    },
+    {
+      "id": "t3",
+      "title": "React 重渲染（材料题）",
+      "type": "trace",
+      "context": "React 中，父组件的 state 发生变化会触发其子树重新渲染。React.memo 通过浅比较 props 来跳过未变化组件的重渲染；useCallback 和 useMemo 用于稳定函数/值的引用，避免因每次渲染都生成新引用而破坏 React.memo 的优化效果。",
+      "question": "根据下面材料回答问题：React 中父组件 state 变化时子组件为什么会重渲染？可以用哪些手段避免不必要的重渲染？请依据材料回答。",
+      "must_cover": ["子树重渲染", "React.memo", "浅比较", "useCallback", "useMemo"]
+    },
+    {
+      "id": "t4",
+      "title": "防抖节流（材料题）",
+      "type": "trace",
+      "context": "防抖（debounce）指事件连续触发时，只在最后一次触发后等待指定时间才执行一次。节流（throttle）指在指定时间间隔内最多执行一次，无论触发多频繁。防抖常用于搜索输入联想，节流常用于滚动事件、窗口 resize 等高频场景。",
+      "question": "根据下面材料回答问题：防抖和节流的核心区别是什么？请各举一个适用场景。请依据材料回答。",
+      "must_cover": ["防抖", "节流", "最后一次", "时间间隔", "搜索", "滚动"]
     }
   ]
 }

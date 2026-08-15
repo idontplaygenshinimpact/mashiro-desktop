@@ -14,6 +14,7 @@
     "bench": "node scripts/benchmark.mjs",
     "bench:quick": "node scripts/benchmark.mjs --quick",
     "bench:agent": "node --experimental-test-module-mocks scripts/benchmark-agent.mjs",
+    "bench:web": "node scripts/web-task-bench.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "coverage": "node --experimental-test-module-mocks --experimental-test-coverage --test \"tests/*.test.mjs\""

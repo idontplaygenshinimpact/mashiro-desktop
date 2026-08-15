@@ -1,0 +1,85 @@
+{
+  "_说明": "Web 任务成功率评测集（WebArena 风格）：固定真实任务，只验证「最终产物」而非执行过程。任务分三档：easy=Bing 搜索+总结（answer_contains）；medium=search_posts+fetch_page+solve_question（solved_question/output_file）；hard=多步 search→fetch→solve_question→verify（solved_question）。judge 字段：type ∈ {answer_contains, output_file, solved_question}；requiredKeywords 命中规则——answer_contains 需全部命中，output_file/solved_question 文件名或内容命中任意一个即可；minFiles 为产出文件数量下限（仅 output_file/solved_question 生效，默认 1）。timeoutMs 为单任务超时（毫秒）。",
+  "tasks": [
+    {
+      "id": "easy-react19",
+      "name": "Bing 搜索 React 19 新特性并总结",
+      "difficulty": "easy",
+      "prompt": "用 Bing 搜索 React 19 有哪些新特性，总结 3 个最重要的新特性给我。",
+      "judge": { "type": "answer_contains", "requiredKeywords": ["React", "19"] },
+      "timeoutMs": 600000
+    },
+    {
+      "id": "easy-eventloop",
+      "name": "Bing 搜索 JS 事件循环执行顺序并解释",
+      "difficulty": "easy",
+      "prompt": "用 Bing 搜索 JavaScript 事件循环的执行机制，简要说明宏任务和微任务的执行顺序。",
+      "judge": { "type": "answer_contains", "requiredKeywords": ["事件循环"] },
+      "timeoutMs": 600000
+    },
+    {
+      "id": "easy-qiuzhao",
+      "name": "Bing 搜索 2026 前端秋招最新动态并总结",
+      "difficulty": "easy",
+      "prompt": "用 Bing 搜索 2026 年互联网前端秋招的最新动态，总结关键信息。",
+      "judge": { "type": "answer_contains", "requiredKeywords": ["秋招", "前端"] },
+      "timeoutMs": 600000
+    },
+    {
+      "id": "med-hooks",
+      "name": "搜索 React Hooks 面经并完整讲解",
+      "difficulty": "medium",
+      "prompt": "帮我搜索 React Hooks 相关的面经帖子，抓取一篇，提取里面的面试题，并完整讲解一道（结论/原理/JS实现/边界）。",
+      "judge": { "type": "solved_question", "requiredKeywords": ["Hook"] },
+      "timeoutMs": 600000
+    },
+    {
+      "id": "med-eventloop",
+      "name": "找事件循环面试题并完整讲解",
+      "difficulty": "medium",
+      "prompt": "找到事件循环相关的前端面试题，抓取一篇面经，提取题目并完整讲解（结论/原理/实现/边界）。",
+      "judge": { "type": "solved_question", "requiredKeywords": ["事件循环"] },
+      "timeoutMs": 600000
+    },
+    {
+      "id": "med-vue",
+      "name": "搜索 Vue 响应式原理面经并完整讲解",
+      "difficulty": "medium",
+      "prompt": "搜索 Vue 响应式原理相关的面经，抓取一篇，提炼核心考点并完整讲解。",
+      "judge": { "type": "solved_question", "requiredKeywords": ["响应式"] },
+      "timeoutMs": 600000
+    },
+    {
+      "id": "med-browser",
+      "name": "搜索浏览器渲染原理面经并讲解归档",
+      "difficulty": "medium",
+      "prompt": "搜索浏览器渲染原理（回流/重绘）相关的面经，抓取一篇，完整讲解并归档到 output 目录。",
+      "judge": { "type": "output_file", "minFiles": 1, "requiredKeywords": ["渲染"] },
+      "timeoutMs": 600000
+    },
+    {
+      "id": "hard-react3",
+      "name": "搜索 3 篇 React 面经、讲解 2 道并总结共同考点",
+      "difficulty": "hard",
+      "prompt": "搜索 3 篇 React 面经，逐一抓取并提炼面试题，完整讲解其中 2 道题并归档，最后总结这 3 篇的共同高频考点。",
+      "judge": { "type": "solved_question", "minFiles": 2, "requiredKeywords": ["React"] },
+      "timeoutMs": 600000
+    },
+    {
+      "id": "hard-agent",
+      "name": "搜索 AI Agent 前端面经、讲解并给准备建议",
+      "difficulty": "hard",
+      "prompt": "搜索 AI Agent 前端应用（LLM 前端 / MCP / Prompt 工程）相关的面经，抓取相关帖子，提炼面试题并完整讲解，最后给出前端 AI 方向的面试准备建议。",
+      "judge": { "type": "solved_question", "requiredKeywords": ["Agent"] },
+      "timeoutMs": 600000
+    },
+    {
+      "id": "hard-debounce",
+      "name": "搜索防抖手写题、讲解并验证代码",
+      "difficulty": "hard",
+      "prompt": "搜索前端高频手写题——防抖 debounce 的实现，抓取一篇面经，完整讲解防抖（结论/原理/实现/边界），并验证你的实现代码正确。",
+      "judge": { "type": "solved_question", "requiredKeywords": ["防抖"] },
+      "timeoutMs": 600000
+    }
+  ]
+}

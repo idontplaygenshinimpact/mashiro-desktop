@@ -1,0 +1,52 @@
+{
+  "id": "interview-sim-followup",
+  "name": "模拟面试官·追问：低分轮 → 面试官追问 + 薄弱点回流",
+  "kind": "interviewer",
+  "description": "面试官对低分回答 push back 追问：agent 需调用 submit_answer，薄弱点回流记忆，面试推进到下一问。",
+  "turns": [
+    {
+      "userMessage": "开始一次前端模拟面试",
+      "interviewerResponse": [
+        "TOOLCALL:{\"name\":\"start_interview\",\"arguments\":\"{\\\"position\\\":\\\"前端\\\"}\"}",
+        "{\"question\":\"讲讲事件循环\",\"basis\":\"高频\",\"dimension\":\"原理\",\"criteria\":\"宏任务与微任务\",\"boundary\":\"边界\"}",
+        "面试开始。"
+      ],
+      "expectedToolCalls": [
+        "start_interview"
+      ]
+    },
+    {
+      "userMessage": "我的回答：宏任务先于微任务执行",
+      "interviewerResponse": [
+        "TOOLCALL:{\"name\":\"submit_answer\",\"arguments\":\"{\\\"answer\\\":\\\"宏任务先于微任务执行\\\"}\"}",
+        "{\"scores\":{\"tech\":30,\"expr\":30,\"depth\":30,\"edge\":30,\"reflect\":30},\"comment\":\"回答不完整\",\"finish\":false,\"next_question\":\"微任务和宏任务的执行顺序具体是怎样的？\",\"next_basis\":\"追问\",\"next_dimension\":\"原理\",\"next_criteria\":\"顺序\",\"next_boundary\":\"\",\"weak_topic\":\"事件循环\"}",
+        "已提交，面试官追问了。"
+      ],
+      "expectedToolCalls": [
+        "submit_answer"
+      ],
+      "expectedStateAfter": {
+        "weak_points": [
+          {
+            "topic": "事件循环"
+          }
+        ],
+        "interview": {
+          "active": true,
+          "question": "微任务和宏任务的执行顺序具体是怎样的？"
+        }
+      }
+    }
+  ],
+  "goalState": {
+    "weak_points": [
+      {
+        "topic": "事件循环"
+      }
+    ],
+    "interview": {
+      "active": true,
+      "question": "微任务和宏任务的执行顺序具体是怎样的？"
+    }
+  }
+}
