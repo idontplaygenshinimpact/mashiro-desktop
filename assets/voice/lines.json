@@ -4,7 +4,10 @@
     "files": [
       "greeting-1.wav",
       "greeting-2.wav",
-      "greeting-3.wav"
+      "greeting-3.wav",
+      "greeting-4.wav",
+      "greeting-5.wav",
+      "greeting-6.wav"
     ]
   },
   "praise": {
@@ -13,7 +16,9 @@
       "praise-1.wav",
       "praise-2.wav",
       "praise-3.wav",
-      "praise-4.wav"
+      "praise-4.wav",
+      "praise-5.wav",
+      "praise-6.wav"
     ]
   },
   "encourage": {
@@ -21,7 +26,10 @@
     "files": [
       "encourage-1.wav",
       "encourage-2.wav",
-      "encourage-3.wav"
+      "encourage-3.wav",
+      "encourage-4.wav",
+      "encourage-5.wav",
+      "encourage-6.wav"
     ]
   },
   "comfort": {
@@ -29,98 +37,167 @@
     "files": [
       "comfort-1.wav",
       "comfort-2.wav",
-      "comfort-3.wav"
+      "comfort-3.wav",
+      "comfort-4.wav",
+      "comfort-5.wav",
+      "comfort-6.wav"
     ]
   },
-  "remind": {
-    "desc": "学习提醒",
+  "ack": {
+    "desc": "通用应答",
     "files": [
-      "remind-1.wav",
-      "remind-2.wav",
-      "remind-3.wav"
-    ]
-  },
-  "sleep": {
-    "desc": "晚安",
-    "files": [
-      "sleep-1.wav",
-      "sleep-2.wav"
-    ]
-  },
-  "click": {
-    "desc": "被点击",
-    "files": [
-      "click-1.wav",
-      "click-2.wav",
-      "click-3.wav"
-    ]
-  },
-  "interview": {
-    "desc": "面试相关",
-    "files": [
-      "interview-1.wav",
-      "interview-2.wav",
-      "interview-3.wav"
-    ]
-  },
-  "thanks": {
-    "desc": "感谢回应",
-    "files": [
-      "thanks-1.wav",
-      "thanks-2.wav"
-    ]
-  },
-  "love": {
-    "desc": "表白",
-    "files": [
-      "love-1.wav",
-      "love-2.wav"
-    ]
-  },
-  "proud": {
-    "desc": "求夸",
-    "files": [
-      "proud-1.wav",
-      "proud-2.wav"
-    ]
-  },
-  "review": {
-    "desc": "复习",
-    "files": [
-      "review-1.wav",
-      "review-2.wav"
-    ]
-  },
-  "start": {
-    "desc": "开始学习",
-    "files": [
-      "start-1.wav",
-      "start-2.wav"
-    ]
-  },
-  "done": {
-    "desc": "全部完成",
-    "files": [
-      "done-1.wav",
-      "done-2.wav"
+      "ack-1.wav",
+      "ack-2.wav",
+      "ack-3.wav",
+      "ack-4.wav",
+      "ack-5.wav",
+      "ack-6.wav",
+      "ack-7.wav",
+      "ack-8.wav"
     ]
   },
   "question": {
-    "desc": "困惑",
+    "desc": "疑问思考",
     "files": [
       "question-1.wav",
-      "question-2.wav"
+      "question-2.wav",
+      "question-3.wav",
+      "question-4.wav",
+      "question-5.wav"
     ]
   },
   "surprise": {
     "desc": "惊讶",
     "files": [
       "surprise-1.wav",
-      "surprise-2.wav"
+      "surprise-2.wav",
+      "surprise-3.wav",
+      "surprise-4.wav",
+      "surprise-5.wav"
+    ]
+  },
+  "done": {
+    "desc": "完成",
+    "files": [
+      "done-1.wav",
+      "done-2.wav",
+      "done-3.wav",
+      "done-4.wav"
+    ]
+  },
+  "start": {
+    "desc": "开始",
+    "files": [
+      "start-1.wav",
+      "start-2.wav",
+      "start-3.wav",
+      "start-4.wav"
+    ]
+  },
+  "review": {
+    "desc": "复习",
+    "files": [
+      "review-1.wav",
+      "review-2.wav",
+      "review-3.wav",
+      "review-4.wav"
+    ]
+  },
+  "remind": {
+    "desc": "提醒",
+    "files": [
+      "remind-1.wav",
+      "remind-2.wav",
+      "remind-3.wav",
+      "remind-4.wav",
+      "remind-5.wav"
+    ]
+  },
+  "click": {
+    "desc": "点击",
+    "files": [
+      "click-1.wav",
+      "click-2.wav",
+      "click-3.wav",
+      "click-4.wav",
+      "click-5.wav"
+    ]
+  },
+  "interview": {
+    "desc": "面试",
+    "files": [
+      "interview-1.wav",
+      "interview-2.wav",
+      "interview-3.wav",
+      "interview-4.wav",
+      "interview-5.wav"
+    ]
+  },
+  "thanks": {
+    "desc": "感谢",
+    "files": [
+      "thanks-1.wav",
+      "thanks-2.wav",
+      "thanks-3.wav",
+      "thanks-4.wav"
+    ]
+  },
+  "love": {
+    "desc": "喜欢",
+    "files": [
+      "love-1.wav",
+      "love-2.wav",
+      "love-3.wav",
+      "love-4.wav"
+    ]
+  },
+  "proud": {
+    "desc": "求夸",
+    "files": [
+      "proud-1.wav",
+      "proud-2.wav",
+      "proud-3.wav",
+      "proud-4.wav"
+    ]
+  },
+  "sleep": {
+    "desc": "晚安",
+    "files": [
+      "sleep-1.wav",
+      "sleep-2.wav",
+      "sleep-3.wav",
+      "sleep-4.wav"
+    ]
+  },
+  "bye": {
+    "desc": "再见",
+    "files": [
+      "bye-1.wav",
+      "bye-2.wav",
+      "bye-3.wav",
+      "bye-4.wav"
+    ]
+  },
+  "call": {
+    "desc": "叫名字",
+    "files": [
+      "call-1.wav",
+      "call-2.wav",
+      "call-3.wav",
+      "call-4.wav"
+    ]
+  },
+  "agree": {
+    "desc": "同意",
+    "files": [
+      "agree-1.wav",
+      "agree-2.wav",
+      "agree-3.wav",
+      "agree-4.wav"
     ]
   },
   "mail": {
-    "desc": "新邮件",
+    "desc": "邮件",
     "files": [
       "mail-1.wav",
       "mail-2.wav",
@@ -128,7 +205,7 @@
     ]
   },
   "news": {
-    "desc": "资讯播报",
+    "desc": "资讯",
     "files": [
       "news-1.wav",
       "news-2.wav"
@@ -150,14 +227,14 @@
     ]
   },
   "focus-nudge": {
-    "desc": "分心提醒",
+    "desc": "专注提醒",
     "files": [
       "focus-nudge-1.wav",
       "focus-nudge-2.wav"
     ]
   },
   "schedule": {
-    "desc": "日程提醒",
+    "desc": "日程",
     "files": [
       "schedule-1.wav",
       "schedule-2.wav",
