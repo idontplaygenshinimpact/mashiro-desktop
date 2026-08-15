@@ -152,6 +152,12 @@ export function mockFetchPage() {
       fetchPage: mockFetchPageImpl,
       fetchPages: async () => [],
       closeBrowser: async () => {},
+      // SSRF 校验在真实 fetch-page.mjs 里做（单独由 fetch-page.test.mjs 覆盖）；
+      // 这里 mock 成直接放行，避免测试里的假域名触发 DNS 解析
+      assertPublicUrl: async () => {},
+      assertPublicHostname: async () => {},
+      isPrivateHostname: () => false,
+      isPrivateIP: () => false,
     },
   });
 }

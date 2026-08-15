@@ -219,3 +219,24 @@ test("压缩参数可配置：COMPACT_BUDGET 环境变量生效", async () => {
     if (prev === undefined) delete process.env.COMPACT_BUDGET; else process.env.COMPACT_BUDGET = prev;
   }
 });
+
+// ---------- 压缩边界不拆散 tool_calls 配对（F14 回归） ----------
+test("compactMessages 不拆散 assistant(tool_calls) 与其 tool 结果", async () => {
+  setLlmResponses("这是压缩后的对话摘要，长度超过二十个字符的审计阈值，用于测试压缩流程。");
+  const msgs = [{ role: "system", content: "sys" }];
+  for (let i = 0; i < 8; i++) {
+    msgs.push({ role: "user", content: "前端面试高频考点".repeat(200) });
+    msgs.push({ role: "tool", tool_call_id: `old_${i}`, content: JSON.stringify({ r: ["x".repeat(500)] }) });
+  }
+  // 尾部：assistant(tool_calls) + tool 结果 + 最终回答（构造 keep 边界落在 tool 上，assistant 落入被压缩段）
+  msgs.push({ role: "assistant", content: "工具调用说明".repeat(600), tool_calls: [{ id: "call_1", type: "function", function: { name: "get_memory", arguments: "{}" } }] });
+  msgs.push({ role: "tool", tool_call_id: "call_1", content: "工具结果" });
+  msgs.push({ role: "assistant", content: "最终回答".repeat(600) });
+
+  const out = await ai.compactMessages(msgs);
+  const idxTool = out.findIndex((m) => m.role === "tool" && m.tool_call_id === "call_1");
+  const idxAsst = out.findIndex((m) => m.role === "assistant" && Array.isArray(m.tool_calls) && m.tool_calls.some((tc) => tc.id === "call_1"));
+  assert.ok(idxTool >= 0, "tool 结果保留");
+  assert.ok(idxAsst >= 0, "assistant(tool_calls) 保留（未被压缩掉）");
+  assert.equal(idxAsst, idxTool - 1, "assistant(tool_calls) 与 tool 结果相邻");
+});

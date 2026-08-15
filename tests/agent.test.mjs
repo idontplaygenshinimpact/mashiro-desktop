@@ -270,3 +270,33 @@ test("solve_question 审批允许后执行并写文件", async () => {
   const files = existsSync(dir) ? readdirSync(dir) : [];
   assert.ok(files.length >= 0, "目录可访问");
 });
+
+// ---------- F16：非连续重复调用不误判死循环 ----------
+test("非连续重复调用不误判死循环（连续计数在换工具时重置）", async () => {
+  setLlmResponses(
+    'TOOLCALL:{"name":"get_study_plan","arguments":"{}"}',
+    'TOOLCALL:{"name":"get_memory","arguments":"{}"}',
+    'TOOLCALL:{"name":"get_study_plan","arguments":"{}"}',
+    'TOOLCALL:{"name":"get_memory","arguments":"{}"}',
+    'TOOLCALL:{"name":"get_study_plan","arguments":"{}"}',
+    "总结完成。"
+  );
+  await chatWithAgent("看清单和记忆");
+  const { getRecentTools } = await import("../lib/trace.mjs");
+  const calls = getRecentTools(20).filter((t) => t.tool_name === "get_study_plan");
+  assert.equal(calls.length, 3, `非连续重复不应被拦截（实际执行 ${calls.length} 次）`);
+});
+
+// ---------- F5：返回 {error} 的工具 trace 记为失败 ----------
+test("工具返回 {error} 时 trace 记为失败（不再无条件 ok:true）", async () => {
+  setMockPages([{ invalid: true, text: "", title: "404页" }]);
+  setLlmResponses(
+    'TOOLCALL:{"name":"fetch_page","arguments":"{\\"url\\":\\"http://x.com/1\\"}"}',
+    "页面无效，我换个思路。"
+  );
+  await chatWithAgent("看下 http://x.com/1");
+  const { getRecentTools } = await import("../lib/trace.mjs");
+  const calls = getRecentTools(20).filter((t) => t.tool_name === "fetch_page");
+  assert.ok(calls.length >= 1, "fetch_page 已执行");
+  assert.ok(calls.every((c) => !c.ok), "返回 {error} 的工具应记为失败");
+});
