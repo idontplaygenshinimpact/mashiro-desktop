@@ -254,7 +254,8 @@ function maybeTimeGreeting() {
     if (localStorage.getItem(key)) return;
     localStorage.setItem(key, g.text);
     showBubble(g.text, 8000);
-    if (voiceOn) window.kanban.speak(g.text);
+    // 语音：播日语预设问候台词（显示中文、播放日语）
+    if (voiceOn) window.kanban.playScene("greeting");
   } catch { /* ignore */ }
 }
 

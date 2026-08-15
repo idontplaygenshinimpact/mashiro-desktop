@@ -475,8 +475,8 @@ ipcMain.handle("window:open-output", () => {
   return { ok: true };
 });
 
-// 语音播放：edge-tts 神经语音（晓伊少女音，真白人设）→ 失败降级系统 TTS
-// 语音文本按"真白人设"由 agent 生成后传入
+// 语音播放：edge-tts 神经语音（日语声线，真白人设）→ 失败降级系统 TTS（也是日语）
+// 语音文本按"真白人设"由 agent 生成后传入；显示中文、播放日语声
 let ttsEdge = null;
 async function getTtsEdge() {
   if (!ttsEdge) {
@@ -557,28 +557,15 @@ ipcMain.handle("resume:parse-file", async (e, { name, data }) => {
 
 ipcMain.handle("window:speak", async (e, { text }) => {
   if (!text || !String(text).trim()) return { ok: false };
-  // 优先 edge-tts（神经语音）
+  // 全部日语预设：按文本关键词匹配语音包场景 → 播日语 wav；未命中播 ack 通用应答
+  // 不做任何实时 TTS 合成（内容对不上且开销大）
   try {
     const tts = await getTtsEdge();
     if (tts) {
       const r = await tts.speak(String(text));
-      if (r.ok) return { ok: true, engine: "edge-tts" };
+      if (r.ok) return { ok: true, engine: "voicepack", scene: r.scene };
+      return { ok: false, error: r.error };
     }
-  } catch { /* ignore */ }
-  // 降级：系统 TTS（pwsh → powershell）
-  try {
-    const tmpFile = path.join(app.getPath("temp"), "mashiro-tts.txt");
-    writeFileSync(tmpFile, String(text).slice(0, 200), "utf8");
-    const ps1 = path.join(__dirname, "speak.ps1");
-    const run = (shell) => {
-      safeSpawn(shell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, "-TextFile", tmpFile]);
-    };
-    try {
-      const probe = spawnSync("pwsh", ["-NoProfile", "-Command", "exit 0"], { timeout: 3000, windowsHide: true });
-      if (probe.status === 0) { run("pwsh"); return { ok: true, engine: "pwsh" }; }
-    } catch { /* ignore */ }
-    run("powershell");
-    return { ok: true, engine: "powershell" };
   } catch { /* ignore */ }
   return { ok: false };
 });

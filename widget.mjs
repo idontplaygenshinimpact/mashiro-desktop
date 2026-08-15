@@ -856,11 +856,18 @@ const server = createServer((req, res) => {
       const done = u.searchParams.get("done") === "1";
       const r = studyApi.checkItem(u.searchParams.get("id"), done);
       let emotion = null;
+      let emotionScene = null;
       try {
-        emotion = done ? pickEmotion(EMOTIONS.celebrate) : "……嗯，那先放着。";
+        if (done) {
+          emotion = pickEmotion(EMOTIONS.celebrate);
+          emotionScene = "praise"; // 面板播日语预设台词（显示中文、播放日语）
+        } else {
+          emotion = "……嗯，那先放着。";
+          emotionScene = "encourage";
+        }
       } catch { /* ignore */ }
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ...r, emotion }));
+      res.end(JSON.stringify({ ...r, emotion, emotionScene }));
     } catch (e) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));

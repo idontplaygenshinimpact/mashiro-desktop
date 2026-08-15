@@ -336,10 +336,13 @@ document.querySelectorAll(".rc-btn").forEach((btn) => {
   btn.addEventListener("click", async () => {
     const card = reviewQueue[reviewIdx];
     const r = await window.kanban.reviewSubmit(card.id, parseInt(btn.dataset.rating, 10));
-    // 真白情感反馈
+    // 真白情感反馈：显示中文，语音播日语预设场景台词（emotionScene）
     if (r?.emotion) {
       window.kanban.notify("🎀 真白", r.emotion);
-      if (voiceOn) window.kanban.speak(r.emotion);
+      if (voiceOn) {
+        if (r.emotionScene) window.kanban.playScene(r.emotionScene);
+        else window.kanban.speak(r.emotion);
+      }
     }
     reviewIdx++;
     if (reviewIdx < reviewQueue.length) showReviewCard();
@@ -441,10 +444,13 @@ function bindPlanItems(root, isDone) {
       const r = await window.kanban.studyCheck(el.dataset.id, e.target.checked);
       // 勾选/取消后重新渲染（完成项移入/移出"已完成"折叠区）
       loadStudyPlan();
-      // 真白情感反馈（庆祝/安慰）+ 语音
+      // 真白情感反馈（庆祝/安慰）+ 语音：显示中文，播日语预设场景台词
       if (r?.emotion) {
         window.kanban.notify("🎀 真白", r.emotion);
-        if (voiceOn) window.kanban.speak(r.emotion);
+        if (voiceOn) {
+          if (r.emotionScene) window.kanban.playScene(r.emotionScene);
+          else window.kanban.speak(r.emotion);
+        }
       }
     });
     el.querySelector(".s-learn").addEventListener("click", () => showStudyDetail(el.dataset.id));
@@ -938,7 +944,8 @@ async function sendChat() {
   try {
     const r = await window.kanban.chat(msg, chatHistory);
     chatHistory = r.history || [];
-    if (r.voice && voiceOn) window.kanban.speak(r.voice);
+    // 语音：用回复文本匹配日语预设台词（r.voice 已不再由 LLM 生成）
+    if (voiceOn) window.kanban.speak(r.voice || r.reply || msg);
     thinking.querySelector(".body").className = "body";
     thinking.querySelector(".body").textContent = r.reply || "（无回复）";
   } catch (e) {
