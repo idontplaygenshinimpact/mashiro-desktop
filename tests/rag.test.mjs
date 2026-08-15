@@ -12,7 +12,7 @@ const outDir = mkdtempSync(path.join(tmpdir(), "rag-test-out-"));
 mkdirSync(outDir, { recursive: true });
 process.env.RAG_OUTPUT_DIR = outDir;
 process.env.RAG_EMBED_MODEL = "Xenova/nonexistent-model-for-test"; // 强制 embedding 降级，避免加载真实模型拖慢测试
-const { searchKnowledge, getKnowledgeStats, incrementalRebuild, getIndexedMtimes } = await import("../lib/rag.mjs");
+const { searchKnowledge, getKnowledgeStats, incrementalRebuild, getIndexedMtimes, markVerified } = await import("../lib/rag.mjs");
 const { db } = await import("../lib/db.mjs");
 
 // 假向量：基于文本哈希的确定性 32 维向量（测通道逻辑，不加载真实模型）
@@ -84,4 +84,34 @@ test("weak_points 索引入库（regression: note 列不存在导致薄弱点从
   const weakRows = db.prepare("SELECT title, content FROM knowledge_items WHERE source='weak'").all();
   assert.ok(weakRows.length >= 1, "薄弱点已索引进知识库");
   assert.ok(weakRows.some((w) => w.title.includes("事件循环")), "薄弱点主题存在");
+});
+
+// ---------- claim layer：可信度 / 溯源证据 / 人工验证 ----------
+test("新知识条目默认 confidence 0.5（claim layer 默认可信度）", () => {
+  const row = db.prepare("SELECT confidence, evidence, last_verified_at FROM knowledge_items WHERE id='kb_s1'").get();
+  assert.equal(row.confidence, 0.5);
+  assert.equal(row.evidence, "");
+  assert.equal(row.last_verified_at, null);
+});
+
+test("weak 薄弱点入库 confidence 0.3 + evidence 复盘弱项", async () => {
+  db.prepare("INSERT INTO weak_points (id, topic, fail_count, last_failed_at, source, origin, updated_at) VALUES ('wp_c','闭包',2,NULL,'复盘','agent',1)").run();
+  await incrementalRebuild();
+  const row = db.prepare("SELECT confidence, evidence FROM knowledge_items WHERE source='weak' AND title LIKE '%闭包%'").get();
+  assert.ok(row, "薄弱点已入库");
+  assert.equal(row.confidence, 0.3);
+  assert.equal(row.evidence, "复盘弱项");
+});
+
+test("markVerified 更新 confidence + last_verified_at；非法 id → ok:false", () => {
+  const r = markVerified("kb_s1", 0.9);
+  assert.equal(r.ok, true);
+  assert.ok(r.lastVerifiedAt > 0);
+  const row = db.prepare("SELECT confidence, last_verified_at FROM knowledge_items WHERE id='kb_s1'").get();
+  assert.equal(row.confidence, 0.9);
+  assert.ok(row.last_verified_at > 0, "验证时间戳写入");
+  // 越界 confidence 收敛到 0.9
+  assert.equal(markVerified("kb_s2", 99).confidence, 0.9);
+  // 不存在的 id
+  assert.equal(markVerified("kb_nope", 0.8).ok, false);
 });

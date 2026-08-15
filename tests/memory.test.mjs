@@ -12,6 +12,7 @@ const { db } = await import("../lib/db.mjs");
 beforeEach(async () => {
   await clearAllTables();
   resetMemoryState(memory);
+  try { db.exec("DELETE FROM curated_memory;"); } catch { /* ignore */ }
 });
 after(() => { cleanupTempDb(dbDir); });
 
@@ -225,4 +226,34 @@ test("saveInterviewHistory 持久化(DB) + 内存上限20", () => {
   assert.equal(memory.getInterviewHistory().length, 20, "内存镜像保留最近 20 条");
   const n = db.prepare("SELECT COUNT(*) n FROM interview_history").get().n;
   assert.ok(n >= 20, "DB 全量保留");
+});
+
+// ---------- 长期记忆（curated_memory） ----------
+test("getCuratedMemory 按 importance DESC, updated_at DESC 排序", () => {
+  const ins = db.prepare("INSERT INTO curated_memory (id, topic, content, source_ref, importance, origin, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)");
+  ins.run("cm_1", "低", "c", "weak:低", 1, "agent", 1000, 1000);
+  ins.run("cm_2", "高", "c", "weak:高", 5, "agent", 1000, 1000);
+  ins.run("cm_3", "中", "c", "weak:中", 3, "agent", 1000, 1000);
+  ins.run("cm_4", "高2", "c", "weak:高2", 5, "agent", 1000, 2000); // 同 important，updated_at 更大排前
+  const mem = memory.getCuratedMemory();
+  assert.deepEqual(mem.map((m) => m.topic), ["高2", "高", "中", "低"]);
+  assert.equal(mem[0].sourceRef, "weak:高2", "带来源溯源");
+});
+
+test("getCuratedMemory limit 生效", () => {
+  const ins = db.prepare("INSERT INTO curated_memory (id, topic, content, source_ref, importance, origin, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)");
+  for (let i = 0; i < 10; i++) ins.run(`cm_l${i}`, `主题${i}`, "c", `weak:${i}`, i + 1, "agent", 1000, 1000);
+  assert.equal(memory.getCuratedMemory(3).length, 3);
+});
+
+test("injectCuratedIntoPrompt 追加长期记忆章节 + 空记忆不追加", () => {
+  const base = "你是前端秋招助手。";
+  assert.equal(memory.injectCuratedIntoPrompt(base), base, "无长期记忆时原样返回");
+  db.prepare("INSERT INTO curated_memory (id, topic, content, source_ref, importance, origin, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)")
+    .run("cm_i", "事件循环", "宏任务先于微任务", "weak:事件循环", 4, "agent", 1000, 1000);
+  const injected = memory.injectCuratedIntoPrompt(base);
+  assert.ok(injected.startsWith(base), "保留原提示词");
+  assert.ok(injected.includes("长期记忆（带来源）"), "追加章节标题");
+  assert.ok(injected.includes("来源:weak:事件循环"), "带来源引用");
+  assert.ok(injected.includes("事件循环"), "含记忆内容");
 });
