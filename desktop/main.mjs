@@ -58,8 +58,10 @@ function safeSpawn(cmd, args, opts = {}) {
 
 // ---------- 启动/复用后端 widget 服务（含守护：死了自动拉起） ----------
 function ensureWidgetServer() {
+  // 探测 /api/health：认证豁免端点（主进程 fetch 不走 webRequest token 注入，
+  // 探测 /api/refresh 会被 401 误判 widget 未启动 → 疯狂重复 spawn）
   // 5s 超时：widget 卡死时不再无限挂起，超时视为未启动
-  fetch(`${WIDGET_URL}/api/refresh`, { signal: AbortSignal.timeout(5000) })
+  widgetFetch(`${WIDGET_URL}/api/health`, { signal: AbortSignal.timeout(5000) })
     .then((r) => { if (!r.ok) throw new Error("bad status"); })
     .catch(() => {
       if (widgetProc && widgetProc.exitCode === null) return; // 已在运行，不重复启动
@@ -242,7 +244,7 @@ function createTray() {
 // ---------- IPC ----------
 ipcMain.handle("widget:data", async () => {
   try {
-    const res = await fetch(`${WIDGET_URL}/api/widget-data`);
+    const res = await widgetFetch(`${WIDGET_URL}/api/widget-data`);
     return await res.json();
   } catch {
     return { error: "widget 服务未启动" };
@@ -251,7 +253,7 @@ ipcMain.handle("widget:data", async () => {
 
 ipcMain.handle("widget:run-discover", async () => {
   try {
-    const res = await fetch(`${WIDGET_URL}/api/run-discover`);
+    const res = await widgetFetch(`${WIDGET_URL}/api/run-discover`);
     return await res.json();
   } catch {
     return { error: "widget 服务未启动" };
@@ -260,7 +262,7 @@ ipcMain.handle("widget:run-discover", async () => {
 
 ipcMain.handle("widget:progress", async () => {
   try {
-    const res = await fetch(`${WIDGET_URL}/api/progress`);
+    const res = await widgetFetch(`${WIDGET_URL}/api/progress`);
     return await res.json();
   } catch {
     return { status: "idle", message: "widget 服务未启动" };
@@ -270,7 +272,7 @@ ipcMain.handle("widget:progress", async () => {
 // 对话 + 学习清单转发（widget 服务实现）
 async function widgetPost(pathname, body) {
   try {
-    const res = await fetch(`${WIDGET_URL}${pathname}`, {
+    const res = await widgetFetch(`${WIDGET_URL}${pathname}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {}),
@@ -282,7 +284,7 @@ async function widgetPost(pathname, body) {
 }
 async function widgetGet(pathname) {
   try {
-    const res = await fetch(`${WIDGET_URL}${pathname}`);
+    const res = await widgetFetch(`${WIDGET_URL}${pathname}`);
     return await res.json();
   } catch {
     return { error: "widget 服务未启动" };
@@ -301,7 +303,7 @@ ipcMain.handle("widget:study-detail", (e, { id }) => widgetGet(`/api/study-detai
 // 流式讲解：main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）
 ipcMain.handle("widget:study-detail-stream", async (e, { id }) => {
   try {
-    const res = await fetch(`${WIDGET_URL}/api/study-detail-stream?id=${encodeURIComponent(id)}`);
+    const res = await widgetFetch(`${WIDGET_URL}/api/study-detail-stream?id=${encodeURIComponent(id)}`);
     const ctype = res.headers.get("content-type") || "";
     // 有文件：一次性 JSON
     if (!ctype.includes("text/event-stream")) {
@@ -332,7 +334,7 @@ ipcMain.handle("widget:study-detail-stream", async (e, { id }) => {
 // 讲解追问补充：main 转发 widget append-stream SSE → 渲染层（独立事件通道）
 ipcMain.handle("widget:study-append-stream", async (e, { id, question }) => {
   try {
-    const res = await fetch(`${WIDGET_URL}/api/study-append-stream?id=${encodeURIComponent(id)}&question=${encodeURIComponent(question)}`);
+    const res = await widgetFetch(`${WIDGET_URL}/api/study-append-stream?id=${encodeURIComponent(id)}&question=${encodeURIComponent(question)}`);
     const ctype = res.headers.get("content-type") || "";
     if (!ctype.includes("text/event-stream")) {
       const j = await res.json();
@@ -361,7 +363,7 @@ ipcMain.handle("widget:study-append-stream", async (e, { id, question }) => {
 // 整理讲解全文：main 转发 widget consolidate-stream SSE → 渲染层（独立事件通道）
 ipcMain.handle("widget:study-consolidate-stream", async (e, { id }) => {
   try {
-    const res = await fetch(`${WIDGET_URL}/api/study-consolidate-stream?id=${encodeURIComponent(id)}`);
+    const res = await widgetFetch(`${WIDGET_URL}/api/study-consolidate-stream?id=${encodeURIComponent(id)}`);
     const ctype = res.headers.get("content-type") || "";
     if (!ctype.includes("text/event-stream")) {
       const j = await res.json();
@@ -390,7 +392,7 @@ ipcMain.handle("widget:study-consolidate-stream", async (e, { id }) => {
 // 多条目归并：main 转发 widget cluster-stream SSE → 渲染层（独立事件通道）
 ipcMain.handle("widget:study-cluster-stream", async (e, { ids }) => {
   try {
-    const res = await fetch(`${WIDGET_URL}/api/study-cluster-stream`, {
+    const res = await widgetFetch(`${WIDGET_URL}/api/study-cluster-stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids }),
@@ -785,7 +787,7 @@ function petSay(text, scene) {
 
 async function fetchFocusBlacklist() {
   try {
-    const res = await fetch(`${WIDGET_URL}/api/focus/blacklist`);
+    const res = await widgetFetch(`${WIDGET_URL}/api/focus/blacklist`);
     const j = await res.json();
     if (j?.ok && Array.isArray(j.blacklist)) focusBlacklist = j.blacklist;
   } catch { /* widget 未启动忽略 */ }
@@ -794,7 +796,7 @@ async function fetchFocusBlacklist() {
 async function checkFocusSupervision() {
   let status = null;
   try {
-    const res = await fetch(`${WIDGET_URL}/api/focus/status`);
+    const res = await widgetFetch(`${WIDGET_URL}/api/focus/status`);
     status = await res.json();
   } catch { /* widget 未启动忽略 */ }
   if (!status || status.ok === false) return;
@@ -830,7 +832,7 @@ async function checkFocusSupervision() {
   focusLastNudge = now;
 
   // 记录分心 + 真白提醒
-  fetch(`${WIDGET_URL}/api/focus/distract`, { method: "POST" }).catch(() => {});
+  widgetFetch(`${WIDGET_URL}/api/focus/distract`, { method: "POST" }).catch(() => {});
   petSay("集中して。", "focus-nudge");
 }
 
@@ -841,12 +843,13 @@ function startFocusSupervision() {
 }
 
 // ---------- widget 鉴权：给面板/桌宠对 8899 的请求注入 Bearer token ----------
-// widget.mjs（另一任务）会写入 data/widget-token.json；此处读取并注入（缺失则轮询 ~10s 等待）
+// widget.mjs 会写入 data/widget-token.json；此处读取并注入
+// widget 冷启动要 15-30s 才写 token 文件 → 持续轮询直到读到（不能 10s 放弃，
+// 否则面板所有请求永远 401，学习清单/复习/对话全部加载不出来）
 let widgetToken = "";
 async function loadWidgetToken() {
   const tokenFile = path.join(ROOT, "data", "widget-token.json");
-  const deadline = Date.now() + 10000;
-  while (Date.now() < deadline) {
+  for (;;) {
     try {
       const raw = readFileSync(tokenFile, "utf8").trim();
       let t = "";
@@ -855,7 +858,7 @@ async function loadWidgetToken() {
         t = typeof parsed === "string" ? parsed : (parsed?.token || parsed?.value || "");
       } catch { t = raw; } // 非 JSON 视为裸字符串
       if (t) { widgetToken = String(t); console.log("[kanban] widget token 已加载"); return; }
-    } catch { /* 文件尚未生成，轮询等待 */ }
+    } catch { /* 文件尚未生成，继续轮询 */ }
     await new Promise((r) => setTimeout(r, 500));
   }
 }
@@ -867,6 +870,15 @@ function registerWidgetAuth() {
     }
     callback({ requestHeaders: details.requestHeaders });
   });
+}
+
+// 主进程 fetch widget 的统一包装：自动附 Bearer token。
+// 关键：IPC handler（getData/studyPlan/reviewDue/chat 等）在主进程用 fetch 调 widget，
+// 主进程 fetch 不经过 webRequest 注入 → 必须显式带 header，否则全部 401
+function widgetFetch(url, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (widgetToken) headers["Authorization"] = "Bearer " + widgetToken;
+  return fetch(url, { ...opts, headers });
 }
 
 // ---------- 生命周期 ----------
