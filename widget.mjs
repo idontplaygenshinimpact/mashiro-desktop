@@ -7,6 +7,7 @@
 import { createServer } from "node:http";
 import { readFileSync, writeFileSync, appendFileSync, readdirSync, statSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { exec } from "node:child_process";
 import notifier from "node-notifier";
 import { config } from "./config.mjs";
@@ -26,43 +27,100 @@ import * as zhentiApi from "./lib/zhenti.mjs";
 import * as ojApi from "./lib/oj.mjs";
 import * as rssApi from "./lib/rss.mjs";
 import * as focusApi from "./lib/focus.mjs";
+import * as mailApi from "./lib/mail.mjs";
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
 // 测试隔离：集成测试起实例时禁用巡检定时器（生产不设置则正常巡检）
 const DISABLE_PATROL = process.env.MIANSHI_DISABLE_PATROL === "1";
 
+// ============ 数据目录 + 错误日志（最小文件日志，便于诊断静默崩溃） ============
+const DATA_DIR = path.join(import.meta.dirname, "data");
+
+function logErr(msg) {
+  try {
+    mkdirSync(DATA_DIR, { recursive: true });
+    appendFileSync(path.join(DATA_DIR, "widget-error.log"), `[${new Date().toISOString()}] ${msg}\n`, "utf8");
+  } catch { /* ignore */ }
+}
+
+// 未捕获异常/未处理拒绝兜底：写日志后退出（桌面守护会重启，日志可诊断）
+process.on("unhandledRejection", (reason) => {
+  const msg = `unhandledRejection: ${reason instanceof Error ? (reason.stack || reason.message) : String(reason)}`;
+  console.error(`[widget] ${msg}`);
+  logErr(msg);
+  process.exit(1);
+});
+process.on("uncaughtException", (err) => {
+  const msg = `uncaughtException: ${err && err.stack ? err.stack : String(err)}`;
+  console.error(`[widget] ${msg}`);
+  logErr(msg);
+  process.exit(1);
+});
+
+// ============ Bearer Token 认证（防 CSRF 数据泄露/驱动 agent） ============
+// 优先级：环境变量 MIANSHI_TOKEN > data/widget-token.json > 生成并落盘
+function loadOrCreateToken() {
+  const tokenFile = path.join(DATA_DIR, "widget-token.json");
+  if (process.env.MIANSHI_TOKEN) return process.env.MIANSHI_TOKEN;
+  try {
+    if (existsSync(tokenFile)) {
+      const j = JSON.parse(readFileSync(tokenFile, "utf8"));
+      if (j && typeof j.token === "string" && j.token) return j.token;
+    }
+  } catch { /* ignore */ }
+  const token = randomUUID();
+  try {
+    mkdirSync(DATA_DIR, { recursive: true });
+    writeFileSync(tokenFile, JSON.stringify({ token, ts: Date.now() }), "utf8");
+  } catch (e) {
+    console.log(`[widget] 写入 token 文件失败: ${e.message}`);
+  }
+  return token;
+}
+const AUTH_TOKEN = loadOrCreateToken();
+
 // ============ 数据读取 ============
 
 function latestOutputs(limit = 12) {
-  const outDir = config.outputDir;
-  if (!existsSync(outDir)) return [];
-  return readdirSync(outDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => ({ dir: d.name, mtime: statSync(path.join(outDir, d.name)).mtime }))
-    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
-    .slice(0, limit);
+  try {
+    const outDir = config.outputDir;
+    if (!existsSync(outDir)) return [];
+    return readdirSync(outDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => ({ dir: d.name, mtime: statSync(path.join(outDir, d.name)).mtime }))
+      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
+      .slice(0, limit);
+  } catch (e) {
+    console.log(`[widget] latestOutputs 扫描失败: ${e.message}`);
+    return [];
+  }
 }
 
 function scanNewestFiles(limit = 20) {
   // 扫最新产出目录里的 md 文件，返回标题/公司/路径
   // 排除 00_ 开头的索引/README + study_notes（学习讲解存档，不算产出）——chat_solutions（对话解答）保留展示
-  const outDir = config.outputDir;
-  if (!existsSync(outDir)) return [];
-  const files = [];
-  const SKIP_DIRS = new Set(["study_notes"]);
-  for (const d of readdirSync(outDir, { withFileTypes: true })) {
-    if (!d.isDirectory()) continue;
-    if (SKIP_DIRS.has(d.name)) continue; // 学习讲解存档不展示
-    const dirPath = path.join(outDir, d.name);
-    for (const f of readdirSync(dirPath)) {
-      if (!f.endsWith(".md")) continue;
-      if (/^00[_-]/.test(f)) continue; // 索引文件跳过
-      const fp = path.join(dirPath, f);
-      files.push({ file: f, dir: d.name, mtime: statSync(fp).mtime, path: fp });
+  try {
+    const outDir = config.outputDir;
+    if (!existsSync(outDir)) return [];
+    const files = [];
+    const SKIP_DIRS = new Set(["study_notes"]);
+    for (const d of readdirSync(outDir, { withFileTypes: true })) {
+      if (!d.isDirectory()) continue;
+      if (SKIP_DIRS.has(d.name)) continue; // 学习讲解存档不展示
+      const dirPath = path.join(outDir, d.name);
+      for (const f of readdirSync(dirPath)) {
+        if (!f.endsWith(".md")) continue;
+        if (/^00[_-]/.test(f)) continue; // 索引文件跳过
+        const fp = path.join(dirPath, f);
+        files.push({ file: f, dir: d.name, mtime: statSync(fp).mtime, path: fp });
+      }
     }
+    return files.sort((a, b) => b.mtime - a.mtime).slice(0, limit);
+  } catch (e) {
+    console.log(`[widget] scanNewestFiles 扫描失败: ${e.message}`);
+    return [];
   }
-  return files.sort((a, b) => b.mtime - a.mtime).slice(0, limit);
 }
 
 // 文件名规范化：忽略空格/下划线/括号差异，用于模糊匹配
@@ -159,7 +217,12 @@ function sendNotification(title, message, { wait = false } = {}) {
 }
 
 // 后台运行 discover.mjs（隐藏窗口 + 日志重定向 widget-run.log，不弹终端）
+// 互斥：crawlRunning 防并发 discover 子进程（每个都会拉起 Playwright chromium）
+let crawlRunning = false;
+const crawlChildren = []; // 已 spawn 的 discover 子进程，供优雅关闭时 kill
+
 async function runDiscoverHidden() {
+  if (crawlRunning) return false;
   try {
     const { spawn } = await import("node:child_process");
     const { openSync } = await import("node:fs");
@@ -170,9 +233,21 @@ async function runDiscoverHidden() {
       detached: true,
       stdio: ["ignore", logFd, logFd],
     });
+    crawlRunning = true;
+    crawlChildren.push(child);
+    const cleanup = () => {
+      crawlRunning = false;
+      const i = crawlChildren.indexOf(child);
+      if (i >= 0) crawlChildren.splice(i, 1);
+    };
+    child.on("exit", cleanup);
+    child.on("error", cleanup);
     child.unref();
+    return true;
   } catch (e) {
+    crawlRunning = false;
     console.log(`[widget] 后台爬取启动失败: ${String(e.message).slice(0, 80)}`);
+    return false;
   }
 }
 
@@ -307,6 +382,28 @@ async function checkRssDigest() {
   }
 }
 
+// ============ 面试/笔试邀约提醒（24h 内提前提醒，4 小时冷却防重复轰炸） ============
+
+async function checkScheduleReminder() {
+  try {
+    // 未来 24h 内的邀约
+    const events = mailApi.getUpcomingEvents({ withinDays: 1 });
+    if (!events.length) return;
+    const now = Date.now();
+    for (const ev of events) {
+      // 距上次提醒 >4h 才再次提醒（lastNotifiedAt 持久化在 schedule_events.last_notified_at）
+      if (ev.lastNotifiedAt && now - ev.lastNotifiedAt < 4 * 3600 * 1000) continue;
+      const time = new Date(ev.interviewAt).toLocaleString("zh-CN", { hour12: false });
+      console.log(`[widget] 面试提醒触发：${ev.company}·${ev.role} ${time}`);
+      await sendNotification(
+        "⏰ 面试提醒",
+        `${ev.company}·${ev.role} ${time}（${ev.form || "形式待定"}）${ev.link ? `\n${ev.link}` : ""}`
+      );
+      mailApi.markNotified(ev.id); // 更新 last_notified_at，避免同一邀约反复提醒
+    }
+  } catch { /* ignore */ }
+}
+
 // ============ 专注结束自动结算（到点自动完成 + 通知，30 秒检查一次） ============
 
 async function checkFocusEnd() {
@@ -319,6 +416,28 @@ async function checkFocusEnd() {
       await sendNotification("⏰ 专注结束", `${s.mode} 分钟到了，休息一下`);
     }
   } catch { /* ignore */ }
+}
+
+// 请求体大小上限（1MB）：防无界内存占用（超大 POST 直接 413）
+const MAX_BODY = 1024 * 1024;
+
+// 读取请求体：限流 1MB，超出返回 413 并销毁连接；成功则回调 body
+function readBody(req, res, cb) {
+  let body = "";
+  let overflow = false;
+  req.on("data", (c) => {
+    if (overflow) return;
+    body += c;
+    if (body.length > MAX_BODY) {
+      overflow = true;
+      res.writeHead(413, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "请求体过大（>1MB）" }));
+      req.destroy();
+    }
+  });
+  req.on("end", () => {
+    if (!overflow) cb(body);
+  });
 }
 
 // ============ HTTP 服务 ============
@@ -338,8 +457,31 @@ const server = createServer((req, res) => {
   const corsOrigin = reqOrigin || "*";
   res.setHeader("Access-Control-Allow-Origin", corsOrigin);
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+
+  // Bearer token 认证：/api/*（除 /api/health）必须带 Authorization: Bearer <token>
+  // 防 CSRF 数据泄露/驱动 agent；CORS 白名单已挡掉任意网页，这里再挡 Origin:null 沙盒 iframe
+  if (url.pathname.startsWith("/api/") && url.pathname !== "/api/health") {
+    const auth = req.headers.authorization || "";
+    if (auth !== `Bearer ${AUTH_TOKEN}`) {
+      res.writeHead(401, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "未授权：缺少或错误的 Bearer token" }));
+      return;
+    }
+  }
+
+  if (url.pathname === "/api/health") {
+    // 机器可读健康检查（无需认证）：DB 连通性 + 运行时长 + 实际端口
+    let dbOk = false;
+    try {
+      db.prepare("SELECT 1").get();
+      dbOk = true;
+    } catch { /* ignore */ }
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: true, db: dbOk, uptime: Math.round(process.uptime()), port: actualPort }));
+    return;
+  }
 
   if (url.pathname === "/api/widget-data") {
     // 看板娘数据：学习计划 + 最新产出 + 趋势 + 爬取进度
@@ -361,9 +503,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/chat") {
     // 桌宠对话：用户消息 → agent 工具循环 → 回复（走串行 lane，防并发竞争 memory 镜像）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { message, history } = JSON.parse(body || "{}");
         if (!message) { res.writeHead(400); res.end(JSON.stringify({ error: "message required" })); return; }
@@ -573,9 +713,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/study-cluster-stream") {
     // 多条目知识归并：把多个相关条目的讲解整合成主题簇综合讲解，流式生成并存到 study_notes/<簇>/ 目录
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
+    readBody(req, res, (body) => {
       try {
         const { ids } = JSON.parse(body || "{}");
         if (!Array.isArray(ids) || ids.length < 2) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "请至少选择 2 个相关条目归并" })); return; }
@@ -745,9 +883,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/study-answer") {
     // 复盘：提交答案判分
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const r = await studyApi.answerReview(JSON.parse(body || "{}").answers || []);
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -760,9 +896,7 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/interview/start") {
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const r = await laneSubmit(() => startInterview(JSON.parse(body || "{}")));
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -775,9 +909,7 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/interview/answer") {
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const r = await laneSubmit(() => submitAnswer(JSON.parse(body || "{}").answer || ""));
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -863,9 +995,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/review/add") {
     // 添加复习卡（学习清单/薄弱点回流用）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
+    readBody(req, res, (body) => {
       try {
         const { topic, question = "", answer = "", source = "" } = JSON.parse(body || "{}");
         if (!topic) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "topic required" })); return; }
@@ -881,9 +1011,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/review/submit") {
     // 复习提交评级 0-3
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
+    readBody(req, res, (body) => {
       try {
         const { id, rating } = JSON.parse(body || "{}");
         const r = reviewApi.review.reviewCard(id, parseInt(rating, 10) || 2);
@@ -906,7 +1034,16 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/refresh") {
-    checkTrends().then(() => { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); });
+    checkTrends()
+      .then(() => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      })
+      .catch((err) => {
+        logErr(`refresh checkTrends 异常: ${err && err.message ? err.message : String(err)}`);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      });
     return;
   }
   if (url.pathname === "/api/notify-test") {
@@ -936,9 +1073,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/jobs/profile") {
     // 简历技能画像（驱动岗位匹配；原文一并保存供后续复用）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { resume } = JSON.parse(body || "{}");
         if (!resume || !String(resume).trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "resume required" })); return; }
@@ -954,9 +1089,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/jobs/direction") {
     // 设置意向方向 + 返回调整建议
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { direction } = JSON.parse(body || "{}");
         const set = jobsApi.setTargetDirection(direction);
@@ -997,9 +1130,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/jobs/status") {
     // 更新投递状态
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { id, status } = JSON.parse(body || "{}");
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -1013,9 +1144,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/jobs/favorite") {
     // 收藏/取消收藏岗位（body {id, favorite}）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { id, favorite } = JSON.parse(body || "{}");
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -1041,9 +1170,7 @@ const server = createServer((req, res) => {
       }
       return;
     }
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (_body) => {
       try {
         const r = await jobsApi.collectJobsDaily();
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -1057,9 +1184,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/jobs/collect") {
     // 搜集校招岗位：官网优先 → 公司名单 → 中厂兜底（POST 触发；可传 step / skipDetails）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { step, skipDetails } = JSON.parse(body || "{}");
         const result = {};
@@ -1081,9 +1206,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/jobs/fetch-details") {
     // 手动触发：抓官网岗位详情页 JD 正文入库（POST；返回 {ok,total,done,failed,updated,skipped}）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         JSON.parse(body || "{}"); // 仅校验 body 合法（预留参数位）
         const r = await jobsApi.fetchJobDetails();
@@ -1109,9 +1232,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/knowledge/ask") {
     // RAG 问答：检索 → 注入 → LLM 生成（POST { query }）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { query } = JSON.parse(body || "{}");
         const r = await ragApi.askKnowledge(query);
@@ -1126,9 +1247,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/knowledge/search") {
     // 本地知识库混合检索（POST { query, topK }）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { query, topK } = JSON.parse(body || "{}");
         const hits = await ragApi.searchKnowledge(query, Math.min(topK || 5, 10));
@@ -1154,9 +1273,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/knowledge/rebuild") {
     // 重建知识库（POST；全量采集 + embedding，约 15-60s）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (_body) => {
       try {
         const r = await ragApi.rebuildKnowledgeBase();
         if (r === null) {
@@ -1252,9 +1369,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/zhenti/collect") {
     // 搜集真题清单（POST；可传 { details: 20 } 顺带抓题型详情；{ company: "拼多多" } 按公司搜索搜集）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { details, company } = JSON.parse(body || "{}");
         const r = company
@@ -1272,9 +1387,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/zhenti/cookie") {
     // 保存牛客 Cookie（POST { cookie }，本地落盘）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { cookie } = JSON.parse(body || "{}");
         const r = zhentiApi.saveNowcoderCookie(cookie);
@@ -1289,9 +1402,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/zhenti/questions") {
     // 登录态抓取试卷完整题目（POST { paperTestId }）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { paperTestId } = JSON.parse(body || "{}");
         if (!paperTestId) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "paperTestId required" })); return; }
@@ -1307,9 +1418,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/zhenti/wrong") {
     // 错题回流：学习清单 + FSRS 复习卡（POST { paperId, company, paperTitle, question, answer }）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { paperId, company, paperTitle, question, answer } = JSON.parse(body || "{}");
         if (!question || !String(question).trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "question required" })); return; }
@@ -1325,9 +1434,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/zhenti/plan") {
     // 整套真题加入学习清单（POST { paperTestId }）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { paperTestId } = JSON.parse(body || "{}");
         if (!paperTestId) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "paperTestId required" })); return; }
@@ -1354,9 +1461,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/learning/check") {
     // 检查各文档最新版本（POST；可传 { only: [名称...] } 只检查指定项）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { only } = JSON.parse(body || "{}");
         const results = await learningApi.checkDocVersions(Array.isArray(only) ? only : []);
@@ -1371,9 +1476,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/resume-plan") {
     // 简历项目 → 学习清单（简历拷打准备）：提取项目 → 每个项目作为"必会"清单条目
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    readBody(req, res, async (body) => {
       try {
         const { resume } = JSON.parse(body || "{}");
         if (!resume || !String(resume).trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "resume required" })); return; }
@@ -1410,9 +1513,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/approval") {
     // 权限审批：用户决策（allow/session）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
+    readBody(req, res, (body) => {
       try {
         const { toolName, allow, session } = JSON.parse(body || "{}");
         if (!toolName) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "toolName required" })); return; }
@@ -1428,9 +1529,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/interview-notes") {
     // 面试实录：把真实面试被问住的知识点加入学习清单（必会）+ 建复习卡
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
+    readBody(req, res, (body) => {
       try {
         const input = JSON.parse(body || "{}");
         // topics 支持数组或字符串（逗号/顿号/换行/分号分隔）
@@ -1472,6 +1571,11 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/run-discover") {
     // 重置进度并后台启动爬取（spawn 隐藏窗口 + 日志重定向，不弹终端）
+    if (crawlRunning) {
+      res.writeHead(409, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "已有爬取任务运行中" }));
+      return;
+    }
     try {
       writeFileSync(path.join(config.outputDir, "..", "progress.json"), JSON.stringify({ status: "running", step: "start", message: "爬取启动中...", current: 0, total: 0 }), "utf8");
     } catch { /* ignore */ }
@@ -1487,9 +1591,7 @@ const server = createServer((req, res) => {
       return;
     }
     if (req.method === "POST") {
-      let body = "";
-      req.on("data", (c) => (body += c));
-      req.on("end", () => {
+      readBody(req, res, (body) => {
         try {
           const cfg = JSON.parse(body || "{}");
           if (cfg.enabled !== undefined && typeof cfg.enabled !== "boolean") {
@@ -1583,9 +1685,7 @@ const server = createServer((req, res) => {
       return;
     }
     if (req.method === "POST") {
-      let body = "";
-      req.on("data", (c) => (body += c));
-      req.on("end", () => {
+      readBody(req, res, (body) => {
         try {
           const { feeds } = JSON.parse(body || "{}");
           const r = rssApi.setFeeds(feeds);
@@ -1604,9 +1704,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/focus/start" && req.method === "POST") {
     // 开始专注（番茄钟 25/45 分钟）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
+    readBody(req, res, (body) => {
       try {
         const { mode } = JSON.parse(body || "{}");
         const r = focusApi.startFocus(String(mode || ""));
@@ -1621,9 +1719,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/focus/stop" && req.method === "POST") {
     // 结束专注（completed=true 表示完成，false 表示中断）
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
+    readBody(req, res, (body) => {
       try {
         const { completed } = JSON.parse(body || "{}");
         const r = focusApi.stopFocus(!!completed);
@@ -1682,9 +1778,7 @@ const server = createServer((req, res) => {
       return;
     }
     if (req.method === "POST") {
-      let body = "";
-      req.on("data", (c) => (body += c));
-      req.on("end", () => {
+      readBody(req, res, (body) => {
         try {
           const { blacklist } = JSON.parse(body || "{}");
           const r = focusApi.setBlacklist(blacklist);
@@ -1699,6 +1793,77 @@ const server = createServer((req, res) => {
     }
     res.writeHead(405, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Method Not Allowed" }));
+    return;
+  }
+  if (url.pathname === "/api/mail/config") {
+    // 邮箱配置：GET 读取（脱敏，不返回授权码），POST 保存（持久化到 settings mail_config）
+    if (req.method === "GET") {
+      try {
+        const cfg = mailApi.getConfig();
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, config: { email: cfg.email, enabled: cfg.enabled, configured: !!(cfg.email && cfg.authCode) } }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+    if (req.method === "POST") {
+      readBody(req, res, (body) => {
+        try {
+          const { email, authCode } = JSON.parse(body || "{}");
+          const r = mailApi.setConfig({ email, authCode });
+          res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify(r));
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+    res.writeHead(405, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Method Not Allowed" }));
+    return;
+  }
+  if (url.pathname === "/api/mail/test" && req.method === "POST") {
+    // 测试连接：用提交的邮箱/授权码连 IMAP（不落库）
+    readBody(req, res, async (body) => {
+      try {
+        const { email, authCode } = JSON.parse(body || "{}");
+        const r = await mailApi.testConnection({ email, authCode });
+        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+  if (url.pathname === "/api/mail/check" && req.method === "POST") {
+    // 立即检查：拉未读 → LLM 识别 → 入库（同步等待结果返回给面板）
+    (async () => {
+      try {
+        const r = await mailApi.runMailCheck();
+        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: String(e.message || e).slice(0, 200) }));
+      }
+    })();
+    return;
+  }
+  if (url.pathname === "/api/schedule") {
+    // 未来日程列表（面试/笔试邀约）
+    try {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, events: mailApi.getSchedule() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
     return;
   }
   if (url.pathname === "/" || url.pathname === "/index.html") {
@@ -1721,12 +1886,47 @@ try {
   assertConfig();
 } catch (e) { /* config.mjs 无此导出时忽略 */ }
 
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`✅ 桌面小组件已启动: http://127.0.0.1:${PORT}`);
-  console.log(`   学习提醒: 每天 ${STUDY_HOURS.join(":00 / ")}:00 弹通知`);
-  console.log(`   趋势检测: 每 5 分钟扫描 output 目录，发现新产出弹通知`);
-  console.log(`   Ctrl+C 停止`);
+// ============ 启动：端口占用回退（EADDRINUSE 不再静默崩溃） ============
+let actualPort = PORT;
+let listenAttempt = 0;
+const MAX_PORT_RETRIES = 3;
+
+function writeWidgetPort(port) {
+  try {
+    mkdirSync(DATA_DIR, { recursive: true });
+    writeFileSync(path.join(DATA_DIR, "widget-port.json"), JSON.stringify({ port, ts: Date.now() }), "utf8");
+  } catch (e) {
+    console.log(`[widget] 写入端口文件失败: ${e.message}`);
+  }
+}
+
+function tryListen() {
+  server.listen(actualPort, "127.0.0.1", () => {
+    console.log(`✅ 桌面小组件已启动: http://127.0.0.1:${actualPort}`);
+    console.log(`   学习提醒: 每天 ${STUDY_HOURS.join(":00 / ")}:00 弹通知`);
+    console.log(`   趋势检测: 每 5 分钟扫描 output 目录，发现新产出弹通知`);
+    console.log(`   Ctrl+C 停止`);
+    writeWidgetPort(actualPort);
+  });
+}
+
+server.on("error", (/** @type {NodeJS.ErrnoException} */ err) => {
+  const code = err.code;
+  if (code === "EADDRINUSE" && listenAttempt < MAX_PORT_RETRIES) {
+    listenAttempt++;
+    const prev = actualPort;
+    actualPort = PORT + listenAttempt;
+    console.log(`[widget] 端口 ${prev} 被占用，改用 ${actualPort} 重试（${listenAttempt}/${MAX_PORT_RETRIES}）`);
+    logErr(`端口 ${prev} 被占用，改用 ${actualPort} 重试`);
+    tryListen();
+  } else {
+    console.error(`[widget] 服务器启动失败: ${code || err.message}（端口 ${actualPort}）`);
+    logErr(`服务器启动失败: ${code || err.message}（端口 ${actualPort}）`);
+    process.exit(1);
+  }
 });
+
+tryListen();
 
 // ============ 主动推送：按关注点定时巡检新内容 ============
 import { memory } from "./lib/memory.mjs";
@@ -1804,9 +2004,13 @@ function scheduleNextPatrol() {
 scheduleNextPatrol();
 console.log(`[widget] 自动巡检: ${DISABLE_PATROL ? "关闭（环境变量 MIANSHI_DISABLE_PATROL=1）" : patrolState.enabled ? `开启（每 ${patrolState.intervalMin} 分钟）` : "关闭（面板设置）"}`);
 
+let patrolRunning = false; // 巡检重入保护标记
+
 async function patrolInterests() {
+  if (patrolRunning) return; // 重入保护：定时巡检与手动 /api/patrol-run 重叠时跳过
   const interests = memory.getInterests();
   if (!interests.length) return;
+  patrolRunning = true;
   try {
     const { chatWithAgent } = { chatWithAgent: null }; // 避免循环依赖，直接调 search
     const { fetchPage } = await import("./lib/fetch-page.mjs");
@@ -1860,15 +2064,21 @@ async function patrolInterests() {
       const now = Date.now();
       if (now - (lastFullCrawl || 0) > 2 * 60 * 60 * 1000) {
         lastFullCrawl = now;
-        console.log("[widget] 巡检无新帖，触发全量爬取");
-        try {
-          runDiscoverHidden();
-        } catch { /* ignore */ }
+        if (crawlRunning) {
+          console.log("[widget] 巡检无新帖，但已有爬取任务运行中，跳过全量爬取");
+        } else {
+          console.log("[widget] 巡检无新帖，触发全量爬取");
+          try {
+            runDiscoverHidden();
+          } catch { /* ignore */ }
+        }
       } else {
         console.log("[widget] 巡检无新帖，全量爬取冷却中（2 小时限频）");
       }
     }
-  } catch { /* ignore */ }
+  } catch { /* ignore */ } finally {
+    patrolRunning = false;
+  }
 }
 let lastFullCrawl = null; // 全量爬取限频标记
 
@@ -1979,6 +2189,9 @@ if (!DISABLE_BACKGROUND) {
 // 专注结束自动结算：每 30 秒检查；启动 1 分钟后 catch-up
 registerInterval(checkFocusEnd, 30 * 1000);
 registerTimer(checkFocusEnd, 60 * 1000);
+// 面试/笔试邀约提醒：每 30 分钟检查（24h 内 + 4 小时冷却）；启动 2 分钟后 catch-up
+registerInterval(checkScheduleReminder, 30 * 60 * 1000);
+registerTimer(checkScheduleReminder, 2 * 60 * 1000);
 
 // ---------- 每日自动岗位搜集（24h 门控：白天执行，距上次搜集 >24h 才跑；running 互斥防重叠） ----------
 let collectJobsRunning = false;
@@ -2001,8 +2214,21 @@ if (!DISABLE_BACKGROUND) {
   registerInterval(collectJobsDailyTick, 30 * 60 * 1000); // 每 30 分钟 tick（24h 门控幂等）
 }
 
-// 优雅关闭：server close / 进程信号时清理所有定时器
+// 优雅关闭：停止接收连接 → 清理定时器 → kill 爬取子进程 → 关闭 DB（WAL checkpoint）→ 退出
 const cleanupTimers = () => { for (const t of timers) clearTimeout(t); };
 server.on("close", cleanupTimers);
-process.on("SIGINT", () => { cleanupTimers(); process.exit(0); });
-process.on("SIGTERM", () => { cleanupTimers(); process.exit(0); });
+
+function shutdown() {
+  console.log("[widget] 收到退出信号，优雅关闭中…");
+  cleanupTimers();
+  try { server.close(); } catch { /* ignore */ }
+  for (const c of crawlChildren) {
+    try { c.kill(); } catch { /* ignore */ }
+  }
+  try { db.close(); } catch { /* ignore */ } // WAL checkpoint + 释放连接
+  setTimeout(() => process.exit(0), 200);
+  setTimeout(() => process.exit(1), 3000).unref(); // 兜底：3s 后强制退出
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

@@ -17,13 +17,18 @@ server.tool(
   { query: z.string().describe("搜索关键词，如 React面经 / 拼多多笔试 / Agent面试"),
     site: z.enum(["auto", "nowcoder", "juejin", "csdn"]).optional().describe("站点，默认 auto（牛客+掘金）") },
   async ({ query, site }) => {
-    const { toolSearchPosts } = await import("./lib/agent.mjs");
-    // 复用 agent 的搜索工具（含标题过滤/去重/AI挑帖）
-    const r = await toolSearchPosts(query, site || "auto");
-    const text = (r.results || []).slice(0, 6)
-      .map((p) => `- ${p.title}\n  ${p.url}${p.site ? ` (${p.site})` : ""}`)
-      .join("\n") || "没有找到结果";
-    return { content: [{ type: "text", text }] };
+    try {
+      const { toolSearchPosts } = await import("./lib/agent.mjs");
+      // 复用 agent 的搜索工具（含标题过滤/去重/AI挑帖）
+      const r = await toolSearchPosts(query, site || "auto");
+      const text = (r.results || []).slice(0, 6)
+        .map((p) => `- ${p.title}\n  ${p.url}${p.site ? ` (${p.site})` : ""}`)
+        .join("\n") || "没有找到结果";
+      return { content: [{ type: "text", text }] };
+    } catch (e) {
+      console.error(`[mcp] search_posts 失败: ${e && e.message ? e.message : String(e)}`);
+      return { content: [{ type: "text", text: `⚠️ 搜索失败: ${e && e.message ? e.message : String(e)}` }], isError: true };
+    }
   }
 );
 
@@ -34,15 +39,20 @@ server.tool(
   { question: z.string().describe("要讲解的问题或知识点，如：事件循环 / React Hooks 原理 / 防抖节流"),
     verify_question: z.string().optional().describe("附加的验证题（可选）") },
   async ({ question }) => {
-    const { solveQuestion } = await import("./lib/ai.mjs");
-    const md = await solveQuestion({
-      title: question,
-      text: `这是一道前端面试题，请完整讲解：${question}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
-      company: "MCP",
-      position: "前端",
-      sourceUrl: "mcp://solve_question",
-    });
-    return { content: [{ type: "text", text: String(md).slice(0, 8000) }] };
+    try {
+      const { solveQuestion } = await import("./lib/ai.mjs");
+      const md = await solveQuestion({
+        title: question,
+        text: `这是一道前端面试题，请完整讲解：${question}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
+        company: "MCP",
+        position: "前端",
+        sourceUrl: "mcp://solve_question",
+      });
+      return { content: [{ type: "text", text: String(md).slice(0, 8000) }] };
+    } catch (e) {
+      console.error(`[mcp] solve_question 失败: ${e && e.message ? e.message : String(e)}`);
+      return { content: [{ type: "text", text: `⚠️ 讲解失败: ${e && e.message ? e.message : String(e)}` }], isError: true };
+    }
   }
 );
 
@@ -52,13 +62,18 @@ server.tool(
   "查看当前学习清单（必会/进阶/拓展分层），了解待学知识点",
   {},
   async () => {
-    const { getPlan } = await import("./lib/study.mjs");
-    const plan = getPlan();
-    const items = (plan.items || []).filter((i) => !i.done);
-    const text = items.length
-      ? items.map((i) => `- [${i.level || "必会"}] ${i.topic}${i.source ? `（来源：${i.source}）` : ""}`).slice(0, 15).join("\n")
-      : "学习清单已全部完成 🎉";
-    return { content: [{ type: "text", text: `今日待学 ${items.length} 项：\n${text}` }] };
+    try {
+      const { getPlan } = await import("./lib/study.mjs");
+      const plan = getPlan();
+      const items = (plan.items || []).filter((i) => !i.done);
+      const text = items.length
+        ? items.map((i) => `- [${i.level || "必会"}] ${i.topic}${i.source ? `（来源：${i.source}）` : ""}`).slice(0, 15).join("\n")
+        : "学习清单已全部完成 🎉";
+      return { content: [{ type: "text", text: `今日待学 ${items.length} 项：\n${text}` }] };
+    } catch (e) {
+      console.error(`[mcp] get_study_plan 失败: ${e && e.message ? e.message : String(e)}`);
+      return { content: [{ type: "text", text: `⚠️ 读取学习清单失败: ${e && e.message ? e.message : String(e)}` }], isError: true };
+    }
   }
 );
 
@@ -70,10 +85,15 @@ server.tool(
     role: z.enum(["技术深挖型", "温和引导型", "压力追问型"]).optional().describe("面试官风格"),
     focus: z.string().optional().describe("重点方向，如 React / 事件循环") },
   async ({ position, role, focus }) => {
-    const { startInterview } = await import("./lib/interview.mjs");
-    const r = await startInterview({ position, role: role || "技术深挖型", focus });
-    if (r.error) return { content: [{ type: "text", text: `⚠️ ${r.error}` }] };
-    return { content: [{ type: "text", text: `第 ${r.round} 轮\n🎯 维度：${r.dimension}\n📌 依据：${r.basis}\n✅ 合格标准：${r.criteria}\n\n问题：${r.question}` }] };
+    try {
+      const { startInterview } = await import("./lib/interview.mjs");
+      const r = await startInterview({ position, role: role || "技术深挖型", focus });
+      if (r.error) return { content: [{ type: "text", text: `⚠️ ${r.error}` }] };
+      return { content: [{ type: "text", text: `第 ${r.round} 轮\n🎯 维度：${r.dimension}\n📌 依据：${r.basis}\n✅ 合格标准：${r.criteria}\n\n问题：${r.question}` }] };
+    } catch (e) {
+      console.error(`[mcp] start_interview 失败: ${e && e.message ? e.message : String(e)}`);
+      return { content: [{ type: "text", text: `⚠️ 开始面试失败: ${e && e.message ? e.message : String(e)}` }], isError: true };
+    }
   }
 );
 

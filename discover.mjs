@@ -74,7 +74,7 @@ export function dedupePosts(posts) {
 }
 
 // ===== 爬取进度上报（桌宠轮询展示） =====
-const PROGRESS_FILE = "D:/mianshi-agent/progress.json";
+const PROGRESS_FILE = path.join(import.meta.dirname, "progress.json");
 
 function writeProgress(p) {
   try {

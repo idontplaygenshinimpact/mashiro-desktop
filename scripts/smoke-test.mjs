@@ -10,6 +10,22 @@ const BASE = "http://127.0.0.1:8899";
 const SKIP_LLM = process.argv.includes("--skip-llm");
 const toUrl = (p) => `file:///${p.replace(/\\/g, "/")}`;
 
+// widget 已启用 Bearer token 认证（见 widget.mjs loadOrCreateToken）：从 env 或 data/widget-token.json 读
+function loadToken() {
+  if (process.env.MIANSHI_TOKEN) return process.env.MIANSHI_TOKEN;
+  try {
+    const f = path.join(ROOT, "data", "widget-token.json");
+    if (existsSync(f)) {
+      const j = JSON.parse(readFileSync(f, "utf8"));
+      if (j && typeof j.token === "string" && j.token) return j.token;
+    }
+  } catch { /* ignore */ }
+  return "";
+}
+const AUTH_TOKEN = loadToken();
+const AUTH_HEADERS = AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {};
+const apiFetch = (p, opts = {}) => fetch(`${BASE}${p}`, { ...opts, headers: { ...AUTH_HEADERS, ...(opts.headers || {}) } });
+
 let pass = 0, fail = 0;
 const results = [];
 
@@ -22,8 +38,12 @@ function check(name, ok, detail = "") {
 // 0. widget 服务可用性
 console.log("== 0. widget 服务 ==");
 try {
-  const r = await fetch(`${BASE}/api/widget-data`, { signal: AbortSignal.timeout(8000) });
+  const r = await apiFetch("/api/widget-data", { signal: AbortSignal.timeout(8000) });
   check("GET /api/widget-data", r.ok, `status=${r.status}`);
+  if (r.status === 401) {
+    console.log(`\n❌ widget 返回 401：Bearer token 缺失/不匹配（data/widget-token.json 或 MIANSHI_TOKEN）`);
+    process.exit(1);
+  }
 } catch (e) {
   check("GET /api/widget-data", false, e.message);
   // 服务都没起，后续无意义
@@ -34,7 +54,7 @@ try {
 // 1. 学习清单
 console.log("== 1. 学习清单 ==");
 {
-  const r = await (await fetch(`${BASE}/api/study-plan`)).json();
+  const r = await (await apiFetch("/api/study-plan")).json();
   check("study-plan 返回 ok", r.ok === true);
   check("study-plan 有 items", Array.isArray(r.plan?.items), `count=${r.plan?.items?.length ?? "?"}`);
   const item = r.plan?.items?.[0];
@@ -45,10 +65,10 @@ console.log("== 1. 学习清单 ==");
 // 2. 学习详情（有文件条目走 JSON；无文件条目走 LLM——跳过 LLM 时只测有文件的）
 console.log("== 2. 学习详情 ==");
 {
-  const plan = await (await fetch(`${BASE}/api/study-plan`)).json();
+  const plan = await (await apiFetch("/api/study-plan")).json();
   const withFile = (plan.plan?.items || []).find((i) => i.filePath);
   if (withFile) {
-    const r = await (await fetch(`${BASE}/api/study-detail?id=${withFile.id}`)).json();
+    const r = await (await apiFetch(`/api/study-detail?id=${withFile.id}`)).json();
     check("study-detail(有文件) 返回内容", r.ok && r.content?.length > 100, `len=${r.content?.length}`);
   } else {
     console.log("  ⏭️ 无文件条目存在性检查跳过（没有 filePath 条目）");
@@ -57,7 +77,7 @@ console.log("== 2. 学习详情 ==");
 // 3. 复习
 console.log("== 3. 复习 ==");
 {
-  const r = await (await fetch(`${BASE}/api/review/due`)).json();
+  const r = await (await apiFetch("/api/review/due")).json();
   check("review/due 返回 ok", r.ok === true);
   check("review/due 有 stats", r.stats && typeof r.stats.total === "number", `total=${r.stats?.total}`);
 }
@@ -65,7 +85,7 @@ console.log("== 3. 复习 ==");
 console.log("== 4. 模拟面试 ==");
 {
   // 如果已有进行中的面试，先结束（避免污染）
-  const end = await (await fetch(`${BASE}/api/interview/end`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+  const end = await (await apiFetch("/api/interview/end", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
   check("interview/end 可调用", end && (end.ok === true || end.error), `err=${end.error || "none"}`);
 }
 // 5. 数据文件完整性
