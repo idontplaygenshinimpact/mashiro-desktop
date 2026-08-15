@@ -25,12 +25,12 @@ beforeEach(async () => {
 after(() => { cleanupTempDb(dbDir); });
 
 // ---------- 简单对话 ----------
-test("chatWithAgent 简单对话：回复 + 语音解析", async () => {
+test("chatWithAgent 简单对话：回复 + 语音稿剥离（voice 恒空，由面板按回复匹配预设）", async () => {
   setLlmResponses("事件循环要先分清宏任务和微任务哦【语音】这个知识点其实很简单的呢~");
   const r = await chatWithAgent("讲讲事件循环");
   assert.ok(r.reply.includes("宏任务"), "回复内容");
-  assert.equal(r.voice, "这个知识点其实很简单的呢~", "语音稿提取");
-  assert.ok(!r.reply.includes("【语音】"), "语音稿从回复中移除");
+  assert.equal(r.voice, "", "不再由 LLM 生成语音稿（省开销），面板按回复文本匹配预设日语台词");
+  assert.ok(!r.reply.includes("【语音】"), "语音稿标记从回复中移除");
   assert.ok(Array.isArray(r.history) && r.history.length >= 2);
 });
 
