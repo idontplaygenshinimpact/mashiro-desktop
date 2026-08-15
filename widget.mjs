@@ -2241,6 +2241,23 @@ const dreamingTick = async () => {
 if (!DISABLE_BACKGROUND) {
   registerTimer(dreamingTick, 4 * 60 * 1000); // 启动 4 分钟后首查
   registerInterval(dreamingTick, 12 * 3600 * 1000); // 每 12 小时检查（24h 门控幂等）
+  // MCP 自环配置自愈：data/mcp-servers.json 缺失时生成默认自环（桌宠经 mcp__mianshi__* 消费个人数据/核心能力）
+  try {
+    const mcpCfgFile = path.join(import.meta.dirname, "data", "mcp-servers.json");
+    if (!existsSync(mcpCfgFile)) {
+      mkdirSync(path.dirname(mcpCfgFile), { recursive: true });
+      writeFileSync(mcpCfgFile, JSON.stringify([{
+        name: "mianshi",
+        command: "node",
+        args: [path.join(import.meta.dirname, "mcp-server.mjs").replace(/\\/g, "/")],
+        permission: "auto",
+        description: "mianshi-agent 自身能力（搜索面经/讲解/学习清单/模拟面试/个人数据：简历/校招/日程/学习进度）",
+      }], null, 2), "utf8");
+      console.log("[widget] 已生成默认 MCP 自环配置（data/mcp-servers.json）");
+    }
+  } catch (e) {
+    logErr(`MCP 自环配置自愈失败: ${e && e.message ? e.message : String(e)}`);
+  }
 }
 
 // 优雅关闭：停止接收连接 → 清理定时器 → kill 爬取子进程 → 关闭 DB（WAL checkpoint）→ 退出
