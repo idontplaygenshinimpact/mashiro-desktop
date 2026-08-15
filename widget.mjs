@@ -5,7 +5,7 @@
 //   3. 学习提醒 —— 每天固定时间提醒做面经/笔试学习
 // 用法: node widget.mjs [--no-notify]
 import { createServer } from "node:http";
-import { readFileSync, writeFileSync, appendFileSync, readdirSync, statSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, readdirSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { exec } from "node:child_process";
@@ -28,6 +28,7 @@ import * as ojApi from "./lib/oj.mjs";
 import * as rssApi from "./lib/rss.mjs";
 import * as focusApi from "./lib/focus.mjs";
 import * as mailApi from "./lib/mail.mjs";
+import { scanNewestFiles, latestOutputs, loadOrCreateToken, checkBearerAuth, buildHealthPayload, readBody, createCrawlMutex } from "./lib/widget-core.mjs";
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -60,68 +61,10 @@ process.on("uncaughtException", (err) => {
 
 // ============ Bearer Token 认证（防 CSRF 数据泄露/驱动 agent） ============
 // 优先级：环境变量 MIANSHI_TOKEN > data/widget-token.json > 生成并落盘
-function loadOrCreateToken() {
-  const tokenFile = path.join(DATA_DIR, "widget-token.json");
-  if (process.env.MIANSHI_TOKEN) return process.env.MIANSHI_TOKEN;
-  try {
-    if (existsSync(tokenFile)) {
-      const j = JSON.parse(readFileSync(tokenFile, "utf8"));
-      if (j && typeof j.token === "string" && j.token) return j.token;
-    }
-  } catch { /* ignore */ }
-  const token = randomUUID();
-  try {
-    mkdirSync(DATA_DIR, { recursive: true });
-    writeFileSync(tokenFile, JSON.stringify({ token, ts: Date.now() }), "utf8");
-  } catch (e) {
-    console.log(`[widget] 写入 token 文件失败: ${e.message}`);
-  }
-  return token;
-}
-const AUTH_TOKEN = loadOrCreateToken();
-
-// ============ 数据读取 ============
-
-function latestOutputs(limit = 12) {
-  try {
-    const outDir = config.outputDir;
-    if (!existsSync(outDir)) return [];
-    return readdirSync(outDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => ({ dir: d.name, mtime: statSync(path.join(outDir, d.name)).mtime }))
-      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
-      .slice(0, limit);
-  } catch (e) {
-    console.log(`[widget] latestOutputs 扫描失败: ${e.message}`);
-    return [];
-  }
-}
-
-function scanNewestFiles(limit = 20) {
-  // 扫最新产出目录里的 md 文件，返回标题/公司/路径
-  // 排除 00_ 开头的索引/README + study_notes（学习讲解存档，不算产出）——chat_solutions（对话解答）保留展示
-  try {
-    const outDir = config.outputDir;
-    if (!existsSync(outDir)) return [];
-    const files = [];
-    const SKIP_DIRS = new Set(["study_notes"]);
-    for (const d of readdirSync(outDir, { withFileTypes: true })) {
-      if (!d.isDirectory()) continue;
-      if (SKIP_DIRS.has(d.name)) continue; // 学习讲解存档不展示
-      const dirPath = path.join(outDir, d.name);
-      for (const f of readdirSync(dirPath)) {
-        if (!f.endsWith(".md")) continue;
-        if (/^00[_-]/.test(f)) continue; // 索引文件跳过
-        const fp = path.join(dirPath, f);
-        files.push({ file: f, dir: d.name, mtime: statSync(fp).mtime, path: fp });
-      }
-    }
-    return files.sort((a, b) => b.mtime - a.mtime).slice(0, limit);
-  } catch (e) {
-    console.log(`[widget] scanNewestFiles 扫描失败: ${e.message}`);
-    return [];
-  }
-}
+const AUTH_TOKEN = process.env.MIANSHI_TOKEN || loadOrCreateToken(
+  path.join(DATA_DIR, "widget-token.json"),
+  { randomUUID, existsSync, readFileSync, writeFileSync, mkdirSync }
+);
 
 // 文件名规范化：忽略空格/下划线/括号差异，用于模糊匹配
 const normName = (s) => String(s || "").toLowerCase().replace(/[\s_\-（）()【】[].]/g, "");
@@ -179,7 +122,7 @@ function parseTitle(file) {
 // ============ 学习计划 ============
 
 function getStudyPlan() {
-  const files = scanNewestFiles(30);
+  const files = scanNewestFiles(30, config.outputDir);
   const bishi = files.filter((f) => f.dir.includes("discover") || /笔试|bishi/.test(f.file));
   const mianshi = files.filter((f) => !bishi.includes(f));
   const today = new Date().toISOString().slice(0, 10);
@@ -217,38 +160,36 @@ function sendNotification(title, message, { wait = false } = {}) {
 }
 
 // 后台运行 discover.mjs（隐藏窗口 + 日志重定向 widget-run.log，不弹终端）
-// 互斥：crawlRunning 防并发 discover 子进程（每个都会拉起 Playwright chromium）
-let crawlRunning = false;
+// 互斥：crawlMutex 防并发 discover 子进程（每个都会拉起 Playwright chromium）
+const crawlMutex = createCrawlMutex();
 const crawlChildren = []; // 已 spawn 的 discover 子进程，供优雅关闭时 kill
 
 async function runDiscoverHidden() {
-  if (crawlRunning) return false;
-  try {
-    const { spawn } = await import("node:child_process");
-    const { openSync } = await import("node:fs");
-    const logFd = openSync(path.join(config.outputDir, "..", "widget-run.log"), "a");
-    const child = spawn("node", ["discover.mjs"], {
-      cwd: import.meta.dirname,
-      windowsHide: true,
-      detached: true,
-      stdio: ["ignore", logFd, logFd],
-    });
-    crawlRunning = true;
-    crawlChildren.push(child);
-    const cleanup = () => {
-      crawlRunning = false;
-      const i = crawlChildren.indexOf(child);
-      if (i >= 0) crawlChildren.splice(i, 1);
-    };
-    child.on("exit", cleanup);
-    child.on("error", cleanup);
-    child.unref();
-    return true;
-  } catch (e) {
-    crawlRunning = false;
-    console.log(`[widget] 后台爬取启动失败: ${String(e.message).slice(0, 80)}`);
-    return false;
-  }
+  return crawlMutex.begin(async () => {
+    try {
+      const { spawn } = await import("node:child_process");
+      const { openSync } = await import("node:fs");
+      const logFd = openSync(path.join(config.outputDir, "..", "widget-run.log"), "a");
+      const child = spawn("node", ["discover.mjs"], {
+        cwd: import.meta.dirname,
+        windowsHide: true,
+        detached: true,
+        stdio: ["ignore", logFd, logFd],
+      });
+      crawlChildren.push(child);
+      const cleanup = () => {
+        const i = crawlChildren.indexOf(child);
+        if (i >= 0) crawlChildren.splice(i, 1);
+      };
+      child.on("exit", cleanup);
+      child.on("error", cleanup);
+      child.unref();
+      return true;
+    } catch (e) {
+      console.log(`[widget] 后台爬取启动失败: ${String(e.message).slice(0, 80)}`);
+      return false;
+    }
+  });
 }
 
 // Windows toast 备用（node-notifier 在某些环境 silent）
@@ -268,7 +209,7 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
 const state = { lastScan: null, seenFiles: new Set() };
 
 async function checkTrends() {
-  const files = scanNewestFiles(15);
+  const files = scanNewestFiles(15, config.outputDir);
   if (files.length === 0) return;
   // 首次运行：只记录不通知（避免启动就轰炸）
   if (state.lastScan === null) {
@@ -418,27 +359,7 @@ async function checkFocusEnd() {
   } catch { /* ignore */ }
 }
 
-// 请求体大小上限（1MB）：防无界内存占用（超大 POST 直接 413）
-const MAX_BODY = 1024 * 1024;
-
-// 读取请求体：限流 1MB，超出返回 413 并销毁连接；成功则回调 body
-function readBody(req, res, cb) {
-  let body = "";
-  let overflow = false;
-  req.on("data", (c) => {
-    if (overflow) return;
-    body += c;
-    if (body.length > MAX_BODY) {
-      overflow = true;
-      res.writeHead(413, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "请求体过大（>1MB）" }));
-      req.destroy();
-    }
-  });
-  req.on("end", () => {
-    if (!overflow) cb(body);
-  });
-}
+// 请求体读取/限流（readBody，1MB 上限）已抽到 lib/widget-core.mjs（可单测）
 
 // ============ HTTP 服务 ============
 
@@ -463,8 +384,7 @@ const server = createServer((req, res) => {
   // Bearer token 认证：/api/*（除 /api/health）必须带 Authorization: Bearer <token>
   // 防 CSRF 数据泄露/驱动 agent；CORS 白名单已挡掉任意网页，这里再挡 Origin:null 沙盒 iframe
   if (url.pathname.startsWith("/api/") && url.pathname !== "/api/health") {
-    const auth = req.headers.authorization || "";
-    if (auth !== `Bearer ${AUTH_TOKEN}`) {
+    if (!checkBearerAuth(req.headers.authorization, AUTH_TOKEN)) {
       res.writeHead(401, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ error: "未授权：缺少或错误的 Bearer token" }));
       return;
@@ -479,18 +399,18 @@ const server = createServer((req, res) => {
       dbOk = true;
     } catch { /* ignore */ }
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ ok: true, db: dbOk, uptime: Math.round(process.uptime()), port: actualPort }));
+    res.end(JSON.stringify(buildHealthPayload(dbOk, Math.round(process.uptime()), actualPort)));
     return;
   }
 
   if (url.pathname === "/api/widget-data") {
     // 看板娘数据：学习计划 + 最新产出 + 趋势 + 爬取进度
     const plan = getStudyPlan();
-    const files = scanNewestFiles(12).map((f) => {
+    const files = scanNewestFiles(12, config.outputDir).map((f) => {
       const { company, title } = parseTitle(f.file);
       return { company, title, dir: f.dir, path: f.path, mtime: f.mtime.toISOString() };
     });
-    const outputs = latestOutputs(6).map((o) => ({ dir: o.dir, mtime: o.mtime.toISOString() }));
+    const outputs = latestOutputs(6, config.outputDir).map((o) => ({ dir: o.dir, mtime: o.mtime.toISOString() }));
     let progress = { status: "idle", message: "暂无爬取任务" };
     try {
       progress = JSON.parse(readFileSync(path.join(config.outputDir, "..", "progress.json"), "utf8"));
@@ -1578,7 +1498,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/api/run-discover") {
     // 重置进度并后台启动爬取（spawn 隐藏窗口 + 日志重定向，不弹终端）
-    if (crawlRunning) {
+    if (crawlMutex.isRunning()) {
       res.writeHead(409, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: "已有爬取任务运行中" }));
       return;
@@ -2071,7 +1991,7 @@ async function patrolInterests() {
       const now = Date.now();
       if (now - (lastFullCrawl || 0) > 2 * 60 * 60 * 1000) {
         lastFullCrawl = now;
-        if (crawlRunning) {
+        if (crawlMutex.isRunning()) {
           console.log("[widget] 巡检无新帖，但已有爬取任务运行中，跳过全量爬取");
         } else {
           console.log("[widget] 巡检无新帖，触发全量爬取");
@@ -2200,6 +2120,73 @@ registerTimer(checkFocusEnd, 60 * 1000);
 registerInterval(checkScheduleReminder, 30 * 60 * 1000);
 registerTimer(checkScheduleReminder, 2 * 60 * 1000);
 
+// ============ 持久化定时任务（scheduled_jobs，OpenClaw Automations 风格） ============
+// 现有硬编码定时器（巡检/资讯摘要/学习提醒）保持不变；scheduler 是 ADDITIVE 层：
+// 把调度写进 SQLite，可配置/可禁用/失败自动停用。种子任务默认禁用，不抢现有定时器的活（防双重触发）。
+import { createScheduler } from "./lib/scheduler.mjs";
+
+const scheduler = createScheduler({
+  db,
+  executes: {
+    patrol: async () => {
+      try {
+        if (DISABLE_PATROL) return { ok: false, error: "MIANSHI_DISABLE_PATROL=1 强制关闭巡检" };
+        await patrolInterests();
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e && e.message ? e.message : String(e) };
+      }
+    },
+    rss_digest: async () => {
+      try {
+        await checkRssDigest();
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e && e.message ? e.message : String(e) };
+      }
+    },
+    study_remind: async () => {
+      try {
+        await checkStudyReminder();
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e && e.message ? e.message : String(e) };
+      }
+    },
+  },
+});
+
+// 种子默认任务（表空才种，防重启重复）：默认禁用（enabled:false），config.seeded 标记来源
+function seedDefaultJobs() {
+  try {
+    const row = db.prepare("SELECT COUNT(*) AS n FROM scheduled_jobs").get();
+    if (Number(row && row.n) > 0) return;
+    const patrol = scheduler.registerJob({
+      name: "自动巡检",
+      job_type: "patrol",
+      schedule_spec: `interval:${patrolState.intervalMin}`, // 沿用现有巡检间隔设置
+      enabled: false,
+      config: { seeded: true, source: "widget-defaults" },
+    });
+    const rss = scheduler.registerJob({
+      name: "每日技术资讯摘要",
+      job_type: "rss_digest",
+      schedule_spec: "daily:0900", // 沿用现有 8-10 点摘要窗口（取 9 点）
+      enabled: false,
+      config: { seeded: true, source: "widget-defaults" },
+    });
+    console.log(`[scheduler] 已种默认任务: ${patrol.id}（巡检）/ ${rss.id}（资讯摘要）——默认禁用，不抢现有定时器`);
+  } catch (e) {
+    logErr(`scheduler 种子默认任务失败: ${e && e.message ? e.message : String(e)}`);
+  }
+}
+seedDefaultJobs();
+
+// 每分钟 tick 一次，串行跑到期任务（内部有重入保护 + 全 try/catch，绝不抛崩进程）
+if (!DISABLE_BACKGROUND) {
+  registerInterval(() => { scheduler.checkDue().catch(() => {}); }, 60 * 1000);
+}
+
 // ---------- 每日自动岗位搜集（24h 门控：白天执行，距上次搜集 >24h 才跑；running 互斥防重叠） ----------
 let collectJobsRunning = false;
 const collectJobsDailyTick = async () => {
@@ -2219,6 +2206,41 @@ const collectJobsDailyTick = async () => {
 if (!DISABLE_BACKGROUND) {
   registerTimer(collectJobsDailyTick, 2 * 60 * 1000); // 启动 2 分钟后首查
   registerInterval(collectJobsDailyTick, 30 * 60 * 1000); // 每 30 分钟 tick（24h 门控幂等）
+}
+
+// ---------- 每日记忆巩固（dreaming，OpenClaw 风格：候选 → 提炼 → 长期记忆） ----------
+// 24h 门控：读 settings['last_dreaming']，距上次 <24h 跳过；fire-and-forget 安全（全 try/catch，绝不抛）
+let dreamingRunning = false;
+const dreamingTick = async () => {
+  if (dreamingRunning) return; // 互斥：定时 tick 与上一次尚未完成重叠时跳过
+  try {
+    let last = 0;
+    try {
+      const row = db.prepare("SELECT value FROM settings WHERE key = ?").get("last_dreaming");
+      last = row ? Number(row.value) || 0 : 0;
+    } catch { /* settings 不可用按 0 处理 */ }
+    if (last && Date.now() - last < 24 * 3600 * 1000) return; // 距上次 <24h 跳过
+    dreamingRunning = true;
+    try {
+      const { runDreaming } = await import("./lib/dreaming.mjs");
+      const r = await runDreaming();
+      if (r && r.ok) {
+        db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
+          .run("last_dreaming", String(Date.now()), Date.now());
+        console.log(`[dreaming] 记忆巩固完成：候选 ${r.candidates} 条，新增 ${r.added}，更新 ${r.updated}，丢弃 ${r.dropped}`);
+      } else {
+        logErr(`dreaming: ${(r && r.error) || "未知错误"}`);
+      }
+    } finally {
+      dreamingRunning = false;
+    }
+  } catch (err) {
+    logErr(`dreaming: ${err && err.message ? err.message : String(err)}`);
+  }
+};
+if (!DISABLE_BACKGROUND) {
+  registerTimer(dreamingTick, 4 * 60 * 1000); // 启动 4 分钟后首查
+  registerInterval(dreamingTick, 12 * 3600 * 1000); // 每 12 小时检查（24h 门控幂等）
 }
 
 // 优雅关闭：停止接收连接 → 清理定时器 → kill 爬取子进程 → 关闭 DB（WAL checkpoint）→ 退出
