@@ -36,9 +36,9 @@ window.addEventListener("resize", () => {
 
 let model = null;
 
-async function loadModel() {
+async function loadModel(forcedPath = "") {
   try {
-    let modelPath = window.kanban?.modelPath || "";
+    let modelPath = forcedPath || window.kanban?.modelPath || "";
     if (!modelPath) {
       modelPath = new URL(
         "../../node_modules/live2d-widget-model-mashiro-zamp/assets/model/Sakurasou/mashiro/ryoufuku.model.json",
@@ -46,6 +46,11 @@ async function loadModel() {
       ).href;
     } else if (!modelPath.startsWith("file:")) {
       modelPath = "file:///" + modelPath.replace(/\\/g, "/");
+    }
+    // 切换：销毁旧模型再加载
+    if (model) {
+      try { app.stage.removeChild(model); model.destroy(); } catch { /* ignore */ }
+      model = null;
     }
     model = await Live2DModel.from(modelPath, { autoInteract: false });
     // 半身模型（Sakurasou mashiro），适配窗口
@@ -64,15 +69,24 @@ async function loadModel() {
     // 初始：默认穿透（鼠标不在角色区域时不影响下层应用）
     lastInArea = false;
     window.kanban.setIgnoreMouse(true);
-    // 加载成功问候
-    showBubble("……嗯。我在。", 5000);
-    setTimeout(maybeTimeGreeting, 5000);
+    // 加载成功问候（切换形象时不重复问候）
+    if (!forcedPath) {
+      showBubble("……嗯。我在。", 5000);
+      setTimeout(maybeTimeGreeting, 5000);
+    } else {
+      showBubble("……换好了。怎么样？", 4000);
+    }
   } catch (e) {
     showBubble("😢 Live2D 加载失败: " + e.message, 8000);
     // 模型加载失败也必须让窗口可见（否则错误气泡永远在隐藏窗口里，应用看起来像没启动）
     try { await window.kanban.fitWindow(); } catch { /* ignore */ }
   }
 }
+
+// 桌宠形象切换（面板选择 → 主进程广播 → 重载）
+window.kanban?.onMascotModelChanged?.(({ path }) => {
+  if (path) loadModel(path);
+});
 
 function startIdleMotion() {
   setInterval(() => {
@@ -83,42 +97,19 @@ function startIdleMotion() {
 
 // ---------- 拖拽（setBounds 固定尺寸避免 DWM 漂移） ----------
 let dragging = false, moved = false, offset = { x: 0, y: 0 }, downAt = null, lastMoveTs = 0;
-
-canvas.addEventListener("pointerdown", (e) => {
-  dragging = true;
-  moved = false;
-  downAt = Date.now();
-  offset = { x: e.screenX - window.screenX, y: e.screenY - window.screenY };
-  canvas.style.cursor = "grabbing";
-});
-
-canvas.addEventListener("pointermove", (e) => {
-  if (!dragging) return;
-  const dx = e.screenX - offset.x - window.screenX;
-  const dy = e.screenY - offset.y - window.screenY;
-  if (Math.abs(dx) + Math.abs(dy) > 6) moved = true;
-  if (moved) {
-    const now = Date.now();
-    if (now - lastMoveTs > 16) {
-      lastMoveTs = now;
-      window.kanban.moveWindow(e.screenX - offset.x, e.screenY - offset.y);
-    }
-  }
-});
-
-canvas.addEventListener("pointerup", (e) => {
-  dragging = false;
-  canvas.style.cursor = "grab";
-  if (!moved && Date.now() - downAt < 400) {
-    handleClick(e);
-  }
-});
+// 注意：pointerdown/pointermove/pointerup 监听器在下方「长按」区块统一注册（含长按/空闲逻辑），此处不再重复注册
 
 // 双击角色 → 打开大面板（单击=人设反应，双击=面板；双击会取消挂起的单击戳反应）
 let lastClickTs = 0;
 canvas.addEventListener("dblclick", (e) => {
   clearTimeout(clickTimer); // 取消单击的延迟语音/气泡
   window.kanban.togglePanel();
+});
+
+// 右键桌宠 → 弹出换肤菜单（与托盘同一菜单：旅行装/水手服/私服/shizuku 即时切换）
+canvas.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  window.kanban.showMascotMenu();
 });
 
 // ---------- 鼠标穿透：只在角色模型附近可交互，其余区域点击穿透到下层应用 ----------
@@ -207,20 +198,92 @@ async function handleClick(e) {
   lastTapTs = now;
 
   let reaction;
-  if (tapCount >= 3) {
+  let voiceScene = "click"; // 部位 → 场景语音（人设一致：摸头=招呼/戳脸=惊讶/身体=得意/手=应声）
+  const PART_SCENES = { head: "call", face: "surprise", body: "proud", hand: "agree" };
+  if (tapCount >= 5) {
+    reaction = "……今天这么想我？那、那……真白也很开心。";
+    voiceScene = "love";
+  } else if (tapCount >= 3) {
     reaction = "……你，很无聊吗？我可以分你一支画笔。";
   } else {
     const pool = MASHIRO_REACTIONS[hitArea] || MASHIRO_REACTIONS.default;
     reaction = pool[Math.floor(Math.random() * pool.length)];
+    voiceScene = PART_SCENES[hitArea] || "click";
   }
+  const finalVoiceScene = voiceScene;
 
   // 延迟触发：280ms 内若出现第二次点击（双击开面板），取消戳反应，避免误语音
   clearTimeout(clickTimer);
   clickTimer = setTimeout(() => {
     showBubble(reaction, 5000);
-    if (voiceOn) window.kanban.playScene("click");
+    if (voiceOn) window.kanban.playScene(finalVoiceScene);
+    touchActivity(); // 有交互 → 重置空闲关怀计时
   }, 280);
 }
+
+// ---------- 长按（800ms 无移动 → 撒娇反应） ----------
+let longPressTimer = null, longPressFired = false;
+canvas.addEventListener("pointerdown", (e) => {
+  dragging = true;
+  moved = false;
+  longPressFired = false;
+  downAt = Date.now();
+  offset = { x: e.screenX - window.screenX, y: e.screenY - window.screenY };
+  canvas.style.cursor = "grabbing";
+  clearTimeout(longPressTimer);
+  longPressTimer = setTimeout(() => {
+    if (!dragging || moved) return;
+    longPressFired = true;
+    showBubble("……嗯？一直摸着我……像在安抚一只猫。", 4500);
+    if (voiceOn) window.kanban.playLongScene("love");
+  }, 800);
+});
+
+canvas.addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  const dx = e.screenX - offset.x - window.screenX;
+  const dy = e.screenY - offset.y - window.screenY;
+  if (Math.abs(dx) + Math.abs(dy) > 6) moved = true;
+  if (moved) {
+    const now = Date.now();
+    if (now - lastMoveTs > 16) {
+      lastMoveTs = now;
+      window.kanban.moveWindow(e.screenX - offset.x, e.screenY - offset.y);
+    }
+  }
+});
+
+canvas.addEventListener("pointerup", (e) => {
+  dragging = false;
+  canvas.style.cursor = "grab";
+  clearTimeout(longPressTimer);
+  if (longPressFired) { longPressFired = false; return; } // 长按已反应，不再触发单击
+  if (!moved && Date.now() - downAt < 400) {
+    handleClick(e);
+  }
+});
+
+// ---------- 空闲关怀：5 分钟无交互 → 真白长句关怀（每日最多 3 次） ----------
+let lastActivityTs = Date.now();
+function touchActivity() { lastActivityTs = Date.now(); }
+const IDLE_MIN = 5; // 分钟
+let idleCheckTimer = setInterval(() => {
+  try {
+    if (Date.now() - lastActivityTs < IDLE_MIN * 60 * 1000) return;
+    if (document.hidden) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const key = "mashiro-idle-" + today;
+    let count = 0;
+    try { count = parseInt(localStorage.getItem(key) || "0", 10); } catch { /* ignore */ }
+    if (count >= 3) return;
+    localStorage.setItem(key, String(count + 1));
+    touchActivity();
+    // 长句优先（GPT-SoVITS 真白声线），未合成回退短句 + 中文气泡
+    const lines = ["……ふわぁ。有点无聊呢。在你回来之前，真白会在这里等你哦。", "真白一直在这里哦。觉得寂寞了，随时来跟我说话。"];
+    showBubble(lines[Math.floor(Math.random() * lines.length)], 7000);
+    if (voiceOn) window.kanban.playLongScene("idle");
+  } catch { /* ignore */ }
+}, 60 * 1000);
 
 // ---------- 打开大面板 ----------
 // 双击角色打开；托盘"打开面板"也可

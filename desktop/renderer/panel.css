@@ -17,7 +17,8 @@ body::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(242, 239, 251, 0.93) 0%, rgba(240, 237, 250, 0.88) 50%, rgba(237, 233, 248, 0.95) 100%);
+  /* v5：遮罩降到 ~50% 透明度，让 mashiro-bg 透出来——毛玻璃后面才有东西可糊（之前 0.93/0.88/0.95 全盖死，玻璃效果不可见） */
+  background: linear-gradient(180deg, rgba(242, 239, 251, 0.52) 0%, rgba(240, 237, 250, 0.42) 50%, rgba(237, 233, 248, 0.6) 100%);
   pointer-events: none;
   z-index: 0;
 }
@@ -44,6 +45,12 @@ body::before {
   transition: all 0.15s;
 }
 .top-actions button:hover { background: rgba(109, 79, 216, 0.25); }
+.top-actions #settings-gear.active {
+  background: linear-gradient(135deg, rgba(138,90,220,.35), rgba(109,79,216,.22));
+  box-shadow: 0 0 0 2px rgba(109,79,216,.35);
+  transform: rotate(45deg);
+  transition: all .25s;
+}
 
 /* Tab 导航：毛玻璃条 */
 .tabs {
@@ -112,9 +119,114 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
   border-radius: 10px; padding: 12px; font-size: 13px; line-height: 1.7; white-space: pre-wrap;
 }
 .iv-meta { font-size: 11px; color: #6a6790; margin: 8px 0; line-height: 1.6; }
-.iv-answer-area { display: flex; gap: 8px; margin-top: 10px; }
+.iv-answer-area { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 .iv-answer-area textarea { flex: 1; height: 70px; resize: none; }
-.iv-answer-area button { width: 90px; }
+.iv-answer-row { display: flex; gap: 8px; }
+.iv-answer-row #iv-mic { width: 44px; flex: none; font-size: 14px; }
+.iv-answer-row #iv-mic.recording {
+  background: rgba(220,60,60,.15); border-color: rgba(220,60,60,.5); color: #c03030;
+  animation: ivMicPulse 1.2s ease-in-out infinite; font-size: 12px;
+}
+.iv-answer-row #iv-mic.transcribing { background: rgba(109,79,216,.15); color: #5d48b8; }
+.iv-answer-row #iv-send { flex: 1; }
+@keyframes ivMicPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220,60,60,.35); }
+  50% { box-shadow: 0 0 0 6px rgba(220,60,60,0); }
+}
+.iv-chain {
+  display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 10px;
+  background: rgba(220,140,60,.16); color: #b07020; font-size: 11px; font-weight: 600;
+  border: 1px solid rgba(220,140,60,.35);
+}
+.iv-weak-hit {
+  flex: 0 0 100%; margin-top: 6px; padding: 6px 10px; border-radius: 8px;
+  background: rgba(60,160,100,.12); border: 1px solid rgba(60,160,100,.35);
+  color: #2f7d4e; font-size: 12px; font-weight: 600;
+}
+.iv-weak-plan {
+  margin-bottom: 6px; padding: 5px 9px; border-radius: 8px;
+  background: rgba(138,90,220,.1); border: 1px dashed rgba(138,90,220,.4);
+  color: #5d48b8; font-size: 11px; line-height: 1.6;
+}
+.iv-weak-row { margin-top: 10px; }
+.iv-weak-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
+.iv-weak-chip { font-size: 11px; }
+.iv-weak-chip i { font-style: normal; opacity: .7; margin-left: 2px; font-size: 10px; }
+.iv-weak-chip.picked {
+  background: linear-gradient(135deg, rgba(138,90,220,.35), rgba(109,79,216,.25)) !important;
+  color: #5d48b8 !important; border-color: rgba(109,79,216,.5) !important;
+}
+.iv-replay {
+  margin-left: 8px; padding: 1px 8px; border-radius: 10px; font-size: 10px;
+  background: rgba(109,79,216,.12); border: 1px solid rgba(109,79,216,.3);
+  color: #5d48b8; cursor: pointer;
+}
+.iv-replay:hover { background: rgba(109,79,216,.25); }
+.iv-radar-wrap { margin-top: 10px; display: flex; justify-content: center; }
+.iv-radar-wrap canvas { max-width: 100%; }
+.iv-radar-wrap.small canvas { width: 150px; height: auto; }
+.iv-hist-expand {
+  margin-left: 8px; padding: 1px 8px; border-radius: 10px; font-size: 10px;
+  background: rgba(109,79,216,.1); border: 1px solid rgba(109,79,216,.25);
+  color: #5d48b8; cursor: pointer;
+}
+.iv-hist-detail { margin-top: 8px; }
+.iv-hist-detail .iv-hist-dims { display: flex; gap: 5px; flex-wrap: wrap; }
+.iv-hist-detail .iv-hist-dims .score-bar { flex: 1 1 30%; min-width: 90px; }
+.iv-hist-full {
+  margin-top: 8px; font-size: 11px; color: #555; line-height: 1.7;
+  white-space: pre-wrap; max-height: 220px; overflow-y: auto;
+  border-top: 1px dashed rgba(109,79,216,.2); padding-top: 8px;
+}
+/* 复习模块：讲解按钮 / 面试检验 / 错题本 */
+#rc-explain { margin-top: 8px; font-size: 12px; width: 100%; }
+#review-test-btn { width: 100%; font-size: 12px; }
+#rex-body {
+  font-size: 12px; line-height: 1.75; white-space: pre-wrap; color: #3a3750;
+  max-height: 46vh; overflow-y: auto; padding: 10px 12px;
+}
+.wrong-item {
+  padding: 8px 10px; border: 1px solid rgba(220,90,60,.25); border-radius: 8px;
+  margin-bottom: 8px; background: rgba(255,248,245,.6);
+}
+.wrong-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #5d48b8; }
+.wrong-head b { font-size: 12px; }
+/* 方向画像配置区 */
+.career-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.career-field { display: flex; flex-direction: column; gap: 3px; }
+.career-label { font-size: 10px; color: #8a87a8; }
+.career-field input {
+  padding: 6px 10px; font-size: 11px; border: 1px solid rgba(109,79,216,.25);
+  border-radius: 6px; background: rgba(255,255,255,.8);
+}
+/* 复习自测选择题 */
+.rc-quiz {
+  margin-top: 10px; padding: 10px; border: 1px solid rgba(109,79,216,.22);
+  border-radius: 10px; background: rgba(255,255,255,.5);
+}
+.quiz-loading { font-size: 11px; color: #8a87a8; text-align: center; padding: 6px 0; }
+.quiz-head { font-size: 11px; font-weight: 700; color: #5d48b8; margin-bottom: 8px; }
+.quiz-q { margin-bottom: 10px; }
+.quiz-question { font-size: 12px; color: #3a3750; margin-bottom: 5px; line-height: 1.5; }
+.quiz-options { display: flex; flex-wrap: wrap; gap: 5px; }
+.quiz-opt {
+  flex: 1 1 calc(50% - 5px); text-align: left; padding: 5px 8px; font-size: 11px;
+  border: 1px solid rgba(109,79,216,.25); border-radius: 7px; background: rgba(255,255,255,.85);
+  color: #4a3a6d; cursor: pointer; transition: all .12s; white-space: normal; line-height: 1.4;
+}
+.quiz-opt:hover { background: rgba(138,90,220,.12); }
+.quiz-opt.picked { background: rgba(138,90,220,.22); border-color: rgba(109,79,216,.55); }
+.quiz-opt.right { background: rgba(60,160,100,.16); border-color: rgba(60,160,100,.5); color: #2e7d4e; }
+.quiz-opt.wrong { background: rgba(220,90,60,.14); border-color: rgba(220,90,60,.5); color: #b04530; }
+.quiz-fb { margin-top: 5px; font-size: 11px; line-height: 1.5; }
+.quiz-right { color: #2e9e5b; font-weight: 700; }
+.quiz-wrong { color: #c05030; font-weight: 700; }
+.quiz-explain { color: #6a6790; }
+.quiz-foot { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.quiz-foot button { padding: 5px 12px; font-size: 11px; }
+.quiz-summary { font-size: 11px; }
+.quiz-summary.good { color: #2e9e5b; font-weight: 600; }
+.quiz-summary.bad { color: #c05030; font-weight: 600; }
 .iv-scores { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 .score-chip {
   background: rgba(255,255,255,0.75); border: 1px solid rgba(109,79,216,0.2);
@@ -565,3 +677,492 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
   display: flex; align-items: center; gap: 6px;
 }
 .jobs-cat-title::after { content: ""; flex: 1; height: 1px; background: rgba(109,79,216,.15); }
+
+/* =====================================================================
+   v2 视觉增强层（2026-08 主题升级：玻璃拟态 + 渐变光效 + 微动效）
+   —— 只叠加不重写，旧布局结构保持不变
+   ===================================================================== */
+
+/* 顶栏：渐变描边 + 更透的玻璃 */
+.topbar {
+  background: linear-gradient(135deg, rgba(255,255,255,.72), rgba(246,243,255,.55));
+  border-bottom: 1px solid transparent;
+  background-image:
+    linear-gradient(135deg, rgba(255,255,255,.72), rgba(246,243,255,.55)),
+    linear-gradient(90deg, rgba(138,90,220,.35), rgba(80,160,255,.2), rgba(138,90,220,.35));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow: 0 2px 14px rgba(109,79,216,.08);
+}
+.logo { font-size: 16px; letter-spacing: 1px; }
+.logo::after { content: "·陪你上岸"; font-size: 10px; color: #a39ac9; font-weight: 400; margin-left: 6px; letter-spacing: .5px; }
+
+/* Tab：精致 pill + active 发光 */
+.tabs { gap: 6px; padding: 10px 14px; }
+.tab { border-radius: 10px; font-size: 12.5px; position: relative; }
+.tab:hover { transform: translateY(-1px); }
+.tab.active {
+  background: linear-gradient(135deg, rgba(138,90,220,.28), rgba(109,79,216,.14));
+  color: #4a3a9d;
+  box-shadow: 0 2px 10px rgba(109,79,216,.18), inset 0 1px 0 rgba(255,255,255,.7);
+}
+.tab.active::after {
+  content: ""; position: absolute; left: 30%; right: 30%; bottom: 3px;
+  height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #8a5adc, transparent);
+}
+
+/* 主区域卡片氛围 */
+main { background: radial-gradient(1200px 500px at 20% -10%, rgba(138,90,220,.07), transparent 60%); }
+h4 { font-size: 13px; letter-spacing: .3px; }
+
+/* 按钮：微动效 + 渐变 */
+button.primary, .chat-input-row button, #chat-mic {
+  background: linear-gradient(135deg, #8a5adc, #6d4fd8);
+  box-shadow: 0 3px 12px rgba(109,79,216,.28);
+  transition: transform .15s, box-shadow .15s, filter .15s;
+}
+button.primary:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(109,79,216,.35); }
+button.primary:active { transform: translateY(0); }
+button.secondary, .job-btn {
+  transition: all .15s; border-color: rgba(109,79,216,.3);
+}
+button.secondary:hover, .job-btn:hover {
+  background: linear-gradient(135deg, rgba(138,90,220,.16), rgba(109,79,216,.1));
+  border-color: rgba(109,79,216,.5);
+  transform: translateY(-1px);
+}
+
+/* 聊天气泡：真白渐变 + 用户蓝紫 */
+.chat-msg .body {
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255,255,255,.9), rgba(248,245,255,.75));
+  box-shadow: 0 2px 8px rgba(109,79,216,.07);
+  border: 1px solid rgba(109,79,216,.1);
+}
+.chat-msg.bot .body {
+  background: linear-gradient(135deg, rgba(138,90,220,.14), rgba(109,79,216,.08));
+  border-color: rgba(138,90,220,.18);
+}
+.chat-msg.user .body {
+  background: linear-gradient(135deg, rgba(91,141,239,.14), rgba(74,111,224,.1));
+  border-color: rgba(91,141,239,.18);
+}
+.chat-msg .who { font-weight: 600; }
+
+/* 统计 chips：渐变底 */
+.stat-chip, .stats-row .stat-chip, .obs-row .stat-chip {
+  border: 1px solid rgba(109,79,216,.14);
+  background: linear-gradient(135deg, rgba(255,255,255,.85), rgba(246,243,255,.6));
+  box-shadow: 0 1px 4px rgba(109,79,216,.06);
+}
+.stats-row .stat-chip b { font-size: 14px; }
+
+/* 岗位卡片：柔和阴影 + 圆角 */
+.job-item {
+  border: 1px solid rgba(109,79,216,.12);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(250,247,255,.6));
+  box-shadow: 0 2px 10px rgba(109,79,216,.05);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  transition: box-shadow .2s, transform .2s;
+}
+.job-item:hover { box-shadow: 0 4px 16px rgba(109,79,216,.1); transform: translateY(-1px); }
+
+/* 审批条 / 提问条：滑入动画 + 渐变描边 */
+.approval-bar {
+  animation: bar-slide-in .25s ease-out;
+  box-shadow: 0 4px 20px rgba(109,79,216,.2);
+}
+@keyframes bar-slide-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 设置卡 / 区块容器统一 */
+.patrol-card, .jobs-setup, .interview-setup, .today-reco {
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(255,255,255,.7), rgba(248,245,255,.45));
+  border: 1px solid rgba(109,79,216,.13);
+  box-shadow: 0 2px 10px rgba(109,79,216,.05);
+}
+.jobs-setup { padding: 10px 12px; }
+
+/* 输入框：聚焦光环 */
+input, textarea, select {
+  transition: border-color .2s, box-shadow .2s;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: rgba(138,90,220,.55) !important;
+  box-shadow: 0 0 0 3px rgba(138,90,220,.12);
+}
+
+/* 滚动条：渐变细条 */
+main::-webkit-scrollbar { width: 7px; }
+main::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(138,90,220,.4), rgba(109,79,216,.3));
+  border-radius: 4px;
+}
+main::-webkit-scrollbar-thumb:hover { background: rgba(138,90,220,.55); }
+
+/* 专注倒计时：渐变数字 */
+.focus-countdown {
+  font-size: 26px; font-weight: 800; letter-spacing: 2px;
+  background: linear-gradient(135deg, #8a5adc, #4a6fe0);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  margin: 6px 0;
+}
+
+/* 桌宠形象按钮：选中态 */
+.mascot-btn { transition: all .15s; }
+.mascot-btn:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(109,79,216,.2); }
+
+/* 链接：粉紫渐变 */
+.job-link {
+  background: linear-gradient(135deg, #f472b6, #d9629f);
+  box-shadow: 0 2px 8px rgba(244,114,182,.25);
+  transition: filter .15s, transform .15s;
+}
+.job-link:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+/* 空态提示：居中柔化 */
+.empty-hint {
+  color: #8a87a8; font-size: 12.5px;
+  background: rgba(109,79,216,.04);
+  border: 1px dashed rgba(109,79,216,.2);
+  border-radius: 10px;
+  padding: 22px 14px;
+  margin: 8px 0;
+}
+
+/* =====================================================================
+   v3 面板优化层（2026-08：全局状态条 / Tab 双行 / 进度条 / 对话头像）
+   —— 只叠加不重写
+   ===================================================================== */
+
+/* 顶栏下全局闭环状态条：毛玻璃胶囊条 + 渐变 chips + 题库进度条 */
+.loop-bar {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 7px 14px;
+  background: linear-gradient(135deg, rgba(138,90,220,.08), rgba(80,160,255,.05));
+  border-bottom: 1px solid rgba(109,79,216,.12);
+  font-size: 11px;
+}
+.loop-bar-loading { color: #8a87a8; }
+.loop-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 9px; border-radius: 20px;
+  background: rgba(255,255,255,.75);
+  border: 1px solid rgba(109,79,216,.18);
+  color: #4a3a9d; font-weight: 600;
+  box-shadow: 0 1px 4px rgba(109,79,216,.06);
+}
+.loop-chip b { color: #6d4fd8; font-weight: 800; }
+.loop-chip.warn { background: rgba(255,240,220,.9); border-color: rgba(220,150,60,.35); color: #9a6a20; }
+.loop-chip.warn b { color: #c07a20; }
+.loop-chip.ok { background: rgba(235,250,240,.9); border-color: rgba(60,160,100,.3); color: #2f7d4e; }
+.loop-chip.ok b { color: #2e9e5b; }
+/* 题库进度条（loop-bar 内嵌迷你条） */
+.loop-progress {
+  flex: 1; min-width: 120px; display: flex; align-items: center; gap: 6px;
+}
+.loop-progress .track {
+  flex: 1; height: 6px; border-radius: 3px;
+  background: rgba(109,79,216,.12); overflow: hidden;
+}
+.loop-progress .track i {
+  display: block; height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, #8a5adc, #6d4fd8);
+  transition: width .4s;
+}
+.loop-progress .pct { font-size: 10px; color: #8a87a8; font-weight: 700; white-space: nowrap; }
+
+/* Tab 双行布局（v6：8 个 Tab，两行 4+4 对称；图标+文字胶囊，active 渐变发光） */
+.tabs { flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
+.tab {
+  flex: 0 0 calc(25% - 5px);
+  padding: 9px 0;
+  font-size: 12px;
+  white-space: nowrap;
+  border-radius: 11px;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+}
+.tab.active {
+  background: linear-gradient(135deg, rgba(138,90,220,.30), rgba(109,79,216,.16));
+  box-shadow: 0 3px 12px rgba(109,79,216,.22), inset 0 1px 0 rgba(255,255,255,.7);
+  transform: translateY(-1px);
+}
+.tab.active::after {
+  content: ""; position: absolute; left: 32%; right: 32%; bottom: 3px;
+  height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #8a5adc, transparent);
+}
+
+/* 通用迷你进度条（学习清单/题库等） */
+.mini-progress {
+  display: flex; align-items: center; gap: 8px; margin: 6px 0;
+  font-size: 11px; color: #6a6790;
+}
+.mini-progress .track {
+  flex: 1; height: 7px; border-radius: 4px;
+  background: rgba(109,79,216,.12); overflow: hidden;
+}
+.mini-progress .track i {
+  display: block; height: 100%; border-radius: 4px;
+  background: linear-gradient(90deg, #8a5adc, #6d4fd8);
+  transition: width .4s;
+}
+.mini-progress b { color: #5d48b8; white-space: nowrap; }
+
+/* 对话头像：气泡旁圆形渐变头像（真白 🎀 / 你 👤） */
+.chat-msg { display: flex; gap: 8px; align-items: flex-start; }
+.chat-msg .avatar {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; margin-top: 2px;
+  background: linear-gradient(135deg, #e8d9ff, #c9b8f5);
+  border: 1px solid rgba(138,90,220,.3);
+  box-shadow: 0 1px 4px rgba(109,79,216,.15);
+}
+.chat-msg.user { flex-direction: row-reverse; }
+.chat-msg.user .avatar {
+  background: linear-gradient(135deg, #d8e4ff, #b8cdf5);
+  border-color: rgba(91,141,239,.3);
+}
+.chat-msg .who { margin-bottom: 3px; }
+.chat-msg .body { flex: 1; }
+.chat-msg .msg-main { flex: 1; min-width: 0; }
+
+/* 聊天气泡内 Markdown 渲染样式（复用讲解弹层 renderMd 的输出类，作用域限定在气泡内） */
+.chat-msg .body .sd-h { color: #5d48b8; font-size: 13px; margin: 8px 0 4px; }
+.chat-msg .body h3.sd-h, .chat-msg .body h4.sd-h { font-size: 12.5px; }
+.chat-msg .body p { margin: 4px 0; }
+.chat-msg .body .sd-li { margin: 2px 0 2px 4px; }
+.chat-msg .body .sd-code {
+  background: rgba(45, 42, 69, 0.07); border-radius: 6px; padding: 8px 10px;
+  font-size: 11.5px; font-family: Consolas, "Courier New", monospace;
+  white-space: pre-wrap; word-break: break-all; margin: 6px 0;
+}
+.chat-msg .body .sd-inline-code {
+  background: rgba(109, 79, 216, 0.1); color: #5d48b8;
+  border-radius: 3px; padding: 0 3px; font-size: 11.5px;
+  font-family: Consolas, "Courier New", monospace;
+}
+.chat-msg .body .sd-table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 11.5px; }
+.chat-msg .body .sd-table th, .chat-msg .body .sd-table td {
+  border: 1px solid rgba(109, 79, 216, 0.2); padding: 3px 7px; text-align: left;
+}
+.chat-msg .body .sd-table th { background: rgba(109, 79, 216, 0.08); color: #4a3a9d; }
+.chat-msg .body .sd-quote {
+  border-left: 3px solid rgba(109, 79, 216, 0.35); background: rgba(109, 79, 216, 0.05);
+  border-radius: 0 6px 6px 0; padding: 5px 9px; margin: 6px 0; color: #6a6790; font-size: 11.5px;
+}
+.chat-msg .body .sd-hr { border: none; border-top: 1px dashed rgba(109, 79, 216, 0.25); margin: 8px 0; }
+.chat-msg .body .sd-blank { height: 5px; }
+.chat-msg .body a { color: #5d48b8; }
+
+/* 学习清单头：进度 + 标题行 */
+.study-head-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px;
+}
+.study-head-row .mini-progress { flex: 1; margin: 0; }
+
+/* 复习记忆方法可视化（v5.1：艾宾浩斯节奏 + FSRS 记忆强度） */
+.review-method-hint {
+  font-size: 10.5px; color: #6a6790;
+  background: rgba(109,79,216,.05); border: 1px dashed rgba(109,79,216,.2);
+  border-radius: 8px; padding: 5px 10px; margin-bottom: 8px;
+  line-height: 1.6;
+}
+.review-method-hint b { color: #5d48b8; }
+.review-batch {
+  margin-top: 8px; font-size: 11px; color: #6a6790;
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+}
+.rc-memory {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 0;
+  font-size: 11px;
+}
+.rc-stage-badge {
+  font-size: 10px; font-weight: 700;
+  background: linear-gradient(135deg, rgba(138,90,220,.18), rgba(109,79,216,.1));
+  color: #5d48b8; border-radius: 10px; padding: 2px 9px;
+  white-space: nowrap;
+}
+.rc-mem-track {
+  flex: 1; height: 7px; border-radius: 4px;
+  background: rgba(109,79,216,.1); overflow: hidden;
+}
+.rc-mem-track i { display: block; height: 100%; border-radius: 4px; transition: width .4s; }
+.rc-mem-pct { font-size: 13px; font-weight: 800; }
+
+/* 复习会话：进度头 + 卡面 + 反馈 + 趋势（v5 深度优化） */
+.review-session-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px; padding-bottom: 8px;
+  border-bottom: 1px dashed rgba(109,79,216,.15);
+}
+.rc-progress {
+  font-size: 12px; font-weight: 700; color: #5d48b8;
+  background: rgba(109,79,216,.08); border-radius: 12px; padding: 3px 10px;
+  white-space: nowrap;
+}
+.rc-feedback {
+  margin-top: 10px; padding: 8px 12px;
+  background: rgba(109,79,216,.06); border-radius: 8px;
+  font-size: 12px; color: #4a3a9d;
+  border: 1px solid rgba(109,79,216,.15);
+  animation: bar-slide-in .2s ease-out;
+}
+.rc-buttons kbd {
+  font-size: 9px; color: #8a87a8;
+  background: rgba(255,255,255,.6); border: 1px solid rgba(109,79,216,.2);
+  border-radius: 3px; padding: 0 3px; margin-left: 2px;
+  font-family: inherit;
+}
+.review-trend {
+  padding: 8px 10px;
+  background: rgba(255,255,255,.45);
+  border: 1px solid rgba(109,79,216,.12);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* 学习清单状态流分组（v5：待学 → 学习中 → 待复习 → 已掌握） */
+.study-state-group { margin-bottom: 10px; }
+.study-state-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12.5px; font-weight: 700;
+  padding: 6px 10px; margin-bottom: 2px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(109,79,216,.12), rgba(109,79,216,.05));
+  color: #4a3a9d;
+  border: 1px solid rgba(109,79,216,.15);
+}
+.study-state-head.lv-adv {
+  background: linear-gradient(135deg, rgba(220,160,60,.16), rgba(220,160,60,.06));
+  color: #9a6a20;
+  border-color: rgba(220,160,60,.25);
+}
+.study-state-head .sg-count {
+  font-size: 10px; font-weight: 600;
+  background: rgba(255,255,255,.65); border-radius: 8px; padding: 0 7px;
+}
+.study-batch-bar { transition: all .2s; }
+.study-batch-bar.hidden { display: none !important; }
+
+/* =====================================================================
+   v5 玻璃拟态真实化（2026-08：背景透出 + 卡片毛玻璃）
+   —— 遮罩降透明度让背景图可见；主要区块半透明 + backdrop blur（糊的是背景图，非嵌套）
+   ===================================================================== */
+body { background-position: center 78%; background-size: cover; }
+
+/* 主要区块毛玻璃（各卡片互不嵌套，糊的都是 body 背景图） */
+.patrol-card, .jobs-setup, .interview-setup, .today-reco, .review-card,
+.iv-question, .iv-summary, .iv-review, .stat-chip, .score-chip, .job-item,
+.chat-msg .body, .loop-chip, .mascot-box, .todo-box, .iv-notes-box, .sd-modal,
+.iv-hist-item, .platform-config, .jobs-advice-box, .study-group-head, .mastery-toggle {
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+}
+
+/* 卡片白底更透：让 blur 出来的背景色透进卡片 */
+.job-item, .review-card, .iv-question, .iv-hist-item {
+  background: linear-gradient(135deg, rgba(255,255,255,.5), rgba(250,247,255,.34));
+}
+.patrol-card, .jobs-setup, .interview-setup, .today-reco, .mascot-box, .todo-box, .iv-notes-box {
+  background: linear-gradient(135deg, rgba(255,255,255,.48), rgba(248,245,255,.32));
+}
+.stat-chip, .score-chip, .loop-chip, .chat-msg .body {
+  background: rgba(255,255,255,.55);
+}
+.sd-modal {
+  background: rgba(250, 248, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+.topbar { background: rgba(255,255,255,.42); }
+.tabs { background: rgba(255,255,255,.34); }
+
+/* 浅紫灰文字在透出背景上对比度不足 → 加深（原 #c9c6dd 在浅底几乎不可见） */
+#loop-box > div:last-child { color: #5d48b8 !important; }
+.mascot-box > div:first-child, .todo-box > div:first-child { color: #5d48b8 !important; }
+
+/* 输入框也透一点 */
+input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+
+/* =====================================================================
+   v4 模拟面试增强层（2026-08：轮次进度点 / 每题计时 / 评分条形图 / 结束小结）
+   ===================================================================== */
+.iv-timer {
+  font-size: 12px; font-weight: 700; color: #6a6790;
+  background: rgba(255,255,255,.7); border: 1px solid rgba(109,79,216,.2);
+  border-radius: 14px; padding: 3px 10px; transition: color .3s;
+}
+.iv-progress {
+  display: flex; align-items: center; gap: 4px; margin: 10px 0 2px;
+  flex-wrap: wrap;
+}
+.iv-dot {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700;
+  background: rgba(109,79,216,.1); color: #8a87a8;
+  border: 1px solid rgba(109,79,216,.2);
+  transition: all .2s;
+}
+.iv-dot.cur {
+  background: linear-gradient(135deg, #8a5adc, #6d4fd8); color: #fff;
+  border-color: transparent; box-shadow: 0 2px 8px rgba(109,79,216,.35);
+  transform: scale(1.15);
+}
+.iv-dot.done { background: rgba(60,160,100,.18); color: #2e9e5b; border-color: rgba(60,160,100,.3); }
+.iv-progress-txt { font-size: 11px; color: #8a87a8; margin-left: 4px; font-weight: 700; }
+.iv-round-type {
+  font-size: 11px; color: #5d48b8; font-weight: 600;
+  margin: 2px 0 8px;
+}
+.iv-total {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: #6a6790; margin: 10px 0 6px;
+}
+.iv-total b {
+  font-size: 26px;
+  background: linear-gradient(135deg, #8a5adc, #4a6fe0);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.score-bar {
+  display: flex; align-items: center; gap: 8px; margin: 4px 0;
+  font-size: 11px; color: #6a6790;
+}
+.score-bar .sb-label { flex: 0 0 32px; font-weight: 600; color: #4a3a9d; }
+.score-bar .sb-track {
+  flex: 1; height: 9px; border-radius: 5px;
+  background: rgba(109,79,216,.1); overflow: hidden;
+}
+.score-bar .sb-track i { display: block; height: 100%; border-radius: 5px; transition: width .5s; }
+.score-bar .sb-val { flex: 0 0 26px; text-align: right; font-weight: 800; color: #2d2a45; }
+.score-bar.big .sb-track { height: 12px; }
+.iv-summary {
+  margin-top: 12px; padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(138,90,220,.1), rgba(80,160,255,.06));
+  border: 1px solid rgba(138,90,220,.22); border-radius: 12px;
+}
+.iv-summary-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 13px; font-weight: 700; color: #4a3a9d; margin-bottom: 8px;
+}
+.iv-summary-head span { font-size: 12px; color: #6a6790; font-weight: 600; }
+.iv-summary-head b {
+  font-size: 22px;
+  background: linear-gradient(135deg, #8a5adc, #4a6fe0);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.iv-summary-tip { font-size: 11px; color: #6a6790; margin-top: 8px; line-height: 1.6; }
+

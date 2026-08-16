@@ -2,8 +2,10 @@
   "name": "mianshi-agent",
   "version": "0.1.0",
   "description": "面经/招聘采集 + AI 完整讲解工具：Playwright 抓页 → 通用正文提取 → DeepSeek 判断与解答 → Markdown 归档",
+  "author": "mianshi-agent",
   "type": "module",
   "private": true,
+  "main": "desktop/main.mjs",
   "scripts": {
     "run": "node run.mjs",
     "smoke": "node scripts/smoke-test.mjs",
@@ -17,7 +19,41 @@
     "bench:web": "node scripts/web-task-bench.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "coverage": "node --experimental-test-module-mocks --experimental-test-coverage --test \"tests/*.test.mjs\""
+    "coverage": "node --experimental-test-module-mocks --experimental-test-coverage --test \"tests/*.test.mjs\"",
+    "dist": "electron-builder --win",
+    "dist:portable": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.mianshi.mascot",
+    "productName": "MianshiAgent",
+    "electronVersion": "43.2.0",
+    "npmRebuild": false,
+    "files": [
+      "desktop/**",
+      "lib/**",
+      "skills/**",
+      "widget.mjs",
+      "config.mjs",
+      "discover.mjs",
+      "run.mjs",
+      "mcp-server.mjs",
+      "links.txt",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "真白 · 前端秋招助手"
+    }
   },
   "dependencies": {
     "@andresaya/edge-tts": "^1.8.0",
@@ -44,6 +80,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
     "eslint": "^10.8.0",
     "globals": "^17.9.0",

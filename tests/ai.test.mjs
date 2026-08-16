@@ -85,6 +85,32 @@ test("solveQuestion 空响应不崩溃", async () => {
   assert.equal(typeof md, "string");
 });
 
+// ---------- 方向画像驱动（默认前端；转方向/开源可配置） ----------
+test("solveQuestion prompt 跟随方向画像（改画像后角色/语言/范围变化）", async () => {
+  const { saveCareerProfile, resetCareerProfile } = await import("../lib/career.mjs");
+  try {
+    saveCareerProfile({
+      roleLabel: "资深后端开发面试辅导老师",
+      scopeNote: "后端 / 微服务 / 数据库",
+      ignoreNote: "前端/算法岗等其他方向",
+      codeLang: "Python / Go",
+      positionDefault: "后端开发实习生",
+      examNote: "社招",
+    });
+    setLlmResponses("## 结论\nok");
+    await ai.solveQuestion({ title: "数据库索引", text: "B+树", company: "某公司", position: "后端开发实习生", sourceUrl: "" });
+    const { getLastMessages } = await import("./helpers.mjs");
+    const userPrompt = getLastMessages().map((m) => m.content).join("\n");
+    assert.ok(userPrompt.includes("资深后端开发面试辅导老师"), "角色名跟随画像");
+    assert.ok(userPrompt.includes("后端 / 微服务 / 数据库"), "讲解范围跟随画像");
+    assert.ok(userPrompt.includes("Python / Go"), "代码语言跟随画像");
+    assert.ok(userPrompt.includes("社招"), "求职场景跟随画像");
+    assert.ok(!userPrompt.includes("资深前端面试辅导老师"), "不再硬编码前端角色");
+  } finally {
+    resetCareerProfile();
+  }
+});
+
 // ---------- 流式讲解 ----------
 test("solveQuestionStream 逐 chunk 回调", async () => {
   setLlmResponses("这是一段完整的讲解内容，会被切成小段回调。");

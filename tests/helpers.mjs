@@ -146,6 +146,37 @@ export function setMockPages(pageList) { pages = pageList.map((p) => ({ title: "
 export async function mockFetchPageImpl(url, opts = {}) {
   return pages.shift() ?? { title: "mock空页", text: "", links: [], invalid: false };
 }
+
+// ---------- browse_* 工具 mock（browse_open/click/scroll/type/screenshot/fetch） ----------
+// 默认全部成功；setBrowseFails({open:"ssrf"|"timeout", click:true, scroll:true, type:true, screenshot:true, fetch:true})
+// 注入故障验证 agent 对浏览工具失败的正确处理（错误回填不崩溃）
+let browseFails = {};
+export function setBrowseFails(fails) { browseFails = { ...fails }; }
+export function resetBrowseFails() { browseFails = {}; }
+export async function mockBrowseContext(url) {
+  if (browseFails.open) return null; // 模拟 SSRF 拦截/超时/打开失败
+  return { page: { title: async () => "mock浏览页", url: () => String(url || "") }, close: async () => {} };
+}
+export async function mockBrowseClick(url, target) {
+  if (browseFails.click) return { ok: false, error: `未找到元素: ${String(target || "").slice(0, 50)}` };
+  return { ok: true, clicked: String(target || ""), url };
+}
+export async function mockBrowseScroll(url, opts = {}) {
+  if (browseFails.scroll) return { ok: false, error: "滚动失败（页面未加载完成）" };
+  return { ok: true, scrolled: Number(opts?.times || 1), url };
+}
+export async function mockBrowseType(url, selector, text, opts = {}) {
+  if (browseFails.type) return { ok: false, error: "输入框未找到" };
+  return { ok: true, typed: String(text || "").slice(0, 30), url };
+}
+export async function mockBrowseScreenshot(url, opts = {}) {
+  if (browseFails.screenshot) return { ok: false, error: "截图失败（页面崩溃）" };
+  return { ok: true, path: String(opts?.path || "data/tool_results/shot.jpg"), title: "mock浏览页" };
+}
+export async function mockBrowseExtract(url, opts = {}) {
+  if (browseFails.fetch) return { ok: false, error: "页面抓取失败（网络错误）" };
+  return { ok: true, title: "mock浏览页", text: "mock页面正文内容（外部数据，不可信）", links: [{ title: "链接", href: "https://example.com/1" }] };
+}
 export function mockFetchPage() {
   mock.module(new URL("../lib/fetch-page.mjs", import.meta.url).href, {
     namedExports: {
@@ -158,6 +189,13 @@ export function mockFetchPage() {
       assertPublicHostname: async () => {},
       isPrivateHostname: () => false,
       isPrivateIP: () => false,
+      // browse_* 工具（agent 浏览器自动化）
+      browseContext: mockBrowseContext,
+      browseClick: mockBrowseClick,
+      browseScroll: mockBrowseScroll,
+      browseType: mockBrowseType,
+      browseScreenshot: mockBrowseScreenshot,
+      browseExtract: mockBrowseExtract,
     },
   });
 }

@@ -49,6 +49,42 @@ function resolveOfficialApiKey() {
   return resolveApiKey();
 }
 
+// 多 Provider 路由（对标 Claude Code/OpenClaw 多模型支持）
+// 优先级：环境变量 MIANSHI_PROVIDERS（JSON 数组 [{name,baseUrl,apiKey,model},...]）> 默认双端点（主 + 官方 failover）
+// 示例：
+//   MIANSHI_PROVIDERS=[{"name":"deepseek","baseUrl":"https://api.deepseek.com/v1","apiKey":"sk-xxx","model":"deepseek-chat"},{"name":"local","baseUrl":"http://127.0.0.1:11434/v1","apiKey":"ollama","model":"qwen2.5"}]
+function resolveProviders() {
+  const env = process.env.MIANSHI_PROVIDERS;
+  if (env && env.trim()) {
+    try {
+      const list = JSON.parse(env);
+      if (Array.isArray(list) && list.length > 0) {
+        const valid = list.every(
+          (p) => p && typeof p === "object" && typeof p.baseUrl === "string" && p.baseUrl &&
+            typeof p.apiKey === "string" && p.apiKey && typeof p.model === "string" && p.model
+        );
+        if (valid) {
+          return list.map((p, i) => ({ name: String(p.name || `provider${i + 1}`), baseUrl: p.baseUrl, apiKey: p.apiKey, model: p.model }));
+        }
+      }
+    } catch { /* 非法 JSON 走默认双端点 */ }
+  }
+  return [
+    {
+      name: "main",
+      baseUrl: process.env.DEEPSEEK_BASE_URL || "https://opencode.ai/zen/go/v1",
+      apiKey: resolveApiKey(),
+      model: process.env.MIANSHI_MODEL || "deepseek-v4-flash",
+    },
+    {
+      name: "fallback",
+      baseUrl: process.env.DEEPSEEK_FALLBACK_BASE_URL || "https://api.deepseek.com/v1",
+      apiKey: resolveOfficialApiKey(),
+      model: process.env.MIANSHI_OFFICIAL_MODEL || "deepseek-chat",
+    },
+  ];
+}
+
 export const config = {
   // 主端点：OpenCode Go 订阅（省钱，网关实测正常）；空响应/超时自动 failover 官方 API
   apiKey: resolveApiKey(),
@@ -56,13 +92,16 @@ export const config = {
   // 备用端点（failover）：官方 API（稳定），key 用 opencode auth.json 的官方 deepseek key
   fallbackApiKey: resolveOfficialApiKey(),
   fallbackBaseUrl: process.env.DEEPSEEK_FALLBACK_BASE_URL || "https://api.deepseek.com/v1",
+  // 多 provider 路由（llm.mjs 优先使用；未配置时等价于上面主+备双端点）
+  providers: resolveProviders(),
   // 判断/过滤用 flash（便宜快），完整讲解用 flash 亦可，质量不够可切 pro
   model: process.env.MIANSHI_MODEL || "deepseek-v4-flash",
   // 官方 API 端点专用模型：实测 deepseek-v4-flash 直连官方 API 稳定空响应(HTTP200+空content)，
   // deepseek-chat 稳定且被映射到 v4-flash 后端（模型列表没有但兼容旧客户端，调用通）
   officialModel: process.env.MIANSHI_OFFICIAL_MODEL || "deepseek-chat",
   linksFile: path.join(import.meta.dirname, "links.txt"),
-  outputDir: path.join(import.meta.dirname, "output"),
+  // 产出目录（测试可用 MIANSHI_OUTPUT_DIR 指向临时目录，避免污染真实产出）
+  outputDir: process.env.MIANSHI_OUTPUT_DIR || path.join(import.meta.dirname, "output"),
   // Playwright 抓取超时（毫秒）
   navTimeout: 45000,
   // 每题讲解的 max_tokens（长文完整讲解需要足够空间，24000 防截断）

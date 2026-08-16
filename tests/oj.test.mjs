@@ -334,4 +334,19 @@ test("collectAllOjDetails 全部已缓存：allCached:true 且不启动浏览器
   assert.equal(progressCalls, 0, "无 pending 不回调");
 });
 
+// ---------- 刷题进度（闭环：刷题计入统计/建议） ----------
+test("markOjDone/getOjProgress：记录 + 去重置顶 + 统计", async () => {
+  const r1 = oj.markOjDone({ bm_no: "BM1", title: "反转链表", category: "链表" });
+  assert.equal(r1.ok, true);
+  assert.equal(r1.done, 1);
+  oj.markOjDone({ bm_no: "BM2", title: "两数之和", category: "数组" });
+  oj.markOjDone({ bm_no: "BM1", title: "反转链表", category: "链表" }); // 重复 → 更新不新增
+  const list = oj.getOjProgress();
+  assert.equal(list.length, 2, "去重后 2 题");
+  assert.equal(list[0].key, "BM1", "最近刷的置顶");
+  assert.equal(list[1].category, "数组");
+  // 缺标识拒绝
+  assert.equal(oj.markOjDone({}).ok, false);
+});
+
 cleanupTempDb(dbDir);

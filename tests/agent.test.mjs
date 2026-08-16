@@ -1,9 +1,12 @@
 // agent.mjs 单测：工具循环 / 参数校验 / 压缩 / 记忆（mock LLM + mock fetch-page + 临时 DB）
 import { test, beforeEach, after, mock } from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, mockFetchPage, setLlmResponses, setMockPages, resetMemoryState } from "./helpers.mjs";
 
 const dbDir = setupTempDb("agent");
+// 测试产出隔离：讲解/归档文件写到临时目录（防污染真实 output/chat_solutions）
+process.env.MIANSHI_OUTPUT_DIR = path.join(dbDir, "output");
 mockLLM();
 mockFetchPage();
 // mock web-search：正常 query 委托真实实现（其内部 fetchPage 已被 mockFetchPage 接管），
@@ -277,9 +280,11 @@ test("solve_question 审批允许后执行并写文件", async () => {
   assert.ok(r.reply.length > 0);
   // 检查输出文件写入（mock LLM 空响应也可能写文件——solveQuestion 返回空时 toolSolveQuestion 仍写文件）
   const { existsSync, readdirSync } = await import("node:fs");
-  const dir = "D:/mianshi-agent/output/chat_solutions";
+  const { config } = await import("../config.mjs");
+  const dir = path.join(config.outputDir, "chat_solutions");
   const files = existsSync(dir) ? readdirSync(dir) : [];
-  assert.ok(files.length >= 0, "目录可访问");
+  assert.ok(files.some((f) => f.includes("测试")), "讲解文件写入临时产出目录");
+  assert.ok(!path.join(dir, "").startsWith("D:/mianshi-agent/output"), "不污染真实 output 目录");
 });
 
 // ---------- F16：非连续重复调用不误判死循环 ----------

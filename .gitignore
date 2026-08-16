@@ -15,6 +15,7 @@ widget-run.log
 desktop/renderer/app.bundle.js
 desktop/renderer/test-direct.html
 desktop/renderer/lib/
+release/
 
 # 系统文件
 Thumbs.db

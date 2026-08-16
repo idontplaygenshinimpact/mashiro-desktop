@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { mockLLM, mockFetchPage, setLlmResponses, setMockPages, setupTempDb } from "../tests/helpers.mjs";
+import { mockLLM, mockFetchPage, setLlmResponses, setMockPages, setupTempDb, setBrowseFails, resetBrowseFails } from "../tests/helpers.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -90,6 +90,7 @@ async function resetState() {
   m.studyProgress = {}; m.interview = null; m.interviewHistory = [];
   m.stats = { chats: 0, questionsSolved: 0, reviewsDone: 0, interviewsDone: 0, lastActive: "" };
   setMockPages([]);
+  resetBrowseFails(); // 清 browse 故障注入（每个场景独立）
 }
 
 // ========== 场景 1-6：工具循环 / 参数校验 / 容错 / 压缩 / 记忆 / 语音 ==========
@@ -210,6 +211,86 @@ scenario("搜索过滤：方向排除 + 跨源去重 + 已看跳过", async () =
   const noDupe = titles.filter((t) => t.startsWith("字节前端一面面经")).length <= 1;
   return { ok: noEmbed && noSeen && noDupe, detail: `结果:${titles.join(" | ") || "空"}` };
 });
+
+// ========== 场景 14-19：浏览器自动化（browse_* 工具）故障注入 ==========
+// 覆盖 agent 对浏览工具"成功回填 / 失败回填"的处理：错误必须回填给模型且不崩溃
+scenario("browse_open 成功：打开页面 → 回填标题/URL", async () => {
+  await resetState();
+  resetBrowseFails();
+  setLlmResponses(
+    'TOOLCALL:{"name":"browse_open","arguments":"{\\"url\\":\\"https://example.com/post/1\\"}"}',
+    "页面已打开，标题是 mock浏览页。"
+  );
+  const r = await autoApproveDuring(() => chatWithAgent("打开这个页面看看"));
+  const tools = getRecentTools(10);
+  const t = tools.find((x) => x.tool_name === "browse_open");
+  return { ok: !!t && t.ok && r.reply.includes("mock浏览页"), detail: `工具ok:${!!t?.ok} 回复:${r.reply.slice(0, 16)}` };
+}, { expectedTools: ["browse_open"] });
+
+scenario("browse_open SSRF/超时拦截：返回错误不崩溃", async () => {
+  await resetState();
+  setBrowseFails({ open: true });
+  setLlmResponses(
+    'TOOLCALL:{"name":"browse_open","arguments":"{\\"url\\":\\"http://127.0.0.1/internal\\"}"}',
+    "这个页面打不开，我换个方式。"
+  );
+  const r = await autoApproveDuring(() => chatWithAgent("打开这个内网页面"));
+  const tools = getRecentTools(10);
+  const t = tools.find((x) => x.tool_name === "browse_open");
+  return { ok: !!t && !t.ok && !!t.error && r.reply.length > 0, detail: `拦截:${!!t?.error} 回复:${r.reply.slice(0, 12)}` };
+}, { expectedTools: ["browse_open"] });
+
+scenario("browse_click 元素缺失：错误回填不崩溃", async () => {
+  await resetState();
+  setBrowseFails({ click: true });
+  setLlmResponses(
+    'TOOLCALL:{"name":"browse_click","arguments":"{\\"url\\":\\"https://example.com\\",\\"target\\":\\"#login-btn\\"}"}',
+    "没找到这个按钮，我看看别的。"
+  );
+  const r = await autoApproveDuring(() => chatWithAgent("点一下登录按钮"));
+  const tools = getRecentTools(10);
+  const t = tools.find((x) => x.tool_name === "browse_click");
+  return { ok: !!t && !t.ok && !!t.error && r.reply.length > 0, detail: `错误:${t?.error?.slice(0, 20)}` };
+}, { expectedTools: ["browse_click"] });
+
+scenario("browse_type 输入+回车：成功回填", async () => {
+  await resetState();
+  resetBrowseFails();
+  setLlmResponses(
+    'TOOLCALL:{"name":"browse_type","arguments":"{\\"url\\":\\"https://example.com/search\\",\\"selector\\":\\"input\\",\\"text\\":\\"React 面经\\"}"}',
+    "已输入并提交搜索。"
+  );
+  const r = await autoApproveDuring(() => chatWithAgent("在搜索框输入 React 面经"));
+  const tools = getRecentTools(10);
+  const t = tools.find((x) => x.tool_name === "browse_type");
+  return { ok: !!t && t.ok && r.reply.length > 0, detail: `工具ok:${!!t?.ok} 回复:${r.reply.slice(0, 12)}` };
+}, { expectedTools: ["browse_type"] });
+
+scenario("browse_screenshot 失败：错误回填不崩溃", async () => {
+  await resetState();
+  setBrowseFails({ screenshot: true });
+  setLlmResponses(
+    'TOOLCALL:{"name":"browse_screenshot","arguments":"{\\"url\\":\\"https://example.com\\"}"}',
+    "截图失败了，没关系。"
+  );
+  const r = await autoApproveDuring(() => chatWithAgent("截个图看看"));
+  const tools = getRecentTools(10);
+  const t = tools.find((x) => x.tool_name === "browse_screenshot");
+  return { ok: !!t && !t.ok && !!t.error && r.reply.length > 0, detail: `错误:${t?.error?.slice(0, 20)}` };
+}, { expectedTools: ["browse_screenshot"] });
+
+scenario("browse_fetch 抓取失败：错误回填不崩溃", async () => {
+  await resetState();
+  setBrowseFails({ fetch: true });
+  setLlmResponses(
+    'TOOLCALL:{"name":"browse_fetch","arguments":"{\\"url\\":\\"https://example.com/article/2\\"}"}',
+    "页面抓取失败，我换个页面。"
+  );
+  const r = await autoApproveDuring(() => chatWithAgent("抓取这篇文章内容"));
+  const tools = getRecentTools(10);
+  const t = tools.find((x) => x.tool_name === "browse_fetch");
+  return { ok: !!t && !t.ok && !!t.error && r.reply.length > 0, detail: `错误:${t?.error?.slice(0, 20)}` };
+}, { expectedTools: ["browse_fetch"] });
 
 // ========== 状态式评分（goalState → 真实 DB 状态，只读 imports） ==========
 // goalState 支持的键（均为只读查询，不改状态）：

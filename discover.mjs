@@ -27,6 +27,9 @@ const DEFAULT_STARTS = [
   // ===== CSDN（前端/AI 面经） =====
   "https://so.csdn.net/so/search?q=%E5%89%8D%E7%AB%AF%E9%9D%A2%E7%BB%8F",
   "https://so.csdn.net/so/search?q=Agent%20%E9%9D%A2%E7%BB%8F",
+  // ===== 思否 SegmentFault（服务端渲染，面经汇总多，实测稳定可抓） =====
+  "https://segmentfault.com/search?q=%E5%89%8D%E7%AB%AF%E9%9D%A2%E7%BB%8F",
+  "https://segmentfault.com/search?q=Agent%20%E9%9D%A2%E7%BB%8F",
 ];
 const TARGET_COUNT = 5; // 每个起始页挑几篇（多爬点：3→5）
 // 重点方向：不限制岗位范围；笔试类优先，面经/招聘兼顾
@@ -90,9 +93,10 @@ function clearProgress() {
 process.on("exit", () => clearProgress());
 process.on("SIGINT", () => { clearProgress(); process.exit(0); });
 
-// 各站点"内容帖"链接模式：牛客 /discuss/、掘金 /post/、CSDN /article/details/、知乎 /question/ 等
+// 各站点"内容帖"链接模式：牛客 /discuss/、掘金 /post/、CSDN /article/details/、知乎 /question/、
+// 思否 /a/（面经汇总帖）、博客园 /p/（实测 zzk 搜索对 headless 反爬，保留模式备用）
 const POST_URL_RE =
-  /(\/discuss\/\d+|\/post\/\d+|\/article\/details\/\d+|juejin\.cn\/post\/\d+|blog\.csdn\.net\/[^/]+\/article\/details\/\d+)/;
+  /(\/discuss\/\d+|\/post\/\d+|\/article\/details\/\d+|juejin\.cn\/post\/\d+|blog\.csdn\.net\/[^/]+\/article\/details\/\d+|segmentfault\.com\/a\/\d+|cnblogs\.com\/p\/\d+|zhihu\.com\/question\/\d+)/;
 
 // 标题级方向过滤：嵌入式/硬件/算法/后端等非前端方向 + 简历/求职咨询/闲聊（列表页收集时就过滤，省 AI 挑帖额度）
 const EXCLUDE_TITLE = /嵌入式|单片机|硬件|驱动|PCB|STM32|ESP32|ARM|芯片|FPGA|物联网|上位机|爬虫开发/;
@@ -143,59 +147,65 @@ export async function initStage(ctx) {
   writeProgress({ status: "running", step: "start", message: "开始爬取", current: 0, total: ctx.startUrls.length });
 }
 
-/** 阶段1：遍历起始页抓列表 → 提取/去重/过滤 → AI 挑帖 */
+/** 阶段1：遍历起始页抓列表 → 提取/去重/过滤 → AI 挑帖（列表页 3 并发，提速不增加风控面） */
 export async function collectPostsStage(ctx) {
   const { startUrls, want, history } = ctx;
   const allPicked = [];
-  for (const startUrl of startUrls) {
-    const si = startUrls.indexOf(startUrl) + 1;
-    writeProgress({ status: "running", step: "list", message: "抓取列表页 " + si + "/" + startUrls.length, current: si, total: startUrls.length });
-    console.log(`\n🔍 起始页: ${startUrl}\n抓取列表页...`);
+  const CONCURRENCY = 3;
+  let idx = 0;
+  const processOne = async () => {
+    while (idx < startUrls.length) {
+      const si = idx + 1;
+      const startUrl = startUrls[idx++];
+      writeProgress({ status: "running", step: "list", message: "抓取列表页 " + si + "/" + startUrls.length, current: si, total: startUrls.length });
+      console.log(`\n🔍 起始页(${si}/${startUrls.length}): ${startUrl}\n抓取列表页...`);
 
-    // 掘金搜索页：SPA 渲染，用 apiPattern 拦截搜索 XHR API + 延长等待
-    const isJuejinSearch = startUrl.includes("juejin.cn/search");
-    const listOpts = { maxTextChars: 4000, collectLinks: true };
-    if (isJuejinSearch) {
-      listOpts.waitUntil = "networkidle";
-      listOpts.waitMs = 4000;
-      listOpts.apiPattern = "api.juejin.cn/search_api";
-    }
-
-    const list = await fetchPage(startUrl, listOpts);
-    if (!list || (!list.text && list.length === 0)) {
-      console.error("列表页抓取失败:", list?.error || "无正文内容");
-      continue;
-    }
-
-    // 掘金搜索：若 DOM 链接为空但 API 响应有数据，从 API 响应提取链接
-    let allLinks = list.links;
-    if (isJuejinSearch && allLinks.length === 0 && list.apiResponses?.length) {
-      const apiLinks = extractJuejinLinks(list.apiResponses);
-      if (apiLinks.length > 0) {
-        console.log(`  掘金 API 拦截成功，提取 ${apiLinks.length} 条链接`);
-        allLinks = apiLinks;
+      // 掘金搜索页：SPA 渲染，用 apiPattern 拦截搜索 XHR API + 延长等待
+      const isJuejinSearch = startUrl.includes("juejin.cn/search");
+      const listOpts = { maxTextChars: 4000, collectLinks: true };
+      if (isJuejinSearch) {
+        listOpts.waitUntil = "networkidle";
+        listOpts.waitMs = 4000;
+        listOpts.apiPattern = "api.juejin.cn/search_api";
       }
-    }
 
-    // 提取帖子链接（通用模式），去重 + 清洗 + 过滤已爬过的 + 标题方向过滤
-    const posts = dedupePosts(
-      allLinks
-        .filter((l) => POST_URL_RE.test(l.href) && l.text.length > 5 && !EXCLUDE_TITLE.test(l.text))
-        .map((l) => ({ text: l.text.slice(0, 120), href: cleanHref(l.href) }))
-    ).filter((p) => !history.has(keyOf(p.href)));
-    console.log(`列表页发现 ${posts.length} 篇新帖子（过滤已爬 ${allLinks.filter((l) => POST_URL_RE.test(l.href)).length - posts.length} 篇）`);
-    if (posts.length === 0) {
-      console.log("⏭️ 该页没有新帖子，跳过");
-      continue;
-    }
+      const list = await fetchPage(startUrl, listOpts);
+      if (!list || (!list.text && list.length === 0)) {
+        console.error("列表页抓取失败:", list?.error || "无正文内容");
+        continue;
+      }
 
-    // AI 挑选最有价值的帖子（按重点方向优先）
-    const picked = await pickPosts(posts, want, FOCUS);
-    writeProgress({ status: "running", step: "pick", message: "AI 挑选帖子（" + si + "/" + startUrls.length + "）", current: si, total: startUrls.length });
-    console.log(`AI 选中 ${picked.length} 篇：`);
-    picked.forEach((p, i) => console.log(`  ${i + 1}. [${p.reason?.slice(0, 30) || ""}] ${p.text.slice(0, 45)}`));
-    allPicked.push(...picked.map((p) => ({ ...p, from: startUrl })));
-  }
+      // 掘金搜索：若 DOM 链接为空但 API 响应有数据，从 API 响应提取链接
+      let allLinks = list.links;
+      if (isJuejinSearch && allLinks.length === 0 && list.apiResponses?.length) {
+        const apiLinks = extractJuejinLinks(list.apiResponses);
+        if (apiLinks.length > 0) {
+          console.log(`  掘金 API 拦截成功，提取 ${apiLinks.length} 条链接`);
+          allLinks = apiLinks;
+        }
+      }
+
+      // 提取帖子链接（通用模式），去重 + 清洗 + 过滤已爬过的 + 标题方向过滤
+      const posts = dedupePosts(
+        allLinks
+          .filter((l) => POST_URL_RE.test(l.href) && l.text.length > 5 && !EXCLUDE_TITLE.test(l.text))
+          .map((l) => ({ text: l.text.slice(0, 120), href: cleanHref(l.href) }))
+      ).filter((p) => !history.has(keyOf(p.href)));
+      console.log(`列表页发现 ${posts.length} 篇新帖子（过滤已爬 ${allLinks.filter((l) => POST_URL_RE.test(l.href)).length - posts.length} 篇）`);
+      if (posts.length === 0) {
+        console.log("⏭️ 该页没有新帖子，跳过");
+        continue;
+      }
+
+      // AI 挑选最有价值的帖子（按重点方向优先）
+      const picked = await pickPosts(posts, want, FOCUS);
+      writeProgress({ status: "running", step: "pick", message: "AI 挑选帖子（" + si + "/" + startUrls.length + "）", current: si, total: startUrls.length });
+      console.log(`AI 选中 ${picked.length} 篇：`);
+      picked.forEach((p, i) => console.log(`  ${i + 1}. [${p.reason?.slice(0, 30) || ""}] ${p.text.slice(0, 45)}`));
+      allPicked.push(...picked.map((p) => ({ ...p, from: startUrl })));
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, startUrls.length) }, processOne));
   ctx.allPicked = allPicked;
 }
 
@@ -266,32 +276,49 @@ export async function fetchPagesStage(ctx) {
   ctx.okPages = okPages;
 }
 
-/** 阶段3：分类 + 前端方向硬过滤 + 具体题目检测（zhaopin 分流到情报） */
+/** 阶段3：分类 + 前端方向硬过滤 + 具体题目检测（zhaopin 分流到情报）；LLM 步骤 3 并发提速 */
 export async function classifyStage(ctx) {
   const { okPages = [] } = ctx;
   const items = [];
   const qiuItems = []; // 秋招情报类
   const GOOD_DIRS = ["frontend", "agent"];
-  for (const p of okPages) {
-    const cls = await classifyPage({ title: p.title, text: p.text });
-    const dir = cls.direction || "other";
-    console.log(`  [${cls.type}/${dir}] ${cls.company || "-"} | ${p.title.slice(0, 40)} | worth=${cls.worth}`);
-    // 只保留前端/Agent 方向；其他方向（backend/embedded/algorithm）直接丢弃
-    if (!GOOD_DIRS.includes(dir) || cls.worth < 40) {
-      console.log(`    ⏭️ 跳过（非前端/Agent 方向）`);
-      continue;
+  const CONCURRENCY = 3;
+  let idx = 0;
+  const results = []; // 顺序保留（按 okPages 下标）
+  const processOne = async () => {
+    while (idx < okPages.length) {
+      const i = idx++;
+      const p = okPages[i];
+      const rec = { p, item: null, qiu: null, log: "" };
+      try {
+        const cls = await classifyPage({ title: p.title, text: p.text });
+        const dir = cls.direction || "other";
+        rec.log = `  [${cls.type}/${dir}] ${cls.company || "-"} | ${p.title.slice(0, 40)} | worth=${cls.worth}`;
+        // 只保留前端/Agent 方向；其他方向（backend/embedded/algorithm）直接丢弃
+        if (!GOOD_DIRS.includes(dir) || cls.worth < 40) {
+          rec.log += `\n    ⏭️ 跳过（非前端/Agent 方向）`;
+        } else if (cls.type === "zhaopin") {
+          rec.qiu = { ...p, cls };
+        } else {
+          // 具体题目检测：攻略文/流水账/时间分配类 → 跳过，只讲具体题
+          const dq = await detectQuestions({ title: p.title, text: p.text });
+          if (!dq.hasQuestion || !dq.questions?.length) {
+            rec.log += `\n    ⏭️ 跳过（无具体题目：${dq.reason || "攻略/流水账"}）`;
+          } else {
+            rec.item = { ...p, cls, questions: dq.questions.slice(0, 3) };
+          }
+        }
+      } catch (e) {
+        rec.log += `\n    ⚠️ 分类异常: ${String(e.message || e).slice(0, 80)}`;
+      }
+      results[i] = rec;
     }
-    if (cls.type === "zhaopin") {
-      qiuItems.push({ ...p, cls });
-      continue;
-    }
-    // 具体题目检测：攻略文/流水账/时间分配类 → 跳过，只讲具体题
-    const dq = await detectQuestions({ title: p.title, text: p.text });
-    if (!dq.hasQuestion || !dq.questions?.length) {
-      console.log(`    ⏭️ 跳过（无具体题目：${dq.reason || "攻略/流水账"}）`);
-      continue;
-    }
-    items.push({ ...p, cls, questions: dq.questions.slice(0, 3) });
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, okPages.length) }, processOne));
+  for (const rec of results) {
+    if (rec.log) console.log(rec.log);
+    if (rec.item) items.push(rec.item);
+    if (rec.qiu) qiuItems.push(rec.qiu);
   }
   ctx.items = items;
   ctx.qiuItems = qiuItems;
