@@ -229,6 +229,14 @@ function createWindow() {
 }
 
 // ---------- 托盘 ----------
+// 桌宠快捷菜单 → 面板指定 Tab（chat/settings 等）
+ipcMain.handle("panel:goto-tab", (e, { tab }) => {
+  if (panelWin && !panelWin.isDestroyed()) {
+    panelWin.webContents.send("panel:goto-tab", { tab: String(tab || "") });
+  }
+  return { ok: true };
+});
+
 // 打开面板并定位到「手写/算法题库」区块（panel.js 监听 panel:goto-challenges）
 function openPanelChallenges() {
   createPanelWindow();
@@ -565,7 +573,42 @@ function killAllWidgetProcesses() {
   } catch { /* ignore */ }
 }
 
+// ============ 渲染层产物防呆：app.js 是源码、app.bundle.js 是 esbuild 产物 ============
+// 改 app.js/index.html/style.css 后不重建 bundle → 改动不生效（历史上踩过坑）。
+// 机制：重启前自动检测"源码比产物新"→ 自动重建；启动时也检查并告警。
+const RENDERER_DIR = path.join(__dirname, "renderer");
+const RENDERER_BUNDLE = path.join(RENDERER_DIR, "app.bundle.js");
+const RENDERER_SRC = ["app.js", "index.html", "style.css"].map((f) => path.join(RENDERER_DIR, f));
+
+/** 渲染源码是否比 bundle 新（任一源文件 mtime > bundle mtime 即过期） */
+function rendererBundleStale() {
+  try {
+    if (!existsSync(RENDERER_BUNDLE)) return true;
+    const bm = statSync(RENDERER_BUNDLE).mtimeMs;
+    return RENDERER_SRC.some((f) => existsSync(f) && statSync(f).mtimeMs > bm);
+  } catch { return false; }
+}
+
+/** 重建 app.bundle.js（esbuild；失败不阻塞重启，返回是否成功） */
+function rebuildRendererBundle() {
+  return new Promise((resolve) => {
+    const esbuildBin = path.join(ROOT, "node_modules", ".bin", process.platform === "win32" ? "esbuild.cmd" : "esbuild");
+    if (!existsSync(esbuildBin)) { console.log("[renderer] esbuild 未安装，跳过自动构建"); resolve(false); return; }
+    const child = spawn(esbuildBin, ["desktop/renderer/app.js", "--bundle", "--format=esm", "--outfile=desktop/renderer/app.bundle.js", "--log-level=warning"], {
+      cwd: ROOT, windowsHide: true, stdio: "ignore",
+    });
+    const timer = setTimeout(() => { try { child.kill(); } catch { /* ignore */ } resolve(false); }, 60000);
+    child.on("exit", (code) => { clearTimeout(timer); console.log(`[renderer] 自动重建 bundle ${code === 0 ? "成功" : "失败(code=" + code + ")"}`); resolve(code === 0); });
+    child.on("error", () => { clearTimeout(timer); console.log("[renderer] esbuild 启动失败"); resolve(false); });
+  });
+}
+
 ipcMain.handle("app:restart", async () => {
+  // 渲染源码比 bundle 新 → 先自动重建（改代码后点面板重启即生效，无需手动构建）
+  if (rendererBundleStale()) {
+    console.log("[renderer] 检测到渲染源码更新，重启前自动重建 bundle…");
+    await rebuildRendererBundle();
+  }
   try { cleanupWidget(); } catch { /* ignore */ }
   killAllWidgetProcesses();
   app.relaunch();
@@ -1114,6 +1157,12 @@ app.whenReady().then(() => {
   startDesktopScopeCheck();
   startFocusSupervision();
   initMusic(); // 🎵 音乐状态注入 + 启动自动播放
+  // 渲染产物防呆：源码比 bundle 新 → 启动告警（避免"改了没生效"的困惑）
+  setTimeout(() => {
+    if (rendererBundleStale()) {
+      console.log("[renderer] ⚠️ 检测到 app.js/index.html/style.css 比 app.bundle.js 新——改动尚未生效！请重启桌宠（会自动重建）或运行 npm run build:renderer");
+    }
+  }, 1500);
   // 开发辅助：MIANSHI_OPEN_PANEL=1 时启动即打开面板（便于 UI 调试/自动化验证）
   if (process.env.MIANSHI_OPEN_PANEL === "1") {
     setTimeout(createPanelWindow, 1600);

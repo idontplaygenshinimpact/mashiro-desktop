@@ -49,6 +49,10 @@ window.kanban?.onPanelGotoChallenges?.(() => {
     }
   }, 300);
 });
+// 桌宠快捷菜单「💬 聊天 / ⚙️ 设置」→ 切到对应 Tab
+window.kanban?.onPanelGotoTab?.((tab) => {
+  if (tab === "chat" || tab === "settings") switchTab(tab);
+});
 
 const $ = (id) => document.getElementById(id);
 
@@ -2220,9 +2224,9 @@ async function sendAskAnswer(label) {
   setTimeout(checkAsks, 800);
 }
 
-// ============ 一键重启（改代码后不用手动杀进程；桌宠 + 后台服务一并重启） ============
+// ============ 一键重启（改代码后点它即生效：自动检测并重建前端 bundle + 重启桌宠/后台服务） ============
 document.getElementById("restart-btn")?.addEventListener("click", async () => {
-  if (!confirm("确定重启桌宠吗？\n后台服务会一并重启（约 3-5 秒），改代码后点这个就能生效。")) return;
+  if (!confirm("确定重启桌宠吗？\n后台服务会一并重启（约 3-5 秒）。改过前端代码会自动重新构建，点这个就能生效。")) return;
   const btn = document.getElementById("restart-btn");
   btn.disabled = true;
   btn.textContent = "⏳";

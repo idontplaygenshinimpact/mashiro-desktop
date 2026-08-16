@@ -99,7 +99,7 @@ function startIdleMotion() {
 let dragging = false, moved = false, offset = { x: 0, y: 0 }, downAt = null, lastMoveTs = 0;
 // 注意：pointerdown/pointermove/pointerup 监听器在下方「长按」区块统一注册（含长按/空闲逻辑），此处不再重复注册
 
-// 双击角色 → 打开大面板（单击=人设反应，双击=面板；双击会取消挂起的单击戳反应）
+// 双击角色 → 打开大面板（单击=人设反应，双击=面板；双击会取消挂起的单击反应）
 let lastClickTs = 0;
 canvas.addEventListener("dblclick", (e) => {
   clearTimeout(clickTimer); // 取消单击的延迟语音/气泡
@@ -212,27 +212,31 @@ async function handleClick(e) {
   }
   const finalVoiceScene = voiceScene;
 
-  // 延迟触发：280ms 内若出现第二次点击（双击开面板），取消戳反应，避免误语音
+  // 延迟触发：CLICK_DELAY 内若出现第二次点击（双击开面板），取消戳反应，避免误语音
   clearTimeout(clickTimer);
   clickTimer = setTimeout(() => {
     showBubble(reaction, 5000);
     if (voiceOn) window.kanban.playScene(finalVoiceScene);
     touchActivity(); // 有交互 → 重置空闲关怀计时
-  }, 280);
+  }, CLICK_DELAY);
 }
 
-// ---------- 长按（800ms 无移动 → 撒娇反应） ----------
-let longPressTimer = null, longPressFired = false;
+// ---------- 单击 / 长按 / 拖拽 统一手势 ----------
+// 阈值：拖拽需移动 >30px（原 6px 太灵敏，轻微抖动就拖拽窗口）；长按容忍 30px 内微动
+const MOVE_THRESHOLD = 30;
+const CLICK_DELAY = 120; // 单击反应延迟（原 280ms 太迟钝）
+let longPressTimer = null, longPressFired = false, downX = 0, downY = 0;
 canvas.addEventListener("pointerdown", (e) => {
   dragging = true;
   moved = false;
   longPressFired = false;
   downAt = Date.now();
+  downX = e.screenX; downY = e.screenY;
   offset = { x: e.screenX - window.screenX, y: e.screenY - window.screenY };
   canvas.style.cursor = "grabbing";
   clearTimeout(longPressTimer);
   longPressTimer = setTimeout(() => {
-    if (!dragging || moved) return;
+    if (!dragging || moved) return; // 已移动 → 视为拖拽，取消长按
     longPressFired = true;
     showBubble("……嗯？一直摸着我……像在安抚一只猫。", 4500);
     if (voiceOn) window.kanban.playLongScene("love");
@@ -243,7 +247,8 @@ canvas.addEventListener("pointermove", (e) => {
   if (!dragging) return;
   const dx = e.screenX - offset.x - window.screenX;
   const dy = e.screenY - offset.y - window.screenY;
-  if (Math.abs(dx) + Math.abs(dy) > 6) moved = true;
+  const dist = Math.hypot(e.screenX - downX, e.screenY - downY);
+  if (dist > MOVE_THRESHOLD) moved = true; // 30px 以上才视为拖动
   if (moved) {
     const now = Date.now();
     if (now - lastMoveTs > 16) {
@@ -257,10 +262,11 @@ canvas.addEventListener("pointerup", (e) => {
   dragging = false;
   canvas.style.cursor = "grab";
   clearTimeout(longPressTimer);
-  if (longPressFired) { longPressFired = false; return; } // 长按已反应，不再触发单击
+  if (longPressFired) { longPressFired = false; touchActivity(); return; } // 长按已反应
   if (!moved && Date.now() - downAt < 400) {
-    handleClick(e);
+    handleClick(e); // 单击：气泡 + 语音 + 快捷菜单（120ms 防双击误触）
   }
+  touchActivity();
 });
 
 // ---------- 空闲关怀：5 分钟无交互 → 真白长句关怀（每日最多 3 次） ----------

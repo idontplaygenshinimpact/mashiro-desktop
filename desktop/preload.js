@@ -112,6 +112,8 @@ contextBridge.exposeInMainWorld("kanban", {
   mascotSetModel: (modelPath) => ipcRenderer.invoke("mascot:set-model", { path: modelPath }),
   showMascotMenu: () => ipcRenderer.invoke("mascot:menu"),
   onPanelGotoChallenges: (cb) => ipcRenderer.on("panel:goto-challenges", () => cb()),
+  onPanelGotoTab: (cb) => ipcRenderer.on("panel:goto-tab", (e, data) => cb(data?.tab)),
+  gotoPanelTab: (tab) => ipcRenderer.invoke("panel:goto-tab", { tab }),
   onMascotModelChanged: (cb) => ipcRenderer.on("mascot-model-changed", (e, data) => cb(data)),
   onOpenPanel: (cb) => ipcRenderer.on("open-panel", () => cb()),
   onRunDiscover: (cb) => ipcRenderer.on("run-discover", () => cb()),
