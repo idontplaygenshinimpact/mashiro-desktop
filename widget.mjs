@@ -36,6 +36,8 @@ import { registerFocusRoutes } from "./lib/routes/focus.mjs";
 import { registerMailRoutes } from "./lib/routes/mail.mjs";
 import { registerRssRoutes } from "./lib/routes/rss.mjs";
 import { registerCoreRoutes } from "./lib/routes/core.mjs";
+import { db } from "./lib/db.mjs";
+import { createPatrol } from "./lib/patrol.mjs";
 
 // 纵向拆分路由注册：全部路由已按业务域拆到 lib/routes/*.mjs（widget.mjs 只保留
 // 鉴权/CORS/服务生命周期/后台任务调度）
@@ -68,17 +70,17 @@ registerCoreRoutes(router, {
     logErr: (m) => logErr(m),
     runDiscoverHidden: () => runDiscoverHidden(),
     crawlMutex: () => crawlMutex,
-    patrolGetConfig: () => getPatrolConfig(),
-    patrolWriteSetting: (k, v) => writePatrolSetting(k, v),
-    patrolSetBudget: (t) => setPatrolBudget(t),
-    patrolGetBudget: () => patrolDailyBudget(),
-    patrolGetUsed: () => patrolUsedTokensToday(),
-    patrolScheduleNext: () => scheduleNextPatrol(),
-    patrolState: () => patrolState,
+    patrolGetConfig: () => patrol.getConfig(),
+    patrolWriteSetting: (k, v) => patrol.writeSetting(k, v),
+    patrolSetBudget: (t) => patrol.setBudget(t),
+    patrolGetBudget: () => patrol.dailyBudget(),
+    patrolGetUsed: () => patrol.usedTokensToday(),
+    patrolScheduleNext: () => patrol.scheduleNext(),
+    patrolState: () => patrol.state,
     patrolDisabled: () => DISABLE_PATROL,
-    patrolRun: () => patrolInterests(),
-    patrolMinMinutes: () => PATROL_MIN_MINUTES,
-    patrolMaxMinutes: () => PATROL_MAX_MINUTES,
+    patrolRun: () => patrol.run(),
+    patrolMinMinutes: () => patrol.minMinutes,
+    patrolMaxMinutes: () => patrol.maxMinutes,
   },
 });
 
@@ -455,281 +457,15 @@ server.on("error", (/** @type {NodeJS.ErrnoException} */ err) => {
 
 tryListen();
 
-// ============ 主动推送：按关注点定时巡检新内容 ============
-import { memory } from "./lib/memory.mjs";
-import { db } from "./lib/db.mjs";
-
-// ---------- 巡检配置（面板可改，持久化到 settings 表） ----------
-// patrol_enabled: "1"/"0"（默认开启；MIANSHI_DISABLE_PATROL=1 环境变量强制关闭且忽略面板开关）
-// patrol_interval_min: 分钟（默认 60，合法 15-1440 整数）
-// patrol_last_run: 上次定时巡检完成时间戳（毫秒，widget 重启不丢）
-const PATROL_MIN_MINUTES = 15;
-const PATROL_MAX_MINUTES = 1440;
-const PATROL_DEFAULT_MINUTES = 60;
-
-function readPatrolSetting(key, fallback) {
-  try {
-    const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key);
-    return row && row.value != null ? String(row.value) : fallback;
-  } catch { /* settings 表暂不可用时走默认值 */ }
-  return fallback;
-}
-function writePatrolSetting(key, value) {
-  try {
-    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(key, String(value), Date.now());
-  } catch { /* ignore */ }
-}
-function normalizePatrolInterval(v) {
-  const n = Math.round(Number(v));
-  return Number.isInteger(n) && n >= PATROL_MIN_MINUTES && n <= PATROL_MAX_MINUTES ? n : PATROL_DEFAULT_MINUTES;
-}
-
-const patrolState = {
-  enabled: !DISABLE_PATROL && readPatrolSetting("patrol_enabled", "1") !== "0",
-  intervalMin: normalizePatrolInterval(readPatrolSetting("patrol_interval_min", String(PATROL_DEFAULT_MINUTES))),
-  lastRun: Number(readPatrolSetting("patrol_last_run", "0")) || 0,
-  startedAt: Date.now(),
-  timer: null,
-  nextRun: null,
-};
-
-function getPatrolConfig() {
-  const forceOff = DISABLE_PATROL;
-  return {
-    ok: true,
-    enabled: forceOff ? false : patrolState.enabled,
-    intervalMin: patrolState.intervalMin,
-    lastRun: patrolState.lastRun || null,
-    nextRun: forceOff || !patrolState.enabled ? null : patrolState.nextRun,
-    note: forceOff ? "环境变量 MIANSHI_DISABLE_PATROL=1 已强制关闭巡检（面板开关不可用）" : undefined,
-  };
-}
-
-// 动态排程：读配置 → setTimeout 到下次触发 → 触发后重新排程（递归，替代固定 setInterval）
-function scheduleNextPatrol() {
-  if (patrolState.timer) { clearTimeout(patrolState.timer); patrolState.timer = null; }
-  if (DISABLE_PATROL || !patrolState.enabled) { patrolState.nextRun = null; return; }
-  const base = patrolState.lastRun || patrolState.startedAt;
-  const at = base + patrolState.intervalMin * 60 * 1000;
-  patrolState.nextRun = at;
-  const delay = Math.max(at - Date.now(), 1000);
-  patrolState.timer = setTimeout(async () => {
-    patrolState.timer = null;
-    try {
-      await patrolInterests();
-      patrolState.lastRun = Date.now();
-      writePatrolSetting("patrol_last_run", String(patrolState.lastRun));
-    } catch (e) {
-      console.log(`[widget] 巡检异常: ${String(e.message).slice(0, 80)}`);
-    }
-    scheduleNextPatrol();
-  }, delay);
-  console.log(`[widget] 自动巡检已排程: ${new Date(at).toLocaleString("zh-CN")} 触发（每 ${patrolState.intervalMin} 分钟）`);
-}
-
-// 启动巡检：读配置动态排程（首次 = 启动时间 + interval；环境变量强制关闭或面板关闭时不排程）
-scheduleNextPatrol();
-console.log(`[widget] 自动巡检: ${DISABLE_PATROL ? "关闭（环境变量 MIANSHI_DISABLE_PATROL=1）" : patrolState.enabled ? `开启（每 ${patrolState.intervalMin} 分钟）` : "关闭（面板设置）"}`);
-
-let patrolRunning = false; // 巡检重入保护标记
-
-async function patrolInterests() {
-  if (patrolRunning) return; // 重入保护：定时巡检与手动 /api/patrol-run 重叠时跳过
-  // 每日 token 预算检查（设置中心可配；超限跳过本轮巡检）
-  const remaining = patrolBudgetRemaining();
-  if (remaining <= 0) {
-    console.log(`[widget] 巡检跳过：今日 token 预算已用尽（上限 ${patrolDailyBudget()}）`);
-    return;
-  }
-  const interests = memory.getInterests();
-  if (!interests.length) return;
-  patrolRunning = true;
-  try {
-    const { chatWithAgent } = { chatWithAgent: null }; // 避免循环依赖，直接调 search
-    const { fetchPage } = await import("./lib/fetch-page.mjs");
-    const re = /(\/discuss\/\d+|\/post\/\d+|\/article\/details\/\d+|juejin\.cn\/post\/\d+|blog\.csdn\.net\/[^/]+\/article\/details\/\d+)/;
-    // 标题级方向过滤：方向排除词来自画像 ignoreNote（转方向/开源自动跟随）+ 与方向无关的噪音词
-    const { getCareerProfile } = await import("./lib/career.mjs");
-    const prof = getCareerProfile();
-    const noiseRe = /嵌入式|单片机|硬件|驱动|PCB|STM32|ESP32|ARM|芯片|FPGA|物联网|上位机|爬虫开发/;
-    const ignoreWords = String(prof.ignoreNote || "")
-      .split(/[/、,，\s]+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length >= 2 && !/[（()）]/.test(s));
-    const dirRe = ignoreWords.length
-      ? new RegExp(ignoreWords.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "i")
-      : null;
-    const EXCLUDE_TITLE = dirRe ? new RegExp(`${noiseRe.source}|${dirRe.source}`, "i") : noiseRe;
-    const newPosts = [];
-    // 取前 2 个关注点，每个搜多站（牛客/掘金/CSDN）
-    const searchSites = [
-      (q) => `https://www.nowcoder.com/discuss?type=2&query=${encodeURIComponent(q)}`,
-      (q) => `https://juejin.cn/search?query=${encodeURIComponent(q + " 面经")}`,
-      (q) => `https://so.csdn.net/so/search?q=${encodeURIComponent(q + " 面经")}`,
-    ];
-    for (const topic of interests.slice(0, 2)) {
-      for (const makeUrl of searchSites) {
-        const url = makeUrl(topic);
-        try {
-          const page = await fetchPage(url, { maxTextChars: 1500, collectLinks: true });
-          for (const l of page.links) {
-            if (re.test(l.href) && l.text.length > 8) {
-              if (EXCLUDE_TITLE.test(l.text)) continue; // 非前端方向标题跳过
-              const clean = l.href.replace(/[?&]searchId=[^&]*/g, "").split("?")[0];
-              if (!memory.isSeen(clean)) {
-                newPosts.push({ title: l.text.slice(0, 50), url: clean, topic });
-              }
-            }
-          }
-        } catch { /* ignore */ }
-      }
-    }
-    if (newPosts.length) {
-      const names = newPosts.slice(0, 3).map((p) => p.title.slice(0, 20)).join("、");
-      console.log(`[widget] 巡检发现 ${newPosts.length} 条新内容（关注点 ${interests.slice(0, 2).join("、")}）`);
-      // 真正处理：抓正文 → 分类过滤 → 讲解 → 存档（通知不再"空口说白话"）
-      const result = await processPatrolPosts(newPosts.slice(0, 4));
-      const saved = result.saved;
-      let detail;
-      if (saved.length) {
-        detail = `已生成讲解：\n${saved.map((s) => `  📄 ${s}`).join("\n")}\n在面板「🔍 爬取产出」查看`;
-      } else {
-        // 如实说明未生成的原因（不再是笼统的"都是旧内容"）
-        const reasons = Object.entries(result.skipped || {}).filter(([, n]) => n > 0);
-        const reasonText = reasons.length
-          ? reasons.map(([k, n]) => `${k} ${n} 篇`).join("；")
-          : "未说明原因";
-        detail = `未生成新讲解（${reasonText}）`;
-      }
-      await sendNotification("🆕 真白发现新面经", `${names}${newPosts.length > 3 ? ` 等 ${newPosts.length} 条` : ""}\n${detail}`);
-    } else {
-      // 多站都没找到新帖：触发一次完整 discover 全量爬取（7 源），但限制频率（2 小时一次）
-      const now = Date.now();
-      if (now - (lastFullCrawl || 0) > 2 * 60 * 60 * 1000) {
-        lastFullCrawl = now;
-        if (crawlMutex.isRunning()) {
-          console.log("[widget] 巡检无新帖，但已有爬取任务运行中，跳过全量爬取");
-        } else {
-          console.log("[widget] 巡检无新帖，触发全量爬取");
-          try {
-            runDiscoverHidden();
-          } catch { /* ignore */ }
-        }
-      } else {
-        console.log("[widget] 巡检无新帖，全量爬取冷却中（2 小时限频）");
-      }
-    }
-  } catch { /* ignore */ } finally {
-    patrolRunning = false;
-  }
-}
-let lastFullCrawl = null; // 全量爬取限频标记
-
-// ---------- 巡检每日 token 预算（设置中心可配：patrol_daily_tokens，0=不限） ----------
-const PATROL_BUDGET_KEY = "patrol_daily_tokens";
-const PATROL_BUDGET_DEFAULT = 100000; // 默认每日上限（4 帖 × 讲解 ~2.4 万 token/帖 + 分类/题目检测）
-
-/** 读取巡检 token 预算（0=不限） */
-function patrolDailyBudget() {
-  try {
-    const row = db.prepare("SELECT value FROM settings WHERE key=?").get(PATROL_BUDGET_KEY);
-    const n = row?.value != null ? Number(String(row.value)) : PATROL_BUDGET_DEFAULT;
-    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
-  } catch { return PATROL_BUDGET_DEFAULT; }
-}
-
-/** 今日巡检已用 token（trace_llm 按 role=patrol 汇总） */
-function patrolUsedTokensToday() {
-  try {
-    const start = new Date(); start.setHours(0, 0, 0, 0);
-    const r = db.prepare("SELECT COALESCE(SUM(input_tokens),0) i, COALESCE(SUM(output_tokens),0) o FROM trace_llm WHERE role='patrol' AND ts >= ?").get(start.getTime());
-    return (Number(r?.i) || 0) + (Number(r?.o) || 0);
-  } catch { return 0; }
-}
-
-/** 巡检 token 预算检查：剩余可用；超限返回剩余 0（patrolInterests/processPatrolPosts 开头调用） */
-function patrolBudgetRemaining() {
-  const budget = patrolDailyBudget();
-  if (budget <= 0) return Infinity; // 0 = 不限
-  return budget - patrolUsedTokensToday();
-}
-
-/** 更新巡检配置里的预算（patrol-config API 用） */
-function setPatrolBudget(tokens) {
-  const n = Number(tokens);
-  if (!Number.isFinite(n) || n < 0) return { ok: false, error: "预算必须是 ≥0 的整数（0=不限）" };
-  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?,?,?)")
-    .run(PATROL_BUDGET_KEY, String(Math.floor(n)), Date.now());
-  return { ok: true };
-}
-
-// 巡检方向白名单：跟随求职目标（方向画像 direction；默认前端/Agent）
-// backend → 只巡检后端/全栈；fullstack → 全方向；frontend/agent/未设置 → 前端/Agent
-function patrolGoodDirs() {
-  try {
-    const dir = getCareerProfile().direction;
-    if (dir === "backend") return ["backend", "fullstack"];
-    if (dir === "fullstack") return ["frontend", "agent", "fullstack", "backend"];
-    if (dir === "agent") return ["agent", "frontend"];
-  } catch { /* ignore */ }
-  return ["frontend", "agent"];
-}
-
-// 巡检帖 → 抓正文 → 分类/方向过滤 → 具体题目检测 → 完整讲解 → 存档
-// 返回 { saved: [文件名], skipped: { 原因: 篇数 } }
-async function processPatrolPosts(posts) {
-  const saved = [];
-  const skipped = {};
-  const skip = (reason) => { skipped[reason] = (skipped[reason] || 0) + 1; };
-  try {
-    const { fetchPage } = await import("./lib/fetch-page.mjs");
-    const { classifyPage, detectQuestions, solveQuestion } = await import("./lib/ai.mjs");
-    const GOOD_DIRS = patrolGoodDirs(); // 方向过滤跟随求职目标（转后端后只巡检后端相关）
-    for (const p of posts) {
-      try {
-        // 每日 token 预算：每帖处理前检查，超限停止（讲解是 token 大户）
-        if (patrolBudgetRemaining() <= 0) {
-          console.log(`[widget] 巡检讲解停止：今日 token 预算已用尽`);
-          skip("token 预算用尽");
-          break;
-        }
-        // 标记已看（避免下次重复通知）
-        memory.markSeen(p.url);
-        const page = await fetchPage(p.url, { maxTextChars: 6000 });
-        if (!page.ok || page.invalid || !page.text || page.text.length < 200) { skip("页面无效/404"); continue; }
-        // 方向过滤：跟随求职目标
-        const cls = await classifyPage({ title: page.title, text: page.text }, "patrol");
-        if (!GOOD_DIRS.includes(cls.direction)) { skip("非目标方向"); continue; }
-        if (cls.worth < 40) { skip("内容价值低"); continue; }
-        // 具体题目检测：攻略文跳过
-        const dq = await detectQuestions({ title: page.title, text: page.text }, "patrol");
-        if (!dq.hasQuestion || !dq.questions?.length) { skip("攻略文/无具体题"); continue; }
-        // 完整讲解
-        const md = await solveQuestion({
-          title: page.title,
-          text: dq.questions.slice(0, 3).map((q, i) => `【题${i + 1}】${q.question}`).join("\n"),
-          company: cls.company,
-          position: cls.position,
-          sourceUrl: p.url,
-        }, "patrol");
-        // 存档到 output/<date>_patrol/
-        const date = new Date().toISOString().slice(0, 10);
-        const dir = path.join(config.outputDir, `${date}_patrol`);
-        mkdirSync(dir, { recursive: true });
-        const fname = `${String(saved.length + 1).padStart(2, "0")}_${(cls.company || cls.type || "patrol").replace(/[\\/:*?"<>|]/g, "_")}_${page.title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 30)}.md`;
-        writeFileSync(path.join(dir, fname), `# ${page.title}\n\n> 来源: ${p.url}\n\n${md}\n`, "utf8");
-        saved.push(fname);
-        console.log(`[widget] 巡检讲解完成: ${fname}`);
-      } catch (e) {
-        console.log(`[widget] 巡检讲解失败 ${p.url}: ${e.message}`);
-        skip("讲解失败");
-      }
-    }
-  } catch (e) {
-    console.log(`[widget] processPatrolPosts 异常: ${e.message}`);
-  }
-  return { saved, skipped };
-}
+// ============ 主动推送：按关注点定时巡检新内容（纵向拆分：逻辑在 lib/patrol.mjs，可独立测试） ============
+const patrol = createPatrol({
+  disabled: DISABLE_PATROL,
+  sendNotification,
+  crawlMutex,
+  runDiscoverHidden,
+});
+patrol.scheduleNext(); // 启动巡检：读配置动态排程（环境变量强制关闭或面板关闭时不排程）
+console.log(`[widget] 自动巡检: ${DISABLE_PATROL ? "关闭（环境变量 MIANSHI_DISABLE_PATROL=1）" : patrol.state.enabled ? `开启（每 ${patrol.state.intervalMin} 分钟）` : "关闭（面板设置）"}`);
 
 // ============ 后台任务管理（门控 + 互斥 + 优雅关闭） ============
 // 测试/无后台场景：MIANSHI_DISABLE_BACKGROUND=1 关闭所有后台定时任务（RAG 构建/每日搜集）
