@@ -3122,6 +3122,9 @@ async function loadLlmKeyStatus() {
     $("set-llm-key-status").textContent = j.hasKey
       ? `✅ 已配置（${j.masked}）· ${j.baseUrl} / ${j.model}`
       : "未配置（当前用 .env / 环境变量）· " + j.baseUrl + " / " + j.model;
+    // 回填当前生效地址/模型（自定义才回填，默认值只展示不占输入框）
+    if (j.baseUrlCustom) $("set-llm-base").value = j.baseUrl;
+    if (j.modelCustom) $("set-llm-model").value = j.model;
   } catch { /* ignore */ }
 }
 $("set-llm-key-save")?.addEventListener("click", async () => {
@@ -3138,6 +3141,24 @@ $("set-llm-key-save")?.addEventListener("click", async () => {
     if (j.ok) $("set-llm-key").value = "";
   } catch (e) {
     $("set-llm-key-status").textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+// Base URL + 模型名保存（配了地址 = 单端点直连该服务，不再 fallback 官方）
+$("set-llm-base-save")?.addEventListener("click", async () => {
+  const btn = $("set-llm-base-save");
+  btn.disabled = true;
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/settings/llm", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseUrl: $("set-llm-base").value.trim(), model: $("set-llm-model").value.trim() }),
+    });
+    const j = await r.json();
+    $("set-llm-base-status").textContent = j.ok ? j.message : "⚠️ " + (j.error || "保存失败");
+    if (j.ok) loadLlmKeyStatus();
+  } catch (e) {
+    $("set-llm-base-status").textContent = "⚠️ " + e.message;
   } finally {
     btn.disabled = false;
   }
