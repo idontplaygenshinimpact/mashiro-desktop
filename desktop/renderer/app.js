@@ -160,15 +160,7 @@ window.addEventListener("mouseleave", () => {
 // 进入窗口 → 根据位置决定（mousemove 会接管）
 window.addEventListener("mouseenter", () => { ignoreActive = false; });
 
-// ---------- 点击部位反应（真白人设） ----------
-const MASHIRO_REACTIONS = {
-  head: ["……嗯？有人在摸我的头。像在画布上轻轻扫了一层底色。", "……头被摸了。会分心。不过……不讨厌。"],
-  face: ["……戳脸的话，颜料会花的。", "……脸。不要戳。会画歪的。"],
-  body: ["……不要乱动。我还在想构图。", "……嗯。你在我旁边。"],
-  hand: ["这双手……是用来画画的。你要看吗？", "……手。握画笔的地方有茧。"],
-  default: ["……嗯？", "……我在。", "……今天画什么好呢。"],
-};
-
+// ---------- 点击部位反应（人设一致，仅语音） ----------
 let lastTapTs = 0, tapCount = 0, voiceOn = true;
 let clickTimer = null; // 单击反应延迟器：等待确认不是双击
 
@@ -197,17 +189,13 @@ async function handleClick(e) {
   if (now - lastTapTs < 3000) tapCount++; else tapCount = 1;
   lastTapTs = now;
 
-  let reaction;
   let voiceScene = "click"; // 部位 → 场景语音（人设一致：摸头=招呼/戳脸=惊讶/身体=得意/手=应声）
   const PART_SCENES = { head: "call", face: "surprise", body: "proud", hand: "agree" };
   if (tapCount >= 5) {
-    reaction = "……今天这么想我？那、那……真白也很开心。";
     voiceScene = "love";
   } else if (tapCount >= 3) {
-    reaction = "……你，很无聊吗？我可以分你一支画笔。";
+    // 连击：保持部位场景
   } else {
-    const pool = MASHIRO_REACTIONS[hitArea] || MASHIRO_REACTIONS.default;
-    reaction = pool[Math.floor(Math.random() * pool.length)];
     voiceScene = PART_SCENES[hitArea] || "click";
   }
   const finalVoiceScene = voiceScene;
@@ -215,8 +203,11 @@ async function handleClick(e) {
   // 延迟触发：CLICK_DELAY 内若出现第二次点击（双击开面板），取消戳反应，避免误语音
   clearTimeout(clickTimer);
   clickTimer = setTimeout(() => {
-    showBubble(reaction, 5000);
-    if (voiceOn) window.kanban.playScene(finalVoiceScene);
+    // 单击应答：优先随机播一条新合成长句（GPT-SoVITS），无长句回退部位短句
+    if (voiceOn) {
+      const r = window.kanban.playClickLong?.();
+      if (r === undefined || r === null) window.kanban.playScene(finalVoiceScene);
+    }
     touchActivity(); // 有交互 → 重置空闲关怀计时
   }, CLICK_DELAY);
 }
@@ -238,7 +229,6 @@ canvas.addEventListener("pointerdown", (e) => {
   longPressTimer = setTimeout(() => {
     if (!dragging || moved) return; // 已移动 → 视为拖拽，取消长按
     longPressFired = true;
-    showBubble("……嗯？一直摸着我……像在安抚一只猫。", 4500);
     if (voiceOn) window.kanban.playLongScene("love");
   }, 800);
 });
@@ -284,10 +274,11 @@ let idleCheckTimer = setInterval(() => {
     if (count >= 3) return;
     localStorage.setItem(key, String(count + 1));
     touchActivity();
-    // 长句优先（GPT-SoVITS 真白声线），未合成回退短句 + 中文气泡
-    const lines = ["……ふわぁ。有点无聊呢。在你回来之前，真白会在这里等你哦。", "真白一直在这里哦。觉得寂寞了，随时来跟我说话。"];
-    showBubble(lines[Math.floor(Math.random() * lines.length)], 7000);
-    if (voiceOn) window.kanban.playLongScene("idle");
+    // 长句优先（GPT-SoVITS 真白声线）：从全部长句池随机，避免空闲时永远只播 idle 场景那几句
+    if (voiceOn) {
+      const r = window.kanban.playClickLong?.();
+      if (r === undefined || r === null) window.kanban.playLongScene("idle");
+    }
   } catch { /* ignore */ }
 }, 60 * 1000);
 

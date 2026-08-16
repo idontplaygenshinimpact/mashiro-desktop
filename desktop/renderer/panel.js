@@ -2941,9 +2941,13 @@ async function loadSettings() {
     if (r?.ok) {
       $("set-patrol-enabled").checked = !!r.enabled;
       $("set-patrol-interval").value = String(r.intervalMin);
+      $("set-patrol-budget").value = String(r.dailyTokenBudget ?? 100000);
+      const used = r.usedToday || 0;
+      const budget = r.dailyTokenBudget ?? 100000;
+      const budgetTxt = budget > 0 ? ` · 今日 token ${used}/${budget}${used >= budget ? "（已用尽）" : ""}` : " · token 不限";
       $("set-patrol-status").textContent = r.enabled
-        ? `每 ${r.intervalMin} 分钟${r.nextRun ? " · 下次 " + new Date(r.nextRun).toLocaleString("zh-CN", { hour12: false }) : ""}`
-        : (r.note || "已关闭");
+        ? `每 ${r.intervalMin} 分钟${r.nextRun ? " · 下次 " + new Date(r.nextRun).toLocaleString("zh-CN", { hour12: false }) : ""}${budgetTxt}`
+        : (r.note || "已关闭") + budgetTxt;
     }
   } catch { /* ignore */ }
   // RSS
@@ -2965,6 +2969,9 @@ async function loadSettings() {
   loadCareerProfile();
   // 知识树（掌握度骨架）
   loadKnowledgeTree();
+  loadTreeTemplates();
+  // LLM API Key
+  loadLlmKeyStatus();
   // 项目路径
   try {
     const r = await fetch("http://127.0.0.1:8899/api/learning/project");
@@ -3038,6 +3045,66 @@ $("set-tree-reset")?.addEventListener("click", async () => {
   loadKnowledgeTree();
 });
 
+// 知识树方向模板（前端/后端/算法一键切换）
+async function loadTreeTemplates() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/knowledge/templates");
+    const j = await r.json();
+    if (!j?.ok) return;
+    const box = $("set-tree-templates");
+    if (!box) return;
+    box.innerHTML = "";
+    for (const t of j.templates) {
+      const a = document.createElement("a");
+      a.href = "javascript:void(0)";
+      a.style.cssText = "margin-right:8px;text-decoration:none;font-weight:600;color:" + (t.current ? "#6d4fd8" : "#8a87a8") + ";cursor:pointer;";
+      a.textContent = t.name + (t.current ? "（当前）" : "");
+      if (!t.current) {
+        a.onclick = async () => {
+          const rr = await fetch("http://127.0.0.1:8899/api/knowledge/load-template", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: t.name }),
+          });
+          const jj = await rr.json();
+          $("set-tree-status").textContent = jj.ok ? (jj.message || "✅ 已切换") : "⚠️ " + (jj.error || "切换失败");
+          if (jj.ok) { loadKnowledgeTree(); loadTreeTemplates(); }
+        };
+      }
+      box.appendChild(a);
+    }
+  } catch { /* ignore */ }
+}
+
+// ============ 🔑 LLM API Key（设置中心配置，无需改 .env） ============
+async function loadLlmKeyStatus() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/settings/llm");
+    const j = await r.json();
+    if (!j?.ok) return;
+    $("set-llm-key-status").textContent = j.hasKey
+      ? `✅ 已配置（${j.masked}）· ${j.baseUrl} / ${j.model}`
+      : "未配置（当前用 .env / 环境变量）· " + j.baseUrl + " / " + j.model;
+  } catch { /* ignore */ }
+}
+$("set-llm-key-save")?.addEventListener("click", async () => {
+  const btn = $("set-llm-key-save");
+  btn.disabled = true;
+  try {
+    const apiKey = $("set-llm-key").value.trim();
+    const r = await fetch("http://127.0.0.1:8899/api/settings/llm", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey }),
+    });
+    const j = await r.json();
+    $("set-llm-key-status").textContent = j.ok ? j.message : "⚠️ " + (j.error || "保存失败");
+    if (j.ok) $("set-llm-key").value = "";
+  } catch (e) {
+    $("set-llm-key-status").textContent = "⚠️ " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // 方向保存
 $("set-direction-btn")?.addEventListener("click", async () => {
   const btn = $("set-direction-btn");
@@ -3048,7 +3115,11 @@ $("set-direction-btn")?.addEventListener("click", async () => {
       body: JSON.stringify({ direction: $("set-direction").value }),
     });
     const j = await r.json();
-    $("set-direction-status").textContent = j.ok ? `✅ 已保存${j.advice ? "，建议：" + String(j.advice).slice(0, 60) + "…" : ""}` : "⚠️ " + (j.error || "保存失败");
+    const autoTxt = j?.auto?.applied?.length ? ` · 🔄 已联动：${j.auto.applied.join("、")}` : "";
+    $("set-direction-status").textContent = j.ok
+      ? `✅ 已保存${autoTxt}${j.advice ? "，建议：" + String(j.advice).slice(0, 60) + "…" : ""}`
+      : "⚠️ " + (j.error || "保存失败");
+    if (j.ok) { loadCareerProfile(); loadKnowledgeTree(); loadTreeTemplates(); }
   } catch (e) {
     $("set-direction-status").textContent = "⚠️ " + e.message;
   } finally {
@@ -3117,6 +3188,19 @@ $("set-patrol-enabled")?.addEventListener("change", async () => {
 $("set-patrol-interval")?.addEventListener("change", async () => {
   const r = await window.kanban.patrolConfig({ intervalMin: parseInt($("set-patrol-interval").value, 10) });
   if (r?.ok) $("set-patrol-status").textContent = `✅ 每 ${$("set-patrol-interval").value} 分钟`;
+});
+$("set-patrol-budget")?.addEventListener("change", async () => {
+  const v = parseInt($("set-patrol-budget").value, 10);
+  const r = await window.kanban.patrolConfig({ dailyTokenBudget: Number.isFinite(v) && v >= 0 ? v : 0 });
+  if (r?.ok) {
+    const used = r.usedToday || 0;
+    const b = r.dailyTokenBudget ?? 0;
+    $("set-patrol-status").textContent = b > 0
+      ? `✅ 每日 token 上限 ${b}（今日已用 ${used}）${used >= b ? " · 已用尽" : ""}`
+      : "✅ token 不限（0）";
+  } else {
+    $("set-patrol-status").textContent = "⚠️ " + (r?.error || "保存失败");
+  }
 });
 
 // RSS 保存
@@ -3423,8 +3507,12 @@ $("profile-save-btn")?.addEventListener("click", async () => {
     });
     const j = await res.json();
     profileStatus.className = "resume-status";
-    profileStatus.textContent = j.ok ? `✅ 已存档：技能 ${(j.skills || []).length} 个 · 方向 ${(j.directions || []).join(",") || "未识别"}` : "⚠️ " + (j.error || "保存失败");
+    const autoTxt = j?.auto?.applied?.length ? ` · 🔄 已联动：${j.auto.applied.join("、")}` : "";
+    profileStatus.textContent = j.ok
+      ? `✅ 已存档：技能 ${(j.skills || []).length} 个 · 方向 ${(j.directions || []).join(",") || "未识别"}${autoTxt}`
+      : "⚠️ " + (j.error || "保存失败");
     loadProfileStatus();
+    if (j.ok && j.auto?.applied?.length) { loadCareerProfile(); loadKnowledgeTree(); loadTreeTemplates(); }
   } catch (e) {
     profileStatus.textContent = "⚠️ " + e.message;
   } finally {

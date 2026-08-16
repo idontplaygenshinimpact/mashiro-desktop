@@ -1,8 +1,9 @@
 {
   "desc": "真白长句语音清单：GPT-SoVITS 真白声线合成（D:/GPT-SoVITS 训练模型），输出 assets/voice/long/\n分段原则：每行 2-3 句（40-70 字）→ get_tts_wav 逐段合成拼接，段数少 = 停顿少 = 听感连贯",
-  "ref_wav": "D:/GPT-SoVITS/radio/ref-600.wav",
-  "gpt": "D:/GPT-SoVITS/GPT-SoVITS/GPT_weights_v2/mashiro2/mashiro2-e8.ckpt",
-  "sovits": "D:/GPT-SoVITS/GPT-SoVITS/SoVITS_weights_v2/mashiro2/G_233333333333_infer.pth",
+  "ref_wav": "D:/GPT-SoVITS/radio/ref-clean-A.wav",
+  "ref_text": "戻ろうと思って エスカレーターに乗ったの離しちゃダメなの 離したら飛んでくわ",
+  "gpt": "D:/GPT-SoVITS/GPT-SoVITS/GPT_weights_v2/mashiro3/mashiro3-e20.ckpt",
+  "sovits": "D:/GPT-SoVITS/GPT-SoVITS/SoVITS_weights_v2/mashiro3/G_233333333333_infer.pth",
   "lines": [
     {
       "scene": "greeting",
