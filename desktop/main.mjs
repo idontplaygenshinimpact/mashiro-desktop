@@ -18,6 +18,10 @@ import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, he
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
+// 启动时读取上次保存的桌宠形象（默认真白·旅行装；面板可切换并持久化）
+const { scanMascotModels, getCurrentModel } = await import("../lib/mascot-models.mjs");
+const savedModelPath = getCurrentModel(scanMascotModels());
+
 let win = null;
 let panelWin = null;
 let tray = null;
@@ -186,9 +190,10 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      // 给渲染层传模型绝对路径（避免 file:// 相对路径问题）
+      sandbox: true, // 渲染进程沙箱（preload 仅用 contextBridge/ipcRenderer，兼容）
+      // 给渲染层传模型绝对路径（避免 file:// 相对路径问题；启动读保存的形象）
       additionalArguments: [
-        `--model-path=${path.join(ROOT, "node_modules", "live2d-widget-model-mashiro-zamp", "assets", "model", "Sakurasou", "mashiro", "ryoufuku.model.json")}`,
+        `--model-path=${savedModelPath || path.join(ROOT, "node_modules", "live2d-widget-model-mashiro-zamp", "assets", "model", "Sakurasou", "mashiro", "ryoufuku.model.json")}`,
       ],
     },
   });
@@ -224,22 +229,116 @@ function createWindow() {
 }
 
 // ---------- 托盘 ----------
-function createTray() {
-  tray = new Tray(createTrayIcon());
-  tray.setToolTip("mianshi-agent 看板娘");
+// 打开面板并定位到「手写/算法题库」区块（panel.js 监听 panel:goto-challenges）
+function openPanelChallenges() {
+  createPanelWindow();
+  setTimeout(() => {
+    try {
+      if (panelWin && !panelWin.isDestroyed()) {
+        panelWin.webContents.send("panel:goto-challenges");
+      }
+    } catch { /* ignore */ }
+  }, 600); // 等面板加载
+}
+
+// 换肤菜单动态构建（含托盘子菜单 + 桌宠右键弹同一菜单）；切换后重建刷新勾选
+async function buildTrayMenu() {
+  if (!tray) return;
+  let mascotItems;
+  try {
+    const { scanMascotModels, getCurrentModel, saveCurrentModel } = await import("../lib/mascot-models.mjs");
+    const list = scanMascotModels();
+    const cur = getCurrentModel(list);
+    mascotItems = list.length
+      ? list.map((m) => ({
+          label: m.name,
+          type: "radio",
+          checked: m.path === cur,
+          click: async () => {
+            saveCurrentModel(m.path);
+            if (win && !win.isDestroyed()) {
+              win.webContents.send("mascot-model-changed", { path: m.path, name: m.name });
+            }
+            buildTrayMenu(); // 刷新勾选
+          },
+        }))
+      : [{ label: "未找到模型", enabled: false }];
+  } catch (e) {
+    mascotItems = [{ label: "模型扫描失败", enabled: false }];
+  }
   const menu = Menu.buildFromTemplate([
     { label: "📌 看板娘", enabled: false },
     { type: "separator" },
     { label: "显示/隐藏", click: () => { if (win) { win.isVisible() ? win.hide() : win.show(); } } },
     { label: "打开面板", click: () => { createPanelWindow(); } },
+    { label: "✍️ 手写/算法题库", click: () => { openPanelChallenges(); } },
+    { label: "🎀 换肤", submenu: mascotItems },
+    await musicSubmenu(), // 🎵 樱花庄音乐（扫描 assets/music/）
     { label: "立即爬取", click: () => { widgetPost("/api/run-discover", {}).catch(() => {}); } },
     { label: "打开输出目录", click: () => { safeSpawn("explorer", [path.join(ROOT, "output")]); } },
     { type: "separator" },
     { label: "退出", click: () => { app.quit(); } },
   ]);
   tray.setContextMenu(menu);
-  tray.on("click", () => { if (win) { win.isVisible() ? win.hide() : win.show(); } });
 }
+
+// 🎵 樱花庄音乐子菜单：播放/停止/下一首 + 曲目列表 + 音量 + 自动播放开关
+async function musicSubmenu() {
+  const m = await musicApi();
+  const tracks = m.scanMusic();
+  const st = m.getMusicState();
+  const items = [];
+  if (!tracks.length) {
+    items.push({ label: "未找到音乐（把 mp3 放入 assets/music/，如樱花庄 OP/ED）", enabled: false });
+  } else {
+    for (const t of tracks.slice(0, 12)) {
+      items.push({
+        label: `♪ ${t.name}`,
+        click: async () => { const mm = await musicApi(); mm.playMusic(t.file); },
+      });
+    }
+    if (tracks.length > 12) items.push({ label: `…共 ${tracks.length} 首`, enabled: false });
+    items.push({ type: "separator" });
+  }
+  items.push({
+    label: st.playing ? `⏹ 停止（正在播：${String(st.current || "").slice(0, 14)}）` : "▶ 播放",
+    click: async () => {
+      const mm = await musicApi();
+      if (st.playing) mm.stopMusic();
+      else mm.playMusic();
+    },
+  });
+  items.push({ label: "⏭ 下一首", click: async () => { const mm = await musicApi(); mm.nextMusic(); } });
+  items.push({ type: "separator" });
+  items.push({
+    label: `🔊 音量 ${st.volume}%`,
+    submenu: [30, 50, 70, 90, 100].map((v) => ({
+      label: `${v}%${v === st.volume ? " ✓" : ""}`,
+      type: "radio", checked: v === st.volume,
+      click: async () => { const mm = await musicApi(); mm.setMusicVolume(v); },
+    })),
+  });
+  items.push({
+    label: `🎵 启动自动播放${st.autoplayOn ? " ✓" : ""}`,
+    type: "checkbox", checked: !!st.autoplayOn,
+    click: async (item) => { const mm = await musicApi(); mm.setMusicAutoplay(item.checked); },
+  });
+  return { label: "🎵 樱花庄音乐", submenu: items };
+}
+
+function createTray() {
+  tray = new Tray(createTrayIcon());
+  tray.setToolTip("mianshi-agent 看板娘");
+  tray.on("click", () => { if (win) { win.isVisible() ? win.hide() : win.show(); } });
+  buildTrayMenu();
+}
+
+// 桌宠右键 → 弹出换肤菜单（与托盘同一菜单）
+ipcMain.handle("mascot:menu", async () => {
+  await buildTrayMenu();
+  tray?.popUpContextMenu();
+  return { ok: true };
+});
 
 // ---------- IPC ----------
 ipcMain.handle("widget:data", async () => {
@@ -291,6 +390,7 @@ async function widgetGet(pathname) {
   }
 }
 ipcMain.handle("widget:chat", (e, { message, history }) => widgetPost("/api/chat", { message, history }));
+ipcMain.handle("widget:chat-history", () => widgetGet("/api/chat-history"));
 ipcMain.handle("widget:study-plan", () => widgetGet("/api/study-plan"));
 ipcMain.handle("widget:interview-history", () => widgetGet("/api/interview/history"));
 ipcMain.handle("widget:stats", () => widgetGet("/api/stats"));
@@ -439,21 +539,39 @@ ipcMain.handle("interview:end", () => widgetPost("/api/interview/end", {}));
 
 ipcMain.handle("widget:notify", async (e, { title, message }) => {
   // 系统通知（复用 node-notifier 同款 toast）
+  // 安全：参数经 base64 + -EncodedCommand 传递（旧实现直接拼 PS 字符串有注入面）
   try {
-    const ps = `
-[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
-$template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-$textNodes = $template.GetElementsByTagName('text')
-$textNodes.Item(0).AppendChild($template.CreateTextNode('${String(title).replace(/'/g, "")}')) > $null
-$textNodes.Item(1).AppendChild($template.CreateTextNode('${String(message).replace(/'/g, "")}')) > $null
-$toast = [Windows.UI.Notifications.ToastNotification]::new($template)
-[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('MianshiAgent').Show($toast)`;
-    safeSpawn("powershell", ["-NoProfile", "-Command", ps]);
+    const { buildToastScript, encodePowerShellCommand } = await import("../lib/win-toast.mjs");
+    const ps = buildToastScript(title, message);
+    safeSpawn("powershell", ["-NoProfile", "-NonInteractive", "-EncodedCommand", encodePowerShellCommand(ps)]);
   } catch { /* ignore */ }
   return { ok: true };
 });
 
 ipcMain.handle("window:quit", () => app.quit());
+
+// 一键重启（面板按钮）：杀全部 widget 子进程（含外部残留，按命令行匹配）→ relaunch 自身
+// 教训：cleanupWidget 只杀本实例拉起的 pid；测试/手动残留的 widget 占着 8899 会导致
+// 重启后新主进程探测到旧服务而不重新拉起 → "重启没生效"。这里按命令行全杀，治本。
+function killAllWidgetProcesses() {
+  try {
+    spawnSync(
+      "powershell",
+      ["-NoProfile", "-Command",
+        `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match 'widget\\.mjs' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`],
+      { windowsHide: true, timeout: 5000, stdio: "ignore" }
+    );
+    console.log("[kanban] 已清理全部 widget 进程（含外部残留）");
+  } catch { /* ignore */ }
+}
+
+ipcMain.handle("app:restart", async () => {
+  try { cleanupWidget(); } catch { /* ignore */ }
+  killAllWidgetProcesses();
+  app.relaunch();
+  app.exit(0);
+  return { ok: true };
+});
 
 // 打开指定文件（用系统默认程序，如 md 编辑器/浏览器）
 ipcMain.handle("window:open-file", (e, { filePath }) => {
@@ -496,6 +614,74 @@ ipcMain.handle("window:play-scene", async (e, { scene }) => {
     return { ok: false };
   }
 });
+// 长句场景播放（GPT-SoVITS 真白声线长句：日常关怀/完成庆祝等；无长句回退短句）
+ipcMain.handle("window:play-long-scene", async (e, { scene }) => {
+  try {
+    const vp = await import("./voice-pack.mjs");
+    const r = vp.playLongScene(String(scene || ""));
+    return r || { ok: false };
+  } catch {
+    return { ok: false };
+  }
+});
+
+// ============ 🎵 樱花庄音乐（lib/music.mjs：assets/music/ 目录扫描 + ffplay 播放） ============
+const MUSIC_STATE_FILE = path.join(ROOT, "data", "music-state.json");
+function loadMusicState() {
+  try {
+    return JSON.parse(readFileSync(MUSIC_STATE_FILE, "utf8")) || {};
+  } catch { /* 首次无状态 */ }
+  return {};
+}
+function saveMusicState(extra = {}) {
+  try {
+    writeFileSync(MUSIC_STATE_FILE, JSON.stringify({ ...loadMusicState(), ...extra, updatedAt: Date.now() }, null, 2), "utf8");
+  } catch { /* ignore */ }
+}
+async function musicApi() {
+  return await import("../lib/music.mjs");
+}
+ipcMain.handle("music:play", async (e, { file, loop } = {}) => {
+  const m = await musicApi();
+  return m.playMusic(file || "", { loop });
+});
+ipcMain.handle("music:stop", async () => {
+  const m = await musicApi();
+  return m.stopMusic();
+});
+ipcMain.handle("music:next", async () => {
+  const m = await musicApi();
+  return m.nextMusic();
+});
+ipcMain.handle("music:state", async () => {
+  const m = await musicApi();
+  return m.getMusicState();
+});
+ipcMain.handle("music:volume", async (e, { volume } = {}) => {
+  const m = await musicApi();
+  const r = m.setMusicVolume(volume);
+  if (r.ok) saveMusicState({ volume: m.getMusicState().volume });
+  return r;
+});
+ipcMain.handle("music:autoplay", async (e, { on } = {}) => {
+  const m = await musicApi();
+  const r = m.setMusicAutoplay(on);
+  if (r.ok) saveMusicState({ autoplay: !!on });
+  return r;
+});
+// 启动时注入持久化状态；自动播放开关开启且有音乐文件 → 启动 6s 后自动播放
+async function initMusic() {
+  try {
+    const st = loadMusicState();
+    const m = await musicApi();
+    m.setMusicPrefs({ volume: Number(st.volume) || 70, autoplay: !!st.autoplay });
+    if (st.autoplay) {
+      setTimeout(() => {
+        m.playMusic().catch?.();
+      }, 6000);
+    }
+  } catch { /* ignore */ }
+}
 // 语音全局开关：面板 🔊 切换 → 广播到所有窗口（桌宠 app.js 订阅同步静音/恢复）
 ipcMain.handle("voice:set", (e, enabled) => {
   const on = !!enabled;
@@ -572,6 +758,32 @@ ipcMain.handle("window:speak", async (e, { text }) => {
   return { ok: false };
 });
 
+// ---------- 桌宠形象（Live2D 模型切换） ----------
+// 模型枚举/持久化在 lib/mascot-models.mjs（纯函数可测）；主进程只做 IPC 与广播
+ipcMain.handle("mascot:models", async () => {
+  const { scanMascotModels, getCurrentModel } = await import("../lib/mascot-models.mjs");
+  const list = scanMascotModels();
+  return { ok: true, models: list, current: getCurrentModel(list) };
+});
+
+ipcMain.handle("mascot:set-model", async (e, { path: modelPath }) => {
+  try {
+    const { scanMascotModels, saveCurrentModel } = await import("../lib/mascot-models.mjs");
+    const list = scanMascotModels();
+    const match = list.find((m) => m.path === String(modelPath || ""));
+    if (!match) return { ok: false, error: "模型不在本地列表中" };
+    saveCurrentModel(match.path);
+    // 广播到桌宠窗口 → app.js 重载模型（面板切换后立即生效）
+    if (win && !win.isDestroyed()) {
+      win.webContents.send("mascot-model-changed", { path: match.path, name: match.name });
+    }
+    buildTrayMenu(); // 同步托盘换肤菜单勾选
+    return { ok: true, model: match };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 // 渲染层模型加载完成后，通知主进程显示桌宠窗口（尺寸已固定锁定）
 ipcMain.handle("window:fit", async () => {
   if (!win) return { ok: false };
@@ -637,6 +849,7 @@ function createPanelWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true, // 渲染进程沙箱
       additionalArguments: [
         `--model-path=${path.join(ROOT, "node_modules", "live2d-widget-model-mashiro-zamp", "assets", "model", "Sakurasou", "mashiro", "ryoufuku.model.json")}`,
         `--panel-window=1`,
@@ -720,7 +933,6 @@ ipcMain.handle("window:move", (e, { x, y }) => {
 // ---------- 全屏检测：全屏应用（游戏/视频）时隐藏桌宠，其余情况保持显示 ----------
 // 用 koffi FFI 直调 Win32（毫秒级，替代慢速 PowerShell）
 import { detectForegroundSync, getForegroundInfo } from "./foreground.mjs";
-import { isDistractingTitle } from "../lib/focus.mjs";
 
 function detectForeground() {
   return new Promise((resolve) => {
@@ -772,9 +984,12 @@ function startDesktopScopeCheck() {
 const FOCUS_NUDGE_COOLDOWN = 3 * 60 * 1000; // 分心提醒冷却（3 分钟，防骚扰）
 
 let focusBlacklist = [];          // 分心黑名单（从 widget 拉取缓存）
-let focusPrevActive = null;       // 上一次专注状态（null=首轮，跳过跃迁判断）
+let focusWhitelist = [];          // 白名单（命中不报分心；如 IDE/浏览器）
+let focusPrevPhase = null;        // 上一次专注阶段（null=首轮，跳过跃迁判断）
 let focusLastNudge = 0;           // 上次分心提醒时间戳
 let focusLastNudgeSession = null; // 分心提醒冷却所属会话 id（新会话重置冷却）
+let focusEncourageSession = null; // 中途鼓励所属会话 id
+let focusLastEncourage = 0;       // 上次中途鼓励时间戳
 
 // 广播 pet-say 到所有窗口（桌宠 app.js 订阅显示气泡 + 播语音；面板未订阅则忽略）
 function petSay(text, scene) {
@@ -789,7 +1004,10 @@ async function fetchFocusBlacklist() {
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/focus/blacklist`);
     const j = await res.json();
-    if (j?.ok && Array.isArray(j.blacklist)) focusBlacklist = j.blacklist;
+    if (j?.ok) {
+      if (Array.isArray(j.blacklist)) focusBlacklist = j.blacklist;
+      if (Array.isArray(j.whitelist)) focusWhitelist = j.whitelist;
+    }
   } catch { /* widget 未启动忽略 */ }
 }
 
@@ -801,28 +1019,44 @@ async function checkFocusSupervision() {
   } catch { /* widget 未启动忽略 */ }
   if (!status || status.ok === false) return;
 
-  const active = !!status.active;
-  const prev = focusPrevActive;
-  focusPrevActive = active;
+  const phase = status.phase || (status.active ? "focusing" : "idle");
+  const prev = focusPrevPhase;
+  focusPrevPhase = phase;
 
-  // 黑名单懒加载（首次成功拿到后缓存；每 5 分钟刷新一次由独立定时器兜底）
-  if (!focusBlacklist.length) await fetchFocusBlacklist();
+  // 黑名单/白名单懒加载（首次成功拿到后缓存；每 5 分钟刷新一次由独立定时器兜底）
+  if (!focusBlacklist.length && !focusWhitelist.length) await fetchFocusBlacklist();
 
-  // 状态跃迁：开始 → 陪伴气泡；完成结束 → 慰劳气泡
+  // 状态跃迁：开始专注 / 专注完成进休息 / 休息结束可下一轮
   if (prev === null) return; // 首轮仅记录，避免启动时误触发问候
-  if (active && !prev) {
+  if (phase === "focusing" && prev !== "focusing") {
     petSay("集中して。真白も一緒にいるよ。", "focus-start");
-  } else if (!active && prev) {
-    if (status.lastCompleted) petSay("お疲れさま。よく頑張ったね。", "focus-done");
+  } else if (phase === "resting" && prev !== "resting") {
+    petSay("お疲れさま。5 分休憩しよう。", "focus-done");
+  } else if (phase === "idle" && prev === "resting" && status.restDone) {
+    petSay("休憩完了。次のラウンド、始める？", "rest-done");
   }
 
-  if (!active) return;
-  // 专注中：检测前台窗口是否命中分心黑名单
-  let title = "";
-  try { title = getForegroundInfo().title; } catch { /* 检测失败跳过 */ }
-  if (!title || !isDistractingTitle(title, focusBlacklist)) return;
+  if (phase !== "focusing") return;
 
+  // 专注中途鼓励（每 10 分钟一次）
   const now = Date.now();
+  if (status.sessionId !== focusEncourageSession) {
+    focusEncourageSession = status.sessionId;
+    focusLastEncourage = 0;
+  }
+  if (now - focusLastEncourage >= 10 * 60 * 1000) {
+    focusLastEncourage = now;
+    petSay("いい調子。続けよう。", "focus-encourage");
+  }
+
+  // 专注中：检测前台窗口是否命中分心黑名单（标题/进程名；白名单优先）
+  let fg = { title: "", processName: "" };
+  try { fg = getForegroundInfo(); } catch { /* 检测失败跳过 */ }
+  if (!fg.title && !fg.processName) return;
+  const { isDistracting } = await import("../lib/focus.mjs");
+  const hit = isDistracting(fg, focusBlacklist, focusWhitelist);
+  if (!hit.distracting) return;
+
   // 冷却：同一会话内 3 分钟只提醒一次；新会话重置
   if (status.sessionId !== focusLastNudgeSession) {
     focusLastNudgeSession = status.sessionId;
@@ -879,6 +1113,11 @@ app.whenReady().then(() => {
   createTray();
   startDesktopScopeCheck();
   startFocusSupervision();
+  initMusic(); // 🎵 音乐状态注入 + 启动自动播放
+  // 开发辅助：MIANSHI_OPEN_PANEL=1 时启动即打开面板（便于 UI 调试/自动化验证）
+  if (process.env.MIANSHI_OPEN_PANEL === "1") {
+    setTimeout(createPanelWindow, 1600);
+  }
 }).catch(() => { /* 单实例锁未获取时提前退出，ready 可能 reject，忽略 */ });
 
 app.on("window-all-closed", (e) => {

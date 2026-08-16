@@ -1,0 +1,393 @@
+{
+  "ts": "2026-08-15T22:25:19.970Z",
+  "layer": "B",
+  "repeat": 3,
+  "pass": 19,
+  "total": 19,
+  "rate": 1,
+  "consistency": {
+    "fullyConsistent": 19,
+    "total": 19,
+    "scenarios": [
+      {
+        "id": "工具循环：LLM 决定调工具 → harness 执行并回填 → 最终回答",
+        "name": "工具循环：LLM 决定调工具 → harness 执行并回填 → 最终回答",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "参数校验：LLM 传缺参 → validateArgs 拦截，不执行工具",
+        "name": "参数校验：LLM 传缺参 → validateArgs 拦截，不执行工具",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "未知工具：LLM 幻觉工具名 → 报错不崩溃",
+        "name": "未知工具：LLM 幻觉工具名 → 报错不崩溃",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "记忆写入：remember 工具 → 关注点持久化",
+        "name": "记忆写入：remember 工具 → 关注点持久化",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "上下文压缩：长对话触发 compaction 且回答正常",
+        "name": "上下文压缩：长对话触发 compaction 且回答正常",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "语音稿分离：【语音】标记从回复中剥离（voice 恒空）",
+        "name": "语音稿分离：【语音】标记从回复中剥离（voice 恒空）",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "闭环-面试实录：被问住的知识点 → 学习清单(必会) + 复习卡",
+        "name": "闭环-面试实录：被问住的知识点 → 学习清单(必会) + 复习卡",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "闭环-复盘判分：错题 → 薄弱点回流 + 标记已复盘",
+        "name": "闭环-复盘判分：错题 → 薄弱点回流 + 标记已复盘",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "闭环-模拟面试：低分轮 → 复盘报告 + 薄弱点 + 复习卡 + 清单回流",
+        "name": "闭环-模拟面试：低分轮 → 复盘报告 + 薄弱点 + 复习卡 + 清单回流",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "搜索过滤：方向排除 + 跨源去重 + 已看跳过",
+        "name": "搜索过滤：方向排除 + 跨源去重 + 已看跳过",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "browse_open 成功：打开页面 → 回填标题/URL",
+        "name": "browse_open 成功：打开页面 → 回填标题/URL",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "browse_open SSRF/超时拦截：返回错误不崩溃",
+        "name": "browse_open SSRF/超时拦截：返回错误不崩溃",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "browse_click 元素缺失：错误回填不崩溃",
+        "name": "browse_click 元素缺失：错误回填不崩溃",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "browse_type 输入+回车：成功回填",
+        "name": "browse_type 输入+回车：成功回填",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "browse_screenshot 失败：错误回填不崩溃",
+        "name": "browse_screenshot 失败：错误回填不崩溃",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "browse_fetch 抓取失败：错误回填不崩溃",
+        "name": "browse_fetch 抓取失败：错误回填不崩溃",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "interview-sim-complete",
+        "name": "模拟面试官·收官：低分结束 → 复盘报告 + 清单 + 复习卡回流",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "interview-sim-followup",
+        "name": "模拟面试官·追问：低分轮 → 面试官追问 + 薄弱点回流",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      },
+      {
+        "id": "interview-sim-start",
+        "name": "模拟面试官·启动：面试官出题，agent 调用 start_interview",
+        "pass1": true,
+        "passN": 3,
+        "consistent": 1
+      }
+    ]
+  },
+  "failureTaxonomy": {
+    "premature_stop": 0,
+    "wrong_tool": 0,
+    "constraint_miss": 0,
+    "state_mismatch": 0,
+    "crash": 0,
+    "timeout": 0
+  },
+  "interviewer": {
+    "pass": 3,
+    "total": 3,
+    "scenarios": [
+      {
+        "id": "interview-sim-complete",
+        "name": "模拟面试官·收官：低分结束 → 复盘报告 + 清单 + 复习卡回流",
+        "ok": true,
+        "detail": "工具:start_interview | 工具:submit_answer | 工具:end_interview",
+        "stateDetail": "清单:防抖节流✓ 复习卡:防抖节流✓ 面试历史✓ 面试会话✓"
+      },
+      {
+        "id": "interview-sim-followup",
+        "name": "模拟面试官·追问：低分轮 → 面试官追问 + 薄弱点回流",
+        "ok": true,
+        "detail": "工具:start_interview | 工具:submit_answer",
+        "stateDetail": "薄弱点:事件循环✓ 面试会话✓"
+      },
+      {
+        "id": "interview-sim-start",
+        "name": "模拟面试官·启动：面试官出题，agent 调用 start_interview",
+        "ok": true,
+        "detail": "工具:start_interview",
+        "stateDetail": "面试会话✓"
+      }
+    ]
+  },
+  "results": [
+    {
+      "id": "工具循环：LLM 决定调工具 → harness 执行并回填 → 最终回答",
+      "name": "工具循环：LLM 决定调工具 → harness 执行并回填 → 最终回答",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "回复:执行完毕。 工具记录:1",
+      "stateDetail": ""
+    },
+    {
+      "id": "参数校验：LLM 传缺参 → validateArgs 拦截，不执行工具",
+      "name": "参数校验：LLM 传缺参 → validateArgs 拦截，不执行工具",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "拦截原因:参数缺失: question（solve_question ",
+      "stateDetail": ""
+    },
+    {
+      "id": "未知工具：LLM 幻觉工具名 → 报错不崩溃",
+      "name": "未知工具：LLM 幻觉工具名 → 报错不崩溃",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "回复:好的。",
+      "stateDetail": ""
+    },
+    {
+      "id": "记忆写入：remember 工具 → 关注点持久化",
+      "name": "记忆写入：remember 工具 → 关注点持久化",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "interests:React",
+      "stateDetail": ""
+    },
+    {
+      "id": "上下文压缩：长对话触发 compaction 且回答正常",
+      "name": "上下文压缩：长对话触发 compaction 且回答正常",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "回复:压缩后正常回答。",
+      "stateDetail": ""
+    },
+    {
+      "id": "语音稿分离：【语音】标记从回复中剥离（voice 恒空）",
+      "name": "语音稿分离：【语音】标记从回复中剥离（voice 恒空）",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "reply:结论在这里 voice:",
+      "stateDetail": ""
+    },
+    {
+      "id": "闭环-面试实录：被问住的知识点 → 学习清单(必会) + 复习卡",
+      "name": "闭环-面试实录：被问住的知识点 → 学习清单(必会) + 复习卡",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "清单:事件循环 卡数:1",
+      "stateDetail": ""
+    },
+    {
+      "id": "闭环-复盘判分：错题 → 薄弱点回流 + 标记已复盘",
+      "name": "闭环-复盘判分：错题 → 薄弱点回流 + 标记已复盘",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "薄弱点:事件循环 reviewed:true",
+      "stateDetail": ""
+    },
+    {
+      "id": "闭环-模拟面试：低分轮 → 复盘报告 + 薄弱点 + 复习卡 + 清单回流",
+      "name": "闭环-模拟面试：低分轮 → 复盘报告 + 薄弱点 + 复习卡 + 清单回流",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "报告:## 面试复盘\n###  薄弱点:true 卡:true 清单:true 历史:true",
+      "stateDetail": ""
+    },
+    {
+      "id": "搜索过滤：方向排除 + 跨源去重 + 已看跳过",
+      "name": "搜索过滤：方向排除 + 跨源去重 + 已看跳过",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "结果:字节前端一面面经",
+      "stateDetail": ""
+    },
+    {
+      "id": "browse_open 成功：打开页面 → 回填标题/URL",
+      "name": "browse_open 成功：打开页面 → 回填标题/URL",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "工具ok:true 回复:页面已打开，标题是 mock浏览",
+      "stateDetail": ""
+    },
+    {
+      "id": "browse_open SSRF/超时拦截：返回错误不崩溃",
+      "name": "browse_open SSRF/超时拦截：返回错误不崩溃",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "拦截:true 回复:这个页面打不开，我换个方",
+      "stateDetail": ""
+    },
+    {
+      "id": "browse_click 元素缺失：错误回填不崩溃",
+      "name": "browse_click 元素缺失：错误回填不崩溃",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "错误:未找到元素: #login-btn",
+      "stateDetail": ""
+    },
+    {
+      "id": "browse_type 输入+回车：成功回填",
+      "name": "browse_type 输入+回车：成功回填",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "工具ok:true 回复:已输入并提交搜索。",
+      "stateDetail": ""
+    },
+    {
+      "id": "browse_screenshot 失败：错误回填不崩溃",
+      "name": "browse_screenshot 失败：错误回填不崩溃",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "错误:截图失败（页面崩溃）",
+      "stateDetail": ""
+    },
+    {
+      "id": "browse_fetch 抓取失败：错误回填不崩溃",
+      "name": "browse_fetch 抓取失败：错误回填不崩溃",
+      "kind": "legacy",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "错误:页面抓取失败（网络错误）",
+      "stateDetail": ""
+    },
+    {
+      "id": "interview-sim-complete",
+      "name": "模拟面试官·收官：低分结束 → 复盘报告 + 清单 + 复习卡回流",
+      "kind": "interviewer",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "工具:start_interview | 工具:submit_answer | 工具:end_interview",
+      "stateDetail": "清单:防抖节流✓ 复习卡:防抖节流✓ 面试历史✓ 面试会话✓"
+    },
+    {
+      "id": "interview-sim-followup",
+      "name": "模拟面试官·追问：低分轮 → 面试官追问 + 薄弱点回流",
+      "kind": "interviewer",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "工具:start_interview | 工具:submit_answer",
+      "stateDetail": "薄弱点:事件循环✓ 面试会话✓"
+    },
+    {
+      "id": "interview-sim-start",
+      "name": "模拟面试官·启动：面试官出题，agent 调用 start_interview",
+      "kind": "interviewer",
+      "pass1": true,
+      "passN": 3,
+      "consistent": 1,
+      "taxonomy": null,
+      "detail": "工具:start_interview",
+      "stateDetail": "面试会话✓"
+    }
+  ]
+}

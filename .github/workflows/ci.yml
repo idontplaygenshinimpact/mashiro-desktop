@@ -13,13 +13,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install deps (skip electron/playwright — 测试不依赖浏览器)
-        run: npm install --omit=dev
+      - name: Install deps (npm ci 全量；跳过 electron/playwright 二进制下载 — 测试不依赖浏览器)
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       - name: Type check (tsc --noEmit, checkJs)
         run: npm run typecheck
       - name: Lint
         run: npm run lint
-      - name: Unit + integration tests (156 cases)
+      - name: Unit + integration tests
         run: npm test
-      - name: Agent/Harness benchmark (Layer B, mock LLM)
+      - name: Agent/Harness benchmark (Layer B, mock LLM, pass^3)
         run: npm run bench:agent

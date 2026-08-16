@@ -62,6 +62,15 @@ test("appendChat 上限 40 条", () => {
   assert.equal(memory.get().stats.chats, 50);
 });
 
+test("appendChat DB 防堆积：超出 200 条自动删最旧", () => {
+  for (let i = 0; i < 250; i++) memory.appendChat("user", `堆积消息${i}`);
+  const n = db.prepare("SELECT COUNT(*) n FROM chat_history").get().n;
+  assert.ok(n <= 200, `DB 只保留最近 200 条（实际 ${n}）`);
+  // 最旧消息已被清掉（只留最近的）
+  const oldest = db.prepare("SELECT content FROM chat_history ORDER BY id ASC LIMIT 1").get();
+  assert.ok(String(oldest.content).includes("堆积消息"), "留下的都是最近消息");
+});
+
 // ---------- 薄弱点 ----------
 test("addWeakPoint 过滤伪知识点", () => {
   memory.addWeakPoint("综合能力", "复盘验证");

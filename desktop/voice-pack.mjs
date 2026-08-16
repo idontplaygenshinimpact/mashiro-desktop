@@ -54,8 +54,10 @@ export function pickSceneFile(scene) {
   return existsSync(file) ? file : null;
 }
 
-/** 中文文本 → 命中场景返回 {file, scene}；未命中返回 ack 通用应答（保证总有日语语音，不做实时合成） */
-export function matchVoicePack(text) {
+/** 中文文本 → 命中场景返回 {file, scene}；未命中返回 null
+ * @param {string} text
+ * @param {{ ack?: boolean }} [opts] ack=false 时不返回通用应答（调用方自行兜底，如实时 TTS） */
+export function matchVoicePack(text, opts = {}) {
   const t = String(text || "");
   for (const { scene, kws } of SCENE_KEYWORDS) {
     if (!kws.some((k) => t.includes(k))) continue;
@@ -63,9 +65,11 @@ export function matchVoicePack(text) {
     if (file) return { file, scene };
     return null;
   }
-  // 兜底：通用应答（ack 场景）
-  const ack = pickSceneFile("ack");
-  if (ack) return { file: ack, scene: "ack" };
+  // 兜底：通用应答（ack 场景）；opts.ack=false 时留给调用方（实时 TTS）
+  if (opts.ack !== false) {
+    const ack = pickSceneFile("ack");
+    if (ack) return { file: ack, scene: "ack" };
+  }
   return null;
 }
 
@@ -74,6 +78,44 @@ export function playScene(scene) {
   const file = pickSceneFile(scene);
   if (!file) return null;
   return playVoicePack(file);
+}
+
+// ---------- 长句语音（GPT-SoVITS 真白声线合成，assets/voice/long/） ----------
+// 长句场景：日常关怀/完成庆祝/面试鼓励等需要"说一段话"的场合；
+// 未配置长句 → 回退短句场景（降级不静音）
+let longCache = null;
+function loadLongLines() {
+  if (longCache) return longCache;
+  try {
+    longCache = JSON.parse(readFileSync(path.join(VOICE_DIR, "long", "long.json"), "utf8"));
+  } catch {
+    longCache = {};
+  }
+  return longCache;
+}
+
+/** 播放场景长句（优先）；无长句回退短句。返回播放结果或 null */
+export function playLongScene(scene) {
+  const lines = loadLongLines();
+  const entry = lines[scene] || {};
+  const files = Array.isArray(entry.files) ? entry.files : [];
+  if (!files.length) return playScene(scene); // 回退短句
+  const file = path.join(VOICE_DIR, "long", files[Math.floor(Math.random() * files.length)]);
+  if (!existsSync(file)) return playScene(scene);
+  return playVoicePack(file);
+}
+
+/** 长句文案查询（气泡显示中文翻译用）：{zh, files} 或 null */
+export function pickLongLine(scene) {
+  const lines = loadLongLines();
+  const entry = lines[scene] || {};
+  const files = Array.isArray(entry.files) ? entry.files : [];
+  if (!files.length) return null;
+  const idx = Math.floor(Math.random() * files.length);
+  return {
+    file: files[idx],
+    zh: Array.isArray(entry.zh) ? entry.zh[idx] || "" : "",
+  };
 }
 
 // ---------- ffplay 路径解析（可配置 + 自动探测 + 硬编码兜底，找不到则不崩溃） ----------
@@ -102,15 +144,39 @@ export function resolveFfplay() {
   return ffplayPath;
 }
 
-/** 播放语音包音频（ffplay 直接播，最可靠——MediaPlayer/SoundPlayer 后台不可靠） */
+/** 播放语音包音频：ffplay 优先（最可靠）；ffplay 不可用/失败 → PowerShell SoundPlayer 系统 API 兜底（wav） */
 export function playVoicePack(file) {
   const ff = resolveFfplay();
-  if (!ff) return { ok: false, error: "ffplay 不可用" };
-  mkdirSync(TMP_DIR, { recursive: true });
+  if (ff) {
+    try {
+      const child = spawn(ff, ["-autoexit", "-nodisp", "-loglevel", "quiet", file], { windowsHide: true, detached: true, stdio: "ignore" });
+      child.on("error", (err) => {
+        console.log(`[voice] ffplay 播放失败: ${err.message}`);
+        soundPlayerFallback(file);
+      });
+      child.unref();
+      console.log(`[voice] 播放 ${file.split(/[\\/]/).pop()}（ffplay）`);
+      return { ok: true, engine: "ffplay", file };
+    } catch (e) {
+      console.log(`[voice] ffplay spawn 异常: ${e.message}`);
+    }
+  }
+  return soundPlayerFallback(file);
+}
+
+/** PowerShell SoundPlayer 兜底（Windows 系统 API，播放 wav；返回结果） */
+function soundPlayerFallback(file) {
   try {
-    const child = spawn(ff, ["-autoexit", "-nodisp", "-loglevel", "quiet", file], { windowsHide: true, detached: true, stdio: "ignore" });
-    child.on("error", (err) => console.log(`[voice] ffplay 播放失败: ${err.message}`));
+    const ps = `(New-Object Media.SoundPlayer -ArgumentList '${String(file).replace(/'/g, "''")}').PlaySync()`;
+    const child = spawn("powershell", ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps], {
+      windowsHide: true, detached: true, stdio: "ignore",
+    });
+    child.on("error", (err) => console.log(`[voice] SoundPlayer 播放失败: ${err.message}`));
     child.unref();
-  } catch { /* ignore */ }
-  return { ok: true, engine: "voicepack", file };
+    console.log(`[voice] 播放 ${file.split(/[\\/]/).pop()}（SoundPlayer 兜底）`);
+    return { ok: true, engine: "soundplayer", file };
+  } catch (e) {
+    console.log(`[voice] SoundPlayer 不可用: ${e.message}`);
+    return { ok: false, error: "无可用播放引擎" };
+  }
 }

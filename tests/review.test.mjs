@@ -1,7 +1,7 @@
 // review.mjs 单测：FSRS 复习卡调度（临时 DB 隔离）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
+import { setupTempDb, cleanupTempDb, clearAllTables, resetMemoryState } from "./helpers.mjs";
 
 const dbDir = setupTempDb("review");
 const { review } = await import("../lib/review.mjs");
@@ -10,10 +10,8 @@ const { db } = await import("../lib/db.mjs");
 
 beforeEach(async () => {
   await clearAllTables();
-  // memory 有模块级镜像，直接重置数据（不重载实例，保证与 review 内部引用一致）
-  for (const t of db.prepare("SELECT topic FROM weak_points").all()) {
-    memory.clearWeakPoint(t.topic);
-  }
+  // memory 有模块级镜像：整体重置（防答错回流等行为跨测试残留）
+  resetMemoryState(memory);
 });
 after(() => { cleanupTempDb(dbDir); });
 
@@ -96,6 +94,18 @@ test("reviewCard(0) Again：不清除薄弱点", () => {
   assert.equal(memory.getWeakPoints().length, 1);
 });
 
+test("reviewCard 答错（Again/Hard）：薄弱点 failCount 累加（闭环回流）", () => {
+  memory.addWeakPoint("事件循环", "测试", "agent");
+  const before = memory.getWeakPoints().find((w) => w.topic === "事件循环").failCount;
+  const card = review.addCard({ topic: "事件循环", question: "讲事件循环顺序" });
+  review.reviewCard(card.id, 0); // Again 答错
+  const after = memory.getWeakPoints().find((w) => w.topic === "事件循环");
+  assert.ok(after.failCount > before, "答错 → 薄弱点 failCount+1");
+  // 答对（Good）→ 薄弱点清除
+  review.reviewCard(card.id, 2);
+  assert.equal(memory.getWeakPoints().find((w) => w.topic === "事件循环"), undefined, "答对清除薄弱点");
+});
+
 test("getStats 统计 total/due（新卡有 1 天缓冲不进到期）", () => {
   review.addCard({ topic: "A", question: "q" });
   review.addCard({ topic: "B", question: "q" });
@@ -138,4 +148,60 @@ test("loadCards：history 记录复习次数", () => {
   review.reviewCard(card.id, 2); // Good
   const c2 = review.loadCards().cards.find((c) => c.id === card.id);
   assert.equal(c2.history.length, 2, "已复习 2 次");
+});
+
+// ---------- 到期排序修正：按遗忘概率（memPct）升序，新卡恒排最后 ----------
+function mkFsrs({ stability, elapsedDays, dueDaysAgo = 1, state = 2 }) {
+  return JSON.stringify({
+    due: new Date(Date.now() - dueDaysAgo * 86400000).toISOString(),
+    stability, difficulty: 5, elapsed_days: elapsedDays, scheduled_days: 10,
+    reps: 3, lapses: 0, state,
+    last_review: new Date(Date.now() - (elapsedDays + 1) * 86400000).toISOString(),
+  });
+}
+
+test("getDueCards 按遗忘概率排序：最可能忘的先复习，新卡最后", () => {
+  // A：stability 10 / elapsed 5 → memPct≈e^-0.5≈60.7%
+  // B：stability 5 / elapsed 4 → memPct≈e^-0.8≈44.9%（最危险 → 应最前）
+  // C：新卡（state 0，memPct=null）→ 恒排最后
+  const a = review.addCard({ topic: "A卡", question: "q" });
+  const b = review.addCard({ topic: "B卡", question: "q" });
+  const c = review.addCard({ topic: "C新卡", question: "q" });
+  db.prepare("UPDATE review_cards SET fsrs=? WHERE id=?").run(mkFsrs({ stability: 10, elapsedDays: 5 }), a.id);
+  db.prepare("UPDATE review_cards SET fsrs=? WHERE id=?").run(mkFsrs({ stability: 5, elapsedDays: 4 }), b.id);
+  // 全部回拨创建时间越过 1 天首复习缓冲
+  db.prepare("UPDATE review_cards SET created_at = ?").run(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  const due = review.getDueCards();
+  assert.equal(due.length, 3);
+  assert.equal(due[0].topic, "B卡", "遗忘概率最低的先复习");
+  assert.equal(due[1].topic, "A卡");
+  assert.equal(due[2].topic, "C新卡", "新卡（memPct=null）排最后");
+  assert.ok(due[0].memPct < due[1].memPct, "memPct 升序");
+});
+
+// ---------- 错题本：答错 >=2 次进错题本 ----------
+test("getWrongCards：答错 2 次进错题本，1 次不进", () => {
+  const w = review.addCard({ topic: "防抖节流", question: "手写防抖" });
+  const ok = review.addCard({ topic: "事件循环", question: "讲事件循环" });
+  review.reviewCard(w.id, 0); // 错 1
+  review.reviewCard(w.id, 1); // 错 2（Hard 也算错）
+  review.reviewCard(ok.id, 0); // 错 1 次
+  review.reviewCard(ok.id, 2); // 对 1 次
+  const wrong = review.getWrongCards();
+  assert.equal(wrong.length, 1);
+  assert.equal(wrong[0].topic, "防抖节流");
+  assert.equal(wrong[0].wrongCount, 2);
+  assert.ok(wrong[0].lastWrongAt, "带上次错时间");
+});
+
+// ---------- 今日复习主题（复习完 → 面试检验数据源） ----------
+test("getTodayReviewedTopics：今天复习过的主题去重返回", () => {
+  const a = review.addCard({ topic: "闭包", question: "q" });
+  const b = review.addCard({ topic: "原型链", question: "q" });
+  review.reviewCard(a.id, 2);
+  review.reviewCard(a.id, 3); // 同卡重复复习 → 去重
+  review.reviewCard(b.id, 2);
+  const topics = review.getTodayReviewedTopics();
+  assert.equal(topics.length, 2);
+  assert.deepEqual(topics.map((t) => t.topic).sort(), ["原型链", "闭包"].sort());
 });

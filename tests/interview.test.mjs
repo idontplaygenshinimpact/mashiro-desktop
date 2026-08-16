@@ -159,3 +159,59 @@ test("全部轮次结束 → finished", async () => {
   assert.equal(r.finished, true);
   assert.equal(memory.getInterview().isCompleted, true);
 });
+
+// ---------- 薄弱点队列（八股轮优先出题 + weak_hit 标记） ----------
+test("startInterview 返回薄弱点队列与 depth", async () => {
+  memory.addWeakPoint("事件循环", "测试", "agent");
+  memory.addWeakPoint("React Hooks", "测试", "agent");
+  setLlmResponses(FIRST_Q);
+  const r = await startInterview({ position: "前端" });
+  assert.equal(r.ok, true);
+  assert.equal(r.depth, 0);
+  assert.ok(Array.isArray(r.weakQueue), "返回 weakQueue");
+  assert.ok(r.weakQueue.some((w) => w.topic === "事件循环" && w.failCount >= 1));
+  const s = memory.getInterview();
+  assert.equal(s.weakQueue.length, 2, "会话持久化队列");
+  assert.ok(s.weakQueue.every((w) => w.asked === false));
+});
+
+test("submitAnswer weak_hit 命中 → 标记已考察，本场不重复命中", async () => {
+  memory.addWeakPoint("事件循环", "测试", "agent");
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  // 第一轮命中事件循环
+  setLlmResponses('{"scores":{"tech":70,"expr":70,"depth":70,"edge":70,"reflect":70},"comment":"可以","finish":false,"next_question":"下一问","next_basis":"切换新题","next_dimension":"d","next_criteria":"c","next_boundary":"b","weak_topic":"","weak_hit":"事件循环"}');
+  const r1 = await submitAnswer("回答");
+  assert.equal(r1.weakHit, true, "命中标记");
+  assert.equal(r1.weakTopic, "事件循环");
+  const s1 = memory.getInterview();
+  assert.equal(s1.weakQueue.find((w) => w.topic === "事件循环").asked, true, "已标记 asked");
+  // 第二轮 LLM 再报同一主题 → 不应重复命中
+  setLlmResponses('{"scores":{"tech":70,"expr":70,"depth":70,"edge":70,"reflect":70},"comment":"可以","finish":false,"next_question":"下一问","next_basis":"切换新题","next_dimension":"d","next_criteria":"c","next_boundary":"b","weak_topic":"","weak_hit":"事件循环"}');
+  const r2 = await submitAnswer("回答");
+  assert.equal(r2.weakHit, false, "已考察主题不重复命中");
+});
+
+test("submitAnswer weak_hit 非队列项 → 不命中", async () => {
+  memory.addWeakPoint("事件循环", "测试", "agent");
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses('{"scores":{"tech":70,"expr":70,"depth":70,"edge":70,"reflect":70},"comment":"可以","finish":false,"next_question":"下一问","next_basis":"切换新题","next_dimension":"d","next_criteria":"c","next_boundary":"b","weak_topic":"","weak_hit":"Vue 原理"}');
+  const r = await submitAnswer("回答");
+  assert.equal(r.weakHit, false, "非队列项不命中");
+  assert.equal(memory.getInterview().weakQueue[0].asked, false);
+});
+
+test("endInterview 返回薄弱点覆盖统计", async () => {
+  memory.addWeakPoint("事件循环", "测试", "agent");
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses('{"scores":{"tech":50,"expr":50,"depth":50,"edge":50,"reflect":50},"comment":"一般","finish":true,"next_question":"","next_basis":"","next_dimension":"","next_criteria":"","next_boundary":"","weak_topic":"","weak_hit":"事件循环"}');
+  await submitAnswer("回答");
+  setLlmResponses("## 面试复盘（前端）\n### 总体评价\n中等");
+  const r = await endInterview();
+  assert.equal(r.ok, true);
+  assert.equal(r.weakTotal, 1);
+  assert.equal(r.weakCovered, 1, "命中 1 个薄弱点");
+  assert.deepEqual(r.weakCoveredTopics, ["事件循环"]);
+});

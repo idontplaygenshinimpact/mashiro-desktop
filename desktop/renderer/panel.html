@@ -3,16 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <title>真白 · 前端秋招助手</title>
+<!-- CSP：仅同源脚本/样式（面板无内联脚本），API 只允许本机 widget；防注入内容外联 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src http://127.0.0.1:8899 http://localhost:8899; font-src 'self' data:;">
 <link rel="stylesheet" href="panel.css">
 </head>
 <body>
   <header class="topbar">
     <div class="logo">🎀 真白 · 前端秋招助手</div>
     <div class="top-actions">
+      <button id="settings-gear" title="设置（方向/简历/邮箱/巡检/桌宠/数据维护）">⚙️</button>
+      <button id="restart-btn" title="重启桌宠（后台服务一并重启，改代码后生效）">♻️</button>
       <button id="voice-btn" title="语音开关">🔊</button>
       <button id="refresh-btn" title="刷新">🔄</button>
     </div>
   </header>
+
+  <!-- 全局闭环状态条（所有 Tab 可见：方向/清单/复习/岗位/题库进度，60s 自动刷新） -->
+  <div id="loop-bar" class="loop-bar">
+    <span class="loop-bar-loading">加载闭环状态…</span>
+  </div>
 
   <!-- 权限审批条（agent 请求执行敏感操作时出现） -->
   <div id="approval-bar" class="approval-bar" hidden>
@@ -27,20 +36,25 @@
     </div>
   </div>
 
+  <!-- 提问条（agent 的 ask_user / plan_mode 挂起等待用户点选） -->
+  <div id="ask-bar" class="approval-bar" style="background:linear-gradient(135deg,rgba(138,90,220,.14),rgba(80,160,255,.1))" hidden>
+    <div class="approval-info">
+      <span class="approval-icon">❓</span>
+      <span id="ask-text">真白在等你回答</span>
+    </div>
+    <div class="approval-actions" id="ask-options" style="flex-wrap:wrap;"></div>
+  </div>
+
   <!-- Tab 导航 -->
   <nav class="tabs">
-    <button class="tab active" data-tab="interview">🎤 模拟面试</button>
+    <button class="tab active" data-tab="interview">🎤 面试</button>
     <button class="tab" data-tab="review">🔁 复习</button>
-    <button class="tab" data-tab="study">📋 学习清单</button>
+    <button class="tab" data-tab="study">📋 清单</button>
     <button class="tab" data-tab="chat">💬 对话</button>
-    <button class="tab" data-tab="crawl">🔍 爬取产出</button>
+    <button class="tab" data-tab="crawl">🔍 爬取</button>
     <button class="tab" data-tab="jobs">🏢 校招</button>
-    <button class="tab" data-tab="docs">📚 官方文档</button>
-    <button class="tab" data-tab="rss">📰 资讯</button>
+    <button class="tab" data-tab="dashboard">📊 驾驶舱</button>
     <button class="tab" data-tab="kb">🧠 知识库</button>
-    <button class="tab" data-tab="profile">👤 个人主页</button>
-    <button class="tab" data-tab="focus">⏱️ 专注</button>
-    <button class="tab" data-tab="schedule">📅 日程</button>
   </nav>
 
   <main>
@@ -76,42 +90,68 @@
         </div>
         <button id="iv-start" class="primary">🎤 开始模拟面试</button>
         <div class="iv-hint">面试会参考你的学习清单 + 最近面经 + 薄弱点出题；提供简历后优先从简历项目切入追问</div>
+        <div class="iv-weak-row hidden" id="iv-weak-row">
+          <span style="font-size:11px;color:#5d48b8;font-weight:600;">🎯 已知薄弱点（点一下填入重点方向，面试将优先考察）：</span>
+          <div class="iv-weak-chips" id="iv-weak-chips"></div>
+        </div>
       </div>
 
       <div class="interview-session hidden" id="interview-session">
         <div class="iv-head">
           <span id="iv-status" class="iv-status">面试中 · 第 1 轮</span>
+          <span id="iv-timer" class="iv-timer" title="本题作答用时">⏱ 00:00</span>
           <button id="iv-end" class="danger">结束面试</button>
         </div>
+        <div class="iv-progress" id="iv-progress" title="面试轮次进度"></div>
+        <div class="iv-round-type" id="iv-round-type"></div>
         <div class="iv-question" id="iv-question"></div>
         <div class="iv-meta" id="iv-meta"></div>
         <div class="iv-answer-area">
-          <textarea id="iv-answer" placeholder="输入你的回答...（可用语音输入）"></textarea>
-          <button id="iv-send" class="primary">提交回答</button>
+          <textarea id="iv-answer" placeholder="输入你的回答...（也可点 🎙️ 直接说，语音自动转写 + 录音留存可回听；Ctrl+Enter 提交）"></textarea>
+          <div class="iv-answer-row">
+            <button id="iv-mic" class="secondary" title="录音回答：说答案 → 自动转写回填输入框，录音留存本场可回听">🎙️</button>
+            <button id="iv-send" class="primary">提交回答</button>
+          </div>
         </div>
         <div class="iv-scores" id="iv-scores"></div>
         <div class="iv-log" id="iv-log"></div>
+        <div id="iv-summary" class="iv-summary hidden"></div>
         <div class="iv-review hidden" id="iv-review"></div>
       </div>
     </section>
 
     <!-- ========== 复习 Tab ========== -->
     <section id="tab-review" class="tab-panel">
+      <div class="review-method-hint">🧠 复习采用 <b>FSRS 记忆算法</b>（艾宾浩斯遗忘曲线的自适应版）：答得越差间隔越短、答得好自动拉长，记忆强度实时可见</div>
       <div class="review-stats" id="review-stats"></div>
+      <div id="review-batch" class="review-batch"></div>
+      <div id="review-trend" class="review-trend" style="margin-top:8px;"></div>
       <div id="review-card" class="review-card hidden">
+        <div class="review-session-head">
+          <span id="rc-progress" class="rc-progress">第 1/1 张</span>
+          <div class="mini-progress" style="flex:1;margin:0;">
+            <span class="track"><i id="rc-progress-bar" style="width:0%"></i></span>
+            <b id="rc-progress-pct">0%</b>
+          </div>
+        </div>
         <div id="rc-src" class="rc-src" style="display:none"></div>
         <div class="rc-topic" id="rc-topic"></div>
         <div class="rc-question" id="rc-question"></div>
+        <div id="rc-quiz" class="rc-quiz"></div>
         <div class="rc-answer hidden" id="rc-answer"></div>
+        <div id="rc-memory" class="rc-memory"></div>
         <button id="rc-show" class="secondary">显示答案</button>
         <div class="rc-buttons hidden" id="rc-buttons">
-          <button class="rc-btn" data-rating="0">😵 忘了</button>
-          <button class="rc-btn" data-rating="1">😕 困难</button>
-          <button class="rc-btn" data-rating="2">🙂 记得</button>
-          <button class="rc-btn" data-rating="3">😄 简单</button>
+          <button class="rc-btn" data-rating="0">😵 忘了 <kbd>1</kbd></button>
+          <button class="rc-btn" data-rating="1">😕 困难 <kbd>2</kbd></button>
+          <button class="rc-btn" data-rating="2">🙂 记得 <kbd>3</kbd></button>
+          <button class="rc-btn" data-rating="3">😄 简单 <kbd>4</kbd></button>
         </div>
+        <div id="rc-feedback" class="rc-feedback hidden"></div>
+        <button id="rc-explain" class="secondary hidden" title="让真白结合知识库讲透这道题（讲完可一键加入学习清单）">🤔 没懂？让真白讲一遍</button>
       </div>
       <div id="review-empty" class="empty-hint">🎉 今日没有到期的复习卡片</div>
+      <button id="review-test-btn" class="primary hidden" style="margin-top:8px;" title="用刚复习过的知识点来一场模拟面试，检验是否真的记住了">🎤 面试检验今日复习（刚复习了 N 个主题）</button>
 
       <!-- 掌握度区块（默认收起，点击展开——弱项优先） -->
       <div class="mastery-box" id="mastery-box">
@@ -121,14 +161,59 @@
           <div class="mastery-all" id="mastery-all"></div>
         </div>
       </div>
+
+      <!-- 错题本（答错 >=2 次的卡，点击直接开复习） -->
+      <div class="mastery-box" id="wrong-book-box">
+        <button class="mastery-toggle" id="wrong-book-toggle" type="button">📕 错题本（<span id="wrong-book-count">-</span> 道）▸</button>
+        <div class="mastery-body hidden" id="wrong-book-body">
+          <div class="wrong-book-hint" style="font-size:11px;color:#8a87a8;margin-bottom:6px;">复习时答错过 ≥2 次的题——点击直接开复习，或让真白讲一遍彻底搞懂</div>
+          <div id="wrong-book-list"></div>
+        </div>
+      </div>
     </section>
 
-    <!-- ========== 学习清单 Tab ========== -->
+    <!-- ========== 学习清单 Tab（含专注监督：学什么 + 专注去做） ========== -->
     <section id="tab-study" class="tab-panel">
+      <!-- ⏱️ 专注监督（番茄钟，并入学习清单） -->
+      <div class="patrol-card" style="margin-bottom:10px;">
+        <div class="patrol-row">
+          <span style="font-size:12px;color:#5d48b8;font-weight:600;">⏱️ 专注监督</span>
+          <button id="focus-25" class="secondary" title="25 分钟专注">🍅 25 分钟</button>
+          <button id="focus-45" class="secondary" title="45 分钟专注">🍅 45 分钟</button>
+          <button id="focus-stop" class="danger" hidden>⏹ 结束</button>
+          <button id="focus-skip-rest" class="secondary" hidden title="跳过休息，直接开始下一轮">⏭️ 跳过休息</button>
+          <button id="focus-blacklist-toggle" class="secondary" title="分心应用黑名单/白名单（设置中心也可改）">🚫 名单</button>
+        </div>
+        <div class="resume-status" id="focus-status">未开始专注</div>
+        <div class="focus-countdown hidden" id="focus-countdown"></div>
+        <div class="stats-row" id="focus-stats-row" style="margin-top:6px;"></div>
+        <div class="focus-week hidden" id="focus-week" style="margin-top:6px;font-size:11px;color:#8a87a8;"></div>
+      </div>
       <div class="study-toolbar">
         <button id="study-gen" class="primary">✨ 从产出生成清单</button>
         <button id="study-review" class="secondary">📝 复盘验证</button>
-        <button id="study-cluster-btn" class="secondary" title="归并模式：勾选 2+ 条目（不标记完成，含已完成条目）后确认，生成主题簇综合讲解">🔗 归并</button>
+        <button id="study-cluster-btn" class="secondary" title="批量模式：勾选多个条目后 归并/标记完成">🔗 批量</button>
+      </div>
+      <div class="study-toolbar" style="margin-top:6px;">
+        <input id="study-search" type="text" placeholder="🔍 搜索清单条目..." style="flex:1;min-width:120px;padding:6px 10px;border:1px solid rgba(109,79,216,.25);border-radius:8px;background:rgba(255,255,255,.8);font-size:11px;">
+        <div id="study-lv-filter" style="display:flex;gap:4px;">
+          <button class="job-chip study-lv-chip active" data-lv="">全部</button>
+          <button class="job-chip study-lv-chip" data-lv="必会">必会</button>
+          <button class="job-chip study-lv-chip" data-lv="进阶">进阶</button>
+          <button class="job-chip study-lv-chip" data-lv="拓展">拓展</button>
+        </div>
+        <div id="study-state-filter" style="display:flex;gap:4px;">
+          <button class="job-chip study-state-chip active" data-st="">全部</button>
+          <button class="job-chip study-state-chip" data-st="todo">待学</button>
+          <button class="job-chip study-state-chip" data-st="learning">学习中</button>
+          <button class="job-chip study-state-chip" data-st="review">待复习</button>
+        </div>
+      </div>
+      <div id="study-batch-bar" class="study-batch-bar hidden" style="display:flex;gap:6px;margin-top:6px;padding:6px 10px;background:rgba(138,90,220,.1);border:1px solid rgba(138,90,220,.3);border-radius:8px;font-size:11px;color:#5d48b8;align-items:center;">
+        <span id="study-batch-count">已选 0 项</span>
+        <span style="flex:1;"></span>
+        <button id="study-batch-done" class="job-btn" style="padding:3px 10px;">✅ 标记完成</button>
+        <button id="study-batch-exit" class="job-btn" style="padding:3px 10px;">✖ 退出批量</button>
       </div>
       <div class="iv-notes-box">
         <div class="iv-notes-head">🎤 面试实录：刚被问住的知识点，一键加入必学清单</div>
@@ -138,6 +223,7 @@
         </div>
         <div id="iv-notes-result" class="iv-notes-result"></div>
       </div>
+      <div id="study-progress-wrap" class="mini-progress" style="display:none;"></div>
       <div id="study-list" class="study-list"></div>
       <button id="study-done-toggle" class="secondary" style="margin-top:10px;display:none;width:100%;font-size:11px;">📜 已完成条目（点击展开）</button>
       <div id="study-done-list" class="study-list" style="display:none;opacity:.75;"></div>
@@ -147,6 +233,22 @@
         <button id="review-submit" class="primary">提交判分</button>
       </div>
     </section>
+
+    <!-- 复习错题讲解弹层（答错 → 让真白讲一遍；流式输出） -->
+    <div id="review-explain-overlay" class="sd-overlay hidden">
+      <div class="sd-modal">
+        <div class="sd-modal-head">
+          <b id="rex-title">🤔 让真白讲一遍</b>
+          <button id="rex-close" class="sd-close" title="关闭">✕</button>
+        </div>
+        <div class="sd-modal-body" id="rex-body">加载中...</div>
+        <div class="sd-modal-ask">
+          <span id="rex-status" style="font-size:11px;color:#8a87a8;"></span>
+          <span style="flex:1;"></span>
+          <button id="rex-plan-btn" class="primary hidden">📌 加入学习清单</button>
+        </div>
+      </div>
+    </div>
 
     <!-- 学习详情弹层（占面板大空间，避免小框滑动） -->
     <div id="study-detail-overlay" class="sd-overlay hidden">
@@ -171,6 +273,14 @@
 
     <!-- ========== 对话 Tab ========== -->
     <section id="tab-chat" class="tab-panel">
+      <div id="mascot-box" class="mascot-box" style="margin-bottom:8px;padding:8px 10px;background:rgba(138,90,220,.08);border-radius:8px;font-size:12px;">
+        <div style="color:#c9c6dd;font-weight:600;margin-bottom:4px;">🎀 桌宠形象 <span id="mascot-current" style="color:#8a87a8;font-weight:400;"></span></div>
+        <div id="mascot-models" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      </div>
+      <div id="todo-box" class="todo-box hidden" style="margin-bottom:8px;padding:8px 10px;background:rgba(109,79,216,.07);border-radius:8px;font-size:12px;">
+        <div style="color:#c9c6dd;font-weight:600;margin-bottom:4px;">📋 真白的任务清单 <span id="todo-progress" style="color:#8a87a8;font-weight:400;"></span></div>
+        <div id="todo-items" style="line-height:1.8;"></div>
+      </div>
       <div id="chat-log" class="chat-log"></div>
       <div class="chat-input-row">
         <button id="chat-mic" title="语音输入（点击开始录音，再点停止；识别结果回填输入框）">🎤</button>
@@ -193,6 +303,7 @@
         <div id="today-reco-body"></div>
       </div>
       <h4>📊 运行监控（LLM 调用）</h4>
+      <div id="ctx-meter" class="obs-row" style="margin-bottom:6px;"></div>
       <div id="obs-row" class="obs-row"></div>
       <div id="obs-list" class="obs-list"></div>
       <div class="patrol-card">
@@ -213,10 +324,28 @@
         </div>
         <div class="patrol-status" id="patrol-status">加载中…</div>
       </div>
+      <div class="patrol-card" style="margin-top:10px;">
+        <h4>🔍 系统自检 <span id="self-check-time" style="color:#8a87a8;font-weight:400;font-size:11px;"></span></h4>
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <button id="self-check-btn" class="secondary">🔄 立即检查</button>
+        </div>
+        <div class="patrol-status" id="self-check-status">加载中…</div>
+        <div id="self-check-issues" style="font-size:12px;line-height:1.7;"></div>
+      </div>
       <h4>最近产出</h4>
       <div id="file-list" class="file-list"></div>
       <h4>面试历史</h4>
       <div id="interview-history" class="interview-history"></div>
+
+      <!-- 📰 今日资讯（RSS 摘要，并入爬取产出） -->
+      <div class="patrol-card" style="margin-top:12px;">
+        <h4>📰 今日技术资讯 <span style="color:#8a87a8;font-weight:400;font-size:11px;">（RSS 聚合 → AI 摘要，源配置在「⚙️ 设置」）</span></h4>
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <button id="rss-refresh-btn" class="secondary">🔄 立即刷新</button>
+        </div>
+        <div class="patrol-status" id="rss-status">加载中…</div>
+      </div>
+      <div id="rss-list" class="jobs-list"></div>
     </section>
 
     <!-- ========== 校招 Tab ========== -->
@@ -238,6 +367,20 @@
         </div>
         <div id="jobs-direction-advice" class="jobs-advice"></div>
         <div class="resume-status" id="jobs-status">校招岗位列表（用简历/方向匹配推荐）</div>
+      </div>
+      <!-- 闭环状态区块：方向 → 学习 → 岗位 → 面试 多向驱动（规则引擎给下一步建议） -->
+      <div class="jobs-setup" style="margin-top:10px;">
+        <div class="form-row">
+          <label>🔄 学习-求职闭环（多向驱动：方向→学习→岗位→面试→回流）</label>
+        </div>
+        <div id="loop-box" class="loop-box"></div>
+      </div>
+      <!-- 平台账号区块：AI 逛网搜岗位 → 入库 → 半自动投递（BOSS 直聘等，可插拔） -->
+      <div class="jobs-setup" style="margin-top:14px;">
+        <div class="form-row">
+          <label>🤖 平台账号（AI 逛网：搜岗位自动入库 · 投递需确认 · 每日限额防风控）</label>
+        </div>
+        <div id="platforms-box" class="platforms-box"></div>
       </div>
       <div id="jobs-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
         <button class="job-chip active" data-status="">全部</button>
@@ -285,43 +428,47 @@
         <div id="oj-cats" style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0;"></div>
       </div>
       <div id="oj-list" class="jobs-list"></div>
-    </section>
 
-    <!-- ========== 官方文档 Tab ========== -->
-    <section id="tab-docs" class="tab-panel">
-      <div class="jobs-setup">
+      <!-- 手写/算法题库区块（ai-career 导入：本地沙箱判题，闭环：通过→进度，答错→薄弱点） -->
+      <div class="jobs-setup" style="margin-top:14px;">
         <div class="form-row">
-          <label>📚 官方学习文档（前端 / AI / Agent，检测最新版本）</label>
-          <button id="docs-check-btn" class="secondary">🔄 检查最新版本</button>
-        </div>
-        <div class="resume-status" id="docs-status">官方文档清单，点"检查最新版本"更新</div>
-      </div>
-      <div id="docs-list" class="jobs-list"></div>
-    </section>
-
-    <!-- ========== 资讯 Tab ========== -->
-    <section id="tab-rss" class="tab-panel">
-      <div class="jobs-setup">
-        <div class="form-row">
-          <label>📰 每日技术资讯（RSS 聚合 → AI 摘要 5 条，早 8-10 点自动生成）</label>
+          <label>✍️ 手写/算法题库（91 道高频手写题 + 算法题，本地沙箱判题，做完自动记进度）</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button id="rss-refresh-btn" class="secondary">🔄 立即刷新</button>
-            <button id="rss-config-btn" class="secondary" title="配置 RSS feed 源列表">⚙️ 配置源</button>
+            <button id="challenge-refresh-btn" class="secondary" title="重新从本地题库加载">🔄 刷新</button>
           </div>
         </div>
-        <div class="resume-status" id="rss-status">加载中…</div>
+        <div class="resume-status" id="challenge-status">题库加载中…</div>
+        <div id="challenge-cats" style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0;"></div>
       </div>
-      <div class="jobs-setup hidden" id="rss-config-box" style="margin-top:8px;">
+      <div id="challenge-list" class="jobs-list"></div>
+
+      <!-- 📅 面试/笔试日程（邮箱邀约识别，并入校招） -->
+      <div class="jobs-setup" style="margin-top:12px;">
         <div class="form-row">
-          <label>Feed 源列表（每行一个 URL，保存后「立即刷新」生效）</label>
-          <textarea id="rss-feeds-input" rows="5" style="font-size:11px;font-family:Consolas,monospace;"></textarea>
-          <div style="display:flex;gap:6px;margin-top:6px;">
-            <button id="rss-feeds-save-btn" class="primary">💾 保存</button>
-            <button id="rss-feeds-reset-btn" class="secondary">↩️ 恢复默认</button>
+          <label>📅 面试邀约识别 + 日程提醒（邮箱配置在「⚙️ 设置」，识别后这里按紧迫度分组）</label>
+        </div>
+        <div class="resume-status" id="mail-status">加载中…</div>
+      </div>
+      <div id="schedule-list" class="jobs-list"></div>
+    </section>
+
+    <!-- ========== 求职驾驶舱 Tab（本周总览 + 7 天活动 + 累计进度 + 周报建议） ========== -->
+    <section id="tab-dashboard" class="tab-panel">
+      <div class="jobs-setup">
+        <div class="form-row">
+          <label>📊 求职驾驶舱（本周行动总览 + 累计进度 + 周报建议，每周末看一眼）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button id="dashboard-refresh-btn" class="secondary">🔄 刷新</button>
           </div>
         </div>
+        <div id="dashboard-week" class="stats-row"></div>
+        <div id="dashboard-series" class="dashboard-series"></div>
+        <div id="dashboard-report" class="jobs-advice-box" style="margin-top:10px;">
+          <h4>📝 本周复盘与下周建议</h4>
+          <pre id="dashboard-report-body" style="white-space:pre-wrap;font-family:inherit;font-size:12px;color:#3a3658;line-height:1.7;margin:0;">加载中…</pre>
+        </div>
+        <div id="dashboard-progress" style="margin-top:10px;"></div>
       </div>
-      <div id="rss-list" class="jobs-list"></div>
     </section>
 
     <!-- ========== 知识库 Tab ========== -->
@@ -347,14 +494,25 @@
         </div>
         <div id="kb-answer" class="jobs-advice"></div>
       </div>
+      <div class="jobs-setup" style="margin-top:8px;">
+        <div class="form-row">
+          <label>📦 官方文档版本检测（学习依赖清单 · 最新版 vs 项目内版本对比）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <button id="docs-check-btn" class="secondary">🔄 检查最新版本</button>
+            <span id="docs-status" style="font-size:11px;color:#6a6790;"></span>
+          </div>
+        </div>
+        <div id="docs-list" style="margin-top:8px;"></div>
+      </div>
       <div id="kb-results" class="jobs-list"></div>
     </section>
 
-    <!-- ========== 个人主页 Tab ========== -->
-    <section id="tab-profile" class="tab-panel">
+    <!-- ========== 设置中心 Tab（个人资料 + 全部配置统一入口） ========== -->
+    <section id="tab-settings" class="tab-panel">
+      <!-- 👤 我的简历（个人资料） -->
       <div class="jobs-setup">
         <div class="form-row">
-          <label>📄 我的简历（存档后驱动岗位匹配 + 面试拷打，随时可改）</label>
+          <label>📄 我的简历（存档后驱动岗位匹配 + 面试拷打 + 投递招呼语）</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button id="profile-file-btn" class="secondary">📂 上传简历文件</button>
             <input type="file" id="profile-file" accept=".txt,.md,.json,.docx,.pdf" hidden />
@@ -367,53 +525,192 @@
         <div class="resume-status" id="profile-status"></div>
         <div id="profile-saved" class="jobs-advice"></div>
       </div>
-    </section>
-    <!-- ========== 专注 Tab ========== -->
-    <section id="tab-focus" class="tab-panel">
+      <!-- 简历驱动全景 -->
+      <div class="jobs-setup" id="profile-drive" style="margin-top:8px;">
+        <div class="form-row">
+          <label>🔗 简历驱动全景（简历存档后自动联动各模块）</label>
+        </div>
+        <div id="profile-drive-body" class="resume-status" style="min-height:20px;">加载中…</div>
+      </div>
+      <!-- 🎯 求职目标 -->
       <div class="jobs-setup">
         <div class="form-row">
-          <label>⏱️ 专注监督（番茄钟）：开始专注后真白陪伴你，检测到分心应用（B站/Steam/游戏等）会气泡 + 语音提醒</label>
+          <label>🎯 求职目标（驱动岗位匹配 + 学习方向）</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button id="focus-25" class="secondary" title="25 分钟专注">🍅 25 分钟</button>
-            <button id="focus-45" class="secondary" title="45 分钟专注">🍅 45 分钟</button>
-            <button id="focus-stop" class="danger" hidden>⏹ 结束专注</button>
-            <button id="focus-blacklist-toggle" class="secondary" title="编辑分心应用黑名单">🚫 黑名单</button>
+            <select id="set-direction" style="flex:1;min-width:160px;">
+              <option value="">未设置</option>
+              <option value="frontend">前端</option>
+              <option value="agent">AI Agent</option>
+              <option value="fullstack">全栈</option>
+              <option value="backend">后端</option>
+            </select>
+            <button id="set-direction-btn" class="secondary">💾 保存方向</button>
+          </div>
+          <div class="resume-status" id="set-direction-status"></div>
+        </div>
+      </div>
+
+      <!-- 🧭 方向画像（讲解/面试/考点提炼角度；转方向或开源复用改这里） -->
+      <div class="jobs-setup" style="margin-top:8px;">
+        <div class="form-row">
+          <label>🧭 方向画像（讲解/面试/考点提炼的角度——转 agent/全栈/后端或开源复用，改这里即可，无需改代码）</label>
+          <div class="career-grid">
+            <div class="career-field">
+              <span class="career-label">角色名</span>
+              <input id="set-career-role" type="text" placeholder="如：资深前端面试辅导老师" />
+            </div>
+            <div class="career-field">
+              <span class="career-label">讲解范围</span>
+              <input id="set-career-scope" type="text" placeholder="如：前端 / 前端全栈 / AI Agent 前端应用" />
+            </div>
+            <div class="career-field">
+              <span class="career-label">忽略/筛选</span>
+              <input id="set-career-ignore" type="text" placeholder="如：后端/算法/C++/嵌入式等其他方向" />
+            </div>
+            <div class="career-field">
+              <span class="career-label">代码语言</span>
+              <input id="set-career-lang" type="text" placeholder="如：JavaScript/TypeScript" />
+            </div>
+            <div class="career-field">
+              <span class="career-label">默认岗位</span>
+              <input id="set-career-position" type="text" placeholder="如：前端实习生" />
+            </div>
+            <div class="career-field">
+              <span class="career-label">求职场景</span>
+              <input id="set-career-exam" type="text" placeholder="如：秋招" />
+            </div>
+            <div class="career-field" style="grid-column:1/3;">
+              <span class="career-label">技术栈关键词（岗位 JD 考点提炼 + 巡检方向过滤，逗号分隔）</span>
+              <input id="set-career-tech" type="text" placeholder="如：React,Vue,TypeScript,Node.js,MySQL,Redis,Go,Docker" />
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+            <button id="set-career-save" class="secondary" style="padding:6px 12px;font-size:11px;">💾 保存画像</button>
+            <button id="set-career-reset" class="secondary" style="padding:6px 12px;font-size:11px;" title="重置为前端默认画像">↩ 重置为默认</button>
+            <span id="set-career-status" class="resume-status" style="font-size:11px;color:#8a87a8;"></span>
           </div>
         </div>
-        <div class="resume-status" id="focus-status">未开始专注</div>
-        <div class="focus-countdown hidden" id="focus-countdown"></div>
-        <div class="stats-row" id="focus-stats-row" style="margin-top:8px;"></div>
       </div>
-      <div class="jobs-setup hidden" id="focus-blacklist-box" style="margin-top:8px;">
+
+      <!-- 🌳 知识树（掌握度骨架；转后端/开源可整体替换） -->
+      <div class="jobs-setup" style="margin-top:8px;">
         <div class="form-row">
-          <label>分心应用黑名单（每行一个关键词，命中前台窗口标题即提醒，大小写不敏感）</label>
-          <textarea id="focus-blacklist" rows="6" style="font-size:11px;font-family:Consolas,monospace;"></textarea>
+          <label>🌳 知识树（复习 Tab「掌握度」的骨架 + 答题知识点匹配；转后端/开源可整体替换，格式 [{id,title,points:[{id,title,kws?}]}]）</label>
+          <textarea id="set-knowledge-tree" rows="7" style="width:100%;font-family:Consolas,monospace;font-size:10px;padding:8px 10px;border:1px solid rgba(109,79,216,.25);border-radius:6px;background:rgba(255,255,255,.8);white-space:pre;overflow:auto;" placeholder='[{"id":"js","title":"JavaScript 核心","points":[{"id":"js-closure","title":"闭包与作用域","kws":["闭包","作用域"]}]}]'></textarea>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center;">
+            <button id="set-tree-save" class="secondary" style="padding:6px 12px;font-size:11px;">💾 保存知识树</button>
+            <button id="set-tree-reset" class="secondary" style="padding:6px 12px;font-size:11px;" title="重置为默认前端知识树">↩ 重置为默认</button>
+            <span id="set-tree-status" class="resume-status" style="font-size:11px;color:#8a87a8;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 🤖 自动化 -->
+      <div class="jobs-setup" style="margin-top:8px;">
+        <div class="form-row">
+          <label>🤖 自动巡检（按关注点定时搜新面经 → 讲解 → 通知）</label>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#4a3a9d;cursor:pointer;">
+              <input type="checkbox" id="set-patrol-enabled" style="width:15px;height:15px;accent-color:#6d4fd8;"> 开启自动巡检
+            </label>
+            <select id="set-patrol-interval" style="width:120px;padding:5px 8px;">
+              <option value="30">30 分钟</option>
+              <option value="60">1 小时</option>
+              <option value="120">2 小时</option>
+              <option value="240">4 小时</option>
+              <option value="480">8 小时</option>
+            </select>
+            <span style="font-size:11px;color:#8a87a8;" id="set-patrol-status"></span>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:8px;">
+          <label>📰 资讯 RSS 源（每行一个；留空用默认源）</label>
+          <textarea id="set-rss-feeds" rows="3" style="font-size:11px;font-family:Consolas,monospace;"></textarea>
           <div style="display:flex;gap:6px;margin-top:6px;">
-            <button id="focus-blacklist-save" class="primary">💾 保存黑名单</button>
-            <button id="focus-blacklist-reset" class="secondary">↩️ 恢复默认</button>
+            <button id="set-rss-save" class="secondary" style="padding:6px 12px;font-size:11px;">💾 保存 RSS 源</button>
+            <span class="resume-status" id="set-rss-status" style="align-self:center;"></span>
           </div>
         </div>
       </div>
-    </section>
-    <!-- ========== 日程 Tab ========== -->
-    <section id="tab-schedule" class="tab-panel">
-      <div class="jobs-setup">
+
+      <!-- 📬 外部服务 -->
+      <div class="jobs-setup" style="margin-top:8px;">
         <div class="form-row">
-          <label>📅 面试邀约识别 + 日程提醒（QQ 邮箱 IMAP：拉未读邮件 → AI 识别面试/笔试邀约 → 提前提醒）</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;width:100%;">
-            <input id="mail-email" type="text" placeholder="QQ 邮箱地址（如 xxx@qq.com）" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid rgba(109,79,216,.25);border-radius:6px;background:rgba(255,255,255,.8);font-size:11px;">
-            <input id="mail-authcode" type="password" placeholder="IMAP 授权码（QQ 邮箱设置→账户→开启 IMAP 后生成）" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid rgba(109,79,216,.25);border-radius:6px;background:rgba(255,255,255,.8);font-size:11px;">
-            <button id="mail-save-btn" class="primary">💾 保存</button>
-            <button id="mail-test-btn" class="secondary">🔌 测试连接</button>
-            <button id="mail-check-btn" class="secondary">📥 立即检查</button>
+          <label>📬 邮箱（面试/笔试邀约自动识别提醒；授权码仅存本机）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <input id="set-mail-email" type="text" placeholder="邮箱地址" style="flex:1;min-width:160px;padding:6px 10px;font-size:11px;">
+            <input id="set-mail-authcode" type="password" placeholder="授权码（保存后清空）" style="flex:1;min-width:160px;padding:6px 10px;font-size:11px;">
+            <button id="set-mail-save" class="secondary" style="padding:6px 12px;font-size:11px;">💾 保存</button>
+            <button id="set-mail-test" class="secondary" style="padding:6px 12px;font-size:11px;">🔌 测试连接</button>
           </div>
-          <div style="font-size:11px;color:#8a87a8;margin-top:4px;">授权码在 QQ 邮箱「设置 → 账户 → 开启 IMAP/SMTP 服务」里生成；仅保存在本机本地数据库，不上传。配置后桌宠每 30 分钟自动检查，24 小时内提前提醒。</div>
+          <div class="resume-status" id="set-mail-status"></div>
         </div>
-        <div class="resume-status" id="mail-status">加载中…</div>
       </div>
-      <div id="schedule-list" class="jobs-list"></div>
+
+      <!-- 🎀 桌宠 -->
+      <div class="jobs-setup" style="margin-top:8px;">
+        <div class="form-row">
+          <label>🎀 桌宠（语音开关 + 形象换肤，与对话 Tab 同步）</label>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <button id="set-voice-btn" class="secondary" style="padding:6px 12px;font-size:11px;">🔊 语音开</button>
+            <div id="set-mascot-models" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⏱️ 专注 -->
+      <div class="jobs-setup" style="margin-top:8px;">
+        <div class="form-row">
+          <label>⏱️ 专注分心名单（命中即提醒"别分心"，白名单不提醒）</label>
+          <textarea id="focus-blacklist" rows="4" style="font-size:11px;font-family:Consolas,monospace;"></textarea>
+          <label style="margin-top:6px;">✅ 白名单（如 IDE/浏览器学习页面）</label>
+          <textarea id="focus-whitelist" rows="3" style="font-size:11px;font-family:Consolas,monospace;"></textarea>
+          <div style="display:flex;gap:6px;margin-top:6px;">
+            <button id="focus-blacklist-save" class="secondary" style="padding:6px 12px;font-size:11px;">💾 保存名单</button>
+            <button id="focus-blacklist-reset" class="secondary" style="padding:6px 12px;font-size:11px;">↩️ 恢复默认</button>
+            <span class="resume-status" id="set-focus-status" style="align-self:center;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 📦 学习资料 -->
+      <div class="jobs-setup" style="margin-top:8px;">
+        <div class="form-row">
+          <label>📦 项目 package.json 路径（官方文档"最新版 vs 项目内版本"对比）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <input id="set-docs-project" type="text" placeholder="如 D:/ai-career/package.json（留空自动探测）" style="flex:1;min-width:200px;padding:6px 10px;font-size:11px;">
+            <button id="set-docs-project-btn" class="secondary" style="padding:6px 12px;font-size:11px;">💾 保存</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 🛠 数据维护 -->
+      <div class="jobs-setup" style="margin-top:8px;">
+        <div class="form-row">
+          <label>🛠 数据维护（知识库 / 系统自检）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button id="set-kb-rebuild" class="secondary" style="padding:6px 12px;font-size:11px;">🔄 重建知识库索引</button>
+            <button id="set-self-check" class="secondary" style="padding:6px 12px;font-size:11px;">🔍 立即系统自检</button>
+          </div>
+          <div class="resume-status" id="set-maintain-status"></div>
+        </div>
+      </div>
     </section>
   </main>
+
+  <!-- 服务版本提示（右下角悬浮小卡：后台 widget 是旧进程时提醒重启桌宠，不打扰主内容） -->
+  <div id="service-warn" hidden style="position:fixed;right:14px;bottom:14px;z-index:999;max-width:300px;
+    padding:10px 12px;border-radius:12px;font-size:12px;line-height:1.6;
+    background:rgba(30,26,48,.92);color:#f0eef8;border:1px solid rgba(220,160,60,.45);
+    box-shadow:0 6px 24px rgba(0,0,0,.35);backdrop-filter:blur(8px);animation:bar-slide-in .3s ease-out;">
+    <div style="display:flex;gap:8px;align-items:flex-start;">
+      <span>⚠️</span>
+      <div id="service-warn-text" style="flex:1;">后台服务版本过旧，功能可能异常</div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+      <button id="service-warn-close" style="border:none;background:rgba(220,160,60,.2);color:#f0b45a;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">知道了</button>
+    </div>
+  </div>
 
   <script src="panel.js"></script>
 </body>

@@ -4,9 +4,14 @@ import assert from "node:assert/strict";
 import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
 
 const dbDir = setupTempDb("knowledge");
-const { KNOWLEDGE_TREE, ALL_POINTS, matchKp, recordKp, getMastery, getWeakKps } = await import("../lib/knowledge.mjs");
+const kp = await import("../lib/knowledge.mjs");
+const { KNOWLEDGE_TREE, ALL_POINTS, matchKp, recordKp, getMastery, getWeakKps } = kp;
 
-beforeEach(async () => { await clearAllTables(); });
+beforeEach(async () => {
+  await clearAllTables();
+  // 清模块级树缓存（settings 清了但内存缓存还在，跨测试残留）
+  kp.resetKnowledgeTree();
+});
 after(() => { cleanupTempDb(dbDir); });
 
 test("KNOWLEDGE_TREE 结构完整", () => {
@@ -86,4 +91,66 @@ test("getWeakKps 只返回低于 50 的", () => {
   assert.ok(weak.length >= 1);
   for (const k of weak) assert.ok(k.score < 50);
   assert.ok(weak.every((k) => k.id !== "js-this"));
+});
+
+// ---------- 可配置知识树（转后端/开源整体替换） ----------
+const BACKEND_TREE = [
+  { id: "db", title: "数据库", difficulty: 3, points: [
+    { id: "db-index", title: "索引与B+树", difficulty: 3, kws: ["索引", "b+树", "回表"] },
+    { id: "db-txn", title: "事务与隔离级别", difficulty: 3, kws: ["事务", "隔离级别", "mvcc"] },
+    { id: "db-sql", title: "SQL 优化", difficulty: 2, kws: ["sql", "执行计划", "慢查询"] },
+  ]},
+  { id: "server", title: "服务端", difficulty: 3, points: [
+    { id: "srv-golang", title: "Go 并发模型", difficulty: 3, kws: ["goroutine", "channel", "协程"] },
+    { id: "srv-rpc", title: "RPC 与微服务", difficulty: 3, kws: ["rpc", "微服务", "grpc"] },
+  ]},
+];
+
+test("saveKnowledgeTree：自定义树保存 + matchKp 动态跟随（转后端生效）", () => {
+  const r = kp.saveKnowledgeTree(BACKEND_TREE);
+  assert.equal(r.ok, true);
+  // matchKp 用新树的关键词（后端）
+  assert.equal(matchKp("讲讲 B+树索引"), "db-index");
+  assert.equal(matchKp("goroutine 协程"), "srv-golang");
+  // 前端关键词不再命中（树已换）
+  assert.notEqual(matchKp("事件循环"), "js-event-loop", "前端树已被替换");
+  // 无 kws 的点用 title 匹配
+  assert.equal(matchKp("RPC 与微服务"), "srv-rpc");
+});
+
+test("getMastery 基于自定义树（后端知识点可见）", () => {
+  kp.saveKnowledgeTree(BACKEND_TREE);
+  recordKp("db-index", { correct: false }); // 38 最弱
+  const list = getMastery();
+  assert.ok(list.some((k) => k.id === "db-index"), "后端知识点在掌握度中");
+  assert.ok(!list.some((k) => k.id === "js-closure"), "前端知识点已移除");
+  assert.equal(list[0].id, "db-index", "弱项在前");
+});
+
+test("saveKnowledgeTree：非法结构拒绝 + 不落库", () => {
+  const bad = [
+    { id: "x" }, // 缺 title/points
+    { id: "y", title: "Y", points: [{ title: "无id" }] },
+  ];
+  const r = kp.saveKnowledgeTree(bad);
+  assert.equal(r.ok, false);
+  assert.ok(r.error.includes("结构非法"));
+  // 非法保存后仍用默认树
+  assert.equal(matchKp("事件循环"), "js-event-loop");
+});
+
+test("resetKnowledgeTree：恢复默认前端树", () => {
+  kp.saveKnowledgeTree(BACKEND_TREE);
+  const r = kp.resetKnowledgeTree();
+  assert.equal(r.ok, true);
+  assert.equal(matchKp("事件循环"), "js-event-loop", "默认树恢复");
+  assert.equal(matchKp("B+树索引"), "b+树索引", "后端关键词不再命中，走动态兜底（小写归一化）");
+});
+
+test("isValidTree：结构校验函数", () => {
+  assert.equal(kp.isValidTree(BACKEND_TREE), true);
+  assert.equal(kp.isValidTree([]), false);
+  assert.equal(kp.isValidTree(null), false);
+  assert.equal(kp.isValidTree([{ id: "a", title: "A", points: [{ id: "p", title: "P", kws: "不是数组" }] }]), false, "kws 非数组拒绝");
+  assert.equal(kp.isValidTree(KNOWLEDGE_TREE), true);
 });
