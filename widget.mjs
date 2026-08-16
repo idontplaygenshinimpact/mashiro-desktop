@@ -5,42 +5,82 @@
 //   3. 学习提醒 —— 每天固定时间提醒做面经/笔试学习
 // 用法: node widget.mjs [--no-notify]
 import { createServer } from "node:http";
-import { readFileSync, writeFileSync, appendFileSync, readdirSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { exec } from "node:child_process";
 import notifier from "node-notifier";
 import { config } from "./config.mjs";
-import * as studyApi from "./lib/study.mjs";
-import { chatWithAgent } from "./lib/agent.mjs";
-import { startInterview, submitAnswer, endInterview } from "./lib/interview.mjs";
 import * as reviewApi from "./lib/review.mjs";
 import * as knowledgeApi from "./lib/knowledge.mjs";
 import { pick as pickEmotion, EMOTIONS } from "./lib/emotions.mjs";
-import { getLLMStats, getRecentTools } from "./lib/trace.mjs";
-import { getPendingApprovals, resolveApproval, getSessionApproved } from "./lib/permission.mjs";
 import { submit as laneSubmit } from "./lib/lane.mjs";
 import * as jobsApi from "./lib/jobs.mjs";
 import * as learningApi from "./lib/learning.mjs";
 import * as ragApi from "./lib/rag.mjs";
-import * as zhentiApi from "./lib/zhenti.mjs";
-import * as ojApi from "./lib/oj.mjs";
 import * as rssApi from "./lib/rss.mjs";
 import * as focusApi from "./lib/focus.mjs";
 import * as mailApi from "./lib/mail.mjs";
-import { scanNewestFiles, latestOutputs, loadOrCreateToken, checkBearerAuth, buildHealthPayload, readBody, createCrawlMutex } from "./lib/widget-core.mjs";
+import { scanNewestFiles, loadOrCreateToken, checkBearerAuth, createCrawlMutex } from "./lib/widget-core.mjs";
 import { createRouter } from "./lib/routes/router.mjs";
 import { registerReviewRoutes } from "./lib/routes/review.mjs";
 import { registerKbRoutes } from "./lib/routes/kb.mjs";
 import { registerPracticeRoutes } from "./lib/routes/practice.mjs";
 import { registerMiscRoutes } from "./lib/routes/misc.mjs";
+import { registerStudyRoutes } from "./lib/routes/study.mjs";
+import { registerInterviewRoutes } from "./lib/routes/interview.mjs";
+import { registerJobsRoutes } from "./lib/routes/jobs.mjs";
+import { registerZhentiRoutes } from "./lib/routes/zhenti.mjs";
+import { registerOjRoutes } from "./lib/routes/oj.mjs";
+import { registerFocusRoutes } from "./lib/routes/focus.mjs";
+import { registerMailRoutes } from "./lib/routes/mail.mjs";
+import { registerRssRoutes } from "./lib/routes/rss.mjs";
+import { registerCoreRoutes } from "./lib/routes/core.mjs";
 
-// 纵向拆分路由注册（各业务域独立模块，见 lib/routes/*.mjs；未注册路径继续走本文件内联路由）
+// 纵向拆分路由注册：全部路由已按业务域拆到 lib/routes/*.mjs（widget.mjs 只保留
+// 鉴权/CORS/服务生命周期/后台任务调度）
 const router = createRouter();
 registerReviewRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
 registerKbRoutes(router);
 registerPracticeRoutes(router);
 registerMiscRoutes(router);
+registerStudyRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*", laneSubmit });
+registerInterviewRoutes(router, { laneSubmit });
+registerJobsRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
+registerZhentiRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
+registerOjRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
+registerFocusRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
+registerMailRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
+registerRssRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
+// 核心基础设施域（health/widget-data/chat/stats/observability/refresh/notify/approval/
+// run-discover/patrol/progress/schedule/首页）：runtime 全部用取数函数注入，
+// 因为 patrolState/crawlMutex/DISABLE_PATROL/PATROL_MIN/MAX 声明在此之后（TDZ），
+// actualPort 端口回退后会变（闭包快照会取旧值）
+registerCoreRoutes(router, {
+  getCorsOrigin: (req) => req.headers.origin || "*",
+  laneSubmit,
+  runtime: {
+    getActualPort: () => actualPort,
+    parseTitle: () => parseTitle,
+    getStudyPlan: () => getStudyPlan(),
+    checkTrends: () => checkTrends(),
+    sendNotification: (t, m, o) => sendNotification(t, m, o),
+    logErr: (m) => logErr(m),
+    runDiscoverHidden: () => runDiscoverHidden(),
+    crawlMutex: () => crawlMutex,
+    patrolGetConfig: () => getPatrolConfig(),
+    patrolWriteSetting: (k, v) => writePatrolSetting(k, v),
+    patrolSetBudget: (t) => setPatrolBudget(t),
+    patrolGetBudget: () => patrolDailyBudget(),
+    patrolGetUsed: () => patrolUsedTokensToday(),
+    patrolScheduleNext: () => scheduleNextPatrol(),
+    patrolState: () => patrolState,
+    patrolDisabled: () => DISABLE_PATROL,
+    patrolRun: () => patrolInterests(),
+    patrolMinMinutes: () => PATROL_MIN_MINUTES,
+    patrolMaxMinutes: () => PATROL_MAX_MINUTES,
+  },
+});
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
 const NO_NOTIFY = process.argv.includes("--no-notify");
@@ -78,51 +118,6 @@ const AUTH_TOKEN = process.env.MIANSHI_TOKEN || loadOrCreateToken(
   { randomUUID, existsSync, readFileSync, writeFileSync, mkdirSync }
 );
 
-// 文件名规范化：忽略空格/下划线/括号差异，用于模糊匹配
-const normName = (s) => String(s || "").toLowerCase().replace(/[\s_\-（）()【】[].]/g, "");
-
-// 学习讲解文件专用目录（AI 生成的讲解存档）
-const STUDY_NOTES_DIR = () => path.join(config.outputDir, "study_notes");
-
-// 查找学习条目的讲解文件：
-// 1. study_notes/ 下按 topic 精确匹配（最优先——AI 生成的讲解存档）
-// 2. 产出目录里按 source 文件名模糊匹配
-function findStudyFile(item) {
-  const outDir = config.outputDir;
-  if (!existsSync(outDir)) return null;
-  // 1. study_notes 按 topic 匹配
-  const notesDir = STUDY_NOTES_DIR();
-  if (existsSync(notesDir)) {
-    const topicNorm = normName(item.topic);
-    for (const f of readdirSync(notesDir)) {
-      if (!f.endsWith(".md")) continue;
-      if (normName(f.replace(/\.md$/, "")) === topicNorm) {
-        return path.join(notesDir, f);
-      }
-    }
-  }
-  // 2. 产出目录按 source 模糊匹配
-  const src = (item.source || "").replace(/\.md$/, "");
-  const sn = normName(src);
-  for (const d of readdirSync(outDir, { withFileTypes: true })) {
-    if (!d.isDirectory() || d.name === "study_notes") continue;
-    const dirPath = path.join(outDir, d.name);
-    for (const f of readdirSync(dirPath)) {
-      if (!f.endsWith(".md") || /^00[_-]/.test(f)) continue;
-      const key = normName(f.replace(/\.md$/, ""));
-      if (key === sn || key.includes(sn) || sn.includes(key)) return path.join(dirPath, f);
-    }
-  }
-  return null;
-}
-
-// 知识点名 → 安全文件名（去掉 Windows 非法字符）
-function sanitizeFilename(name) {
-  return String(name || "note")
-    .replace(/[\\/:*?"<>|\r\n]/g, "")
-    .trim()
-    .slice(0, 60) || "note";
-}
 
 function parseTitle(file) {
   // 从文件名提取公司/标题：01_公司_标题.md
@@ -403,1275 +398,12 @@ const server = createServer((req, res) => {
     }
   }
 
-  // 纵向拆分域路由优先分发（lib/routes/*.mjs 注册；未命中继续走本文件内联路由）
+  // 域路由分发（lib/routes/*.mjs 注册；未命中 404）
   {
     const h = router.resolve(url.pathname, req.method);
     if (h) { h.fn(req, res, url); return; }
   }
 
-  if (url.pathname === "/api/health") {
-    // 机器可读健康检查（无需认证）：DB 连通性 + 运行时长 + 实际端口
-    let dbOk = false;
-    try {
-      db.prepare("SELECT 1").get();
-      dbOk = true;
-    } catch { /* ignore */ }
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify(buildHealthPayload(dbOk, Math.round(process.uptime()), actualPort)));
-    return;
-  }
-
-  if (url.pathname === "/api/widget-data") {
-    // 看板娘数据：学习计划 + 最新产出 + 趋势 + 爬取进度
-    const plan = getStudyPlan();
-    const files = scanNewestFiles(12, config.outputDir).map((f) => {
-      const { company, title } = parseTitle(f.file);
-      return { company, title, dir: f.dir, path: f.path, mtime: f.mtime.toISOString() };
-    });
-    const outputs = latestOutputs(6, config.outputDir).map((o) => ({ dir: o.dir, mtime: o.mtime.toISOString() }));
-    let progress = { status: "idle", message: "暂无爬取任务" };
-    try {
-      progress = JSON.parse(readFileSync(path.join(config.outputDir, "..", "progress.json"), "utf8"));
-    } catch { /* ignore */ }
-    let reviewStats = { total: 0, due: 0 };
-    try { reviewStats = reviewApi.review.getStats(); } catch { /* ignore */ }
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ ok: true, plan, files, outputs, progress, review: reviewStats, time: new Date().toISOString() }));
-    return;
-  }
-  if (url.pathname === "/api/chat") {
-    // 桌宠对话：用户消息 → agent 工具循环 → 回复（走串行 lane，防并发竞争 memory 镜像）
-    readBody(req, res, async (body) => {
-      try {
-        const { message, history } = JSON.parse(body || "{}");
-        if (!message) { res.writeHead(400); res.end(JSON.stringify({ error: "message required" })); return; }
-        const result = await laneSubmit(() => chatWithAgent(message, history || []));
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(result));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message, stack: String(e.stack).slice(0, 300) }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/study-plan") {
-    // 学习清单（读取）——study.mjs 已在顶部导入；为每条附加讲解文件路径
-    try {
-      const plan = studyApi.getPlan();
-      const items = (plan.items || []).map((it) => {
-        const filePath = findStudyFile(it);
-        return { ...it, filePath, hasFile: !!filePath };
-      });
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, plan: { ...plan, items } }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/study-detail-stream") {
-    // 学习详情（流式）：SSE 逐段推送讲解；有文件直接返回；无文件边生成边推 + 存档
-    const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
-    const id = u.searchParams.get("id") || "";
-    const plan = studyApi.getPlan();
-    const item = (plan.items || []).find((i) => i.id === id);
-    if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
-    const filePath = findStudyFile(item);
-    if (filePath) {
-      // 有文件：一次性返回（快，无需流式）——不截断，讲解可无限追问累积
-      try {
-        const content = readFileSync(filePath, "utf8");
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: true, content, filePath }));
-        return;
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "读取讲解失败: " + e.message }));
-        return;
-      }
-    }
-    // 无文件：SSE 流式生成
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "Access-Control-Allow-Origin": corsOrigin,
-    });
-    res.on("error", () => {}); // 客户端断开时避免无监听 error 崩溃进程
-    const send = (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
-    send({ type: "start", topic: item.topic });
-    let full = "";
-    import("./lib/ai.mjs").then(async ({ solveQuestionStream }) => {
-      full = await solveQuestionStream({
-        title: item.verify_question || `请完整讲解：${item.topic}`,
-        text: `这是一道前端面试题，请完整讲解：${item.topic}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
-        company: "真白讲解",
-        position: "前端",
-        sourceUrl: "学习清单",
-      }, (delta) => {
-        full += delta;
-        send({ type: "delta", delta });
-      });
-      // 存档
-      let savedPath = null;
-      try {
-        const notesDir = STUDY_NOTES_DIR();
-        mkdirSync(notesDir, { recursive: true });
-        const savePath = path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
-        const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
-        writeFileSync(savePath, header + full.slice(0, 50000), "utf8");
-        savedPath = savePath;
-      } catch { /* ignore */ }
-      // 讲解生成完成 → 自动建复习卡（学过的知识点进间隔复习，不必等勾选）
-      try {
-        reviewApi.review.addCard({
-          topic: item.topic,
-          question: item.verify_question || `请简述：${item.topic}`,
-          answer: full.slice(0, 500),
-          source: "学习清单讲解",
-        });
-      } catch { /* ignore */ }
-      send({ type: "done", saved: !!savedPath, filePath: savedPath });
-      res.end();
-    }).catch((e) => {
-      send({ type: "error", error: e.message });
-      res.end();
-    });
-    return;
-  }
-  if (url.pathname === "/api/study-append-stream") {
-    // 讲解追问补充：基于已有讲解内容 + 用户问题，流式生成补充章节并追加存档
-    const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
-    const id = u.searchParams.get("id") || "";
-    const question = u.searchParams.get("question") || "";
-    if (!question.trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "question required" })); return; }
-    const plan = studyApi.getPlan();
-    const item = (plan.items || []).find((i) => i.id === id);
-    if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
-    // 读已有讲解（study_notes 存档优先；没有则用验证题作为上下文）
-    let existing = "";
-    const filePath = findStudyFile(item);
-    if (filePath) {
-      try { existing = readFileSync(filePath, "utf8"); } catch { /* ignore */ }
-    }
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "Access-Control-Allow-Origin": corsOrigin,
-    });
-    res.on("error", () => {}); // 客户端断开时避免无监听 error 崩溃进程
-    const send = (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
-    send({ type: "start", topic: item.topic });
-    let full = "";
-    import("./lib/ai.mjs").then(async ({ solveAppendStream }) => {
-      full = await solveAppendStream({
-        topic: item.topic,
-        existing: existing || `（暂无已有讲解，围绕知识点直接回答）${item.verify_question || item.topic}`,
-        question,
-      }, (delta) => {
-        full += delta;
-        send({ type: "delta", delta });
-      });
-      // 追加写回讲解文件（持久化：下次打开能看到补充内容）
-      try {
-        const notesDir = STUDY_NOTES_DIR();
-        mkdirSync(notesDir, { recursive: true });
-        const savePath = filePath || path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
-        const appendBlock = `\n\n---\n\n## 💬 追问：${question}\n\n${full.slice(0, 8000)}\n`;
-        // 追加（文件存在则 append，否则新建带头部）
-        if (filePath) {
-          appendFileSync(savePath, appendBlock, "utf8");
-        } else {
-          const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
-          writeFileSync(savePath, header + full.slice(0, 12000) + appendBlock, "utf8");
-        }
-        send({ type: "done", saved: true, filePath: savePath });
-      } catch (e) {
-        send({ type: "done", saved: false, filePath: null });
-      }
-      res.end();
-    }).catch((e) => {
-      send({ type: "error", error: e.message });
-      res.end();
-    });
-    return;
-  }
-  if (url.pathname === "/api/study-consolidate-stream") {
-    // 整理讲解全文：把原始讲解 + 多轮追问整合成结构统一的完整讲解，流式生成并写回
-    const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
-    const id = u.searchParams.get("id") || "";
-    const plan = studyApi.getPlan();
-    const item = (plan.items || []).find((i) => i.id === id);
-    if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
-    // 读完整讲解素材
-    let content = "";
-    const filePath = findStudyFile(item);
-    if (filePath) {
-      try { content = readFileSync(filePath, "utf8"); } catch { /* ignore */ }
-    }
-    if (!content || content.length < 200) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "还没有讲解内容，先点「💡 讲解」生成" })); return; }
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "Access-Control-Allow-Origin": corsOrigin,
-    });
-    res.on("error", () => {}); // 客户端断开时避免无监听 error 崩溃进程
-    const send = (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
-    send({ type: "start", topic: item.topic });
-    let full = "";
-    import("./lib/ai.mjs").then(async ({ consolidateStudyStream }) => {
-      full = await consolidateStudyStream({ topic: item.topic, content }, (delta) => {
-        full += delta;
-        send({ type: "delta", delta });
-      });
-      // 写回：原文件改名 .orig 备份，写整合版
-      let savedPath = null;
-      try {
-        const notesDir = STUDY_NOTES_DIR();
-        mkdirSync(notesDir, { recursive: true });
-        const savePath = filePath || path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
-        if (filePath) {
-          try { writeFileSync(savePath + ".orig", readFileSync(savePath, "utf8"), "utf8"); } catch { /* ignore */ }
-        }
-        const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档（已整理） | 整理于 ${new Date().toLocaleString("zh-CN")}\n\n`;
-        writeFileSync(savePath, header + full.slice(0, 50000), "utf8");
-        savedPath = savePath;
-      } catch (e) { /* ignore */ }
-      send({ type: "done", saved: !!savedPath, filePath: savedPath });
-      res.end();
-    }).catch((e) => {
-      send({ type: "error", error: e.message });
-      res.end();
-    });
-    return;
-  }
-  if (url.pathname === "/api/study-cluster-stream") {
-    // 多条目知识归并：把多个相关条目的讲解整合成主题簇综合讲解，流式生成并存到 study_notes/<簇>/ 目录
-    readBody(req, res, (body) => {
-      try {
-        const { ids } = JSON.parse(body || "{}");
-        if (!Array.isArray(ids) || ids.length < 2) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "请至少选择 2 个相关条目归并" })); return; }
-        const plan = studyApi.getPlan();
-        // 读取每个条目的讲解内容（有文件的读文件；无文件的跳过并提示先生成）
-        const topics = [];
-        const missing = [];
-        for (const id of ids) {
-          const item = (plan.items || []).find((i) => i.id === id);
-          if (!item) continue;
-          const filePath = findStudyFile(item);
-          let content = "";
-          if (filePath) { try { content = readFileSync(filePath, "utf8"); } catch { /* ignore */ } }
-          if (content.length < 200) { missing.push(item.topic); continue; }
-          topics.push({ topic: item.topic, content });
-        }
-        if (topics.length < 2) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: `需要至少 2 个有讲解的条目（${missing.length ? "缺讲解：" + missing.join("、") : ""}）。先点「💡 讲解」生成` }));
-          return;
-        }
-        res.writeHead(200, {
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-          "Access-Control-Allow-Origin": corsOrigin,
-        });
-        res.on("error", () => {}); // 客户端断开时避免无监听 error 崩溃进程
-    const send = (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
-        send({ type: "start", topic: topics.map((t) => t.topic).join(" + ") });
-        let full = "";
-        import("./lib/ai.mjs").then(async ({ clusterStudyStream }) => {
-          full = await clusterStudyStream({
-            topics,
-            onChunk: (delta) => {
-              full += delta;
-              send({ type: "delta", delta });
-            },
-          });
-          // 存到 study_notes/主题簇/ 目录（按 AI 给的主题簇名）
-          let savedPath = null;
-          let clusterName = "综合";
-          try {
-            const cm = full.match(/【cluster】\s*([^\n]+)/);
-            if (cm) clusterName = cm[1].trim().slice(0, 40);
-            const notesDir = STUDY_NOTES_DIR();
-            const clusterDir = path.join(notesDir, sanitizeFilename(clusterName));
-            mkdirSync(clusterDir, { recursive: true });
-            const savePath2 = path.join(clusterDir, `${sanitizeFilename(clusterName)}.md`);
-            const header = `# ${clusterName}\n\n> 来源：多条目归并（${topics.map((t) => t.topic).join("、")}） | 归并于 ${new Date().toLocaleString("zh-CN")}\n\n`;
-            writeFileSync(savePath2, header + full.replace(/【cluster】\s*/, "").slice(0, 50000), "utf8");
-            savedPath = savePath2;
-          } catch (e) { /* ignore */ }
-          send({ type: "done", saved: !!savedPath, filePath: savedPath, clusterName });
-          res.end();
-        }).catch((e) => {
-          send({ type: "error", error: e.message });
-          res.end();
-        });
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/study-detail") {
-    // 学习详情：返回条目讲解内容（有文件读文件；无文件现场生成并写入 study_notes 存档）
-    const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
-    const id = u.searchParams.get("id") || "";
-    const plan = studyApi.getPlan();
-    const item = (plan.items || []).find((i) => i.id === id);
-    if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
-    const filePath = findStudyFile(item);
-    if (filePath) {
-      try {
-        const content = readFileSync(filePath, "utf8");
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: true, content, filePath }));
-        return;
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "读取讲解失败: " + e.message }));
-        return;
-      }
-    }
-    // 无文件：现场生成讲解（前端格式：结论/原理/实现/边界），并写入 study_notes 存档
-    import("./lib/ai.mjs").then(async ({ solveQuestion }) => {
-      const content = String(await solveQuestion({
-        title: item.verify_question || `请完整讲解：${item.topic}`,
-        text: `这是一道前端面试题，请完整讲解：${item.topic}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
-        company: "真白讲解",
-        position: "前端",
-        sourceUrl: "学习清单",
-      })).slice(0, 12000);
-      // 写入存档（下次直接读文件，不再生成）
-      let savedPath = null;
-      try {
-        const notesDir = STUDY_NOTES_DIR();
-        mkdirSync(notesDir, { recursive: true });
-        const savePath = path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
-        const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
-        writeFileSync(savePath, header + content, "utf8");
-        savedPath = savePath;
-      } catch (e) { /* 存档失败不影响返回 */ }
-      // 讲解生成完成 → 自动建复习卡
-      try {
-        reviewApi.review.addCard({
-          topic: item.topic,
-          question: item.verify_question || `请简述：${item.topic}`,
-          answer: content.slice(0, 500),
-          source: "学习清单讲解",
-        });
-      } catch { /* ignore */ }
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: false, content, filePath: savedPath, saved: !!savedPath }));
-    }).catch((e) => {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "生成讲解失败: " + e.message }));
-    });
-    return;
-  }
-  if (url.pathname === "/api/study-generate") {
-    // 从产出生成学习清单
-    laneSubmit(() => studyApi.generateStudyPlan())
-      .then((plan) => {
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, plan }));
-      })
-      .catch((e) => {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      });
-    return;
-  }
-  if (url.pathname === "/api/study-check") {
-    // 勾选完成 → 返回真白情感反馈（庆祝/取消）
-    try {
-      const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
-      const done = u.searchParams.get("done") === "1";
-      const r = studyApi.checkItem(u.searchParams.get("id"), done);
-      let emotion = null;
-      let emotionScene = null;
-      try {
-        if (done) {
-          emotion = pickEmotion(EMOTIONS.celebrate);
-          emotionScene = "praise"; // 面板播日语预设台词（显示中文、播放日语）
-        } else {
-          emotion = "……嗯，那先放着。";
-          emotionScene = "encourage";
-        }
-      } catch { /* ignore */ }
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ...r, emotion, emotionScene }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/study-review") {
-    // 复盘：出验证题
-    studyApi
-      .startReview()
-      .then((r) => {
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      })
-      .catch((e) => {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      });
-    return;
-  }
-  if (url.pathname === "/api/study-answer") {
-    // 复盘：提交答案判分
-    readBody(req, res, async (body) => {
-      try {
-        const r = await studyApi.answerReview(JSON.parse(body || "{}").answers || []);
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/interview/start") {
-    readBody(req, res, async (body) => {
-      try {
-        const r = await laneSubmit(() => startInterview(JSON.parse(body || "{}")));
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/interview/answer") {
-    readBody(req, res, async (body) => {
-      try {
-        const r = await laneSubmit(() => submitAnswer(JSON.parse(body || "{}").answer || ""));
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/interview/end") {
-    laneSubmit(() => endInterview())
-      .then((r) => {
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      })
-      .catch((e) => {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      });
-    return;
-  }
-  if (url.pathname === "/api/interview/history") {
-    // 面试历史（复盘报告）
-    try {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, history: memory.getInterviewHistory() }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/stats") {
-    // 使用统计（对话/复习/面试/答题）
-    try {
-      const m = memory.get();
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, stats: m.stats || {} }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/observability") {
-    // 可观测性：LLM 调用统计 + 最近调用 + 工具链
-    try {
-      const llm = getLLMStats();
-      const tools = getRecentTools(8);
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, llm, tools }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/refresh") {
-    checkTrends()
-      .then(() => {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
-      })
-      .catch((err) => {
-        logErr(`refresh checkTrends 异常: ${err && err.message ? err.message : String(err)}`);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
-      });
-    return;
-  }
-  if (url.pathname === "/api/notify-test") {
-    sendNotification("✅ 通知测试", "mianshi-agent 小组件通知正常");
-    res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true }));
-    return;
-  }
-  if (url.pathname === "/api/jobs/profile" && req.method === "GET") {
-    // 查询简历状态（画像 + 原文是否已保存）
-    try {
-      const profile = jobsApi.getResumeProfile();
-      const raw = jobsApi.getResumeRaw();
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({
-        ok: true,
-        profile,
-        rawSaved: !!raw,
-        rawText: raw?.text || "",
-        rawLength: raw?.text?.length || 0,
-        rawUpdatedAt: raw?.updatedAt || 0,
-      }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/jobs/profile") {
-    // 简历技能画像（驱动岗位匹配；原文一并保存供后续复用）
-    readBody(req, res, async (body) => {
-      try {
-        const { resume } = JSON.parse(body || "{}");
-        if (!resume || !String(resume).trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "resume required" })); return; }
-        const r = await jobsApi.setResumeProfile(resume);
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/jobs/direction") {
-    // 设置意向方向 + 返回调整建议
-    readBody(req, res, async (body) => {
-      try {
-        const { direction } = JSON.parse(body || "{}");
-        const set = jobsApi.setTargetDirection(direction);
-        if (!set.ok) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify(set)); return; }
-        const advice = await jobsApi.generateDirectionAdvice();
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, ...advice }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/jobs") {
-    // 校招岗位列表（可过滤 status/direction）
-    try {
-      const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
-      const jobs = jobsApi.getJobs({ status: u.searchParams.get("status") || undefined, direction: u.searchParams.get("direction") || undefined });
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, jobs }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/jobs/recommended") {
-    // 推荐岗位（匹配度排序）
-    try {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, recommended: jobsApi.getRecommendedJobs(), stats: jobsApi.getJobStats() }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/jobs/status") {
-    // 更新投递状态
-    readBody(req, res, async (body) => {
-      try {
-        const { id, status } = JSON.parse(body || "{}");
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(jobsApi.setJobStatus(id, status)));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/jobs/favorite") {
-    // 收藏/取消收藏岗位（body {id, favorite}）
-    readBody(req, res, async (body) => {
-      try {
-        const { id, favorite } = JSON.parse(body || "{}");
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(jobsApi.setJobFavorite(id, favorite ? 1 : 0)));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/jobs/daily-collect") {
-    // 每日自动搜集（POST 手动触发一次；GET 查询状态）
-    if (req.method === "GET") {
-      try {
-        const last = jobsApi.getJobsLastCollect();
-        const due = !last || Date.now() - last >= 24 * 3600 * 1000;
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, lastCollect: last || 0, due, nextIn: last ? Math.max(0, 24 * 3600 * 1000 - (Date.now() - last)) : 0 }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
-    }
-    readBody(req, res, async (_body) => {
-      try {
-        const r = await jobsApi.collectJobsDaily();
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r.skipped ? { ok: true, skipped: true, message: "距上次搜集不足 24h，跳过（可等定时器或清空时间戳强制）" } : { ok: true, ...r, message: `新增 ${r.totalNew} 条岗位` }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/jobs/collect") {
-    // 搜集校招岗位：官网优先 → 公司名单 → 中厂兜底（POST 触发；可传 step / skipDetails）
-    readBody(req, res, async (body) => {
-      try {
-        const { step, skipDetails } = JSON.parse(body || "{}");
-        const result = {};
-        if (!step || step === "official") {
-          result.official = await jobsApi.collectFromOfficialSites();
-          // 官网步骤跑完自动补 JD 详情（可选 skipDetails=true 跳过）
-          if (!skipDetails) result.details = await jobsApi.fetchJobDetails();
-        }
-        if (!step || step === "companies") result.companies = await jobsApi.collectCompanyList();
-        if (!step || step === "fallback") result.fallback = await jobsApi.collectJobsForCompaniesWithoutSite();
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, ...result }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/jobs/fetch-details") {
-    // 手动触发：抓官网岗位详情页 JD 正文入库（POST；返回 {ok,total,done,failed,updated,skipped}）
-    readBody(req, res, async (body) => {
-      try {
-        JSON.parse(body || "{}"); // 仅校验 body 合法（预留参数位）
-        const r = await jobsApi.fetchJobDetails();
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, ...r }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/companies") {
-    // 公司档案列表
-    try {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, companies: jobsApi.getCompanies() }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/zhenti") {
-    // 牛客大厂官方真题清单（GET；?company= 过滤）
-    try {
-      const { searchParams } = new URL(req.url, "http://x");
-      const list = zhentiApi.getZhentiList({ company: searchParams.get("company") || "" });
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, papers: list, ...zhentiApi.getZhentiStats() }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/oj/problems") {
-    // 牛客专项练习 TOP101 题目清单（GET；?category=&difficulty= 过滤）
-    try {
-      const { searchParams } = new URL(req.url, "http://x");
-      const list = ojApi.getOjProblems({
-        category: searchParams.get("category") || "",
-        difficulty: searchParams.get("difficulty") || "",
-      });
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, problems: list, ...ojApi.getOjStats() }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/oj/detail") {
-    // 抓取单题内容到本地（GET ?url=；懒加载 + 缓存）
-    const { searchParams } = new URL(req.url, "http://x");
-    const u = String(searchParams.get("url") || "").trim();
-    if (!/^https?:\/\/(www\.)?nowcoder\.com\/practice\//i.test(u)) {
-      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: false, error: "仅支持牛客题目页链接" }));
-      return;
-    }
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    ojApi.fetchOjDetail(u).then((r) => {
-      res.end(JSON.stringify(r));
-    }).catch((e) => {
-      res.end(JSON.stringify({ ok: false, error: e.message }));
-    });
-    return;
-  }
-  if (url.pathname === "/api/oj/collect-all-stream") {
-    // 批量下载全部题目内容到本地（SSE 进度流，串行防反爬，约 5-8 分钟）
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "Access-Control-Allow-Origin": corsOrigin,
-    });
-    res.on("error", () => {}); // 客户端断开兜底
-    const send = (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
-    ojApi.collectAllOjDetails((done, total, title) => {
-      send({ type: "progress", done, total, title: String(title).slice(0, 30) });
-    }).then((r) => {
-      send({ type: "done", ...r });
-      res.end();
-    }).catch((e) => {
-      send({ type: "error", error: e.message });
-      res.end();
-    });
-    return;
-  }
-  if (url.pathname === "/api/oj/collect") {
-    // 抓取/更新 TOP101 清单（POST）
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    ojApi.collectOjProblems().then((r) => {
-      res.end(JSON.stringify(r));
-    }).catch((e) => {
-      res.end(JSON.stringify({ ok: false, error: e.message }));
-    });
-    return;
-  }
-  if (url.pathname === "/api/zhenti/collect") {
-    // 搜集真题清单（POST；可传 { details: 20 } 顺带抓题型详情；{ company: "拼多多" } 按公司搜索搜集）
-    readBody(req, res, async (body) => {
-      try {
-        const { details, company } = JSON.parse(body || "{}");
-        const r = company
-          ? await zhentiApi.collectZhentiByCompany(company)
-          : await zhentiApi.collectZhentiList();
-        const detailsResult = details ? await zhentiApi.collectZhentiDetails(details) : null;
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, ...r, details: detailsResult, message: `${company ? `「${company}」真题搜集完成` : "真题搜集完成"}：新增 ${r.added} 条` }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/zhenti/cookie") {
-    // 保存牛客 Cookie（POST { cookie }，本地落盘）
-    readBody(req, res, async (body) => {
-      try {
-        const { cookie } = JSON.parse(body || "{}");
-        const r = zhentiApi.saveNowcoderCookie(cookie);
-        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/zhenti/questions") {
-    // 登录态抓取试卷完整题目（POST { paperTestId }）
-    readBody(req, res, async (body) => {
-      try {
-        const { paperTestId } = JSON.parse(body || "{}");
-        if (!paperTestId) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "paperTestId required" })); return; }
-        const r = await zhentiApi.fetchPaperQuestions(paperTestId);
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/zhenti/wrong") {
-    // 错题回流：学习清单 + FSRS 复习卡（POST { paperId, company, paperTitle, question, answer }）
-    readBody(req, res, async (body) => {
-      try {
-        const { paperId, company, paperTitle, question, answer } = JSON.parse(body || "{}");
-        if (!question || !String(question).trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "question required" })); return; }
-        const r = await zhentiApi.addWrongQuestion({ paperId, company, paperTitle, question, answer });
-        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/zhenti/plan") {
-    // 整套真题加入学习清单（POST { paperTestId }）
-    readBody(req, res, async (body) => {
-      try {
-        const { paperTestId } = JSON.parse(body || "{}");
-        if (!paperTestId) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "paperTestId required" })); return; }
-        const r = await zhentiApi.addPaperToPlan(paperTestId);
-        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/resume-plan") {
-    // 简历项目 → 学习清单（简历拷打准备）：提取项目 → 每个项目作为"必会"清单条目
-    readBody(req, res, async (body) => {
-      try {
-        const { resume } = JSON.parse(body || "{}");
-        if (!resume || !String(resume).trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "resume required" })); return; }
-        const { extractResumeProjects } = await import("./lib/ai.mjs");
-        const projects = await extractResumeProjects(resume);
-        if (!projects.length) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, added: 0, projects: [], message: "未从简历中识别到项目" })); return; }
-        const r = studyApi.addPlanItems(projects.map((p) => ({
-          topic: `项目·${p.name}`,
-          why: `简历项目拷打准备${p.techStack ? `（${p.techStack}）` : ""}：${p.description}`,
-          source: "简历拷打",
-          verify_question: `用 30 秒电梯陈述讲清「${p.name}」，然后准备被深挖：技术选型 trade-off / 架构 / 个人贡献 / 难点踩坑 / 量化指标`,
-          level: "必会",
-        })));
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, added: r.added, projects, message: `已将 ${r.added} 个简历项目加入学习清单` }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/approval-pending") {
-    // 权限审批：查询当前待审批的工具调用（面板轮询）
-    try {
-      const pendingList = getPendingApprovals();
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, pending: pendingList, sessionApproved: getSessionApproved() }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/approval") {
-    // 权限审批：用户决策（allow/session）
-    readBody(req, res, (body) => {
-      try {
-        const { toolName, allow, session } = JSON.parse(body || "{}");
-        if (!toolName) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "toolName required" })); return; }
-        const r = resolveApproval(toolName, { allow: !!allow, session: !!session });
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: r.ok, ...r }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/interview-notes") {
-    // 面试实录：把真实面试被问住的知识点加入学习清单（必会）+ 建复习卡
-    readBody(req, res, (body) => {
-      try {
-        const input = JSON.parse(body || "{}");
-        // topics 支持数组或字符串（逗号/顿号/换行/分号分隔）
-        let raw = input.topics || [];
-        if (typeof raw === "string") raw = raw.split(/[,，、;\n；]+/).map((s) => s.trim()).filter(Boolean);
-        if (!Array.isArray(raw) || !raw.length) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "topics required" })); return; }
-        const added = [], existing = [], skipped = [];
-        for (const t of raw.slice(0, 8)) {
-          const rawTopic = String(t).trim().slice(0, 40);
-          if (!rawTopic) continue;
-          // 伪知识点过滤 + 规范化（返回清洗后的 topic，保证与薄弱点口径一致）
-          const topic = memory._cleanTopic ? memory._cleanTopic(rawTopic) : rawTopic;
-          if (!topic) { skipped.push({ topic: rawTopic, reason: "非具体知识点" }); continue; }
-          const r = studyApi.addPlanItems([{
-            topic,
-            why: "真实面试中被问住，需优先补强",
-            source: "面试实录",
-            verify_question: `请完整回答并讲清原理：${topic}`,
-            level: "必会",
-          }]);
-          if (r.added > 0) {
-            added.push(topic);
-            // 自动建复习卡（进入间隔复习）
-            try {
-              reviewApi.review.addCard({ topic, question: `请完整回答并讲清原理：${topic}`, answer: "", source: "面试实录" });
-            } catch { /* ignore */ }
-          } else {
-            existing.push(topic);
-          }
-        }
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, added, existing, skipped, hint: `新增 ${added.length} 个知识点（已在清单 ${existing.length} 个${skipped.length ? `，跳过 ${skipped.length} 个非知识点` : ""}），可在「📋 学习清单」查看，点「💡 讲解」生成详细讲解` }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/run-discover") {
-    // 重置进度并后台启动爬取（spawn 隐藏窗口 + 日志重定向，不弹终端）
-    if (crawlMutex.isRunning()) {
-      res.writeHead(409, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: false, error: "已有爬取任务运行中" }));
-      return;
-    }
-    try {
-      writeFileSync(path.join(config.outputDir, "..", "progress.json"), JSON.stringify({ status: "running", step: "start", message: "爬取启动中...", current: 0, total: 0 }), "utf8");
-    } catch { /* ignore */ }
-    runDiscoverHidden();
-    res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, msg: "后台已触发" }));
-    return;
-  }
-  if (url.pathname === "/api/patrol-config") {
-    // 巡检配置：GET 读取（enabled/intervalMin/lastRun/nextRun），POST 修改（即时重排定时器）
-    if (req.method === "GET") {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify(getPatrolConfig()));
-      return;
-    }
-    if (req.method === "POST") {
-      readBody(req, res, (body) => {
-        try {
-          const cfg = JSON.parse(body || "{}");
-          if (cfg.enabled !== undefined && typeof cfg.enabled !== "boolean") {
-            res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
-            res.end(JSON.stringify({ error: "enabled 必须是布尔值" })); return;
-          }
-          if (cfg.intervalMin !== undefined) {
-            const n = Math.round(Number(cfg.intervalMin));
-            if (!Number.isInteger(n) || n < PATROL_MIN_MINUTES || n > PATROL_MAX_MINUTES) {
-              res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
-              res.end(JSON.stringify({ error: `intervalMin 必须是 ${PATROL_MIN_MINUTES}-${PATROL_MAX_MINUTES} 之间的整数分钟` })); return;
-            }
-            patrolState.intervalMin = n;
-            writePatrolSetting("patrol_interval_min", String(n));
-          }
-          if (cfg.enabled !== undefined) {
-            if (DISABLE_PATROL && cfg.enabled) {
-              res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
-              res.end(JSON.stringify({ error: "环境变量 MIANSHI_DISABLE_PATROL=1 已强制关闭巡检，无法在面板开启" })); return;
-            }
-            patrolState.enabled = cfg.enabled;
-            writePatrolSetting("patrol_enabled", cfg.enabled ? "1" : "0");
-          }
-          scheduleNextPatrol(); // 改配置：取消旧 timer 重排
-          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-          res.end(JSON.stringify(getPatrolConfig()));
-        } catch (e) {
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: e.message }));
-        }
-      });
-      return;
-    }
-    res.writeHead(405, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Method Not Allowed" }));
-    return;
-  }
-  if (url.pathname === "/api/patrol-run" && req.method === "POST") {
-    // 立即手动巡检一次（不重排定时器、不更新 lastRun）
-    if (DISABLE_PATROL) {
-      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ error: "环境变量 MIANSHI_DISABLE_PATROL=1 已强制关闭巡检" }));
-      return;
-    }
-    patrolInterests().catch(() => {});
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ ok: true, msg: "已触发巡检" }));
-    return;
-  }
-  if (url.pathname === "/api/progress") {
-    // 桌宠轮询爬取进度
-    try {
-      const p = JSON.parse(readFileSync(path.join(config.outputDir, "..", "progress.json"), "utf8"));
-      res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(p));
-    } catch {
-      res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ status: "idle", message: "暂无爬取任务" }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/rss/digest") {
-    // 今日技术资讯摘要（读取，不触发抓取）
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({
-      ok: true,
-      today: rssApi.localToday(),
-      digest: rssApi.getDigest(),
-      lastDigestAt: rssApi.getLastDigestAt() || null,
-      feeds: rssApi.getFeeds().length,
-    }));
-    return;
-  }
-  if (url.pathname === "/api/rss/check" && req.method === "POST") {
-    // 手动触发：抓取 + LLM 摘要（同步等待结果返回给面板）
-    (async () => {
-      try {
-        const r = await rssApi.runDailyDigest();
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, ...r }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: false, error: String(e.message || e).slice(0, 200), digest: rssApi.getDigest(), lastDigestAt: rssApi.getLastDigestAt() || null }));
-      }
-    })();
-    return;
-  }
-  if (url.pathname === "/api/rss/config") {
-    // feed 列表：GET 读取，POST 修改（持久化到 settings）
-    if (req.method === "GET") {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, feeds: rssApi.getFeeds(), defaultFeeds: rssApi.DEFAULT_FEEDS }));
-      return;
-    }
-    if (req.method === "POST") {
-      readBody(req, res, (body) => {
-        try {
-          const { feeds } = JSON.parse(body || "{}");
-          const r = rssApi.setFeeds(feeds);
-          res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
-          res.end(JSON.stringify(r));
-        } catch (e) {
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: e.message }));
-        }
-      });
-      return;
-    }
-    res.writeHead(405, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Method Not Allowed" }));
-    return;
-  }
-  if (url.pathname === "/api/focus/start" && req.method === "POST") {
-    // 开始专注（番茄钟 25/45 分钟）
-    readBody(req, res, (body) => {
-      try {
-        const { mode } = JSON.parse(body || "{}");
-        const r = focusApi.startFocus(String(mode || ""));
-        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: false, error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/focus/stop" && req.method === "POST") {
-    // 结束专注（completed=true 表示完成，false 表示中断）
-    readBody(req, res, (body) => {
-      try {
-        const { completed } = JSON.parse(body || "{}");
-        const r = focusApi.stopFocus(!!completed);
-        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: false, error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/focus/status") {
-    // 专注状态（桌宠主进程轮询 + 面板倒计时）
-    try {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, ...focusApi.getFocusStatus() }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: false, error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/focus/distract" && req.method === "POST") {
-    // 记录一次分心（桌宠主进程检测到分心应用时上报）
-    try {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify(focusApi.recordDistract()));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: false, error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/focus/stats") {
-    // 今日专注统计
-    try {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, ...focusApi.getFocusStats() }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: false, error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/api/focus/blacklist") {
-    // 分心黑名单：GET 读取（含默认值），POST 修改（持久化到 settings）
-    if (req.method === "GET") {
-      try {
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, blacklist: focusApi.getBlacklist(), defaults: focusApi.DEFAULT_BLACKLIST }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: false, error: e.message }));
-      }
-      return;
-    }
-    if (req.method === "POST") {
-      readBody(req, res, (body) => {
-        try {
-          const { blacklist } = JSON.parse(body || "{}");
-          const r = focusApi.setBlacklist(blacklist);
-          res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
-          res.end(JSON.stringify(r));
-        } catch (e) {
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ ok: false, error: e.message }));
-        }
-      });
-      return;
-    }
-    res.writeHead(405, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Method Not Allowed" }));
-    return;
-  }
-  if (url.pathname === "/api/mail/config") {
-    // 邮箱配置：GET 读取（脱敏，不返回授权码），POST 保存（持久化到 settings mail_config）
-    if (req.method === "GET") {
-      try {
-        const cfg = mailApi.getConfig();
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, config: { email: cfg.email, enabled: cfg.enabled, configured: !!(cfg.email && cfg.authCode) } }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
-    }
-    if (req.method === "POST") {
-      readBody(req, res, (body) => {
-        try {
-          const { email, authCode } = JSON.parse(body || "{}");
-          const r = mailApi.setConfig({ email, authCode });
-          res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
-          res.end(JSON.stringify(r));
-        } catch (e) {
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: e.message }));
-        }
-      });
-      return;
-    }
-    res.writeHead(405, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Method Not Allowed" }));
-    return;
-  }
-  if (url.pathname === "/api/mail/test" && req.method === "POST") {
-    // 测试连接：用提交的邮箱/授权码连 IMAP（不落库）
-    readBody(req, res, async (body) => {
-      try {
-        const { email, authCode } = JSON.parse(body || "{}");
-        const r = await mailApi.testConnection({ email, authCode });
-        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: false, error: e.message }));
-      }
-    });
-    return;
-  }
-  if (url.pathname === "/api/mail/check" && req.method === "POST") {
-    // 立即检查：拉未读 → LLM 识别 → 入库（同步等待结果返回给面板）
-    (async () => {
-      try {
-        const r = await mailApi.runMailCheck();
-        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: false, error: String(e.message || e).slice(0, 200) }));
-      }
-    })();
-    return;
-  }
-  if (url.pathname === "/api/schedule") {
-    // 未来日程列表（面试/笔试邀约）
-    try {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, events: mailApi.getSchedule() }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-  if (url.pathname === "/" || url.pathname === "/index.html") {
-    // 最小状态页（健康检查/浏览器访问）：真实 UI 在 Electron 面板
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>mianshi-agent 服务</title></head>
-<body style="font-family:sans-serif;background:#121218;color:#e8e8ef;padding:20px">
-<h3>📌 mianshi-agent 数据服务运行中</h3>
-<p>完整面板在桌宠（双击真白打开）。此页面仅供健康检查。</p>
-<p>状态: <span style="color:#5fd85f">OK</span> · ${new Date().toLocaleString("zh-CN")}</p>
-</body></html>`);
-    return;
-  }
   res.writeHead(404); res.end("Not Found");
 });
 
@@ -1803,6 +535,12 @@ let patrolRunning = false; // 巡检重入保护标记
 
 async function patrolInterests() {
   if (patrolRunning) return; // 重入保护：定时巡检与手动 /api/patrol-run 重叠时跳过
+  // 每日 token 预算检查（设置中心可配；超限跳过本轮巡检）
+  const remaining = patrolBudgetRemaining();
+  if (remaining <= 0) {
+    console.log(`[widget] 巡检跳过：今日 token 预算已用尽（上限 ${patrolDailyBudget()}）`);
+    return;
+  }
   const interests = memory.getInterests();
   if (!interests.length) return;
   patrolRunning = true;
@@ -1810,8 +548,18 @@ async function patrolInterests() {
     const { chatWithAgent } = { chatWithAgent: null }; // 避免循环依赖，直接调 search
     const { fetchPage } = await import("./lib/fetch-page.mjs");
     const re = /(\/discuss\/\d+|\/post\/\d+|\/article\/details\/\d+|juejin\.cn\/post\/\d+|blog\.csdn\.net\/[^/]+\/article\/details\/\d+)/;
-    // 标题级方向过滤：嵌入式/硬件/算法/后端 + 简历/求职咨询/闲聊类（避免通知混入无关内容）
-    const EXCLUDE_TITLE = /嵌入式|单片机|硬件|驱动|PCB|STM32|ESP32|ARM|芯片|FPGA|物联网|上位机|爬虫开发/;
+    // 标题级方向过滤：方向排除词来自画像 ignoreNote（转方向/开源自动跟随）+ 与方向无关的噪音词
+    const { getCareerProfile } = await import("./lib/career.mjs");
+    const prof = getCareerProfile();
+    const noiseRe = /嵌入式|单片机|硬件|驱动|PCB|STM32|ESP32|ARM|芯片|FPGA|物联网|上位机|爬虫开发/;
+    const ignoreWords = String(prof.ignoreNote || "")
+      .split(/[/、,，\s]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 2 && !/[（()）]/.test(s));
+    const dirRe = ignoreWords.length
+      ? new RegExp(ignoreWords.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "i")
+      : null;
+    const EXCLUDE_TITLE = dirRe ? new RegExp(`${noiseRe.source}|${dirRe.source}`, "i") : noiseRe;
     const newPosts = [];
     // 取前 2 个关注点，每个搜多站（牛客/掘金/CSDN）
     const searchSites = [
@@ -1877,6 +625,44 @@ async function patrolInterests() {
 }
 let lastFullCrawl = null; // 全量爬取限频标记
 
+// ---------- 巡检每日 token 预算（设置中心可配：patrol_daily_tokens，0=不限） ----------
+const PATROL_BUDGET_KEY = "patrol_daily_tokens";
+const PATROL_BUDGET_DEFAULT = 100000; // 默认每日上限（4 帖 × 讲解 ~2.4 万 token/帖 + 分类/题目检测）
+
+/** 读取巡检 token 预算（0=不限） */
+function patrolDailyBudget() {
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key=?").get(PATROL_BUDGET_KEY);
+    const n = row?.value != null ? Number(String(row.value)) : PATROL_BUDGET_DEFAULT;
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+  } catch { return PATROL_BUDGET_DEFAULT; }
+}
+
+/** 今日巡检已用 token（trace_llm 按 role=patrol 汇总） */
+function patrolUsedTokensToday() {
+  try {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const r = db.prepare("SELECT COALESCE(SUM(input_tokens),0) i, COALESCE(SUM(output_tokens),0) o FROM trace_llm WHERE role='patrol' AND ts >= ?").get(start.getTime());
+    return (Number(r?.i) || 0) + (Number(r?.o) || 0);
+  } catch { return 0; }
+}
+
+/** 巡检 token 预算检查：剩余可用；超限返回剩余 0（patrolInterests/processPatrolPosts 开头调用） */
+function patrolBudgetRemaining() {
+  const budget = patrolDailyBudget();
+  if (budget <= 0) return Infinity; // 0 = 不限
+  return budget - patrolUsedTokensToday();
+}
+
+/** 更新巡检配置里的预算（patrol-config API 用） */
+function setPatrolBudget(tokens) {
+  const n = Number(tokens);
+  if (!Number.isFinite(n) || n < 0) return { ok: false, error: "预算必须是 ≥0 的整数（0=不限）" };
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?,?,?)")
+    .run(PATROL_BUDGET_KEY, String(Math.floor(n)), Date.now());
+  return { ok: true };
+}
+
 // 巡检方向白名单：跟随求职目标（方向画像 direction；默认前端/Agent）
 // backend → 只巡检后端/全栈；fullstack → 全方向；frontend/agent/未设置 → 前端/Agent
 function patrolGoodDirs() {
@@ -1901,16 +687,22 @@ async function processPatrolPosts(posts) {
     const GOOD_DIRS = patrolGoodDirs(); // 方向过滤跟随求职目标（转后端后只巡检后端相关）
     for (const p of posts) {
       try {
+        // 每日 token 预算：每帖处理前检查，超限停止（讲解是 token 大户）
+        if (patrolBudgetRemaining() <= 0) {
+          console.log(`[widget] 巡检讲解停止：今日 token 预算已用尽`);
+          skip("token 预算用尽");
+          break;
+        }
         // 标记已看（避免下次重复通知）
         memory.markSeen(p.url);
         const page = await fetchPage(p.url, { maxTextChars: 6000 });
         if (!page.ok || page.invalid || !page.text || page.text.length < 200) { skip("页面无效/404"); continue; }
         // 方向过滤：跟随求职目标
-        const cls = await classifyPage({ title: page.title, text: page.text });
+        const cls = await classifyPage({ title: page.title, text: page.text }, "patrol");
         if (!GOOD_DIRS.includes(cls.direction)) { skip("非目标方向"); continue; }
         if (cls.worth < 40) { skip("内容价值低"); continue; }
         // 具体题目检测：攻略文跳过
-        const dq = await detectQuestions({ title: page.title, text: page.text });
+        const dq = await detectQuestions({ title: page.title, text: page.text }, "patrol");
         if (!dq.hasQuestion || !dq.questions?.length) { skip("攻略文/无具体题"); continue; }
         // 完整讲解
         const md = await solveQuestion({
@@ -1919,7 +711,7 @@ async function processPatrolPosts(posts) {
           company: cls.company,
           position: cls.position,
           sourceUrl: p.url,
-        });
+        }, "patrol");
         // 存档到 output/<date>_patrol/
         const date = new Date().toISOString().slice(0, 10);
         const dir = path.join(config.outputDir, `${date}_patrol`);
