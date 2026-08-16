@@ -528,6 +528,22 @@ registerTimer(checkFocusEnd, 60 * 1000);
 // 面试/笔试邀约提醒：每 30 分钟检查（24h 内 + 4 小时冷却）；启动 2 分钟后 catch-up
 registerInterval(checkScheduleReminder, 30 * 60 * 1000);
 registerTimer(checkScheduleReminder, 2 * 60 * 1000);
+// 邮箱自动检查（闭环：设置中心配置邮箱 → 定时拉未读 → LLM 识别邀约 → schedule_events → 提醒）。
+// 此前只有手动「立即检查」触发，配置后从不自动拉取，日程/提醒永远空
+const checkMail = async () => {
+  try {
+    const cfg = mailApi.getConfig();
+    if (!cfg.enabled || !cfg.email || !cfg.authCode) return; // 未配置/未启用不拉取
+    console.log("[widget] 邮箱自动检查…");
+    await mailApi.runMailCheck();
+  } catch (e) {
+    console.log(`[widget] 邮箱检查失败: ${String(e?.message || e).slice(0, 80)}`);
+  }
+};
+if (!DISABLE_BACKGROUND) {
+  registerInterval(checkMail, 30 * 60 * 1000); // 每 30 分钟
+  registerTimer(checkMail, 90 * 1000);         // 启动 90 秒后先检查一次
+}
 
 // ============ 持久化定时任务（scheduled_jobs，OpenClaw Automations 风格） ============
 // 现有硬编码定时器（巡检/资讯摘要/学习提醒）保持不变；scheduler 是 ADDITIVE 层：

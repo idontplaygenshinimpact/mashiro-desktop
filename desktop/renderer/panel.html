@@ -78,18 +78,18 @@
           <input id="iv-focus" type="text" placeholder="如：React / 事件循环 / 简历项目" />
         </div>
         <div class="form-row">
-          <label>📄 简历内容（支持上传文件或粘贴文本——面试官会基于简历追问项目经历）</label>
+          <label>📄 简历内容（面试官会基于简历追问项目经历；留空自动使用「⚙️ 设置」里已上传的简历）</label>
           <div class="resume-upload" id="resume-upload">
             <input type="file" id="iv-file" accept=".txt,.md,.json,.docx,.pdf" hidden />
             <button id="iv-file-btn" class="secondary" type="button">📂 上传简历文件</button>
             <button id="resume-plan-btn" class="secondary" type="button" title="把简历项目加入学习清单，逐个准备拷打档案">🎯 生成拷打清单</button>
             <span class="resume-file-hint" id="resume-file-hint">支持 .txt / .md / .json / .docx / .pdf</span>
           </div>
-          <textarea id="iv-resume" placeholder="或直接粘贴简历文本：项目经历、实习、技能、教育背景...&#10;留空则面试官只问通用技术题"></textarea>
+          <textarea id="iv-resume" placeholder="或直接粘贴简历文本：项目经历、实习、技能、教育背景...&#10;留空自动使用设置中心已上传的简历（面试官同样会拷打项目）"></textarea>
           <div class="resume-status" id="resume-status"></div>
         </div>
         <button id="iv-start" class="primary">🎤 开始模拟面试</button>
-        <div class="iv-hint">面试会参考你的学习清单 + 最近面经 + 薄弱点出题；提供简历后优先从简历项目切入追问</div>
+        <div class="iv-hint">面试会参考你的学习清单 + 最近面经 + 薄弱点出题；简历自动联动（设置里上传的 / 本框粘贴的都会用于项目拷打）</div>
         <div class="iv-weak-row hidden" id="iv-weak-row">
           <span style="font-size:11px;color:#5d48b8;font-weight:600;">🎯 已知薄弱点（点一下填入重点方向，面试将优先考察）：</span>
           <div class="iv-weak-chips" id="iv-weak-chips"></div>
