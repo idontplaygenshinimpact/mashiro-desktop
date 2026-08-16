@@ -37,7 +37,7 @@ async function waitReady(timeoutMs = 90000) {
 }
 
 before(async () => {
-  child = spawn(process.execPath, ["widget.mjs"], {
+  child = spawn(process.execPath, ["widget.mjs", "--no-notify"], {
     cwd: ROOT,
     windowsHide: true,
     stdio: ["ignore", "ignore", "pipe"],
@@ -187,6 +187,67 @@ test("POST /api/approval 缺 toolName → 400", async () => {
 test("POST /api/approval 不存在的请求 → ok:false", async () => {
   const r = await (await api("/api/approval", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ toolName: "nope", allow: true }) })).json();
   assert.equal(r.ok, false);
+});
+
+// ---------- 核心基础设施域（纵向拆分：lib/routes/core.mjs） ----------
+test("GET / 与 /index.html 返回状态页", async () => {
+  const r = await fetch(`${BASE}/`);
+  assert.equal(r.status, 200);
+  assert.ok((await r.text()).includes("mianshi-agent"));
+  const r2 = await fetch(`${BASE}/index.html`);
+  assert.equal(r2.status, 200);
+  assert.ok((await r2.text()).includes("mianshi-agent"));
+});
+
+test("GET /api/patrol-config 返回配置+预算（强制关闭态）", async () => {
+  const r = await (await api("/api/patrol-config")).json();
+  assert.equal(r.ok, true);
+  assert.equal(r.enabled, false); // MIANSHI_DISABLE_PATROL=1
+  assert.ok(typeof r.intervalMin === "number");
+  assert.ok(typeof r.dailyTokenBudget === "number");
+  assert.ok(typeof r.usedToday === "number");
+});
+
+test("POST /api/patrol-config 改 intervalMin → 生效", async () => {
+  const r = await (await api("/api/patrol-config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intervalMin: 30 }) })).json();
+  assert.equal(r.ok, true);
+  assert.equal(r.intervalMin, 30);
+});
+
+test("POST /api/patrol-config 非法 intervalMin → 400", async () => {
+  const r = await api("/api/patrol-config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intervalMin: 5 }) });
+  assert.equal(r.status, 400);
+});
+
+test("POST /api/patrol-config 强制关闭下开启 → 400", async () => {
+  const r = await api("/api/patrol-config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: true }) });
+  assert.equal(r.status, 400);
+});
+
+test("POST /api/patrol-run 强制关闭 → 400 不触发巡检", async () => {
+  const r = await api("/api/patrol-run", { method: "POST" });
+  assert.equal(r.status, 400);
+});
+
+test("POST /api/refresh → ok（不崩溃）", async () => {
+  const r = await (await api("/api/refresh", { method: "POST" })).json();
+  assert.equal(r.ok, true);
+});
+
+test("POST /api/notify-test → ok", async () => {
+  const r = await (await api("/api/notify-test", { method: "POST" })).json();
+  assert.equal(r.ok, true);
+});
+
+test("GET /api/progress → 结构（idle 或 running）", async () => {
+  const r = await (await api("/api/progress")).json();
+  assert.ok(r.status === "idle" || r.status === "running", `status=${r.status}`);
+});
+
+test("GET /api/schedule → events 数组", async () => {
+  const r = await (await api("/api/schedule")).json();
+  assert.equal(r.ok, true);
+  assert.ok(Array.isArray(r.events));
 });
 
 // ---------- 错误路径 ----------
