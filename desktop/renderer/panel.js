@@ -2997,7 +2997,7 @@ async function loadSettings() {
     if (r?.ok) {
       $("set-rag-enabled").checked = !!r.enabled;
       $("set-rag-status").textContent = r.enabled
-        ? `✅ 已开启 · ${r.assets} 条资产（模型 bge-small，约 100MB 内存）`
+        ? `✅ 已开启 · ${r.assets} 条资产（纯关键词检索，0 内存）`
         : `已关闭（0 内存占用）${r.assets > 0 ? ` · 库内仍有 ${r.assets} 条历史数据，开启后自动重建` : ""}`;
     }
   } catch { /* ignore */ }
