@@ -406,6 +406,8 @@ ipcMain.handle("widget:observability", () => widgetGet("/api/observability"));
 // 自动巡检配置：无参数 GET 读取，有参数 POST 修改（即时重排定时器）
 ipcMain.handle("widget:patrol-config", (e, cfg) => (cfg && Object.keys(cfg).length ? widgetPost("/api/patrol-config", cfg) : widgetGet("/api/patrol-config")));
 ipcMain.handle("widget:patrol-run", () => widgetPost("/api/patrol-run", {}));
+// 本地知识库（RAG）开关：无参数 GET 读取，有参数 POST 修改
+ipcMain.handle("widget:settings-rag", (e, cfg) => (cfg && Object.keys(cfg).length ? widgetPost("/api/settings/rag", cfg) : widgetGet("/api/settings/rag")));
 ipcMain.handle("widget:interview-notes", (e, { topics }) => widgetPost("/api/interview-notes", { topics }));
 ipcMain.handle("widget:study-detail", (e, { id }) => widgetGet(`/api/study-detail?id=${encodeURIComponent(id)}`));
 // 流式讲解：main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）

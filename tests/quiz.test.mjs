@@ -9,7 +9,14 @@ const { generateQuiz, ensureQuiz, drawQuiz, submitQuiz, getQuizStats, quizDiffic
 const { review } = await import("../lib/review.mjs");
 const { db } = await import("../lib/db.mjs");
 
-beforeEach(async () => { await clearAllTables(); });
+beforeEach(async () => { await clearAllTables(); enableRag(); });
+// RAG 默认关闭（设置中心可配）——本文件有知识库素材注入用例，显式开启
+async function enableRag() {
+  try {
+    const { db } = await import("../lib/db.mjs");
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('rag_enabled','1',?)").run(Date.now());
+  } catch { /* ignore */ }
+}
 after(() => { cleanupTempDb(dbDir); });
 
 const VALID_JSON = JSON.stringify({

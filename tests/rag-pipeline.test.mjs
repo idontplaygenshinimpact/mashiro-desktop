@@ -47,6 +47,8 @@ Hooks 按调用顺序在组件内部存取状态，所以不能写在条件分�
 
 beforeEach(async () => {
   await clearAllTables();
+  // RAG 默认关闭（设置中心可配）——测试显式开启
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('rag_enabled','1',?)").run(Date.now());
   // 清理临时目录重建
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });

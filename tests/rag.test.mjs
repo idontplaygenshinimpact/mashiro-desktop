@@ -68,6 +68,8 @@ const seed = (items) => {
 
 beforeEach(async () => {
   await clearAllTables();
+  // RAG 默认关闭（设置中心可配）——测试显式开启
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('rag_enabled','1',?)").run(Date.now());
   seed([
     { id: "kb_s1", source: "study", kind: "note", title: "学习·事件循环", content: "事件循环：宏任务与微任务执行顺序详解", text: "事件循环 宏任务" },
     { id: "kb_s2", source: "job", kind: "job", title: "岗位·美团 Agent 算法实习生", content: "美团招聘 Agent 算法实习生", text: "Agent LLM 算法" },
