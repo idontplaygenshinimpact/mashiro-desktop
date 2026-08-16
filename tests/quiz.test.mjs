@@ -128,3 +128,27 @@ test("submitQuiz：换批后抽题优先新批", () => {
   assert.equal(d.questions.length, 3);
   assert.equal(d.questions[0].id, "new1", "新批优先");
 });
+
+// ---------- 方向画像驱动：改画像后选择题 prompt 跟随（转后端出后端题） ----------
+test("generateQuiz prompt 跟随方向画像（角色/范围/代码语言）", async () => {
+  const { saveCareerProfile, resetCareerProfile, invalidateCareerProfile } = await import("../lib/career.mjs");
+  const { getLastMessages, setLlmResponses } = await import("./helpers.mjs");
+  const card = review.addCard({ topic: "数据库索引", question: "讲讲 B+树" });
+  try {
+    saveCareerProfile({
+      roleLabel: "资深后端开发面试辅导老师",
+      scopeNote: "后端 / 微服务 / 数据库",
+      codeLang: "Python / Go",
+    });
+    setLlmResponses(VALID_JSON);
+    await generateQuiz(card);
+    const promptText = getLastMessages().map((m) => m.content).join("\n");
+    assert.ok(promptText.includes("资深后端开发面试辅导老师"), "角色跟随画像");
+    assert.ok(promptText.includes("后端 / 微服务 / 数据库"), "方向范围跟随画像");
+    assert.ok(promptText.includes("Python / Go"), "代码语言跟随画像");
+    assert.ok(!promptText.includes("资深前端面试辅导老师"), "不再硬编码前端角色");
+  } finally {
+    resetCareerProfile();
+    invalidateCareerProfile();
+  }
+});
