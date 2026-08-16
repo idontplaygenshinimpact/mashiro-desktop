@@ -1,0 +1,66 @@
+# 真白语音合成流程（固化版）
+
+一键流程：**合成 → 评测 → 审计**，全部参数化、可复现。
+
+## 快速开始
+
+```bash
+# 1. 全量合成 26 条（新模型/新 ref 改 long-lines.json 或传参）
+npm run voice:synth
+
+# 2. 质量评测（内容完整度/音色/节奏/污染 → 综合分 A-D + 与上次对比）
+npm run voice:score
+
+# 3. 快速审计（2-gram 覆盖率 + ref 泄漏检测，无评分）
+npm run voice:audit
+```
+
+## 模型配置（scripts/long-lines.json 顶部）
+
+| 字段 | 当前值 | 说明 |
+|---|---|---|
+| `gpt` | `GPT_weights_v2/mashiro3/mashiro3-e20.ckpt` | GPT 模型（全量 1472 段 20 epoch） |
+| `sovits` | `SoVITS_weights_v2/mashiro3/G_233333333333_infer.pth` | SoVITS 模型（全量 16 epoch，推理格式） |
+| `ref_wav` | `radio/ref-clean-A.wav` | 参考音频（声纹 sim 0.962 的真白干声段） |
+| `ref_text` | `戻ろうと思って…離したら飛んでくわ` | ref 精确文本（whisper 转写确认） |
+
+换模型/ref 后重跑 `npm run voice:synth && npm run voice:score -- --compare` 即可对比。
+
+## 合成管线（synth-mashiro-long.py）
+
+1. **拆句**：长独白按 `。！？` 拆成 ≤60 字子句（短句生成成功率高）
+2. **文本清洗**：`\n`→`。`、`……`→`、`（消除模型强停顿标记）
+3. **逐子句合成**：每子句 5 次采样（top_p/temperature 微扫描）取 2-gram 完整度最高
+4. **拼接**：子句间插 0.15s 静音（停顿可控，`GAP_SEC` 可调）
+5. **产出**：`assets/voice/long/*.wav` + `long.json`（voice-pack 运行时读取）
+
+参数：`--gpt` `--sovits` `--ref` `--ref-text` `--only <scene>` `--skip-existing`
+
+## 评测体系（score-voices.py）
+
+每文件 5 项指标 → 综合分（0-1）→ 等级：
+
+| 指标 | 权重 | 说明 |
+|---|---|---|
+| cov（内容完整度） | 0.4 | whisper 转写 vs 原文 2-gram 覆盖率，≥0.8 满分 |
+| voice_sim（音色） | 0.3 | resemblyzer 声纹 vs 真白锚点（0.7→0 分，0.9→满分） |
+| pacing（节奏） | 0.2 | ms/字，110-170 自然满分，90-200 良，其余差 |
+| 基础分 | 0.1 | 声纹可用即得 |
+| pollution | -0.15/次 | ref 特征短语泄漏（换 ref 时更新 `POLLUTE` 列表） |
+
+- 等级：A ≥0.8 / B ≥0.65 / C ≥0.5 / D <0.5
+- 锚点缓存：`data/mashiro-anchor.npy`（首次从训练切片自动提取）
+- 历史对比：`data/voice-score-last.json`，`--compare` 显示与上次差值
+- 注意：faster-whisper(ctranslate2) 与 torch cuDNN 同进程冲突 → resemblyzer 强制 CPU
+
+## 评测基线（2026-08-17，mashiro3 GPT e20 + SoVITS 全量 + ref-clean-A + 拆句拼接）
+
+```
+26 条全 A | 平均分 0.94 | 完整度均 61% | 声纹 0.948 | 长独白 5-6 段拼接 0.15s 停顿
+```
+
+## 已知边界
+
+- whisper-medium 转写日文有错字 → cov 是下限估计（实际内容更全）
+- 个别短句（love-1 等）模型生成不稳定 → `scripts/refix-voices.py <file>` 多采样补（12 次）
+- SoVITS 重训流程：`GPT-SoVITS` 侧 `s2_train.py -c tmp_s2_mashiro3.json` → 转换推理权重（weight+config 底模）→ 更新 long-lines.json 的 `sovits` 字段

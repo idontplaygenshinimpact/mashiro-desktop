@@ -105,6 +105,23 @@ export function playLongScene(scene) {
   return playVoicePack(file);
 }
 
+// ---------- 单击应答：随机播一条新合成长句（GPT-SoVITS），让点击有新鲜语音 ----------
+// 场景池：问候/夸赞/鼓励/安慰/发呆/爱意/完成/面试/音乐（人设一致的日常应答）
+const CLICK_LONG_SCENES = ["greeting", "praise", "encourage", "comfort", "idle", "love", "done", "interview", "music"];
+export function playClickLong() {
+  const lines = loadLongLines();
+  const pool = [];
+  for (const scene of CLICK_LONG_SCENES) {
+    const files = (lines[scene] || {}).files || [];
+    for (const f of files) {
+      if (existsSync(path.join(VOICE_DIR, "long", f))) pool.push(f);
+    }
+  }
+  if (!pool.length) return playScene("click"); // 无长句回退短句应答
+  const file = path.join(VOICE_DIR, "long", pool[Math.floor(Math.random() * pool.length)]);
+  return playVoicePack(file);
+}
+
 /** 长句文案查询（气泡显示中文翻译用）：{zh, files} 或 null */
 export function pickLongLine(scene) {
   const lines = loadLongLines();

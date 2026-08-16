@@ -23,7 +23,11 @@
     "dist": "electron-builder --win",
     "dist:portable": "electron-builder --win portable",
     "build:renderer": "esbuild desktop/renderer/app.js --bundle --format=esm --outfile=desktop/renderer/app.bundle.js --log-level=warning",
-    "check:renderer": "node scripts/check-renderer.mjs"
+    "check:renderer": "node scripts/check-renderer.mjs",
+    "voice:synth": "py -3.12 scripts/synth-mashiro-long.py",
+    "voice:score": "py -3.12 scripts/score-voices.py --compare",
+    "voice:audit": "py -3.12 scripts/audit-voices.py",
+    "test:module": "node scripts/test-module.mjs"
   },
   "build": {
     "appId": "com.mianshi.mascot",

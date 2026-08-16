@@ -16,6 +16,8 @@ export function setupTempDb(label) {
   // 测试默认隔离 MCP：指向空配置（防止 chatWithAgent 连到真实/残留 MCP server 导致子进程挂住测试进程）
   const mcpCfg = path.join(dir, "mcp-empty.json");
   process.env.MIANSHI_MCP_CONFIG = mcpCfg;
+  // 知识树模板文件隔离：防 loadTreeTemplate/applyDirectionAuto 写真实 data/knowledge-trees.json 污染其他测试
+  process.env.KNOWLEDGE_TREES_FILE = path.join(dir, "knowledge-trees.json");
   try { writeFileSync(mcpCfg, "[]", "utf8"); } catch { /* ignore */ }
   return dir;
 }
