@@ -22,13 +22,14 @@ function switchTab(name) {
   if (btn) btn.classList.add("active");
   const panel = document.getElementById("tab-" + name);
   if (panel) panel.classList.add("active");
-  if (name === "interview") loadIvWeakChips();
+  if (name === "interview") { loadIvWeakChips(); loadIvResumeAuto(); }
   if (name === "study") { loadStudyPlan(); loadFocus(); }
   if (name === "crawl") { loadCrawlData(); loadRss(); }
   if (name === "review") loadReview();
   if (name === "kb") { loadKbStats(); loadDocs(); loadDocsProject(); }
   if (name === "dashboard") loadDashboard();
-  if (name === "jobs") loadSchedule();
+  if (name === "jobs") { loadSchedule(); startJobsSchedTimer(); }
+  else stopJobsSchedTimer();
   if (name === "settings") { loadSettings(); loadProfileStatus(); }
   $("settings-gear")?.classList.toggle("active", name === "settings");
 }
@@ -239,6 +240,23 @@ $("iv-start").addEventListener("click", () => {
     resume: $("iv-resume").value.trim(),
   });
 });
+
+// 闭环：面试简历自动联动设置中心已上传的简历（iv-resume 留空时预填，不用重复粘贴）
+async function loadIvResumeAuto() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/jobs/profile");
+    const j = await r.json();
+    const statusEl = $("resume-status");
+    if (j.rawSaved && j.rawText) {
+      if (!$("iv-resume").value.trim()) $("iv-resume").value = j.rawText;
+      statusEl.textContent = $("iv-resume").value.trim()
+        ? "✅ 已自动使用设置里上传的简历（可修改；清空则面试官仍会用设置里的简历）"
+        : "✅ 设置里有简历，面试官会自动使用";
+    } else {
+      statusEl.textContent = "📭 设置里还没上传简历——可在此粘贴，或去「⚙️ 设置」上传（上传后全链路复用：岗位匹配/面试拷打/投递招呼语）";
+    }
+  } catch { /* ignore */ }
+}
 
 // 启动面试会话（iv-start 按钮 + 复习检验共用）：成功即切到面试中形态
 async function startIvSession(cfg) {
@@ -2926,6 +2944,16 @@ async function loadDashboard() {
   } catch { /* widget 未启动忽略 */ }
 }
 $("dashboard-refresh-btn")?.addEventListener("click", loadDashboard);
+
+// 日程周期刷新（jobs Tab 停留时每分钟拉一次——邀约识别/岗位笔试随时可能新增）
+let jobsSchedTimer = null;
+function startJobsSchedTimer() {
+  if (jobsSchedTimer) return;
+  jobsSchedTimer = setInterval(() => { try { loadSchedule(); } catch { /* ignore */ } }, 60000);
+}
+function stopJobsSchedTimer() {
+  if (jobsSchedTimer) { clearInterval(jobsSchedTimer); jobsSchedTimer = null; }
+}
 
 // ============ 设置中心（全部配置统一入口，与各 Tab 共用后端配置） ============
 async function loadSettings() {
