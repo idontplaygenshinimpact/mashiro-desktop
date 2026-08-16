@@ -1,5 +1,5 @@
 // rag 流水线测试：全量重建采集（md 切片/去重/kind + DB 资产）/ RAG 问答闭环 / 增量更新（增改删）
-// 技巧：RAG_EMBED_MODEL 指向不存在的模型 → 走 embedding 降级路径（顺带覆盖降级分支，且不加载真实模型）
+// 轻量实现：纯 FTS5 关键词检索（无 embedding 模型，零内存）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, rmSync, utimesSync, mkdirSync, readFileSync } from "node:fs";
@@ -64,7 +64,7 @@ test("rebuild 全量：md 切片标题带文件名 + 去重 + kind 判定 + DB �
   writeMd("2026-08-05_discover/面经.md", MIANJING_MD);
   writeMd("2026-08-05_discover/教程.md", JIAOCHENG_MD);
   const r = await rag.rebuildKnowledgeBase();
-  assert.equal(r.embedding, false, "走降级路径（无真实模型）");
+  assert.equal(typeof r.items, "number", "重建成功（纯 FTS5，无模型依赖）");
   // 文档资产数 = learning-sites.json 实际 site 数（动态，不硬编码）
   const sitesJson = JSON.parse(readFileSync(new URL("../data/learning-sites.json", import.meta.url), "utf8"));
   const docCount = sitesJson.categories.reduce((n, c) => n + c.sites.length, 0);
