@@ -2963,6 +2963,16 @@ async function loadSettings() {
     if (j?.config?.email) $("set-mail-email").value = j.config.email;
     $("set-mail-status").textContent = j.config?.configured ? `✅ 已配置 ${j.config.email}` : "未配置";
   } catch { /* ignore */ }
+  // 本地知识库（RAG）开关
+  try {
+    const r = await window.kanban.ragConfig();
+    if (r?.ok) {
+      $("set-rag-enabled").checked = !!r.enabled;
+      $("set-rag-status").textContent = r.enabled
+        ? `✅ 已开启 · ${r.assets} 条资产（模型 bge-small，约 100MB 内存）`
+        : `已关闭（0 内存占用）${r.assets > 0 ? ` · 库内仍有 ${r.assets} 条历史数据，开启后自动重建` : ""}`;
+    }
+  } catch { /* ignore */ }
   // 桌宠
   loadSettingsMascot();
   // 方向画像（讲解/面试/考点提炼角度）
@@ -3200,6 +3210,20 @@ $("set-patrol-budget")?.addEventListener("change", async () => {
       : "✅ token 不限（0）";
   } else {
     $("set-patrol-status").textContent = "⚠️ " + (r?.error || "保存失败");
+  }
+});
+
+// 本地知识库（RAG）开关
+$("set-rag-enabled")?.addEventListener("change", async () => {
+  const on = $("set-rag-enabled").checked;
+  const r = await window.kanban.ragConfig({ enabled: on });
+  if (r?.ok) {
+    $("set-rag-status").textContent = on
+      ? "✅ 已开启，后台构建中（首次约 1-3 分钟，可稍后刷新查看状态）"
+      : "已关闭（0 内存占用）";
+  } else {
+    $("set-rag-enabled").checked = !on;
+    $("set-rag-status").textContent = "⚠️ " + (r?.error || "保存失败");
   }
 });
 

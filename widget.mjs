@@ -474,10 +474,11 @@ const timers = [];
 const registerTimer = (fn, ms, ...args) => { timers.push(setTimeout(fn, ms, ...args)); };
 const registerInterval = (fn, ms, ...args) => { timers.push(setInterval(fn, ms, ...args)); };
 
-// 本地知识库：启动后若为空则后台构建（首次 ~15-60s；增量可手动点面板重建）；互斥防重叠
+// 本地知识库：设置中心开关（rag_enabled，默认关）——开启后启动自动构建 + 每 6 小时增量
 let ragBuilding = false;
 const ragBuildTick = async () => {
   if (ragBuilding) return;
+  if (!ragApi.ragEnabled()) return; // 未启用：不构建、不加载模型（0 内存）
   ragBuilding = true;
   try {
     const stats = ragApi.getKnowledgeStats();

@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld("kanban", {
   getObservability: () => ipcRenderer.invoke("widget:observability"),
   patrolConfig: (cfg) => ipcRenderer.invoke("widget:patrol-config", cfg || {}),
   patrolRun: () => ipcRenderer.invoke("widget:patrol-run"),
+  ragConfig: (cfg) => ipcRenderer.invoke("widget:settings-rag", cfg || {}),
   interviewNotes: (topics) => ipcRenderer.invoke("widget:interview-notes", { topics }),
   studyDetail: (id) => ipcRenderer.invoke("widget:study-detail", { id }),
   studyDetailStream: (id, onChunk) => streamPromise({
