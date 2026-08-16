@@ -21,7 +21,9 @@
     "lint": "eslint .",
     "coverage": "node --experimental-test-module-mocks --experimental-test-coverage --test \"tests/*.test.mjs\"",
     "dist": "electron-builder --win",
-    "dist:portable": "electron-builder --win portable"
+    "dist:portable": "electron-builder --win portable",
+    "build:renderer": "esbuild desktop/renderer/app.js --bundle --format=esm --outfile=desktop/renderer/app.bundle.js --log-level=warning",
+    "check:renderer": "node scripts/check-renderer.mjs"
   },
   "build": {
     "appId": "com.mianshi.mascot",

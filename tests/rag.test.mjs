@@ -28,6 +28,34 @@ function fakeVector(text) {
   return v;
 }
 
+// ---------- 闭环：牛客真题/刷题 → 知识库（collectDbAssets 题目级资产） ----------
+test("collectDbAssets：真题题目 + TOP101 刷题进知识库（选择题出题素材闭环）", async () => {
+  // 建表 + 插数据（zhenti/oj 模块的表）
+  db.exec(`CREATE TABLE IF NOT EXISTS exam_papers (
+    id TEXT PRIMARY KEY, kind TEXT, company TEXT, title TEXT, test_id TEXT, url TEXT,
+    question_count INTEGER, single_count INTEGER, multi_count INTEGER, program_count INTEGER,
+    job_tags TEXT, found_at INTEGER, updated_at INTEGER)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS exam_questions (
+    id TEXT PRIMARY KEY, paper_test_id TEXT, q_index INTEGER, q_type TEXT, title TEXT, options TEXT, answer TEXT, created_at INTEGER)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS exam_problems (
+    id TEXT PRIMARY KEY, category TEXT, bm_no TEXT, title TEXT, difficulty TEXT, people TEXT, url TEXT, created_at INTEGER, updated_at INTEGER)`);
+  db.prepare("INSERT INTO exam_papers (id, kind, company, title, test_id, url, found_at, updated_at) VALUES (?,?,?,?,?,?,?,?)")
+    .run("p1", "real", "字节跳动", "2024校招前端笔试", "t1001", "https://nowcoder.com/test/1001", Date.now(), Date.now());
+  db.prepare("INSERT INTO exam_questions (id, paper_test_id, q_index, q_type, title, options, answer, created_at) VALUES (?,?,?,?,?,?,?,?)")
+    .run("q1", "t1001", 1, "single", "事件循环中微任务何时执行？", JSON.stringify(["A", "B"]), "B", Date.now());
+  db.prepare("INSERT INTO exam_problems (id, category, bm_no, title, difficulty, people, url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)")
+    .run("oj1", "链表", "BM1", "反转链表", "简单", "41.2w", "https://nowcoder.com/practice/oj1", Date.now(), Date.now());
+
+  const r = await incrementalRebuild();
+  assert.ok(r.ok !== false, "增量重建不崩");
+  const q = db.prepare("SELECT * FROM knowledge_items WHERE source='zhenti-q'").all();
+  assert.ok(q.length >= 1, "真题题目进知识库");
+  assert.ok(q[0].content.includes("事件循环"), "真题题干入库");
+  const o = db.prepare("SELECT * FROM knowledge_items WHERE source='oj'").all();
+  assert.ok(o.length >= 1, "TOP101 刷题进知识库");
+  assert.ok(o[0].content.includes("反转链表"), "刷题标题入库");
+});
+
 const seed = (items) => {
   const now = Date.now();
   const ins = db.prepare("INSERT INTO knowledge_items (id, source, kind, title, content, vector, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)");

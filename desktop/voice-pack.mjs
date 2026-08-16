@@ -8,7 +8,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const VOICE_DIR = path.join(import.meta.dirname, "..", "assets", "voice");
+const VOICE_DIR = process.env.MIANSHI_TEST_VOICE_DIR || path.join(import.meta.dirname, "..", "assets", "voice");
 const TMP_DIR = path.join(os.tmpdir(), "mashiro-tts");
 
 let linesCache = null;
@@ -145,15 +145,34 @@ export function resolveFfplay() {
 }
 
 /** 播放语音包音频：ffplay 优先（最可靠）；ffplay 不可用/失败 → PowerShell SoundPlayer 系统 API 兜底（wav） */
+// 防抖 + 互斥：同一时间只允许一个语音在播（新播放前杀掉旧的，避免连续点击叠加）；1.5s 内重复触发直接丢弃
+let activeVoicePlayer = null; // 当前语音播放进程（互斥）
+let lastVoicePlayAt = 0;      // 上次播放时间戳（防抖）
+const VOICE_DEBOUNCE_MS = 1500;
+
 export function playVoicePack(file) {
+  const now = Date.now();
+  if (now - lastVoicePlayAt < VOICE_DEBOUNCE_MS) {
+    console.log(`[voice] 防抖：${now - lastVoicePlayAt}ms 前刚播过，跳过 ${file.split(/[\\/]/).pop()}`);
+    return { ok: false, debounced: true };
+  }
+  lastVoicePlayAt = now;
+  // 互斥：杀掉上一个语音进程（避免多个 ffplay 同时出声叠加）
+  if (activeVoicePlayer) {
+    try { activeVoicePlayer.kill(); } catch { /* ignore */ }
+    activeVoicePlayer = null;
+  }
   const ff = resolveFfplay();
   if (ff) {
     try {
       const child = spawn(ff, ["-autoexit", "-nodisp", "-loglevel", "quiet", file], { windowsHide: true, detached: true, stdio: "ignore" });
+      activeVoicePlayer = child;
       child.on("error", (err) => {
         console.log(`[voice] ffplay 播放失败: ${err.message}`);
+        if (activeVoicePlayer === child) activeVoicePlayer = null;
         soundPlayerFallback(file);
       });
+      child.on("exit", () => { if (activeVoicePlayer === child) activeVoicePlayer = null; });
       child.unref();
       console.log(`[voice] 播放 ${file.split(/[\\/]/).pop()}（ffplay）`);
       return { ok: true, engine: "ffplay", file };

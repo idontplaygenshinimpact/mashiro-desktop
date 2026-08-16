@@ -5,7 +5,7 @@ import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses } 
 
 const dbDir = setupTempDb("quiz");
 mockLLM();
-const { generateQuiz, ensureQuiz, drawQuiz, submitQuiz, getQuizStats } = await import("../lib/quiz.mjs");
+const { generateQuiz, ensureQuiz, drawQuiz, submitQuiz, getQuizStats, quizDifficulty } = await import("../lib/quiz.mjs");
 const { review } = await import("../lib/review.mjs");
 const { db } = await import("../lib/db.mjs");
 
@@ -151,4 +151,63 @@ test("generateQuiz prompt 跟随方向画像（角色/范围/代码语言）", a
     resetCareerProfile();
     invalidateCareerProfile();
   }
+});
+
+// ---------- 难度分层闭环（知识树 difficulty 优先 / 复习次数 fallback） ----------
+test("quizDifficulty：知识树匹配优先（事件循环=中等）", () => {
+  const d = quizDifficulty({ topic: "事件循环" });
+  assert.equal(d.key, "mid");
+  assert.equal(d.from, "tree");
+  const d2 = quizDifficulty({ topic: "闭包与作用域" });
+  assert.equal(d2.key, "basic");
+  const d3 = quizDifficulty({ topic: "RAG 混合检索" });
+  assert.equal(d3.from, "reps");
+  assert.equal(d3.key, "basic", "未复习 → 基础");
+});
+
+test("quizDifficulty：复习次数驱动（动态主题）", () => {
+  const mk = (reps) => quizDifficulty({ topic: "自定义主题", fsrs: { reps } });
+  assert.equal(mk(0).key, "basic");
+  assert.equal(mk(1).key, "mid");
+  assert.equal(mk(2).key, "mid");
+  assert.equal(mk(5).key, "hard");
+});
+
+test("generateQuiz prompt 难度跟随（首次基础 / 复习多次进阶）", async () => {
+  const { getLastMessages, setLlmResponses } = await import("./helpers.mjs");
+  const card0 = review.addCard({ topic: "自定义知识点", question: "q" }); // reps=0
+  setLlmResponses(VALID_JSON);
+  await generateQuiz(card0);
+  const p0 = getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(p0.includes("基础（核心概念与记忆）"), "首次复习出基础题");
+  // 复习 5 次 → 进阶
+  const card5 = review.addCard({ topic: "另一个知识点", question: "q" });
+  review.reviewCard(card5.id, 2);
+  review.reviewCard(card5.id, 2);
+  review.reviewCard(card5.id, 2);
+  review.reviewCard(card5.id, 2);
+  review.reviewCard(card5.id, 2);
+  setLlmResponses(VALID_JSON);
+  const card5fresh = review.loadCards().cards.find((c) => c.id === card5.id);
+  await generateQuiz({ topic: "另一个知识点", id: card5fresh.id, question: "q", fsrs: card5fresh.fsrs });
+  const p5 = getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(p5.includes("进阶（边界/易错/综合）"), "复习 5 次出进阶题");
+});
+
+// ---------- RAG 素材注入：知识库真题作为出题素材（爬取 → 知识库 → 选择题闭环） ----------
+test("generateQuiz 注入知识库真题素材", async () => {
+  const { getLastMessages, setLlmResponses } = await import("./helpers.mjs");
+  // seed 知识库（真题条目）
+  const { db } = await import("../lib/db.mjs");
+  const now = Date.now();
+  db.prepare("INSERT INTO knowledge_items (id, source, kind, title, content, vector, confidence, evidence, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
+    .run("kbz1", "zhenti-q", "exam", "真题·字节·题1", "事件循环中微任务何时执行？选项...", Buffer.alloc(0), 0.6, "t1", now, now);
+  db.prepare("INSERT INTO knowledge_fts (id, title, content) VALUES (?,?,?)")
+    .run("kbz1", "真题·字节·题1", "事件循环中微任务何时执行");
+  const card = review.addCard({ topic: "事件循环", question: "q" });
+  setLlmResponses(VALID_JSON);
+  await generateQuiz(card);
+  const promptText = getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(promptText.includes("真题·字节·题1"), "知识库真题素材注入 prompt");
+  assert.ok(promptText.includes("真实题目/资料素材"), "素材标注存在");
 });

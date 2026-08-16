@@ -61,10 +61,13 @@ def main():
             print(f"SKIP {l['file']}（已存在）")
             continue
         try:
-            # 超长独白：文本内 \n 分段 → get_tts_wav 按换行逐段合成再拼接（段间自动加停顿）
+            # 超长独白：文本内 \n 分段 → get_tts_wav 逐段合成再拼接；
+            # 段间停顿 pause_second=0.12（默认 0.3 太生硬）
+            # 采样参数：top_p=1/temperature=0.6 会让生成发散（语义 token 快速耗尽 → 句中被 max_sec 截断）
+            # → 保守采样 top_p=0.8 + temperature=1.0（v2 官方推荐组合，长句更稳）
             result = list(get_tts_wav(
                 ref_wav_path=CFG["ref_wav"], prompt_text=ref_text, prompt_language="日文",
-                text=l["jp"], text_language="日文", top_p=1, temperature=0.6,
+                text=l["jp"], text_language="日文", top_p=0.8, temperature=1.0, pause_second=0.12,
             ))
             if result:
                 sr, audio = result[-1]
