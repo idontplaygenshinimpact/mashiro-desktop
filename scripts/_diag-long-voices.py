@@ -33,7 +33,7 @@ for l in CFG["longs"]:
     if not os.path.exists(p):
         print(f"{l['file']:<24} MISSING")
         continue
-    segs, _ = m.transcribe(p, language="ja", beam_size=1)
+    segs, _ = m.transcribe(p, language="ja", beam_size=5)
     got = "".join(s.text for s in segs).strip()
     total = cov(got, l["jp"])
     t = tail(got, l["jp"])

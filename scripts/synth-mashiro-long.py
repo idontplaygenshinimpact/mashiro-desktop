@@ -46,10 +46,11 @@ def clean_punct(t):
     t = t.replace("……", "、")
     return t
 
-def split_chunks(text, max_len=30):
-    """按句拆分：以 。！？ 断句，合并成 ≤max_len 字的子句（日语 char 计）
-    max_len=30（约 12-15s 语音）：GPT 模型 max_sec=25s，60 字块（25-35s）尾部会被截断
-    → 长句"话没说完"。30 字块远低于上限，块级完整率高"""
+def split_chunks(text, max_len=45, min_len=20):
+    """按句拆分并贪心合并成 20-45 字子句（日语 char 计）：
+    - max_len=45（约 15-20s 语音）：GPT max_sec=25s，避免块尾截断
+    - min_len=20：超短块（<20 字）GPT-SoVITS 合成质量极差（实测 19 字块 0% 完整度），
+      尾部短块并入上一块，避免"碎块"拖低整体完整度"""
     import re
     parts = re.split(r"(?<=[。！？])", text)
     chunks = []
@@ -58,14 +59,19 @@ def split_chunks(text, max_len=30):
         p = p.strip()
         if not p:
             continue
-        if len(cur) + len(p) <= max_len:
+        if not cur:
+            cur = p
+        elif len(cur) + len(p) <= max_len:
             cur += p
         else:
-            if cur:
-                chunks.append(cur)
+            chunks.append(cur)
             cur = p
     if cur:
-        chunks.append(cur)
+        # 尾部短块并入上一块（避免碎块）
+        if len(cur) < min_len and chunks:
+            chunks[-1] += cur
+        else:
+            chunks.append(cur)
     return chunks or [text]
 
 def main():
@@ -104,43 +110,47 @@ def main():
         if args.skip_existing and os.path.exists(out):
             print(f"SKIP {l['file']}（已存在）")
             continue
-        # 拆句拼接：长文本按句拆成 ≤60 字的子句（短句生成成功率高），
-        # 每子句独立合成（多采样取 best）→ 拼接（子句间 0.15s 静音，停顿可控、不吞句）
+        # 拆句拼接：长文本按句拆成 20-45 字的子句（短句生成成功率高，超短块质量差已规避），
+        # 每子句独立合成（多采样取 best，verify 用 beam_size=5 提高识别率）→ 拼接（子句间 0.15s 静音）
         text = clean_punct(l["jp"])
-        chunks = split_chunks(text, 60)
+        chunks = split_chunks(text)
         merged = None
         sr = 32000
         all_good = True
         for ci, chunk in enumerate(chunks):
             best = None  # (score, secs, audio)
-            for attempt in range(1, 6):
-                pp = [1.0, 0.95, 1.0, 0.9, 1.0][attempt - 1]
-                tt = [1.0, 0.9, 1.1, 1.0, 1.2][attempt - 1]
-                try:
-                    result = list(get_tts_wav(
-                        ref_wav_path=args.ref, prompt_text=ref_text, prompt_language="日文",
-                        text=chunk, text_language="日文", top_k=20, top_p=pp, temperature=tt, pause_second=0.08,
-                    ))
-                    if not result:
-                        continue
-                    s, audio = result[-1]
-                    secs = round(len(audio) / s, 1)
-                    score = verify_complete(audio, s, chunk) if m else 1.0
-                    if not best or score > best[0]:
-                        best = (score, secs, audio, s)
-                    if score >= 0.5:
+            # 两轮采样：第一轮 6 次；best < 0.55 → 整块重试第二轮 6 次（块质量差值得多花算力）
+            for round_no in (1, 2):
+                for attempt in range(1, 7):
+                    pp = [1.0, 0.95, 1.0, 0.9, 1.0, 0.85][attempt - 1]
+                    tt = [1.0, 0.9, 1.1, 1.0, 1.2, 0.95][attempt - 1]
+                    try:
+                        result = list(get_tts_wav(
+                            ref_wav_path=args.ref, prompt_text=ref_text, prompt_language="日文",
+                            text=chunk, text_language="日文", top_k=20, top_p=pp, temperature=tt, pause_second=0.08,
+                        ))
+                        if not result:
+                            continue
+                        s, audio = result[-1]
+                        secs = round(len(audio) / s, 1)
+                        score = verify_complete(audio, s, chunk) if m else 1.0
+                        if not best or score > best[0]:
+                            best = (score, secs, audio, s)
+                        if score >= 0.55:
+                            break
+                        retried += 1
+                    except Exception as e:
+                        print(f"FAIL {l['file']}[{ci}] 第{attempt}次 {str(e)[:150]}")
                         break
-                    retried += 1
-                except Exception as e:
-                    print(f"FAIL {l['file']}[{ci}] 第{attempt}次 {str(e)[:150]}")
-                    break
+                if best and best[0] >= 0.55:
+                    break  # 达标，无需第二轮
             if not best:
                 print(f"FAIL {l['file']}[{ci}] 子句全部失败")
                 all_good = False
                 break
             score, secs, audio, s = best
             sr = s
-            if score < 0.5:
+            if score < 0.55:
                 all_good = False
             # 拼接：子句间插 0.15s 静音（比 GPT 的 \n 停顿短且可控）
             gap = np.zeros(int(s * 0.15), dtype=audio.dtype)
@@ -177,7 +187,7 @@ def verify_complete(audio, sr, expected_text):
         buf = io.BytesIO()
         sf2.write(buf, audio, sr, format="WAV")
         buf.seek(0)
-        segs, _ = m.transcribe(buf, language="ja", beam_size=1)
+        segs, _ = m.transcribe(buf, language="ja", beam_size=5)
         got = "".join(s.text for s in segs).strip()
         clean = lambda s: "".join(ch for ch in s if ch.isalnum() and not ch.isascii() or (ch.isascii() and ch.isalnum()))
         exp = clean(expected_text)
