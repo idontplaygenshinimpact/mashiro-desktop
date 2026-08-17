@@ -667,7 +667,8 @@ async function loadSettings() {
     const r = await fetch("http://127.0.0.1:8899/api/mail/config");
     const j = await r.json();
     if (j?.config?.email) $("set-mail-email").value = j.config.email;
-    $("set-mail-status").textContent = j.config?.configured ? `✅ 已配置 ${j.config.email}` : "未配置";
+    $("set-mail-enabled").checked = !!j.config?.enabled;
+    $("set-mail-status").textContent = j.config?.configured ? `✅ 已配置 ${j.config.email}${j.config.enabled === false ? "（自动检查已关）" : ""}` : "未配置";
   } catch { /* ignore */ }
   // 本地知识库（RAG）开关
   try {
@@ -968,18 +969,28 @@ $("set-rss-save")?.addEventListener("click", async () => {
   }
 });
 
-// 邮箱保存/测试（共用 mail API）
+// 邮箱保存/测试（共用 mail API）；enabled=自动检查开关（每 30 分钟拉取）
 $("set-mail-save")?.addEventListener("click", async () => {
   const email = $("set-mail-email").value.trim();
   const authCode = $("set-mail-authcode").value.trim();
-  if (!email || !authCode) { $("set-mail-status").textContent = "⚠️ 请填写邮箱和授权码"; return; }
+  if (!email || !authCode) { $("set-mail-status").textContent = "⚠️ 请填写邮箱和授权码；要改开关可直接点上面复选框"; return; }
   try {
     const r = await fetch("http://127.0.0.1:8899/api/mail/config", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, authCode }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, authCode, enabled: $("set-mail-enabled").checked }),
     });
     const j = await r.json();
-    $("set-mail-status").textContent = j.ok ? "✅ 已保存：" + email : "⚠️ " + (j.error || "保存失败");
+    $("set-mail-status").textContent = j.ok ? `✅ 已保存：${email}${$("set-mail-enabled").checked ? "" : "（自动检查已关）"}` : "⚠️ " + (j.error || "保存失败");
     if (j.ok) $("set-mail-authcode").value = "";
+  } catch (e) { $("set-mail-status").textContent = "⚠️ " + e.message; }
+});
+$("set-mail-enabled")?.addEventListener("change", async () => {
+  // 只切开关（保留已有凭据）：setConfig 未提交 email/authCode 时保留
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/mail/config", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: $("set-mail-enabled").checked }),
+    });
+    const j = await r.json();
+    $("set-mail-status").textContent = j.ok ? `✅ 自动检查已${$("set-mail-enabled").checked ? "开启" : "关闭"}` : "⚠️ " + (j.error || "保存失败");
   } catch (e) { $("set-mail-status").textContent = "⚠️ " + e.message; }
 });
 $("set-mail-test")?.addEventListener("click", async () => {

@@ -59,6 +59,27 @@ npm run voice:audit
 - 历史对比：`data/voice-score-last.json`，`--compare` 显示与上次差值
 - 注意：faster-whisper(ctranslate2) 与 torch cuDNN 同进程冲突 → resemblyzer 强制 CPU
 
+## 审计（audit-voices.py，npm run voice:audit）
+
+快速完整性审计（whisper beam_size=5 转写全部文件）：
+
+| 标记 | 判定 | 含义 |
+|---|---|---|
+| OK | cov≥0.5 且无泄漏 且（长句 tail≥0.3） | 通过 |
+| TRUNC | 长句尾 2-gram <0.3 | **话没说完**（结尾句子缺失，需重合成）|
+| BAD | cov<0.5 | 内容缺失/识别过低 |
+| POLLUT | 检出 ref 特征短语 | 参考音频泄漏 |
+
+- 长句末尾完整度（tail）：转写末尾 24 字 vs 原文末尾 24 字 2-gram 覆盖率。
+  曾漏判：旧版只查总覆盖 0.5，长句"话没说完"全部放过（2026-08 实测 8 长句末尾仅 7-42%）
+
+## 已知边界
+
+- whisper-medium 转写日文有错字 → cov 是下限估计（实际内容更全）
+- 个别文件声优/语气词结尾模型不稳定（idle-long-1 的"うん、真白はここでちゃんと待ってる"末尾"うん"多次重合成仍缺）→ 容忍或改文案
+- 个别短句（love-1 / praise-2 等）模型生成不稳定 → `scripts/refix-voices.py <file>` 多采样补（12 次）
+- SoVITS 重训流程已内置：`npm run voice:train -- train-sovits`（详见 scripts/voice-train/README.md）
+
 ## 评测基线（2026-08-17，mashiro3 GPT e20 + SoVITS 全量 + ref-clean-A + 拆句拼接）
 
 ```

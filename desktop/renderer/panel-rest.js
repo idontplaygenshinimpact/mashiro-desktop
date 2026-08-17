@@ -185,11 +185,16 @@ async function loadKbStats() {
     const j = await r.json();
     const statusEl = $("kb-status");
     if (!j.total) {
-      statusEl.textContent = "⏳ 知识库为空——后端启动后会自动构建（约 15-60s），或点「🔄 重建索引」";
+      // 区分"未启用"与"空库"
+      if (j.enabled === false) {
+        statusEl.textContent = "📭 本地知识库未启用——在「⚙️ 设置」开启后自动重建索引（纯关键词检索，秒级）";
+      } else {
+        statusEl.textContent = "⏳ 知识库为空——后端启动后会自动构建，或点「🔄 重建索引」";
+      }
       return;
     }
     const kinds = (j.byKind || []).map((k) => `${KIND_LABEL[k.kind] || k.kind} ${k.n}`).join(" · ");
-    statusEl.textContent = `📦 ${j.total} 条（${kinds}）${j.lastBuild ? " · 构建于 " + new Date(j.lastBuild).toLocaleString("zh-CN") : ""}${j.embedding ? " · 语义检索 ✅" : " · 仅关键词检索"}`;
+    statusEl.textContent = `📦 ${j.total} 条（${kinds}）${j.lastBuild ? " · 构建于 " + new Date(j.lastBuild).toLocaleString("zh-CN") : ""}${j.enabled === false ? " · 未启用（设置可开）" : " · 关键词检索"}`;
   } catch (e) {
     $("kb-status").textContent = "⚠️ " + e.message;
   }
@@ -206,14 +211,14 @@ async function kbSearch() {
       body: JSON.stringify({ query: q, topK: 8 }),
     });
     const j = await res.json();
+    if (j.disabled) { list.innerHTML = `<div class="empty-hint">📭 知识库未启用——到「⚙️ 设置」开启后即可搜索（纯关键词检索，秒级构建）</div>`; return; }
     if (!j.hits?.length) { list.innerHTML = '<div class="empty-hint">没有命中——换个说法，或点「🔄 重建索引」</div>'; return; }
-    list.innerHTML = `<div style="font-size:11px;color:#8a87a8;margin:2px 0 6px;">命中 ${j.hits.length} 条（语义+关键词混合检索）</div>` +
+    list.innerHTML = `<div style="font-size:11px;color:#8a87a8;margin:2px 0 6px;">命中 ${j.hits.length} 条（关键词检索）</div>` +
       j.hits.map((h) => `
       <div class="job-item">
         <div class="job-head">
           <span class="job-badge">${KIND_LABEL[h.kind] || h.kind}</span>
           <b style="font-size:12px;">${esc(h.title)}</b>
-          ${h.vectorScore ? `<span class="job-badge" style="background:rgba(80,160,255,.15);color:#3a7bd5;">语义 ${(h.vectorScore * 100).toFixed(0)}%</span>` : ""}
           ${h.ftsScore ? `<span class="job-badge" style="background:rgba(120,180,120,.15);color:#3a8d5a;">关键词</span>` : ""}
         </div>
         <div class="job-summary">${esc(h.content.slice(0, 150))}${h.content.length > 150 ? "…" : ""}</div>

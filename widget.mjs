@@ -485,7 +485,7 @@ const ragBuildTick = async () => {
     if (!stats.total) {
       console.log("[rag] 知识库为空，后台构建中…");
       const r = await ragApi.rebuildKnowledgeBase();
-      if (r) console.log(`[rag] 知识库构建完成：${r.items} 条（${r.seconds}s，embedding=${r.embedding}）`);
+      if (r) console.log(`[rag] 知识库构建完成：${r.items} 条（${r.seconds}s）`);
       else console.log("[rag] 知识库构建被跳过（已有重建进行中）");
     } else {
       // 非空：增量更新（新面经 md 自动进库）

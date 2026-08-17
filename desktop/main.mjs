@@ -220,6 +220,8 @@ async function buildTrayMenu() {
     { label: "🎀 换肤", submenu: mascotItems },
     await musicSubmenu(), // 🎵 樱花庄音乐（扫描 assets/music/）
     { label: "立即爬取", click: () => { widgetPost("/api/run-discover", {}).catch(() => {}); } },
+    { label: "📥 检查邮箱邀约", click: () => { widgetPost("/api/mail/check", {}).then((r) => { if (r && r.ok === false) console.log(`[mail] ${r.error}`); }).catch(() => {}); } },
+    { label: "🛰️ 立即巡检", click: () => { widgetPost("/api/patrol-run", {}).catch(() => {}); } },
     { label: "打开输出目录", click: () => { safeSpawn("explorer", [path.join(ROOT, "output")]); } },
     { type: "separator" },
     { label: "退出", click: () => { app.quit(); } },
