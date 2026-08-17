@@ -163,9 +163,23 @@ export function resolveFfplay() {
 
 /** 播放语音包音频：ffplay 优先（最可靠）；ffplay 不可用/失败 → PowerShell SoundPlayer 系统 API 兜底（wav） */
 // 防抖 + 互斥：同一时间只允许一个语音在播（新播放前杀掉旧的，避免连续点击叠加）；1.5s 内重复触发直接丢弃
+// 长句保护：长句（20-43s）播放中不打断——新触发忽略（busy），等播完；短句（2-4s）播放中可打断（无感）
 let activeVoicePlayer = null; // 当前语音播放进程（互斥）
+let activeIsLong = false;     // 当前播放是否为长句（/long/ 目录）
 let lastVoicePlayAt = 0;      // 上次播放时间戳（防抖）
 const VOICE_DEBOUNCE_MS = 1500;
+
+/** 长句判定：路径在 assets/voice/long/ 下 */
+function isLongFile(file) {
+  return /[\\/]long[\\/]/.test(String(file || ""));
+}
+
+function clearActive(child) {
+  if (activeVoicePlayer === child) {
+    activeVoicePlayer = null;
+    activeIsLong = false;
+  }
+}
 
 export function playVoicePack(file) {
   const now = Date.now();
@@ -173,7 +187,13 @@ export function playVoicePack(file) {
     console.log(`[voice] 防抖：${now - lastVoicePlayAt}ms 前刚播过，跳过 ${file.split(/[\\/]/).pop()}`);
     return { ok: false, debounced: true };
   }
+  // 长句播放中：不打断（长句完整性优先；用户中途再点等播完即可）
+  if (activeVoicePlayer && activeIsLong) {
+    console.log(`[voice] 长句播放中，忽略新触发 ${file.split(/[\\/]/).pop()}`);
+    return { ok: false, busy: true };
+  }
   lastVoicePlayAt = now;
+  const isLong = isLongFile(file);
   // 互斥：杀掉上一个语音进程（避免多个 ffplay 同时出声叠加）
   if (activeVoicePlayer) {
     try { activeVoicePlayer.kill(); } catch { /* ignore */ }
@@ -184,32 +204,36 @@ export function playVoicePack(file) {
     try {
       const child = spawn(ff, ["-autoexit", "-nodisp", "-loglevel", "quiet", file], { windowsHide: true, detached: true, stdio: "ignore" });
       activeVoicePlayer = child;
+      activeIsLong = isLong;
       child.on("error", (err) => {
         console.log(`[voice] ffplay 播放失败: ${err.message}`);
-        if (activeVoicePlayer === child) activeVoicePlayer = null;
-        soundPlayerFallback(file);
+        clearActive(child);
+        soundPlayerFallback(file, isLong);
       });
-      child.on("exit", () => { if (activeVoicePlayer === child) activeVoicePlayer = null; });
+      child.on("exit", () => clearActive(child));
       child.unref();
-      console.log(`[voice] 播放 ${file.split(/[\\/]/).pop()}（ffplay）`);
+      console.log(`[voice] 播放 ${file.split(/[\\/]/).pop()}（ffplay${isLong ? "·长句" : ""}）`);
       return { ok: true, engine: "ffplay", file };
     } catch (e) {
       console.log(`[voice] ffplay spawn 异常: ${e.message}`);
     }
   }
-  return soundPlayerFallback(file);
+  return soundPlayerFallback(file, isLong);
 }
 
-/** PowerShell SoundPlayer 兜底（Windows 系统 API，播放 wav；返回结果） */
-function soundPlayerFallback(file) {
+/** PowerShell SoundPlayer 兜底（Windows 系统 API，播放 wav；返回结果）——同样纳入互斥管理（可被杀/可清理） */
+function soundPlayerFallback(file, isLong = false) {
   try {
     const ps = `(New-Object Media.SoundPlayer -ArgumentList '${String(file).replace(/'/g, "''")}').PlaySync()`;
     const child = spawn("powershell", ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps], {
       windowsHide: true, detached: true, stdio: "ignore",
     });
-    child.on("error", (err) => console.log(`[voice] SoundPlayer 播放失败: ${err.message}`));
+    activeVoicePlayer = child;
+    activeIsLong = isLong;
+    child.on("error", (err) => { console.log(`[voice] SoundPlayer 播放失败: ${err.message}`); clearActive(child); });
+    child.on("exit", () => clearActive(child));
     child.unref();
-    console.log(`[voice] 播放 ${file.split(/[\\/]/).pop()}（SoundPlayer 兜底）`);
+    console.log(`[voice] 播放 ${file.split(/[\\/]/).pop()}（SoundPlayer 兜底${isLong ? "·长句" : ""}）`);
     return { ok: true, engine: "soundplayer", file };
   } catch (e) {
     console.log(`[voice] SoundPlayer 不可用: ${e.message}`);
