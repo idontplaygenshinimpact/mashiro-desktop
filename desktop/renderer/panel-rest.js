@@ -1068,18 +1068,20 @@ async function loadSchedule() {
       list.innerHTML = '<div class="empty-hint">暂无未来的面试/笔试邀约，点「📥 立即检查」从邮箱识别</div>';
       return;
     }
-    // 按紧迫度分组：48h 内最急 → 本周 → 更远
+    // 按紧迫度分组：48h 内最急 → 本周 → 更远 → 时间待定（邀约未给明确时间）
     const now = Date.now();
     const H = 3600 * 1000, D = 24 * H;
     const groups = [
       { key: "urgent", label: "⏰ 48 小时内（最急）", items: [] },
       { key: "week", label: "📅 本周", items: [] },
       { key: "later", label: "🗓 更远", items: [] },
+      { key: "tbd", label: "⏳ 时间待定（邀约未给明确时间）", items: [] },
     ];
     for (const ev of events) {
       const at = Number(ev.interviewAt) || 0;
-      if (at && at - now <= 48 * H) groups[0].items.push(ev);
-      else if (at && at - now <= 7 * D) groups[1].items.push(ev);
+      if (!at) groups[3].items.push(ev);
+      else if (at - now <= 48 * H) groups[0].items.push(ev);
+      else if (at - now <= 7 * D) groups[1].items.push(ev);
       else groups[2].items.push(ev);
     }
     const relTime = (at) => {
