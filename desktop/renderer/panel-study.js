@@ -825,6 +825,8 @@ async function loadCardQuiz(cardId) {
       }).then((x) => x.json()).catch(() => ({ ok: false }));
       if (g.ok && g.total > 0) {
         r = await fetch(`http://127.0.0.1:8899/api/review/quiz?id=${encodeURIComponent(cardId)}`).then((x) => x.json());
+        // 知识库素材标记：新生成时透传（面板提示"含知识库真题"；缓存命中无此字段）
+        if (g.kbUsed) quizState = { ...(quizState || {}), kbUsed: true };
       } else {
         box.classList.add("hidden");
         return;
@@ -836,9 +838,17 @@ async function loadCardQuiz(cardId) {
 }
 
 function renderQuiz(questions) {
-  quizState = { questions, chosen: {} };
+  quizState = { questions, chosen: {}, kbUsed: quizState?.kbUsed || false };
   const box = $("rc-quiz");
-  box.innerHTML = `<div class="quiz-head">🧠 复习自测 · 快速回忆（答完再评分）</div>` +
+  // 累计自测正确率（/api/review/quiz/stats 消费 quiz_attempts；异步填充）
+  let acc = "";
+  try {
+    const cardId = (quizState.questions[0]?.cardId) || "";
+    // 通过 DOM 拿当前卡 id（rc- 区域）——简化：先不加这里，避免复杂
+  } catch { /* ignore */ }
+  // kbUsed 提示（新生成时含知识库素材）
+  const kbNote = quizState.kbUsed ? '<div class="quiz-kb" style="font-size:11px;color:#8a87a8;margin:2px 0 6px;">📚 本题库引用了本地知识库真题素材</div>' : "";
+  box.innerHTML = `<div class="quiz-head">🧠 复习自测 · 快速回忆（答完再评分）</div>${kbNote}` +
     questions.map((q, qi) => `
     <div class="quiz-q" data-qi="${qi}">
       <div class="quiz-question">${qi + 1}. ${esc(q.question)}</div>

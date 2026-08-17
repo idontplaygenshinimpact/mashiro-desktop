@@ -525,9 +525,23 @@ if (!DISABLE_BACKGROUND) {
 // 专注结束自动结算：每 30 秒检查；启动 1 分钟后 catch-up
 registerInterval(checkFocusEnd, 30 * 1000);
 registerTimer(checkFocusEnd, 60 * 1000);
-// 面试/笔试邀约提醒：每 30 分钟检查（24h 内 + 4 小时冷却）；启动 2 分钟后 catch-up
+// 邮件/笔试邀约提醒：每 30 分钟检查（24h 内 + 4 小时冷却）；启动 2 分钟后 catch-up
 registerInterval(checkScheduleReminder, 30 * 60 * 1000);
 registerTimer(checkScheduleReminder, 2 * 60 * 1000);
+// 系统自检（闭环：注释/面板承诺"启动后自动首检 + 每 6 小时"，此前 runSelfCheck 只被手动按钮触发从未接线）
+let __selfCheckMod = null;
+const runSelfCheckAndSave = async () => {
+  try {
+    if (!__selfCheckMod) __selfCheckMod = await import("./lib/self-check.mjs");
+    const report = __selfCheckMod.runSelfCheck();
+    __selfCheckMod.saveSelfCheck(report);
+    if (report?.issues?.length) console.log(`[widget] 自检发现 ${report.issues.length} 个隐患：${report.issues.map((i) => i.name).join("、")}`);
+  } catch (e) { console.log(`[widget] 自检失败: ${String(e?.message || e).slice(0, 80)}`); }
+};
+if (!DISABLE_BACKGROUND) {
+  registerTimer(runSelfCheckAndSave, 60 * 1000);          // 启动 60s 后首检（面板承诺）
+  registerInterval(runSelfCheckAndSave, 6 * 3600 * 1000); // 每 6 小时
+}
 // 邮箱自动检查（闭环：设置中心配置邮箱 → 定时拉未读 → LLM 识别邀约 → schedule_events → 提醒）。
 // 此前只有手动「立即检查」触发，配置后从不自动拉取，日程/提醒永远空
 const checkMail = async () => {
