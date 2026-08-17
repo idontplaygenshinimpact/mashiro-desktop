@@ -27,6 +27,7 @@
     "voice:synth": "py -3.12 scripts/synth-mashiro-long.py",
     "voice:score": "py -3.12 scripts/score-voices.py --compare",
     "voice:audit": "py -3.12 scripts/audit-voices.py",
+    "voice:train": "node scripts/voice-train/train.mjs",
     "test:module": "node scripts/test-module.mjs"
   },
   "build": {

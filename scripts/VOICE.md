@@ -1,12 +1,18 @@
 # 真白语音合成流程（固化版）
 
-一键流程：**合成 → 评测 → 审计**，全部参数化、可复现。
+一键流程：**训练 → 合成 → 评测 → 审计**，全部参数化、可复现。
 
 ## 快速开始
 
 ```bash
-# 1. 全量合成 26 条（新模型/新 ref 改 long-lines.json 或传参）
-npm run voice:synth
+# 1. 训练（完整链路：数据准备 → 数据格式化 → GPT/SoVITS 训练 → 合成 → 评测）
+#    详见 scripts/voice-train/README.md；训练是长任务用 --no-wait 后台
+npm run voice:train -- prepare        # 数据准备（切段+转写 → esd.list）
+npm run voice:train -- format         # 训练集格式化（→ semantic tsv）
+npm run voice:train -- train-gpt --no-wait    # GPT 训练（后台）
+npm run voice:train -- train-sovits --no-wait # SoVITS 训练（后台）
+npm run voice:train -- synth          # 用新权重合成语音包
+npm run voice:train -- score          # 质量评测
 
 # 2. 质量评测（内容完整度/音色/节奏/污染 → 综合分 A-D + 与上次对比）
 npm run voice:score
