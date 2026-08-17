@@ -140,14 +140,18 @@ test("saveEvents：入库 + email_id 去重", () => {
   assert.equal(r3.skipped, 1);
 });
 
-test("saveEvents：interviewAt 缺失/无法解析 → 跳过（不入库）", () => {
+test("saveEvents：interviewAt 缺失/无法解析 → 以「时间待定」入库（interview_at=NULL，不丢邀约）", () => {
   const r = mail.saveEvents([
     { company: "腾讯", role: "前端", interviewAt: "", emailId: "e1" },
     { company: "阿里", role: "后端", interviewAt: "not-a-date", emailId: "e2" },
-    { company: "", role: "测试", interviewAt: futureStr(1), emailId: "e3" },
+    { company: "", role: "测试", interviewAt: futureStr(1), emailId: "e3" }, // 无公司 → 仍跳过
   ]);
-  assert.equal(r.added, 0);
-  assert.equal(r.skipped, 3);
+  assert.equal(r.added, 2, "无时间邀约也入库（待定），不再静默丢弃");
+  assert.equal(r.skipped, 1, "无公司名仍跳过");
+  const rows = db.prepare("SELECT company, interview_at FROM schedule_events WHERE email_id IN ('e1','e2') ORDER BY email_id").all();
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].interview_at, null, "e1 时间待定（NULL）");
+  assert.equal(rows[1].interview_at, null, "e2 无法解析时间 → NULL");
 });
 
 // ---------- 查询 / 窗口过滤 ----------
