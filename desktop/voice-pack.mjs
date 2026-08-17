@@ -210,7 +210,11 @@ export function playVoicePack(file) {
         clearActive(child);
         soundPlayerFallback(file, isLong);
       });
-      child.on("exit", () => clearActive(child));
+      // 退出日志：code=0 正常播完；非 0 = 播放中途异常（解码/设备），便于区分"被掐断"与"自身中断"
+      child.on("exit", (code) => {
+        clearActive(child);
+        if (code !== 0) console.log(`[voice] ⚠ ffplay 播放异常退出 code=${code}（${file.split(/[\\/]/).pop()}）`);
+      });
       child.unref();
       console.log(`[voice] 播放 ${file.split(/[\\/]/).pop()}（ffplay${isLong ? "·长句" : ""}）`);
       return { ok: true, engine: "ffplay", file };
@@ -231,7 +235,10 @@ function soundPlayerFallback(file, isLong = false) {
     activeVoicePlayer = child;
     activeIsLong = isLong;
     child.on("error", (err) => { console.log(`[voice] SoundPlayer 播放失败: ${err.message}`); clearActive(child); });
-    child.on("exit", () => clearActive(child));
+    child.on("exit", (code) => {
+      clearActive(child);
+      if (code !== 0) console.log(`[voice] ⚠ SoundPlayer 播放异常退出 code=${code}`);
+    });
     child.unref();
     console.log(`[voice] 播放 ${file.split(/[\\/]/).pop()}（SoundPlayer 兜底${isLong ? "·长句" : ""}）`);
     return { ok: true, engine: "soundplayer", file };
