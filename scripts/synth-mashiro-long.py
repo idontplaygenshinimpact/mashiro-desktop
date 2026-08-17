@@ -46,8 +46,10 @@ def clean_punct(t):
     t = t.replace("……", "、")
     return t
 
-def split_chunks(text, max_len=60):
-    """按句拆分：以 。！？ 断句，合并成 ≤max_len 字的子句（日语 char 计）"""
+def split_chunks(text, max_len=30):
+    """按句拆分：以 。！？ 断句，合并成 ≤max_len 字的子句（日语 char 计）
+    max_len=30（约 12-15s 语音）：GPT 模型 max_sec=25s，60 字块（25-35s）尾部会被截断
+    → 长句"话没说完"。30 字块远低于上限，块级完整率高"""
     import re
     parts = re.split(r"(?<=[。！？])", text)
     chunks = []

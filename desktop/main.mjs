@@ -566,7 +566,17 @@ ipcMain.handle("window:play-long-scene", async (e, { scene }) => {
     return { ok: false };
   }
 });
-// 单击应答：随机播一条新合成长句（GPT-SoVITS；无则回退短句）
+// 单击应答：随机播一条短句（2-8s 快速反馈；长句留给空闲关怀/庆祝）
+ipcMain.handle("window:play-click-short", async () => {
+  try {
+    const vp = await import("./voice-pack.mjs");
+    const r = vp.playClickShort();
+    return r || { ok: false };
+  } catch {
+    return { ok: false };
+  }
+});
+// 长句应答：随机播一条新合成长句（GPT-SoVITS 27-36s；空闲关怀/庆祝等"说一段话"场合）
 ipcMain.handle("window:play-click-long", async () => {
   try {
     const vp = await import("./voice-pack.mjs");
