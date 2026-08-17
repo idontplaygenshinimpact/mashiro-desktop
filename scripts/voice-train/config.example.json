@@ -1,0 +1,46 @@
+// 真白语音训练配置模板（复制为 config.json 后按需修改）
+// 作用：把"原始音频 → GPT/SoVITS 训练 → 推理权重 → 项目语音包"全程固化、参数化
+{
+  "voiceName": "mashiro",           // 角色名（目录/权重命名：dataset_raw/<voiceName>、GPT_weights/<voiceName>…）
+
+  "gptSoVitsRoot": "D:/GPT-SoVITS/GPT-SoVITS",  // GPT-SoVITS 安装根（含 GPT_SoVITS/ 训练脚本）
+  "workRoot": "D:/GPT-SoVITS",                   // GPT-SoVITS 上级（放 vocals/ 原始人声等）
+
+  "python": "C:/python/python.exe",  // Python 解释器（需已装 faster_whisper / torch / GPT-SoVITS 依赖）'
+  "gpu": "0",                        // CUDA_VISIBLE_DEVICES
+
+  // ---- 数据准备 ----
+  // 源音频（任选）：separated 人声目录（vocals.wav per 集） 或 单文件广播
+  "sourceVocalsDir": "D:/GPT-SoVITS/vocals/htdemucs", // {ep}/vocals.wav
+  "sourceWav": "",                   // 单文件长音频（mashiro-1h.wav 之类）
+  "sourceSegmentsTsv": "",           // 可选手动标注段 [ep,a,b,text]（复用声纹筛选 TSV）
+  "whisperModel": "D:/GPT-SoVITS/whisper-medium",
+  "whisperDevice": "cuda",
+  "segMinLen": 2.5,                  // 切片最小秒
+  "segMaxLen": 12.5,                 // 切片最大秒（GPT-SoVITS 训练段建议 2.5-12.5s）
+  "sampleRate": 32000,
+
+  // ---- GPT 训练（s1_train.py）----
+  "gpt": {
+    "pretrained": "D:/GPT-SoVITS/GPT-SoVITS/GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369k.ckpt",
+    "epochs": 20,
+    "batchSize": 8,
+    "learningRate": 0.0001,
+    "saveEveryEpoch": 2,
+    "gpuNumbers": "0"
+  },
+
+  // ---- SoVITS 训练（s2_train.py -c …）----
+  "sovits": {
+    "epochs": 16,
+    "batchSize": 4,
+    "learningRate": 0.0001,
+    "saveEveryEpoch": 2,
+    "pretrainedS2G": "D:/GPT-SoVITS/GPT-SoVITS/GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth",
+    "pretrainedS2D": "D:/GPT-SoVITS/GPT-SoVITS/GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2D2333k.pth"
+  },
+
+  // ---- 参考音频（合成音色锚点）----
+  "refWav": "D:/GPT-SoVITS/radio/ref-clean-A.wav",
+  "refText": "戻ろうと思って エスカレーターに乗ったの離しちゃダメなの 離したら飛んでくわ"
+}
