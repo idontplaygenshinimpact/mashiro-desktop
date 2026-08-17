@@ -675,9 +675,12 @@
       <div class="jobs-setup" style="margin-top:8px;">
         <div class="form-row">
           <label>📬 邮箱（面试/笔试邀约自动识别提醒；授权码仅存本机）</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
             <input id="set-mail-email" type="text" placeholder="邮箱地址" style="flex:1;min-width:160px;padding:6px 10px;font-size:11px;">
             <input id="set-mail-authcode" type="password" placeholder="授权码（保存后清空）" style="flex:1;min-width:160px;padding:6px 10px;font-size:11px;">
+            <label style="display:flex;gap:5px;align-items:center;font-size:12px;color:#4a3a9d;cursor:pointer;" title="开启后每 30 分钟自动拉取邮件识别面试/笔试邀约">
+              <input type="checkbox" id="set-mail-enabled" style="width:15px;height:15px;accent-color:#6d4fd8;"> 自动检查
+            </label>
             <button id="set-mail-save" class="secondary" style="padding:6px 12px;font-size:11px;">💾 保存</button>
             <button id="set-mail-test" class="secondary" style="padding:6px 12px;font-size:11px;">🔌 测试连接</button>
           </div>
