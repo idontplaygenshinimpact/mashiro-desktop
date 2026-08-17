@@ -30,6 +30,10 @@ def main():
     os.makedirs(exp_dir, exist_ok=True)
     yaml_path = os.path.join(gs, f"tmp_s1_{name}.yaml")
     epochs = int(g.get("epochs", 20))
+    # 学习率：config 的 gpt.learningRate 生效（映射到 s1.yaml optimizer；此前硬编码 0.01 被忽略）
+    lr = float(g.get("learningRate", 0.0001))
+    lr_init = float(g.get("lrInit", lr / 10))
+    lr_end = float(g.get("lrEnd", lr))
     pretrained = g.get("pretrained", "") or os.path.join(
         gs, "GPT_SoVITS", "pretrained_models", "gsv-v2final-pretrained", "s1bert25hz-5kh-longer-epoch=12-step=369k.ckpt")
     train_semantic_path = os.path.join(opt_dir, "6-name2semantic.tsv")
@@ -51,9 +55,9 @@ train:
   half_weights_save_dir: {os.path.join(gs, 'GPT_weights_v2', name)}
   exp_name: {name}
 optimizer:
-  lr: 0.01
-  lr_init: 0.00001
-  lr_end: 0.0001
+  lr: {lr}
+  lr_init: {lr_init}
+  lr_end: {lr_end}
   warmup_steps: 2000
   decay_steps: 40000
 data:

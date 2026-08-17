@@ -50,13 +50,37 @@ const STEPS = {
   "train-gpt": () => run("GPT 训练", [PY, path.join(VT, "train-gpt.py"), "--config", cfgFlag, ...(noWait ? ["--no-wait"] : [])]),
   "train-sovits": () => run("SoVITS 训练", [PY, path.join(VT, "train-sovits.py"), "--config", cfgFlag, ...(noWait ? ["--no-wait"] : [])]),
   synth: () => {
-    // 合成前把新训练权重写进 long-lines.json（synth 脚本读它）——若权重文件存在则更新
+    // 找训练产出的最新权重（GPT_weights_v2/<name>/*.ckpt 最高 epoch；SoVITS_weights_v2/<name>/G_*_infer 或 G_*.pth）
     const gs = cfg.gptSoVitsRoot;
-    const gptPath = path.join(gs, "GPT_weights_v2", voiceName);
+    const gptDir = path.join(gs, "GPT_weights_v2", voiceName);
     const sovitsDir = path.join(gs, "SoVITS_weights_v2", voiceName);
-    console.log(`新 GPT 权重目录: ${gptPath}`);
-    console.log(`新 SoVITS 权重目录: ${sovitsDir}`);
-    return run("合成语音包（调 synth-mashiro-long.py）", [PY, path.join(ROOT, "scripts", "synth-mashiro-long.py"), "--skip-existing"]);
+    const findGpt = (dir) => {
+      if (!fs.existsSync(dir)) return null;
+      const ckpts = fs.readdirSync(dir).filter((f) => f.endsWith(".ckpt")).sort();
+      return ckpts.length ? path.join(dir, ckpts[ckpts.length - 1]) : null;
+    };
+    const findSovits = (dir) => {
+      if (!fs.existsSync(dir)) return null;
+      const pths = fs.readdirSync(dir).filter((f) => /G_.*(infer)?\.pth$/.test(f) && !f.endsWith("D_")).sort();
+      return pths.length ? path.join(dir, pths[pths.length - 1]) : null;
+    };
+    const gptW = findGpt(gptDir);
+    const sovW = findSovits(sovitsDir);
+    if (!gptW || !sovW) {
+      console.error(`❌ 未找到训练权重：GPT(${gptDir}) / SoVITS(${sovitsDir})——先跑 train-gpt/train-sovits`);
+      process.exit(1);
+    }
+    // 闭环：把新训练权重写进 long-lines.json（synth 脚本读它），合成才用新模型
+    const llFile = path.join(ROOT, "scripts", "long-lines.json");
+    const ll = JSON.parse(fs.readFileSync(llFile, "utf8"));
+    ll.gpt = gptW;
+    ll.sovits = sovW;
+    if (cfg.refWav) ll.ref_wav = cfg.refWav;
+    if (cfg.refText) ll.ref_text = cfg.refText;
+    fs.writeFileSync(llFile, JSON.stringify(ll, null, 2) + "\n", "utf8");
+    console.log(`已更新 long-lines.json：gpt=${gptW}\n  sovits=${sovW}`);
+    // 强制重合成（不 --skip-existing，避免旧 wav 遮蔽新权重）
+    return run("合成语音包（用新训练权重，强制重合成）", [PY, path.join(ROOT, "scripts", "synth-mashiro-long.py")]);
   },
   score: () => run("质量评测", [PY, path.join(ROOT, "scripts", "score-voices.py")]),
   help: () => {
