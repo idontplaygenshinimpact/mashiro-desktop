@@ -203,9 +203,9 @@ async function handleClick(e) {
   // 延迟触发：CLICK_DELAY 内若出现第二次点击（双击开面板），取消戳反应，避免误语音
   clearTimeout(clickTimer);
   clickTimer = setTimeout(() => {
-    // 单击应答：优先随机播一条新合成长句（GPT-SoVITS），无长句回退部位短句
+    // 单击应答：短句快速反馈（2-8s）；长句（27-36s）留给空闲关怀/庆祝等场合
     if (voiceOn) {
-      const r = window.kanban.playClickLong?.();
+      const r = window.kanban.playClickShort?.();
       if (r === undefined || r === null) window.kanban.playScene(finalVoiceScene);
     }
     touchActivity(); // 有交互 → 重置空闲关怀计时

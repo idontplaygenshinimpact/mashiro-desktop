@@ -91,6 +91,7 @@ contextBridge.exposeInMainWorld("kanban", {
   speak: (text) => ipcRenderer.invoke("window:speak", { text }),
   playScene: (scene) => ipcRenderer.invoke("window:play-scene", { scene }),
   playLongScene: (scene) => ipcRenderer.invoke("window:play-long-scene", { scene }),
+  playClickShort: () => ipcRenderer.invoke("window:play-click-short"),
   playClickLong: () => ipcRenderer.invoke("window:play-click-long"),
   // 🎵 樱花庄音乐
   musicPlay: (file) => ipcRenderer.invoke("music:play", { file }),
