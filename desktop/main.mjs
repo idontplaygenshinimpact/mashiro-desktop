@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 import { spawn, exec, spawnSync } from "node:child_process";
 import { writeFileSync, readFileSync } from "node:fs";
 import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, healthUrl } from "../lib/widget-auth.mjs";
+// 纵向拆分：widget 服务守护 / 窗口位置持久化 / 重启设施（desktop/lib/*.mjs，无 electron 依赖可单测）
+import { safeSpawn, createWidgetServer } from "./lib/widget-server.mjs";
+import { readWindowState as readWinState, saveWindowState as saveWinState, scheduleSaveWindowState as scheduleSaveWinState, isOnScreen as isRectOnScreen } from "./lib/window-state.mjs";
+import { rendererBundleStale as bundleStale, rebuildRendererBundle as rebuildBundle, killAllWidgetProcesses as killAllWidgets } from "./lib/restart.mjs";
 
 // ---------- 启动加速 ----------
 // 注意：透明窗口 + disable-gpu 会导致窗口不渲染（看不到）。
@@ -25,11 +29,7 @@ const savedModelPath = getCurrentModel(scanMascotModels());
 let win = null;
 let panelWin = null;
 let tray = null;
-let widgetProc = null; // 后端数据服务（widget.mjs）
 let fitReceived = false; // 渲染层是否已上报 window:fit（用于兜底显示）
-
-// 本实例拉起的 widget 子进程 pid 集合（退出清理只杀自己拉起的，避免误杀其他 node 实例/开发进程）
-const spawnedWidgetPids = new Set();
 
 // ---------- 单实例锁（防注册表自启 + 用户双击 → 双托盘/双守护） ----------
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -47,59 +47,16 @@ if (!gotSingleInstanceLock) {
   });
 }
 
-// ---------- 安全 spawn：始终挂 error 处理器，避免子进程 'error' 未捕获导致主进程崩溃 ----------
-function safeSpawn(cmd, args, opts = {}) {
-  try {
-    const child = spawn(cmd, args, { windowsHide: true, detached: true, stdio: "ignore", ...opts });
-    child.on("error", (err) => console.log(`[kanban] spawn ${cmd} 失败: ${err.message}`));
-    try { child.unref(); } catch { /* ignore */ }
-    return child;
-  } catch (err) {
-    console.log(`[kanban] spawn ${cmd} 异常: ${err.message}`);
-    return null;
-  }
-}
-
-// ---------- 启动/复用后端 widget 服务（含守护：死了自动拉起） ----------
-function ensureWidgetServer() {
-  // 探测 /api/health：认证豁免端点（主进程 fetch 不走 webRequest token 注入，
-  // 探测 /api/refresh 会被 401 误判 widget 未启动 → 疯狂重复 spawn）
-  // 5s 超时：widget 卡死时不再无限挂起，超时视为未启动
-  widgetFetch(healthUrl(), { signal: AbortSignal.timeout(5000) })
-    .then((r) => { if (!r.ok) throw new Error("bad status"); })
-    .catch(() => {
-      if (widgetProc && widgetProc.exitCode === null) return; // 已在运行，不重复启动
-      const child = safeSpawn("node", ["widget.mjs"], { cwd: ROOT });
-      widgetProc = child;
-      if (child) {
-        spawnedWidgetPids.add(child.pid);
-        child.on("exit", () => { spawnedWidgetPids.delete(child.pid); if (widgetProc === child) widgetProc = null; });
-        console.log("[kanban] widget.mjs 已后台拉起");
-      }
-    });
-}
-
+// ---------- 后端 widget 服务守护（desktop/lib/widget-server.mjs） ----------
+// widgetFetch 在下方定义（依赖 token 轮询），此处用函数引用；守护在 app ready 后启动
+const widgetServer = createWidgetServer({
+  widgetFetch: (url, opts) => widgetFetch(url, opts),
+  healthUrlValue: healthUrl(),
+  root: ROOT,
+});
 // 持续守护：每 30 秒探测，挂了自动重启
-if (gotSingleInstanceLock) setInterval(ensureWidgetServer, 30000);
-
-// 退出时清理：只杀本实例拉起的 widget 数据服务 + 其拉起的 discover 爬虫子进程
-// （不再用 CommandLine 匹配，避免误杀其他 node 实例/开发进程）
-function cleanupWidget() {
-  const pids = [...spawnedWidgetPids];
-  if (!pids.length) return;
-  const parentCond = pids.map((p) => `($_.ParentProcessId -eq ${p})`).join(" -or ");
-  const selfCond = pids.map((p) => `($_.ProcessId -eq ${p})`).join(" -or ");
-  try {
-    spawnSync(
-      "powershell",
-      ["-NoProfile", "-Command",
-        `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { ${parentCond} -or ${selfCond} } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`],
-      { windowsHide: true, timeout: 5000, stdio: "ignore" }
-    );
-    console.log("[kanban] 已停止后台服务与爬虫进程");
-  } catch { /* ignore */ }
-}
-app.on("before-quit", () => { cleanupWidget(); });
+if (gotSingleInstanceLock) setInterval(() => widgetServer.ensure(), 30000);
+app.on("before-quit", () => { widgetServer.cleanup(); });
 
 // ---------- 托盘图标（用字符画生成简单图标） ----------
 function createTrayIcon() {
@@ -123,36 +80,16 @@ function createTrayIcon() {
   return nativeImage.createFromBitmap(canvasData, { width: size, height: size });
 }
 
-// ---------- 窗口位置持久化（data/window-state.json，防抖保存） ----------
+// ---------- 窗口位置持久化（desktop/lib/window-state.mjs；data/window-state.json 防抖保存） ----------
 const STATE_FILE = path.join(ROOT, "data", "window-state.json");
 let mascotState = { x: null, y: null };
 let panelState = { x: null, y: null, width: null, height: null };
-let stateSaveTimer = null;
-
-function readWindowState() {
-  try { return JSON.parse(readFileSync(STATE_FILE, "utf8")); } catch { return {}; }
-}
-function saveWindowState() {
-  try {
-    writeFileSync(STATE_FILE, JSON.stringify({ mascot: mascotState, panel: panelState }, null, 2), "utf8");
-  } catch { /* ignore */ }
-}
-function scheduleSaveWindowState() {
-  clearTimeout(stateSaveTimer);
-  stateSaveTimer = setTimeout(saveWindowState, 400); // 防抖，避免拖动时频繁写盘
-}
-// 校验位置是否在屏内（至少露出 40px，避免恢复到屏幕外）
+const getWinState = () => ({ mascot: mascotState, panel: panelState });
+const scheduleSaveWindowState = scheduleSaveWinState(STATE_FILE, getWinState);
+function readWindowState() { return readWinState(STATE_FILE); }
+function saveWindowState() { saveWinState(STATE_FILE, getWinState()); }
 function isOnScreen(x, y, w, h) {
-  try {
-    const { workArea } = screen.getPrimaryDisplay();
-    const minVisible = 40;
-    return (
-      x + minVisible <= workArea.x + workArea.width &&
-      x + w - minVisible >= workArea.x &&
-      y + minVisible <= workArea.y + workArea.height &&
-      y + h - minVisible >= workArea.y
-    );
-  } catch { return false; }
+  try { return isRectOnScreen(screen.getPrimaryDisplay().workArea, x, y, w, h); } catch { return false; }
 }
 
 // ---------- 创建透明悬浮窗 ----------
@@ -560,59 +497,19 @@ ipcMain.handle("widget:notify", async (e, { title, message }) => {
 
 ipcMain.handle("window:quit", () => app.quit());
 
-// 一键重启（面板按钮）：杀全部 widget 子进程（含外部残留，按命令行匹配）→ relaunch 自身
-// 教训：cleanupWidget 只杀本实例拉起的 pid；测试/手动残留的 widget 占着 8899 会导致
-// 重启后新主进程探测到旧服务而不重新拉起 → "重启没生效"。这里按命令行全杀，治本。
-function killAllWidgetProcesses() {
-  try {
-    spawnSync(
-      "powershell",
-      ["-NoProfile", "-Command",
-        `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match 'widget\\.mjs' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`],
-      { windowsHide: true, timeout: 5000, stdio: "ignore" }
-    );
-    console.log("[kanban] 已清理全部 widget 进程（含外部残留）");
-  } catch { /* ignore */ }
-}
-
-// ============ 渲染层产物防呆：app.js 是源码、app.bundle.js 是 esbuild 产物 ============
-// 改 app.js/index.html/style.css 后不重建 bundle → 改动不生效（历史上踩过坑）。
-// 机制：重启前自动检测"源码比产物新"→ 自动重建；启动时也检查并告警。
+// 一键重启（面板按钮）：杀全部 widget 子进程（含外部残留）→ relaunch 自身
+// 渲染产物防呆 / 杀进程逻辑在 desktop/lib/restart.mjs（可单测）
 const RENDERER_DIR = path.join(__dirname, "renderer");
-const RENDERER_BUNDLE = path.join(RENDERER_DIR, "app.bundle.js");
-const RENDERER_SRC = ["app.js", "index.html", "style.css"].map((f) => path.join(RENDERER_DIR, f));
-
-/** 渲染源码是否比 bundle 新（任一源文件 mtime > bundle mtime 即过期） */
-function rendererBundleStale() {
-  try {
-    if (!existsSync(RENDERER_BUNDLE)) return true;
-    const bm = statSync(RENDERER_BUNDLE).mtimeMs;
-    return RENDERER_SRC.some((f) => existsSync(f) && statSync(f).mtimeMs > bm);
-  } catch { return false; }
-}
-
-/** 重建 app.bundle.js（esbuild；失败不阻塞重启，返回是否成功） */
-function rebuildRendererBundle() {
-  return new Promise((resolve) => {
-    const esbuildBin = path.join(ROOT, "node_modules", ".bin", process.platform === "win32" ? "esbuild.cmd" : "esbuild");
-    if (!existsSync(esbuildBin)) { console.log("[renderer] esbuild 未安装，跳过自动构建"); resolve(false); return; }
-    const child = spawn(esbuildBin, ["desktop/renderer/app.js", "--bundle", "--format=esm", "--outfile=desktop/renderer/app.bundle.js", "--log-level=warning"], {
-      cwd: ROOT, windowsHide: true, stdio: "ignore",
-    });
-    const timer = setTimeout(() => { try { child.kill(); } catch { /* ignore */ } resolve(false); }, 60000);
-    child.on("exit", (code) => { clearTimeout(timer); console.log(`[renderer] 自动重建 bundle ${code === 0 ? "成功" : "失败(code=" + code + ")"}`); resolve(code === 0); });
-    child.on("error", () => { clearTimeout(timer); console.log("[renderer] esbuild 启动失败"); resolve(false); });
-  });
-}
+const RENDERER_SRC = ["app.js", "index.html", "style.css"];
 
 ipcMain.handle("app:restart", async () => {
   // 渲染源码比 bundle 新 → 先自动重建（改代码后点面板重启即生效，无需手动构建）
-  if (rendererBundleStale()) {
+  if (bundleStale(RENDERER_DIR, RENDERER_SRC)) {
     console.log("[renderer] 检测到渲染源码更新，重启前自动重建 bundle…");
-    await rebuildRendererBundle();
+    await rebuildBundle(ROOT);
   }
-  try { cleanupWidget(); } catch { /* ignore */ }
-  killAllWidgetProcesses();
+  try { widgetServer.cleanup(); } catch { /* ignore */ }
+  killAllWidgets();
   app.relaunch();
   app.exit(0);
   return { ok: true };
@@ -1163,7 +1060,7 @@ app.whenReady().then(() => {
   if (!gotSingleInstanceLock) return;
   registerWidgetAuth();
   loadWidgetToken();
-  ensureWidgetServer();
+  widgetServer.ensure();
   setTimeout(createWindow, 800); // 等 widget 服务起来
   createTray();
   startDesktopScopeCheck();
@@ -1171,7 +1068,7 @@ app.whenReady().then(() => {
   initMusic(); // 🎵 音乐状态注入 + 启动自动播放
   // 渲染产物防呆：源码比 bundle 新 → 启动告警（避免"改了没生效"的困惑）
   setTimeout(() => {
-    if (rendererBundleStale()) {
+    if (bundleStale(RENDERER_DIR, RENDERER_SRC)) {
       console.log("[renderer] ⚠️ 检测到 app.js/index.html/style.css 比 app.bundle.js 新——改动尚未生效！请重启桌宠（会自动重建）或运行 npm run build:renderer");
     }
   }, 1500);
