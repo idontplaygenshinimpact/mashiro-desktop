@@ -412,11 +412,11 @@ function fmtIvTime(s) {
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
-// ============ 面试录音（🎙️ 说答案 → whisper 转写回填 + 录音留存本场回听） ============
-// 一路双采：MediaRecorder → webm（回听）；ScriptProcessor → 16k PCM（转写）
+// ============ 面试录音（🎙️ 说答案 → ASR 转写回填 + 录音留存本场回听） ============
+// 一路双采：MediaRecorder → webm（回听）；ScriptProcessor → 16k PCM（转写，worker 内本地 ASR）
 let ivMicStream = null, ivMicRec = null, ivMicCtx = null, ivMicSource = null, ivMicProc = null;
 let ivMicChunks = [], ivMicPcm = [], ivMicRecording = false, ivMicAutoStop = null;
-let ivMicTimer = null, ivMicSecs = 0;
+let ivMicTimer = null, ivMicSecs = 0, ivMicRecordSr = 16000;
 const ivRecordings = {}; // 轮次 -> { url, secs }
 
 function setIvMicState(st) {
@@ -468,7 +468,7 @@ async function startIvMic() {
     transcribeIvPcm(); // 转写回填（录音已保存，转写失败不影响回听）
   };
   ivMicRec.start(250);
-  // PCM 采集（whisper 16k 单声道）
+  // PCM 采集（16k 单声道，ASR 期望采样率）
   try {
     ivMicCtx = new AudioContext({ sampleRate: 16000 });
     ivMicSource = ivMicCtx.createMediaStreamSource(ivMicStream);
@@ -493,6 +493,7 @@ async function stopIvMic() {
   ivMicRecording = false;
   clearTimeout(ivMicAutoStop);
   if (ivMicTimer) { clearInterval(ivMicTimer); ivMicTimer = null; }
+  ivMicRecordSr = ivMicCtx?.sampleRate || 16000; // 先取采样率，ctx 马上 close
   try { ivMicSource?.disconnect(); ivMicProc?.disconnect(); } catch { /* ignore */ }
   try { ivMicCtx?.close(); } catch { /* ignore */ }
   if (ivMicStream) { ivMicStream.getTracks().forEach((t) => t.stop()); ivMicStream = null; }
@@ -512,7 +513,18 @@ async function transcribeIvPcm() {
   for (const c of ivMicPcm) { pcm.set(c, off); off += c.length; }
   ivMicPcm = [];
   try {
-    const r = await window.kanban.speechToText(pcm);
+    // VAD 裁头尾静音（防噪声被脑补成汉字；长段思考停顿也能裁掉）
+    const voiced = window.trimSilenceToVoice ? window.trimSilenceToVoice(pcm, 16000) : pcm;
+    if (!voiced || voiced.length < 16000 * 0.5) {
+      window.kanban.notify("面试录音", "未检测到语音，录音已保存可回听");
+      return;
+    }
+    // 采样率兜底（AudioContext 个别平台退回 48k）
+    let input = voiced;
+    if (ivMicRecordSr !== 16000 && typeof resampleTo16k === "function") {
+      input = await resampleTo16k(voiced, ivMicRecordSr);
+    }
+    const r = await window.kanban.speechToText(input);
     if (r?.ok && r.text) {
       const box = $("iv-answer");
       box.value = box.value.trim() ? box.value.trim() + "\n" + r.text : r.text;
