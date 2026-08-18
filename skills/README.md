@@ -1,6 +1,6 @@
 # Skills 插件开发指南
 
-mianshi-agent 的插件机制（参考 DeepSeek Harness / OpenClaw / Claude Code 插件体系）：
+Mashiro 的插件机制（参考 DeepSeek Harness / OpenClaw / Claude Code 插件体系）：
 **目录即插即用，不改 agent 内核**。一个技能 = `skills/<name>/` 目录，支持两种形态（可叠加）：
 
 ```

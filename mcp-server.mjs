@@ -1,4 +1,4 @@
-// MCP Server：把 mianshi-agent 的核心工具暴露成标准 Model Context Protocol
+// MCP Server：把 Mashiro 的核心工具暴露成标准 Model Context Protocol
 // 任何 MCP 客户端（Claude Code / Cursor / OpenCode）连上即可调用真白的能力
 // 用法: node mcp-server.mjs  (stdio 传输，Claude Code 配置后自动连接)
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -6,7 +6,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 const server = new McpServer({
-  name: "mianshi-agent",
+  name: "mashiro-desktop",
   version: "0.1.0",
 });
 
@@ -175,4 +175,4 @@ server.tool(
 // ---------- 启动（stdio 传输，供 MCP 客户端连接） ----------
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error("✅ MCP server 已启动（mianshi-agent）");
+console.error("✅ MCP server 已启动（Mashiro）");

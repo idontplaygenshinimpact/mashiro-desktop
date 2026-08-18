@@ -1,4 +1,4 @@
-# 真白 · 前端秋招桌宠 Agent（mianshi-agent）
+# 真白 · Mashiro Desktop（mashiro-desktop）
 
 > 🎀 一个会爬面经、讲题目、陪你复盘的前端秋招 AI 桌宠。椎名真白（樱花庄的宠物女孩）等你投喂面经链接，也等你跟她对话。
 
@@ -67,7 +67,7 @@ D:\mianshi-agent\start-kanban.bat
 node D:\mianshi-agent\node_modules\electron\dist\electron.exe D:\mianshi-agent\desktop\main.mjs
 ```
 
-**改代码后一键重启**：面板右上角「♻️」按钮（确认后桌宠 + 后台服务一并重启，约 3-5 秒）；或托盘退出后重新运行启动脚本。开机自启：注册表 Run 键 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `mianshi-agent` 项（指向启动脚本），如需取消删除该注册表项。
+**改代码后一键重启**：面板右上角「♻️」按钮（确认后桌宠 + 后台服务一并重启，约 3-5 秒）；或托盘退出后重新运行启动脚本。开机自启：注册表 Run 键 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `mashiro-desktop` 项（指向启动脚本），如需取消删除该注册表项。
 
 ---
 
@@ -153,7 +153,7 @@ node discover.mjs "https://juejin.cn/search?query=React面经" 5
 ## 项目结构
 
 ```
-mianshi-agent/
+mashiro-desktop/
 ├── desktop/                  # 桌宠（Electron）
 │   ├── main.mjs              # 主进程薄壳：窗口/托盘/生命周期
 │   ├── lib/                  # 主进程拆出模块（无 electron 依赖可单测）
@@ -363,7 +363,7 @@ COMPACT_KEEP_RECENT=4000   # 保留最近 N token 的完整消息
 ## 常见问题
 
 **Q：每次怎么启动？**
-双击 `D:\mianshi-agent\start-kanban.bat`（最小化启动 Electron 桌宠）。桌宠主进程会自动拉起后台数据服务（widget，端口 8899）并守护它，**不需要单独启动 widget**。若设置了开机自启（注册表 Run 键 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `mianshi-agent` 项），平时开机即自动运行，无需手动操作；重复双击启动会被单实例锁拦截，聚焦到已运行窗口。
+双击 `D:\mianshi-agent\start-kanban.bat`（最小化启动 Electron 桌宠）。桌宠主进程会自动拉起后台数据服务（widget，端口 8899）并守护它，**不需要单独启动 widget**。若设置了开机自启（注册表 Run 键 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `mashiro-desktop` 项），平时开机即自动运行，无需手动操作；重复双击启动会被单实例锁拦截，聚焦到已运行窗口。
 
 **Q：改完代码后功能没生效 / 面板报 "Not Found" / "is not valid JSON"？**
 运行中的 widget 是旧代码进程（桌宠一直没重启）。**每次代码改动后请重启桌宠**：托盘退出或 `Get-Process electron | Stop-Process -Force`，再双击 `start-kanban.bat`。验证是否新版：浏览器打开 `http://127.0.0.1:8899/api/learning`——返回 JSON 文档清单 = 新版；返回 `Not Found` = 旧进程，重启桌宠即可。
@@ -412,4 +412,4 @@ npm run dist                # 生成 release/ 下 NSIS 安装包 + 便携版（�
 
 ---
 
-*由 mianshi-agent 驱动 · 真白陪你上岸*
+*由 Mashiro 驱动 · 真白陪你上岸*

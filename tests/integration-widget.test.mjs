@@ -193,10 +193,10 @@ test("POST /api/approval 不存在的请求 → ok:false", async () => {
 test("GET / 与 /index.html 返回状态页", async () => {
   const r = await fetch(`${BASE}/`);
   assert.equal(r.status, 200);
-  assert.ok((await r.text()).includes("mianshi-agent"));
+  assert.ok((await r.text()).includes("Mashiro"));
   const r2 = await fetch(`${BASE}/index.html`);
   assert.equal(r2.status, 200);
-  assert.ok((await r2.text()).includes("mianshi-agent"));
+  assert.ok((await r2.text()).includes("Mashiro"));
 });
 
 test("GET /api/patrol-config 返回配置+预算（强制关闭态）", async () => {

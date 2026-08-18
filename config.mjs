@@ -1,4 +1,4 @@
-// mianshi-agent 配置
+// mashiro-desktop 配置
 // API key 优先级：.env 文件 > 环境变量 DEEPSEEK_API_KEY > opencode auth.json
 // 端点默认走 OpenCode Go（opencode.ai/zen/go/v1），用 Go 订阅额度
 import { readFileSync, existsSync } from "node:fs";

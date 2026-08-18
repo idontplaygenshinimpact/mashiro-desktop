@@ -1,4 +1,4 @@
-// mianshi-agent 桌面小组件
+// Mashiro 数据服务
 // 功能：
 //   1. 本地面板 http://127.0.0.1:8799 —— 展示今日新趋势、学习任务、秋招情报
 //   2. 系统通知 —— 爬取到新趋势/新产出时弹通知
@@ -160,7 +160,7 @@ function sendNotification(title, message, { wait = false } = {}) {
         message,
         sound: true,
         wait,
-        appID: "MianshiAgent",
+        appID: "Mashiro",
         icon: path.join(config.outputDir, "..", "icon.png"),
       },
       (err) => resolve(undefined)
@@ -209,7 +209,7 @@ $textNodes = $template.GetElementsByTagName('text')
 $textNodes.Item(0).AppendChild($template.CreateTextNode('${title}')) > $null
 $textNodes.Item(1).AppendChild($template.CreateTextNode('${message}')) > $null
 $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
-[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('MianshiAgent').Show($toast)`;
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Mashiro').Show($toast)`;
   exec(`powershell -NoProfile -Command "${ps.replace(/"/g, '\\"')}"`, { windowsHide: true }, () => {});
 }
 
@@ -233,7 +233,7 @@ async function checkTrends() {
     const { company, title } = parseTitle(fresh[0].file);
     const names = fresh.map((f) => parseTitle(f.file).company).join("、");
     console.log(`[widget] 发现 ${fresh.length} 个新产出: ${names}`);
-    await sendNotification("📌 mianshi-agent 新产出", `新增 ${fresh.length} 篇：${names}\n${fresh[0].dir}`);
+    await sendNotification("📌 真白新产出", `新增 ${fresh.length} 篇：${names}\n${fresh[0].dir}`);
     if (fresh[0].dir.includes("discover")) {
       await sendNotification("🆕 新趋势/新变化", `AI 逛网发现新内容：${names}，去 output 目录看看吧`);
     }
@@ -686,11 +686,11 @@ if (!DISABLE_BACKGROUND) {
     if (!existsSync(mcpCfgFile)) {
       mkdirSync(path.dirname(mcpCfgFile), { recursive: true });
       writeFileSync(mcpCfgFile, JSON.stringify([{
-        name: "mianshi",
+        name: "mashiro",
         command: "node",
         args: [path.join(import.meta.dirname, "mcp-server.mjs").replace(/\\/g, "/")],
         permission: "auto",
-        description: "mianshi-agent 自身能力（搜索面经/讲解/学习清单/模拟面试/个人数据：简历/校招/日程/学习进度）",
+        description: "Mashiro 自身能力（搜索面经/讲解/学习清单/模拟面试/个人数据：简历/校招/日程/学习进度）",
       }], null, 2), "utf8");
       console.log("[widget] 已生成默认 MCP 自环配置（data/mcp-servers.json）");
     }
