@@ -777,7 +777,8 @@ function showReviewCard() {
   $("rc-progress-bar").style.width = pct + "%";
   $("rc-progress-pct").textContent = pct + "%";
   $("rc-topic").textContent = "🔁 " + card.topic;
-  $("rc-question").textContent = card.question || card.topic;
+  // 默答引导：说明这题是"先心里作答→显示答案核对→选择题+评级"三步（此前标题无引导，用户困惑简答/选择的定位）
+  $("rc-question").innerHTML = `<div style="font-size:11px;color:#8a87a8;margin-bottom:4px;">📝 先默答这题（心里组织答案），再点「显示答案」核对，最后做选择题并评级</div>` + esc(card.question || card.topic);
   $("rc-answer").textContent = card.answer || "";
   $("rc-answer").classList.add("hidden");
   $("rc-show").classList.remove("hidden");
@@ -863,12 +864,28 @@ document.querySelectorAll(".rc-btn").forEach((btn) => {
   });
 });
 
+// 跳过这张：不评分，放回队列尾部（稍后回来复习）；全部跳过 → 空队列提示
+$("rc-skip")?.addEventListener("click", () => {
+  const card = reviewQueue[reviewIdx];
+  if (!card) return;
+  reviewQueue.splice(reviewIdx, 1);
+  reviewQueue.push(card);
+  if (reviewIdx >= reviewQueue.length) reviewIdx = 0;
+  showReviewCard();
+  window.kanban.notify("🔁 复习", "已跳过「" + String(card.topic || "").slice(0, 12) + "」，放回队列稍后复习");
+});
+
 // ============ 复习自测：选择题快速回忆（题库化：懒生成 6 题 → 每次随机抽 3 + 选项洗牌；答错自动换批） ============
 let quizState = null; // { questions, chosen: {qi: oi} }
 
 async function loadCardQuiz(cardId) {
   const box = $("rc-quiz");
   if (!box) return;
+  // 同一张卡已加载过（切 Tab 回来）：保留已选状态，不重渲染（此前每次重载 → 选择丢失）
+  if (quizState?.questions?.length && quizState.questions[0]?.cardId === cardId) {
+    renderQuiz(quizState.questions); // 按已选状态重渲染（picked 恢复）
+    return;
+  }
   quizState = null;
   box.classList.remove("hidden");
   box.innerHTML = '<div class="quiz-loading">🧠 复习自测加载中…</div>';
@@ -895,7 +912,8 @@ async function loadCardQuiz(cardId) {
 }
 
 function renderQuiz(questions) {
-  quizState = { questions, chosen: {}, kbUsed: quizState?.kbUsed || false };
+  const prevChosen = quizState?.chosen || {};
+  quizState = { questions, chosen: prevChosen, kbUsed: quizState?.kbUsed || false };
   const box = $("rc-quiz");
   // 累计自测正确率（/api/review/quiz/stats 消费 quiz_attempts；异步填充）
   let acc = "";
@@ -910,7 +928,7 @@ function renderQuiz(questions) {
     <div class="quiz-q" data-qi="${qi}">
       <div class="quiz-question">${qi + 1}. ${esc(q.question)}</div>
       <div class="quiz-options">
-        ${q.options.map((o, oi) => `<button class="quiz-opt" data-qi="${qi}" data-oi="${oi}">${String.fromCharCode(65 + oi)}. ${esc(o)}</button>`).join("")}
+        ${q.options.map((o, oi) => `<button class="quiz-opt${prevChosen[qi] === oi ? " picked" : ""}" data-qi="${qi}" data-oi="${oi}">${String.fromCharCode(65 + oi)}. ${esc(o)}</button>`).join("")}
       </div>
       <div class="quiz-fb hidden" data-fb="${qi}"></div>
     </div>`).join("") +
@@ -943,15 +961,16 @@ async function submitQuizAnswers() {
     }).then((x) => x.json());
     const byQ = {};
     for (const res of r.results || []) byQ[res.questionId] = res;
-    // 逐题对错 + 解析
+    // 逐题对错 + 解析（答错时明确给出正确答案）
     quizState.questions.forEach((q, qi) => {
       const res = byQ[q.id];
       const fb = $("rc-quiz").querySelector(`.quiz-fb[data-fb="${qi}"]`);
       if (!fb || !res) return;
       fb.classList.remove("hidden");
+      const rightText = q.options[res.rightIndex] ? `${String.fromCharCode(65 + res.rightIndex)}. ${q.options[res.rightIndex]}` : "";
       fb.innerHTML = res.correct
-        ? `<span class="quiz-right">✅ 正确</span> <span class="quiz-explain">${esc(res.explain)}</span>`
-        : `<span class="quiz-wrong">❌ 选错了</span> <span class="quiz-explain">${esc(res.explain)}</span>`;
+        ? `<span class="quiz-right">✅ 正确</span><div class="quiz-explain">${esc(res.explain || "")}</div>`
+        : `<span class="quiz-wrong">❌ 选错了 · 正确答案：<b>${esc(rightText)}</b></span><div class="quiz-explain">${esc(res.explain || "")}</div>`;
       // 高亮正确项
       const opts = $("rc-quiz").querySelectorAll(`.quiz-opt[data-qi="${qi}"]`);
       opts.forEach((o, oi) => {
