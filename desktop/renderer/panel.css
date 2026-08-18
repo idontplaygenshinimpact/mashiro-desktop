@@ -218,10 +218,10 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .quiz-opt.picked { background: rgba(138,90,220,.22); border-color: rgba(109,79,216,.55); }
 .quiz-opt.right { background: rgba(60,160,100,.16); border-color: rgba(60,160,100,.5); color: #2e7d4e; }
 .quiz-opt.wrong { background: rgba(220,90,60,.14); border-color: rgba(220,90,60,.5); color: #b04530; }
-.quiz-fb { margin-top: 5px; font-size: 11px; line-height: 1.5; }
+.quiz-fb { margin-top: 6px; font-size: 11px; line-height: 1.6; background: rgba(109,79,216,0.05); border-left: 3px solid rgba(109,79,216,0.3); padding: 6px 8px; border-radius: 4px; }
 .quiz-right { color: #2e9e5b; font-weight: 700; }
 .quiz-wrong { color: #c05030; font-weight: 700; }
-.quiz-explain { color: #6a6790; }
+.quiz-explain { color: #5a5780; margin-top: 2px; }
 .quiz-foot { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .quiz-foot button { padding: 5px 12px; font-size: 11px; }
 .quiz-summary { font-size: 11px; }

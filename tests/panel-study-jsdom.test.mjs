@@ -137,6 +137,8 @@ test("复习卡：到期卡片显示 → 显示答案 → 评级提交", async (
     assert.ok(!card.classList.contains("hidden"), "复习卡容器显示");
     const topic = window.document.getElementById("rc-topic");
     assert.ok(topic.textContent.includes("事件循环"), "复习卡显示主题");
+    // 默答引导说明（简答题干的定位）
+    assert.ok(window.document.getElementById("rc-question").innerHTML.includes("先默答"), "默答引导文案存在");
     // 显示答案
     const show = window.document.getElementById("rc-show");
     show.click();
@@ -154,6 +156,66 @@ test("复习卡：到期卡片显示 → 显示答案 → 评级提交", async (
     assert.equal(ratings.length, 1, "评级提交");
     assert.equal(ratings[0].rating, 3);
     assert.equal(ratings[0].id, "c1");
+  }, {
+    reviewDue: async () => ({
+      ok: true,
+      due: [{ id: "c1", topic: "事件循环", question: "讲一下事件循环", answer: "宏任务微任务…", history: [], nextDue: "2026-01-01" }],
+      stats: { total: 5, due: 1, todayDone: 0 }, trend: { trend: [], streak: 0 }, todayReviewed: [],
+    }),
+  });
+});
+
+test("复习卡「⏭ 跳过」：不评分、放回队尾、切换到下一张", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    window.document.querySelector('.tab[data-tab="review"]').click();
+    await tick(80);
+    const ratings = [];
+    kanban.reviewSubmit = async (id, rating) => { ratings.push({ id, rating }); return { ok: true }; };
+    const skip = window.document.getElementById("rc-skip");
+    assert.ok(skip, "跳过按钮存在");
+    assert.doesNotThrow(() => skip.click());
+    await tick(30);
+    assert.equal(ratings.length, 0, "跳过不触发评级");
+    // 单卡场景：跳过放回队尾 → 仍是同一张（无其他卡）
+    const topic = window.document.getElementById("rc-topic");
+    assert.ok(topic.textContent.includes("事件循环"), "跳过仍显示卡（队列尾部）");
+  }, {
+    reviewDue: async () => ({
+      ok: true,
+      due: [{ id: "c1", topic: "事件循环", question: "讲一下事件循环", answer: "宏任务微任务…", history: [], nextDue: "2026-01-01" }],
+      stats: { total: 5, due: 1, todayDone: 0 }, trend: { trend: [], streak: 0 }, todayReviewed: [],
+    }),
+  });
+});
+
+test("选择题已选状态：切 Tab 回来不丢失（loadCardQuiz 同卡跳过重载）", async () => {
+  await withPanel(async ({ window }) => {
+    // 提供复习选择题数据（loadCardQuiz 走 fetch /api/review/quiz）
+    const origFetch = window.fetch;
+    window.fetch = async (url, opts) => {
+      const u = String(url);
+      if (u.includes("/api/review/quiz?id=")) {
+        return { ok: true, json: async () => ({ ok: true, questions: [{ id: "q1", cardId: "c1", question: "事件循环先执行宏任务还是微任务？", options: ["宏任务", "微任务", "都不对", "看情况"], rightIndex: 1 }] }) };
+      }
+      return origFetch(url, opts);
+    };
+    window.document.querySelector('.tab[data-tab="review"]').click();
+    await tick(80);
+    // 等选择题渲染并选一个选项
+    await tick(60);
+    const opt = window.document.querySelector("#rc-quiz .quiz-opt");
+    assert.ok(opt, "选择题选项存在");
+    opt.click();
+    await tick(10);
+    assert.ok(opt.classList.contains("picked"), "选项已选中");
+    // 切到别的 Tab 再切回 → 复习卡重载 → 选择题不应重置（同卡跳过重载）
+    window.document.querySelector('.tab[data-tab="chat"]').click();
+    await tick(30);
+    window.document.querySelector('.tab[data-tab="review"]').click();
+    await tick(80);
+    const picked = window.document.querySelector("#rc-quiz .quiz-opt.picked");
+    assert.ok(picked, "切页后已选状态保留（此前重载清空）");
+    assert.equal(picked.textContent, opt.textContent, "同一选项仍选中");
   }, {
     reviewDue: async () => ({
       ok: true,
