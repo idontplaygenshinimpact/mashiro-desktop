@@ -1,23 +1,21 @@
-test: 核心模块交互测试铺满——模拟面试/学习清单全流程 jsdom 覆盖 + 修复摸排发现的复习卡空白 bug
+fix: 模拟面试「看不到问题」真凶落网——残留会话阻塞 + 前端自愈
 
-按用户要求摸排核心功能模块（模拟面试 + 学习清单）测试覆盖，结论与动作：
+【真实链路复现（curl 真实 widget 服务）】
+用户报「还是没有问题显示」→ 直接调 /api/interview/start 得到：
+  error: 已有一场面试进行中，先结束（end_interview）或继续回答
+根因：上一场面试未正常结束（关面板/杀进程/中途退出）→ 会话留在 widget 内存
+（常驻进程不清）→ 之后每次点「开始模拟面试」后端都拒绝 → 前端 alert 后 return
+→ 问题永不显示。之前所有「看不到问题」大概率都是这个（jsdom 测试只 mock 成功路径，
+错误路径零覆盖——这是测试盲区）。
 
-【覆盖现状】
-- 后端逻辑本就扎实：interview 19 用例（开始/评分/追问链/薄弱点/复盘闭环）、
-  study 系列 29 用例（CRUD/勾选/复习出题/LLM 异常分支）、review 20 用例（FSRS/错题本）
-- 前端交互是真空：jsdom 仅 4 用例 → 本次铺满
+【修复】
+- 前端 startIvSession 自愈：start 报「进行中」→ 自动 invEnd 收尾旧会话（生成复盘）
+  → 自动重试 start → 正常显示问题，用户无感；收尾也失败则明确提示可重试
+- 抽 showInterviewUi 公共函数（正常路径与自愈重试共用，避免逻辑分叉）
 
-【新增（15 用例）】
-- panel-helper.mjs：公共 jsdom 设施（真实加载 5 脚本/canvas stub/定时器清理/可覆盖 mock）
-- panel-interview-jsdom：面试全流程 6 用例（开始显示问题/提交评分+下一问/薄弱点命中提示/
-  自动结束复盘/手动结束/空回答不提交）
-- panel-study-jsdom：清单全流程 10 用例（状态流渲染/勾选/级别筛选/搜索/详情弹窗追问+整理/
-  归并≥2 校验/复习卡显示+评级/生成清单/空态引导）
-- panel-focus-jsdom 重构复用 helper
+【测试补盲区（+2 用例）】
+- 残留会话自愈：start 拒绝 → invEnd 恰好 1 次 → 重试 start → 问题最终显示、无 alert
+- 自愈失败：invEnd 也挂 → 明确 alert + 按钮恢复可重试
+全量 633/633。
 
-【摸排挖出并修复的真实 bug】
-loadReview 主流程有到期卡时从未移除 review-card 的 hidden（.hidden = display:none!important），
-只有错题本路径移除 → 复习 Tab 有到期卡时卡片区整片空白（内容渲染了但容器隐藏）。
-修复：有卡分支补 classList.remove("hidden")。jsdom 用例先红后绿验证。
-
-全量 631/631。
+另：已清理用户桌宠里残留的真实会话（end 生成旧场复盘），widget 现为干净状态。
