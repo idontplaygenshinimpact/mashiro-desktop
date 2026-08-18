@@ -369,7 +369,7 @@ function runStatic() {
 
 // ---------- 主流程 ----------
 const startedAt = Date.now();
-console.log("========== mianshi-agent 端到端评测 v3（客观判定 + 真实性 + TRACe） ==========");
+console.log("========== Mashiro 端到端评测 v3（客观判定 + 真实性 + TRACe） ==========");
 console.log(`模式: ${QUICK ? "quick（2 题 + 1 材料题）" : "full"} | ${new Date().toLocaleString("zh-CN")}\n`);
 
 // --judge-check 独立模式（最便宜：只跑判官金标校验，不跑全量评测）

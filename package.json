@@ -1,8 +1,8 @@
 {
-  "name": "mianshi-agent",
+  "name": "mashiro-desktop",
   "version": "0.1.0",
   "description": "面经/招聘采集 + AI 完整讲解工具：Playwright 抓页 → 通用正文提取 → DeepSeek 判断与解答 → Markdown 归档",
-  "author": "mianshi-agent",
+  "author": "mashiro-desktop",
   "type": "module",
   "private": true,
   "main": "desktop/main.mjs",
@@ -32,8 +32,8 @@
     "test:module": "node scripts/test-module.mjs"
   },
   "build": {
-    "appId": "com.mianshi.mascot",
-    "productName": "MianshiAgent",
+    "appId": "com.mashiro.desktop",
+    "productName": "Mashiro",
     "electronVersion": "43.2.0",
     "npmRebuild": false,
     "files": [
@@ -60,7 +60,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "真白 · 前端秋招助手"
+      "shortcutName": "真白"
     }
   },
   "dependencies": {

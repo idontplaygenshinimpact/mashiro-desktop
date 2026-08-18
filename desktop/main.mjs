@@ -276,7 +276,7 @@ async function musicSubmenu() {
 
 function createTray() {
   tray = new Tray(createTrayIcon());
-  tray.setToolTip("mianshi-agent 看板娘");
+  tray.setToolTip("真白 · Mashiro 桌宠");
   tray.on("click", () => { if (win) { win.isVisible() ? win.hide() : win.show(); } });
   buildTrayMenu();
 }

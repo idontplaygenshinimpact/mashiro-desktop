@@ -1,4 +1,4 @@
-// mianshi-agent 主入口
+// mashiro-desktop 主入口
 // 用法: node run.mjs [links.txt路径]
 // 流程: 读链接 → Playwright 抓取 → AI 分类 → 值得解的题完整讲解 → 按公司归档 Markdown
 import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync } from "node:fs";

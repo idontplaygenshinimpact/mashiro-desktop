@@ -21,7 +21,7 @@ export const tools = [
       const m = String(repo || "").trim().match(/^[\w.-]+\/[\w.-]+$/);
       if (!m) return { error: "仓库名格式应为 owner/repo，如 vuejs/core" };
       const res = await fetch(`https://api.github.com/repos/${encodeURIComponent(m[0])}`, {
-        headers: { "User-Agent": "mianshi-agent", Accept: "application/vnd.github+json" },
+        headers: { "User-Agent": "mashiro-desktop", Accept: "application/vnd.github+json" },
         signal: AbortSignal.timeout(10000),
       });
       if (res.status === 404) return { error: `仓库不存在: ${m[0]}` };
