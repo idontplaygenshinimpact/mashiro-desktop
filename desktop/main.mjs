@@ -701,8 +701,10 @@ function failAllPending(msg) {
 ipcMain.handle("speech:transcribe", async (e, { audio }) => {
   try {
     if (!audio || !(audio instanceof Float32Array) || audio.length < 1600) {
+      console.log("[speech] 拒绝音频:", audio ? `${audio.constructor?.name} len=${audio.length}` : "null");
       return { ok: false, error: "音频数据无效（过短或格式错误）" };
     }
+    console.log(`[speech] 收到音频 ${audio.length} 采样（${(audio.length / 16000).toFixed(1)}s）`);
     const worker = getAsrWorker();
     const id = ++asrSeq;
     const text = await new Promise((resolve, reject) => {
@@ -710,8 +712,10 @@ ipcMain.handle("speech:transcribe", async (e, { audio }) => {
       // transfer 零拷贝；audio.buffer 是结构化克隆后的独立副本，转移安全
       worker.postMessage({ id, audio: audio.buffer }, [audio.buffer]);
     });
+    console.log(`[speech] 转写成功: ${text.slice(0, 60)}`);
     return { ok: true, text };
   } catch (err) {
+    console.error("[speech] 转写异常:", err?.message || err);
     return { ok: false, error: String(err?.message || err).slice(0, 120) };
   }
 });

@@ -805,7 +805,11 @@ async function stopRecording() {
   try { micSource?.disconnect(); micProc?.disconnect(); } catch { /* ignore */ }
   try { micCtx?.close(); } catch { /* ignore */ }
   if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
-  if (!micChunks.length) return;
+  if (!micChunks.length) {
+    // 静默失败曾是"语音没反应"的元凶之一（采集回调未触发/音频上下文挂起）
+    window.kanban.notify("语音输入", "没有采集到声音——请确认麦克风未被占用，点 🎤 后再说话（说完再点一次停止）");
+    return;
+  }
   // 拼接 PCM
   const total = micChunks.reduce((n, c) => n + c.length, 0);
   const pcm = new Float32Array(total);
@@ -870,6 +874,18 @@ async function startRecording() {
   }
   micChunks = [];
   micCtx = new AudioContext({ sampleRate: 16000 }); // 16k（ASR 期望采样率，浏览器自动重采样；个别平台会退回 48k，停止时兜底重采样）
+  // 关键：AudioContext 可能处于 suspended（自动播放策略）→ 采集回调（onaudioprocess）不触发
+  // → 录不到任何数据且无报错。必须显式 resume（用户点击 🎤 是有效手势，通常可恢复）
+  try {
+    if (micCtx.state === "suspended") await micCtx.resume();
+    if (micCtx.state !== "running") {
+      window.kanban.notify("语音输入", "音频上下文未就绪（" + micCtx.state + "），请重试");
+      return;
+    }
+  } catch (e) {
+    window.kanban.notify("语音输入", "音频启动失败: " + String(e?.message || e).slice(0, 60));
+    return;
+  }
   micSource = micCtx.createMediaStreamSource(micStream);
   micProc = micCtx.createScriptProcessor(4096, 1, 1);
   micProc.onaudioprocess = (e) => {
@@ -883,6 +899,12 @@ async function startRecording() {
   micBtn.classList.add("recording");
   micBtn.textContent = "⏹";
   micBtn.title = "点击停止录音";
+  // 采集自检：开始 300ms 后仍无数据 → 提示麦克风无输入（防静默失败，用户不知录没录上）
+  setTimeout(() => {
+    if (micRecording && !micChunks.length) {
+      window.kanban.notify("语音输入", "⚠️ 麦克风没有声音输入——可能被其他应用占用（浏览器/会议软件），请检查后重试");
+    }
+  }, 300);
   micAutoStop = setTimeout(() => { if (micRecording) stopRecording(); }, 60000); // 60s 上限自动停
 }
 
