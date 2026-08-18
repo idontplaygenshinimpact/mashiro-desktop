@@ -223,6 +223,7 @@ function showInterviewUi(r) {
   $("iv-log").innerHTML = "";
   $("iv-review").classList.add("hidden");
   $("iv-review").textContent = "";
+  $("iv-report-overlay")?.classList.add("hidden"); // 新面试开始 → 关闭复盘弹窗
   $("iv-summary").classList.add("hidden");
   $("iv-scores").innerHTML = "";
   $("iv-answer-area").style.display = "";
@@ -299,8 +300,7 @@ async function submitAnswer() {
       const end = await window.kanban.invEnd();
       if (end?.ok && end.report) {
         renderIvSummary();
-        $("iv-review").classList.remove("hidden");
-        $("iv-review").innerHTML = renderMd(end.report); // Markdown 渲染（标题/列表/加粗层次清晰；renderMd 已转义防注入）
+        showIvReport(end.report); // 毛玻璃弹窗展示复盘报告
         addIvLog(end.hint || "");
         // 薄弱点覆盖统计（录音保留：复盘时可回听）
         if (end.weakTotal > 0) {
@@ -310,11 +310,23 @@ async function submitAnswer() {
       return;
     }
     showQuestion(r);
+    showQuestion(r);
   } finally {
     $("iv-send").disabled = false;
     $("iv-send").textContent = "提交回答";
   }
 }
+
+// 复盘报告弹窗（复用毛玻璃 sd-modal；renderMd 全转义 + href 净化，LLM 输出安全）
+function showIvReport(report) {
+  const overlay = $("iv-report-overlay");
+  $("iv-report-body").innerHTML = renderMd(report);
+  overlay.classList.remove("hidden");
+}
+$("iv-report-close").addEventListener("click", () => $("iv-report-overlay").classList.add("hidden"));
+$("iv-report-overlay").addEventListener("click", (e) => {
+  if (e.target === $("iv-report-overlay")) $("iv-report-overlay").classList.add("hidden"); // 点遮罩关闭
+});
 
 // 结束小结：全场均分 + 五维均分条（基于每轮累计）
 function renderIvSummary() {
@@ -394,8 +406,7 @@ $("iv-end").addEventListener("click", async () => {
     const end = await window.kanban.invEnd();
     if (end?.ok && end.report) {
       renderIvSummary();
-      $("iv-review").classList.remove("hidden");
-      $("iv-review").innerHTML = renderMd(end.report); // Markdown 渲染（同自动结束路径）
+      showIvReport(end.report); // 毛玻璃弹窗展示复盘报告
       $("iv-status").textContent = "面试已结束";
       addIvLog(end.hint || "");
       if (end.weakTotal > 0) {

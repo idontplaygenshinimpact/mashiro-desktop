@@ -57,7 +57,7 @@ test("薄弱点命中轮 → 界面出现「薄弱点命中」提示", async () 
   });
 });
 
-test("最后一轮提交 → 自动结束 + 复盘报告显示", async () => {
+test("最后一轮提交 → 自动结束 + 复盘报告弹窗显示", async () => {
   await withPanel(async ({ window, kanban }) => {
     window.document.getElementById("iv-start").click();
     await tick();
@@ -70,21 +70,24 @@ test("最后一轮提交 → 自动结束 + 复盘报告显示", async () => {
     window.document.getElementById("iv-send").click();
     await tick(80);
     assert.match(window.document.getElementById("iv-status").textContent, /面试结束|正在生成复盘/, "状态切结束");
-    const review = window.document.getElementById("iv-review");
-    assert.ok(!review.classList.contains("hidden"), "复盘区显示");
-    assert.ok(review.textContent.includes("面试复盘"), "复盘报告上屏");
+    const overlay = window.document.getElementById("iv-report-overlay");
+    assert.ok(overlay, "复盘弹窗容器存在");
+    assert.ok(!overlay.classList.contains("hidden"), "复盘弹窗打开（毛玻璃弹窗展示报告）");
+    const body = window.document.getElementById("iv-report-body");
+    assert.ok(body.innerHTML.includes("面试复盘"), "报告 Markdown 渲染上屏");
+    assert.ok(body.querySelector("h3, h4"), "Markdown 标题元素渲染（## → h4）");
   });
 });
 
-test("手动点「结束面试」→ 复盘报告显示", async () => {
+test("手动点「结束面试」→ 复盘报告弹窗显示", async () => {
   await withPanel(async ({ window }) => {
     window.document.getElementById("iv-start").click();
     await tick();
     window.document.getElementById("iv-end").click();
     await tick(60);
-    const review = window.document.getElementById("iv-review");
-    assert.ok(!review.classList.contains("hidden"), "复盘区显示");
-    assert.ok(review.textContent.includes("面试复盘"), "报告上屏");
+    const overlay = window.document.getElementById("iv-report-overlay");
+    assert.ok(!overlay.classList.contains("hidden"), "复盘弹窗打开");
+    assert.ok(window.document.getElementById("iv-report-body").textContent.includes("面试复盘"), "报告上屏");
     assert.match(window.document.getElementById("iv-status").textContent, /面试已结束/);
   });
 });
