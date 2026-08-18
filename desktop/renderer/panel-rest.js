@@ -789,7 +789,7 @@ $("zhenti-cookie-btn")?.addEventListener("click", async () => {
   } catch (e) { alert("⚠️ " + e.message); }
 });
 
-// ============ 语音输入（🎤）：本地 whisper 转写 → 回填输入框 ============
+// ============ 语音输入（🎤）：本地 ASR 转写 → 回填输入框 ============
 // 点击开始录音（16kHz 单声道，浏览器自动重采样）→ 再点停止 → IPC 送主进程转写
 let micStream = null, micCtx = null, micSource = null, micProc = null;
 let micChunks = [], micRecording = false, micAutoStop = null;
