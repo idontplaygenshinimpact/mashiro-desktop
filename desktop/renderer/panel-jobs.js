@@ -680,6 +680,18 @@ async function loadSettings() {
         : `已关闭（0 内存占用）${r.assets > 0 ? ` · 库内仍有 ${r.assets} 条历史数据，开启后自动重建` : ""}`;
     }
   } catch { /* ignore */ }
+  // 简历项目源码（面试官拷打素材）
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/settings/personal-projects");
+    const j = await r.json();
+    if (j?.ok) {
+      const lines = (j.projects || []).map((p) => `${p.name}=${p.dir}`).join("\n");
+      $("set-personal-projects").value = lines;
+      $("set-personal-projects-status").textContent = j.projects?.length
+        ? `✅ ${j.projects.length} 个项目已接入（面试官会基于真实代码拷打）`
+        : "未配置——填项目名=源码目录后保存";
+    }
+  } catch { /* ignore */ }
   // 桌宠
   loadSettingsMascot();
   // 方向画像（讲解/面试/考点提炼角度）
@@ -947,12 +959,41 @@ $("set-rag-enabled")?.addEventListener("change", async () => {
   const r = await window.kanban.ragConfig({ enabled: on });
   if (r?.ok) {
     $("set-rag-status").textContent = on
-      ? "✅ 已开启，后台构建中（首次约 1-3 分钟，可稍后刷新查看状态）"
+      ? "✅ 已开启，索引自动重建（秒级，纯关键词检索）"
       : "已关闭（0 内存占用）";
   } else {
     $("set-rag-enabled").checked = !on;
     $("set-rag-status").textContent = "⚠️ " + (r?.error || "保存失败");
   }
+});
+
+// 简历项目源码（面试官拷打素材）：保存 → 生成档案进知识库
+$("set-personal-projects-save")?.addEventListener("click", async () => {
+  const btn = $("set-personal-projects-save");
+  btn.disabled = true;
+  try {
+    // 解析 "项目名=目录" 每行
+    const projects = $("set-personal-projects").value.split("\n")
+      .map((s) => s.trim()).filter(Boolean)
+      .map((s) => {
+        const eq = s.indexOf("=");
+        return eq > 0 ? { name: s.slice(0, eq).trim(), dir: s.slice(eq + 1).trim() } : null;
+      }).filter(Boolean);
+    if (!projects.length) {
+      $("set-personal-projects-status").textContent = "⚠️ 请至少填一行 项目名=目录";
+      return;
+    }
+    const r = await fetch("http://127.0.0.1:8899/api/settings/personal-projects", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projects }),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      $("set-personal-projects-status").textContent = `${j.message}（${j.indexed?.ok || 0} 成功${j.indexed?.fail ? ` / ${j.indexed.fail} 失败` : ""}）`;
+    } else {
+      $("set-personal-projects-status").textContent = "⚠️ " + (j.error || "保存失败");
+    }
+  } catch (e) { $("set-personal-projects-status").textContent = "⚠️ " + e.message; }
+  finally { btn.disabled = false; }
 });
 
 // RSS 保存
