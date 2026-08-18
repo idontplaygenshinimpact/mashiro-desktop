@@ -237,10 +237,23 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .iv-log { margin-top: 10px; max-height: 140px; overflow-y: auto; font-size: 11px; color: #8a87a8; }
 .iv-log div { padding: 3px 0; border-bottom: 1px dashed rgba(109,79,216,0.12); }
 .iv-review {
-  background: rgba(255,255,255,0.8); border: 1px solid rgba(60,160,100,0.3);
+  background: rgba(255,255,255,0.96); border: 1px solid rgba(60,160,100,0.3);
   border-radius: 10px; padding: 14px; margin-top: 12px; font-size: 12px; line-height: 1.7;
-  white-space: pre-wrap; max-height: 300px; overflow-y: auto;
+  white-space: pre-wrap; max-height: 320px; overflow-y: auto;
+  color: #2c2a4a; /* 显式深色文字：毛玻璃+半透明底透出背景图导致对比度不足，实化背景+固定文字色 */
 }
+/* 复盘报告 Markdown 元素样式（renderMd 输出 sd-* 类） */
+.iv-review h3, .iv-review h4, .iv-review h5 { color: #4a3a9d; margin: 12px 0 4px; font-size: 13px; }
+.iv-review p { margin: 4px 0; }
+.iv-review strong { color: #b07020; }
+.iv-review .sd-li { padding: 1px 0; }
+.iv-review .sd-blank { height: 4px; }
+.iv-review .sd-code { display: block; background: rgba(109,79,216,0.08); padding: 6px 8px; border-radius: 6px; font-size: 11px; overflow-x: auto; margin: 4px 0; }
+.iv-review .sd-inline-code { background: rgba(109,79,216,0.1); padding: 1px 4px; border-radius: 4px; font-size: 11px; }
+.iv-review .sd-quote { border-left: 3px solid rgba(109,79,216,0.4); padding-left: 8px; color: #6a6790; margin: 6px 0; }
+.iv-review table { border-collapse: collapse; margin: 6px 0; font-size: 11px; }
+.iv-review th, .iv-review td { border: 1px solid rgba(109,79,216,0.25); padding: 3px 8px; text-align: left; }
+.iv-review th { background: rgba(109,79,216,0.06); }
 
 /* ===== 复习 ===== */
 .review-stats { display: flex; gap: 8px; margin-bottom: 12px; }

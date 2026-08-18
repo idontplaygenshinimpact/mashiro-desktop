@@ -300,7 +300,7 @@ async function submitAnswer() {
       if (end?.ok && end.report) {
         renderIvSummary();
         $("iv-review").classList.remove("hidden");
-        $("iv-review").textContent = end.report;
+        $("iv-review").innerHTML = renderMd(end.report); // Markdown 渲染（标题/列表/加粗层次清晰；renderMd 已转义防注入）
         addIvLog(end.hint || "");
         // 薄弱点覆盖统计（录音保留：复盘时可回听）
         if (end.weakTotal > 0) {
@@ -395,7 +395,7 @@ $("iv-end").addEventListener("click", async () => {
     if (end?.ok && end.report) {
       renderIvSummary();
       $("iv-review").classList.remove("hidden");
-      $("iv-review").textContent = end.report;
+      $("iv-review").innerHTML = renderMd(end.report); // Markdown 渲染（同自动结束路径）
       $("iv-status").textContent = "面试已结束";
       addIvLog(end.hint || "");
       if (end.weakTotal > 0) {
