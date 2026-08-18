@@ -1,16 +1,15 @@
-chore: 项目更名 mashiro-desktop（真白）——开源标识统一
+fix: 语音输入「说完没反应」——AudioContext suspended 导致采集回调从不触发（静默失败）
 
-- package name / 仓库名：mianshi-agent → mashiro-desktop
-- 产品名：MianshiAgent → Mashiro（显示名「真白」），appId com.mashiro.desktop
-- 可见文案：托盘 tooltip / 窗口标题 / 服务页 / 通知 / 新产出提示 / benchmark 横幅
-- MCP 协议名同步：mcp__mianshi__* → mcp__mashiro__*（agent prompt / mcp-server /
-  mcp-client / context-providers / 运行态 data/mcp-servers.json 联动，保持一致）
-- win toast AppID：MianshiAgent → Mashiro
+【日志定位（主进程落盘日志）】
+用户复现后日志只有 ScriptProcessor 创建警告，无任何 [speech] 请求到达主进程
+→ 面板录音期间 onaudioprocess 从未触发（micChunks 空）→ stopRecording 静默 return
+（连提示都没有）。根因：AudioContext({sampleRate:16000}) 创建后处于 suspended
+（自动播放策略），采集回调不触发；旧代码无 resume、无提示，静默失败。
 
-保留不动（避免破坏）：
-- 物理目录 D:\mianshi-agent（README 路径照旧）
-- 数据文件 data/mianshi.db（业务数据，零迁移）
-- 业务语义 mianshi=面经分类（ai/fetch-page/benchmark 报告等）
-- 用户注册表已有自启项（路径未变仍有效；README 指引已更新为新名）
+【修复】
+- startRecording：AudioContext 显式 resume + state 校验（非 running 明确提示）
+- 空数据不再静默：micChunks 空 → 系统 toast 提示「没有采集到声音，检查麦克风占用」
+- 采集自检：开始 300ms 后仍无数据 → 提示麦克风被占用（防用户不知录没录上）
+- 面试录音 🎙️（panel-study.js startIvMic）同坑一并修复（resume）
 
-验证：639/639 单测 + 30/30 集成全绿。
+验证：639/639 全绿。

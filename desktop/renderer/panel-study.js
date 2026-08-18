@@ -483,6 +483,8 @@ async function startIvMic() {
   // PCM 采集（16k 单声道，ASR 期望采样率）
   try {
     ivMicCtx = new AudioContext({ sampleRate: 16000 });
+    // AudioContext 可能 suspended（自动播放策略）→ 采集回调不触发 → 转写无数据（与 🎤 同坑）
+    if (ivMicCtx.state === "suspended") await ivMicCtx.resume();
     ivMicSource = ivMicCtx.createMediaStreamSource(ivMicStream);
     ivMicProc = ivMicCtx.createScriptProcessor(4096, 1, 1);
     ivMicProc.onaudioprocess = (e) => {
@@ -490,7 +492,7 @@ async function startIvMic() {
     };
     ivMicSource.connect(ivMicProc);
     ivMicProc.connect(ivMicCtx.destination);
-  } catch { /* ignore */ }
+  } catch { /* ignore（MediaRecorder 录音不受影响，仅转写可能空） */ }
   ivMicRecording = true;
   setIvMicState("rec");
   ivMicTimer = setInterval(() => {
