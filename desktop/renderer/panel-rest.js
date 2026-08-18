@@ -797,6 +797,7 @@ let micChunks = [], micRecording = false, micAutoStop = null;
 async function stopRecording() {
   micRecording = false;
   clearTimeout(micAutoStop);
+  console.log("[panel] 语音停止，已采集 chunk 数:", micChunks.length);
   const micBtn = $("chat-mic");
   micBtn.classList.remove("recording");
   micBtn.textContent = "🎤";
@@ -820,23 +821,45 @@ async function stopRecording() {
   micBtn.disabled = true;
   try {
     // ① VAD：裁掉头尾静音——静音/环境噪声直接进 ASR 会被脑补成汉字（识别错误的常见来源）
+    console.log(`[panel] VAD 输入: ${pcm.length} 采样（${(pcm.length / 16000).toFixed(2)}s@16k 估算）`);
+    // 能量诊断：确认音频是"真静音"还是"低于阈值"（ScriptProcessor 在新 Chromium 可能采到全 0）
+    let maxAmp = 0, sumSq = 0, nonZero = 0;
+    for (let i = 0; i < pcm.length; i++) {
+      const v = pcm[i];
+      sumSq += v * v;
+      const a = Math.abs(v);
+      if (a > maxAmp) maxAmp = a;
+      if (a > 1e-6) nonZero++;
+    }
+    console.log(`[panel] 音频能量: rms=${Math.sqrt(sumSq / pcm.length).toFixed(7)} maxAmp=${maxAmp.toFixed(6)} 非零采样=${nonZero}/${pcm.length}（${(nonZero / pcm.length * 100).toFixed(1)}%）`);
     const voiced = window.trimSilenceToVoice ? window.trimSilenceToVoice(pcm, 16000) : pcm;
+    console.log(`[panel] VAD 结果: ${voiced ? voiced.length + " 采样" : "null（判定全程静音）"}`);
+    const voiceStatus = $("chat-voice-status");
     if (!voiced || voiced.length < 16000 * 0.5) {
-      window.kanban.notify("语音输入", voiced ? "语音太短（不足半秒），请再说一次" : "没有检测到语音，请靠近麦克风再说一次");
+      const msg = voiced ? "语音太短（不足半秒），请再说一次" : "没有检测到语音，请靠近麦克风再说一次";
+      console.log("[panel] VAD 拦截:", msg);
+      if (voiceStatus) { voiceStatus.textContent = "⚠️ " + msg; voiceStatus.style.display = ""; }
+      window.kanban.notify("语音输入", msg);
       return;
     }
+    if (voiceStatus) voiceStatus.style.display = "none";
     // ② 采样率兜底：AudioContext({sampleRate:16000}) 个别平台会静默退回默认值
     //    （实际是 48k）→ 用 OfflineAudioContext 标准重采样，保证喂给 ASR 的是真 16k
     let input = voiced;
     if (recordSr !== 16000) input = await resampleTo16k(voiced, recordSr);
+    console.log(`[panel] 发送识别: ${input.length} 采样（recordSr=${recordSr}）`);
     const r = await window.kanban.speechToText(input);
+    console.log("[panel] 识别返回:", JSON.stringify(r));
     if (r?.ok && r.text) {
       $("chat-input").value = r.text;
       $("chat-input").focus();
     } else {
-      window.kanban.notify("语音输入", r?.error || "识别失败，请重试");
+      const msg = r?.error || "识别失败，请重试";
+      if (voiceStatus) { voiceStatus.textContent = "⚠️ " + msg; voiceStatus.style.display = ""; }
+      window.kanban.notify("语音输入", msg);
     }
   } catch (err) {
+    console.error("[panel] 语音流程异常:", err?.message || err);
     window.kanban.notify("语音输入", "调用失败: " + String(err?.message || err).slice(0, 80));
   } finally {
     micBtn.disabled = false;
@@ -864,11 +887,16 @@ async function resampleTo16k(pcm, fromRate) {
 }
 
 async function startRecording() {
+  console.log("[panel] 语音开始录音…");
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
-    });
+    // 禁用音频处理链 + 显式选择物理麦克风（默认设备可能无声——实测 MCHOSE 默认=全零）
+    const micId = await pickMicDevice();
+    const audioConstraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
+    if (micId) audioConstraints.deviceId = { exact: micId };
+    console.log("[panel] 使用麦克风:", micId ? micId.slice(0, 24) : "系统默认");
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
   } catch (err) {
+    console.log("[panel] 麦克风不可用:", err?.name || err?.message || err);
     window.kanban.notify("语音输入", "麦克风不可用: " + (err?.name || "请检查系统麦克风权限"));
     return;
   }
@@ -887,28 +915,38 @@ async function startRecording() {
     return;
   }
   micSource = micCtx.createMediaStreamSource(micStream);
-  micProc = micCtx.createScriptProcessor(4096, 1, 1);
-  micProc.onaudioprocess = (e) => {
-    if (!micRecording) return;
-    micChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-  };
-  micSource.connect(micProc);
-  micProc.connect(micCtx.destination);
+  // AudioWorklet 采集（ScriptProcessor 废弃，在 Electron 43 下 inputBuffer 全零——实测 0/106496 非零采样）
+  try {
+    await micCtx.audioWorklet.addModule("pcm-worklet.js");
+    micProc = new AudioWorkletNode(micCtx, "pcm-capture");
+    micProc.port.onmessage = (e) => {
+      if (!micRecording) return;
+      micChunks.push(e.data); // Float32Array（worklet 已拷贝）
+    };
+    micSource.connect(micProc);
+  } catch (e) {
+    console.error("[panel] AudioWorklet 不可用:", e?.message || e);
+    window.kanban.notify("语音输入", "音频采集初始化失败: " + String(e?.message || e).slice(0, 60));
+    return;
+  }
   micRecording = true;
   const micBtn = $("chat-mic");
   micBtn.classList.add("recording");
   micBtn.textContent = "⏹";
   micBtn.title = "点击停止录音";
-  // 采集自检：开始 300ms 后仍无数据 → 提示麦克风无输入（防静默失败，用户不知录没录上）
+  // 采集自检：开始 2s 后仍无数据 → 提示麦克风无输入（采集启动有延迟，300ms 会误报）
   setTimeout(() => {
     if (micRecording && !micChunks.length) {
       window.kanban.notify("语音输入", "⚠️ 麦克风没有声音输入——可能被其他应用占用（浏览器/会议软件），请检查后重试");
     }
-  }, 300);
+  }, 2000);
   micAutoStop = setTimeout(() => { if (micRecording) stopRecording(); }, 60000); // 60s 上限自动停
 }
 
-$("chat-mic").addEventListener("click", () => { micRecording ? stopRecording() : startRecording(); });
+$("chat-mic").addEventListener("click", () => {
+  console.log("[panel] 🎤 按钮点击，当前录音中:", micRecording);
+  micRecording ? stopRecording() : startRecording();
+});
 
 // ============ 专注监督（番茄钟） ============
 let focusPollTimer = null;

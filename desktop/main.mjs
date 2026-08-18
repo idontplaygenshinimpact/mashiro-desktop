@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, exec, spawnSync } from "node:child_process";
 import { Worker } from "node:worker_threads";
-import { writeFileSync, readFileSync } from "node:fs";
+import { writeFileSync, readFileSync, createWriteStream } from "node:fs";
 import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, healthUrl } from "../lib/widget-auth.mjs";
 // 纵向拆分：widget 服务守护 / 窗口位置持久化 / 重启设施（desktop/lib/*.mjs，无 electron 依赖可单测）
 import { safeSpawn, createWidgetServer } from "./lib/widget-server.mjs";
@@ -22,6 +22,18 @@ import { rendererBundleStale as bundleStale, rebuildRendererBundle as rebuildBun
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
+
+// ---------- 主进程日志持久化（追加模式） ----------
+// 无论手动启动/双击/一键重启（app.relaunch），日志都累积到 data/desktop-main.log。
+// 教训：Start-Process 重定向是覆盖写，relaunch 的新进程会截断日志 → 诊断数据丢失。
+try {
+  const logStream = createWriteStream(path.join(ROOT, "data", "desktop-main.log"), { flags: "a" });
+  const ts = () => new Date().toISOString().slice(11, 23);
+  const origLog = console.log.bind(console);
+  const origErr = console.error.bind(console);
+  console.log = (...a) => { origLog(...a); logStream.write(`[${ts()}] ${a.map(String).join(" ")}\n`); };
+  console.error = (...a) => { origErr(...a); logStream.write(`[${ts()}] [ERR] ${a.map(String).join(" ")}\n`); };
+} catch { /* 日志失败不影响运行 */ }
 
 // 启动时读取上次保存的桌宠形象（默认真白·旅行装；面板可切换并持久化）
 const { scanMascotModels, getCurrentModel } = await import("../lib/mascot-models.mjs");
@@ -490,6 +502,7 @@ ipcMain.handle("interview:end", () => widgetPost("/api/interview/end", {}));
 ipcMain.handle("widget:notify", async (e, { title, message }) => {
   // 系统通知（复用 node-notifier 同款 toast）
   // 安全：参数经 base64 + -EncodedCommand 传递（旧实现直接拼 PS 字符串有注入面）
+  console.log(`[kanban] 通知: ${title} — ${String(message || "").slice(0, 40)}`);
   try {
     const { buildToastScript, encodePowerShellCommand } = await import("../lib/win-toast.mjs");
     const ps = buildToastScript(title, message);
@@ -707,13 +720,14 @@ ipcMain.handle("speech:transcribe", async (e, { audio }) => {
     console.log(`[speech] 收到音频 ${audio.length} 采样（${(audio.length / 16000).toFixed(1)}s）`);
     const worker = getAsrWorker();
     const id = ++asrSeq;
-    const text = await new Promise((resolve, reject) => {
+    const result = await new Promise((resolve, reject) => {
       asrPending.set(id, { resolve, reject });
       // transfer 零拷贝；audio.buffer 是结构化克隆后的独立副本，转移安全
       worker.postMessage({ id, audio: audio.buffer }, [audio.buffer]);
     });
-    console.log(`[speech] 转写成功: ${text.slice(0, 60)}`);
-    return { ok: true, text };
+    if (!result?.ok) throw new Error(result?.error || "识别失败");
+    console.log(`[speech] 转写成功: ${String(result.text || "").slice(0, 60)}`);
+    return { ok: true, text: result.text || "" };
   } catch (err) {
     console.error("[speech] 转写异常:", err?.message || err);
     return { ok: false, error: String(err?.message || err).slice(0, 120) };

@@ -1,15 +1,13 @@
-fix: 语音输入「说完没反应」——AudioContext suspended 导致采集回调从不触发（静默失败）
+fix: 语音输入打通全链路——三层根因（无声默认设备 / ScriptProcessor 全零 / 返回解包 bug）
 
-【日志定位（主进程落盘日志）】
-用户复现后日志只有 ScriptProcessor 创建警告，无任何 [speech] 请求到达主进程
-→ 面板录音期间 onaudioprocess 从未触发（micChunks 空）→ stopRecording 静默 return
-（连提示都没有）。根因：AudioContext({sampleRate:16000}) 创建后处于 suspended
-（自动播放策略），采集回调不触发；旧代码无 resume、无提示，静默失败。
+日志驱动的三层修复：
+1. 采集 API：ScriptProcessor 在 Electron 43 下 inputBuffer 全零（实测 0/106496 非零）
+   → 换 AudioWorklet（pcm-worklet.js），面板 + 面试录音同步替换
+2. 设备选择：Windows 默认输入设备是无声的 MCHOSE 麦克风（探针实测默认=0 非零，
+   显式 Realtek=98.5% 非零）→ enumerateDevices + 优先物理麦克风（Realtek/麦克风）
+3. 返回解包：worker 化时 handler 把整个响应对象当文本返回（text.slice 崩溃，
+   r.text 一直是对象）→ 解包 result.text 为字符串
+附：主进程日志持久化（追加模式，relaunch 不丢）、面板内语音提示行、VAD/能量诊断日志、
+采集自检 2s、处理链禁用（防设备组合下全零）
 
-【修复】
-- startRecording：AudioContext 显式 resume + state 校验（非 running 明确提示）
-- 空数据不再静默：micChunks 空 → 系统 toast 提示「没有采集到声音，检查麦克风占用」
-- 采集自检：开始 300ms 后仍无数据 → 提示麦克风被占用（防用户不知录没录上）
-- 面试录音 🎙️（panel-study.js startIvMic）同坑一并修复（resume）
-
-验证：639/639 全绿。
+验证：639/639 全绿；真实链路：探针 98.5% 非零 → VAD 放行 → sherpa 识别。
