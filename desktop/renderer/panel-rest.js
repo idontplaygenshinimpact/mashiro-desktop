@@ -801,11 +801,12 @@ async function stopRecording() {
   micBtn.classList.remove("recording");
   micBtn.textContent = "🎤";
   micBtn.title = "语音输入（点击开始录音，再点停止；识别结果回填输入框）";
+  const recordSr = micCtx?.sampleRate || 16000; // 先取采样率，ctx 马上要 close
   try { micSource?.disconnect(); micProc?.disconnect(); } catch { /* ignore */ }
   try { micCtx?.close(); } catch { /* ignore */ }
   if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
   if (!micChunks.length) return;
-  // 拼接 PCM → IPC 转写（首次会下载 whisper 模型 ~250MB，可能需 1-2 分钟）
+  // 拼接 PCM
   const total = micChunks.reduce((n, c) => n + c.length, 0);
   const pcm = new Float32Array(total);
   let off = 0;
@@ -814,7 +815,17 @@ async function stopRecording() {
   micBtn.textContent = "⏳";
   micBtn.disabled = true;
   try {
-    const r = await window.kanban.speechToText(pcm);
+    // ① VAD：裁掉头尾静音——静音/环境噪声直接进 ASR 会被脑补成汉字（识别错误的常见来源）
+    const voiced = window.trimSilenceToVoice ? window.trimSilenceToVoice(pcm, 16000) : pcm;
+    if (!voiced || voiced.length < 16000 * 0.5) {
+      window.kanban.notify("语音输入", voiced ? "语音太短（不足半秒），请再说一次" : "没有检测到语音，请靠近麦克风再说一次");
+      return;
+    }
+    // ② 采样率兜底：AudioContext({sampleRate:16000}) 个别平台会静默退回默认值
+    //    （实际是 48k）→ 用 OfflineAudioContext 标准重采样，保证喂给 ASR 的是真 16k
+    let input = voiced;
+    if (recordSr !== 16000) input = await resampleTo16k(voiced, recordSr);
+    const r = await window.kanban.speechToText(input);
     if (r?.ok && r.text) {
       $("chat-input").value = r.text;
       $("chat-input").focus();
@@ -829,6 +840,25 @@ async function stopRecording() {
   }
 }
 
+/** OfflineAudioContext 标准重采样（48k→16k，浏览器高质量 sinc；失败则原样返回兜底） */
+async function resampleTo16k(pcm, fromRate) {
+  try {
+    const len = Math.ceil(pcm.length * 16000 / fromRate);
+    const oc = new OfflineAudioContext(1, len, 16000);
+    const buf = oc.createBuffer(1, pcm.length, fromRate);
+    buf.copyToChannel(pcm, 0);
+    const src = oc.createBufferSource();
+    src.buffer = buf;
+    src.connect(oc.destination);
+    src.start();
+    const rendered = await oc.startRendering();
+    return rendered.getChannelData(0);
+  } catch (e) {
+    console.warn("[voice-input] 重采样失败，原样送识别:", e?.message || e);
+    return pcm;
+  }
+}
+
 async function startRecording() {
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
@@ -839,7 +869,7 @@ async function startRecording() {
     return;
   }
   micChunks = [];
-  micCtx = new AudioContext({ sampleRate: 16000 }); // 16k（whisper 期望采样率，浏览器自动重采样）
+  micCtx = new AudioContext({ sampleRate: 16000 }); // 16k（ASR 期望采样率，浏览器自动重采样；个别平台会退回 48k，停止时兜底重采样）
   micSource = micCtx.createMediaStreamSource(micStream);
   micProc = micCtx.createScriptProcessor(4096, 1, 1);
   micProc.onaudioprocess = (e) => {

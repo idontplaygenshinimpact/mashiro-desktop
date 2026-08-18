@@ -135,6 +135,12 @@ node discover.mjs "https://juejin.cn/search?query=React面经" 5
 - **质量评测**：`npm run voice:score`（内容完整度/音色/节奏/污染 → A-D 分 + 历史对比）；`npm run voice:audit`（含"话没说完"末尾完整度预警）
 - **训练新声线**：`npm run voice:train -- <step>`（详见 [`scripts/voice-train/README.md`](scripts/voice-train/README.md)：原始音频 → 数据准备 → GPT/SoVITS 训练 → 权重接入 → 合成 → 评测，全流程内置）
 
+**语音输入**（面板 🎤 说话 → 文字回填输入框，本地离线识别、零 API key）：
+
+- **引擎**：默认 sherpa-onnx paraformer-zh（中文 SOTA 级、CPU 实时率 5x+）；首次使用先下载模型：`npm run voice:model`（~230MB，国内镜像；直连失败时设 `HTTPS_PROXY` 重跑）
+- **不卡 UI**：识别在 worker 线程（`lib/speech-worker.mjs`）——推理是同步计算，放主进程会冻结整个桌宠（历史卡顿根因）
+- **识别质量**：录音端 VAD 自动裁头尾静音（防噪声被脑补成汉字）+ 16k 采样率兜底重采样；whisper fallback（`SPEECH_ENGINE=whisper` 可切，慢但免下载）
+
 ### 7. 本地知识库（RAG，可选）
 
 把面经/学习清单/复习卡/岗位/真题/文档做成可检索库，对话与复习选题可引用。**默认关闭**（评估使用率低 + 省资源），需要时在「⚙️ 设置」开启：

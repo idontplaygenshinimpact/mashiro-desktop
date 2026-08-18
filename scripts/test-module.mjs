@@ -24,7 +24,7 @@ const MODULES = {
   mail: ["mail"],
   schedule: ["scheduler"],
   music: ["music"],
-  voice: ["voice-pack"],
+  voice: ["voice-pack", "speech-sherpa", "speech-whisper", "vad"],
   mascot: ["mascot-models", "emotions"],
   mcp: ["mcp-client"],
   widget: ["widget-core", "widget-auth", "path-all", "integration-widget"],

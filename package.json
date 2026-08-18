@@ -28,6 +28,7 @@
     "voice:score": "py -3.12 scripts/score-voices.py --compare",
     "voice:audit": "py -3.12 scripts/audit-voices.py",
     "voice:train": "node scripts/voice-train/train.mjs",
+    "voice:model": "node scripts/download-paraformer.mjs",
     "test:module": "node scripts/test-module.mjs"
   },
   "build": {
@@ -82,6 +83,7 @@
     "playwright": "^1.62.1",
     "pngjs": "^7.0.0",
     "rss-parser": "^3.13.0",
+    "sherpa-onnx-node": "^1.13.5",
     "ts-fsrs": "^5.4.1"
   },
   "devDependencies": {

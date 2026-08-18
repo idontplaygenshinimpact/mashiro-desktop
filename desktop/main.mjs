@@ -4,6 +4,7 @@ import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell, se
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, exec, spawnSync } from "node:child_process";
+import { Worker } from "node:worker_threads";
 import { writeFileSync, readFileSync } from "node:fs";
 import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, healthUrl } from "../lib/widget-auth.mjs";
 // 纵向拆分：widget 服务守护 / 窗口位置持久化 / 重启设施（desktop/lib/*.mjs，无 electron 依赖可单测）
@@ -654,13 +655,57 @@ ipcMain.handle("voice:set", (e, enabled) => {
   }
   return { ok: true, enabled: on };
 });
-// 语音输入：本地 whisper 转写（面板 🎤 → Float32Array → 文本）
+// 语音输入：本地 ASR 转写（面板 🎤 → Float32Array → 文本）
+// 关键：ASR 推理跑在 worker 线程（lib/speech-worker.mjs）——WASM/ONNX 推理是同步计算，
+// 放主进程会冻结整个 Electron 应用（历史卡顿根因）。worker 常驻，模型只加载一次。
+let asrWorker = null;
+let asrSeq = 0;
+const asrPending = new Map(); // id → {resolve, reject}
+
+function getAsrWorker() {
+  if (asrWorker) return asrWorker;
+  const w = new Worker(path.join(__dirname, "..", "lib", "speech-worker.mjs"));
+  w.on("message", (m) => {
+    const p = asrPending.get(m?.id);
+    if (!p) return;
+    asrPending.delete(m.id);
+    if (m.ok) p.resolve({ ok: true, text: m.text || "" });
+    else p.reject(new Error(m.error || "识别失败"));
+  });
+  w.on("error", (err) => {
+    console.error("[speech-worker] 异常:", err?.message || err);
+    failAllPending("语音识别进程异常，请重试");
+    w.terminate().catch(() => {});
+  });
+  w.on("exit", (code) => {
+    asrWorker = null;
+    if (code !== 0) failAllPending("语音识别进程已退出，请重试");
+  });
+  asrWorker = w;
+  return w;
+}
+
+function failAllPending(msg) {
+  if (!asrPending.size) return;
+  for (const [, p] of asrPending) p.reject(new Error(msg));
+  asrPending.clear();
+}
+
 ipcMain.handle("speech:transcribe", async (e, { audio }) => {
   try {
-    const { transcribeAudio } = await import("../lib/speech.mjs");
-    return await transcribeAudio(audio);
+    if (!audio || !(audio instanceof Float32Array) || audio.length < 1600) {
+      return { ok: false, error: "音频数据无效（过短或格式错误）" };
+    }
+    const worker = getAsrWorker();
+    const id = ++asrSeq;
+    const text = await new Promise((resolve, reject) => {
+      asrPending.set(id, { resolve, reject });
+      // transfer 零拷贝；audio.buffer 是结构化克隆后的独立副本，转移安全
+      worker.postMessage({ id, audio: audio.buffer }, [audio.buffer]);
+    });
+    return { ok: true, text };
   } catch (err) {
-    return { ok: false, error: `语音模块异常: ${String(err?.message || err).slice(0, 120)}` };
+    return { ok: false, error: String(err?.message || err).slice(0, 120) };
   }
 });
 
