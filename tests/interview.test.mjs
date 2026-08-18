@@ -241,3 +241,55 @@ test("endInterview 返回薄弱点覆盖统计", async () => {
   assert.equal(r.weakCovered, 1, "命中 1 个薄弱点");
   assert.deepEqual(r.weakCoveredTopics, ["事件循环"]);
 });
+
+// ---------- 轮次编排（next_kind 三态：追问不耗轮 / 深度上限硬约束 / 八股轮必然到达） ----------
+const FOLLOWUP_RESP = '{"scores":{"tech":60,"expr":60,"depth":60,"edge":60,"reflect":60},"comment":"有漏洞","finish":false,"next_kind":"followup","next_question":"再讲细一点：宏任务和微任务的顺序","next_basis":"追问","next_dimension":"原理","next_criteria":"c","next_boundary":"b","weak_topic":"","weak_hit":""}';
+
+test("next_kind=followup → 追问不推进轮次（同一轮深挖，round 不变）", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses(FOLLOWUP_RESP);
+  const r = await submitAnswer("回答");
+  assert.equal(r.ok, true);
+  assert.equal(r.depth, 1, "追问深度 +1");
+  assert.equal(r.round, 1, "仍是第 1 轮（追问不增加轮数）");
+  const s = memory.getInterview();
+  assert.equal(s.roundIndex, 0, "轮次索引不推进");
+  assert.equal(s.current.round, 1, "会话内 round 不变");
+  assert.equal(s.current.depth, 1);
+});
+
+test("追问链连续 3 次后 LLM 仍返回 followup → 服务端强制推进（防无限深挖）", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  const s = memory.getInterview();
+  s.current.depth = 3; // 已到 MAX_DEPTH
+  memory.setInterview(s);
+  setLlmResponses(FOLLOWUP_RESP); // LLM 不守规矩仍要追问
+  const r = await submitAnswer("回答");
+  assert.equal(r.depth, 0, "深度归 0（超限强制切新题）");
+  assert.equal(memory.getInterview().roundIndex, 1, "轮次推进（不卡死在追问链）");
+});
+
+test("next_kind=new → 本轮内换新题，深度归 0，轮次推进", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses('{"scores":{"tech":80,"expr":80,"depth":80,"edge":80,"reflect":80},"comment":"可以","finish":false,"next_kind":"new","next_question":"项目里另一个难点是什么","next_basis":"换题","next_dimension":"项目","next_criteria":"c","next_boundary":"b","weak_topic":"","weak_hit":""}');
+  const r = await submitAnswer("回答");
+  assert.equal(r.depth, 0, "新题深度归 0");
+  assert.equal(r.round, 1, "返回的 round 是当前轮（本轮编号）");
+  assert.equal(memory.getInterview().current.round, 2, "会话内下一问轮数 +1");
+  assert.equal(memory.getInterview().roundIndex, 1, "轮次推进");
+});
+
+test("轮次推进到底 → 八股轮必然到达（ROUND_SEQ[3] 是八股穿插）", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  const s = memory.getInterview();
+  s.roundIndex = 3; // 直接定位到八股穿插轮（ROUND_SEQ: open, project×2, tech八股, project回马枪, tech, coding×2, reverse）
+  memory.setInterview(s);
+  setLlmResponses('{"scores":{"tech":70,"expr":70,"depth":70,"edge":70,"reflect":70},"comment":"可以","finish":false,"next_kind":"stage","next_question":"下一阶段第一问","next_basis":"进入下一阶段","next_dimension":"d","next_criteria":"c","next_boundary":"b","weak_topic":"","weak_hit":""}');
+  const r = await submitAnswer("回答");
+  assert.equal(r.roundType, "八股穿插", "本轮类型应为八股（ROUND_SEQ[3]）");
+  assert.equal(r.stage, "项目拷打·回马枪", "下一轮衔接正确");
+});
