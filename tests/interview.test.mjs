@@ -259,11 +259,11 @@ test("next_kind=followup → 追问不推进轮次（同一轮深挖，round 不
   assert.equal(s.current.depth, 1);
 });
 
-test("追问链连续 3 次后 LLM 仍返回 followup → 服务端强制推进（防无限深挖）", async () => {
+test("追问链连续 6 次后 LLM 仍返回 followup → 服务端安全阀强制推进（防死循环，正常按质量判断不会走到）", async () => {
   setLlmResponses(FIRST_Q);
   await startInterview({ position: "前端" });
   const s = memory.getInterview();
-  s.current.depth = 3; // 已到 MAX_DEPTH
+  s.current.depth = 6; // 已到 MAX_DEPTH（安全阀）
   memory.setInterview(s);
   setLlmResponses(FOLLOWUP_RESP); // LLM 不守规矩仍要追问
   const r = await submitAnswer("回答");
