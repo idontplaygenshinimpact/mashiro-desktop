@@ -40,3 +40,52 @@ test("学习清单主列表「📖 学习」按钮有响应：点击打开讲解
     assert.ok(!overlay.classList.contains("hidden"), "点击学习后弹窗应打开（此前按钮无事件 → 没反应）");
   });
 });
+
+// ============ 一键重启按钮（曾因主进程重建失败被吞 → 按钮永久卡 ⏳、重启永不发生） ============
+test("一键重启失败路径（返回错误）：按钮恢复 + 明确提示", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    const notifies = [];
+    kanban.notify = (t, m) => notifies.push({ t, m });
+    window.confirm = () => true; // jsdom 无 confirm，mock 自动确认
+    kanban.restartApp = async () => ({ ok: false, error: "重启失败: 构建异常" });
+    const btn = window.document.getElementById("restart-btn");
+    assert.ok(btn, "重启按钮存在");
+    btn.click();
+    await tick(50);
+    assert.equal(btn.disabled, false, "按钮恢复可点（此前永久卡 ⏳）");
+    assert.equal(btn.textContent, "🔄 一键重启", "按钮文案恢复");
+    assert.ok(notifies.some((n) => String(n.t).includes("重启失败")), "错误提示显示");
+  });
+});
+
+test("一键重启 reject 路径：按钮同样恢复", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    window.confirm = () => true;
+    kanban.restartApp = async () => { throw new Error("IPC 异常"); };
+    const btn = window.document.getElementById("restart-btn");
+    btn.click();
+    await tick(50);
+    assert.equal(btn.disabled, false, "按钮恢复");
+  });
+});
+
+test("一键重启成功路径：正常触发不抛错", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    window.confirm = () => true;
+    kanban.restartApp = async () => ({ ok: true });
+    const btn = window.document.getElementById("restart-btn");
+    assert.doesNotThrow(() => btn.click());
+    await tick(30);
+  });
+});
+
+test("一键重启取消确认：不触发 restartApp", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    let called = 0;
+    kanban.restartApp = async () => { called++; return { ok: true }; };
+    window.confirm = () => false; // 取消
+    window.document.getElementById("restart-btn").click();
+    await tick(30);
+    assert.equal(called, 0, "取消确认不重启");
+  });
+});

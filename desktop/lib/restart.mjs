@@ -1,7 +1,7 @@
 // desktop/lib/restart.mjs —— 桌宠重启设施（纵向拆分：从 desktop/main.mjs 迁出）
 // 渲染层产物防呆（app.bundle.js 过期检测 + esbuild 自动重建）+ 暴力清理 widget 进程（重启用）
 // 无 electron 依赖（fs/child_process），可单测
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -19,18 +19,25 @@ export function rendererBundleStale(rendererDir, srcFiles) {
   } catch { return false; }
 }
 
-/** 重建 app.bundle.js（esbuild；失败不阻塞重启，返回是否成功） */
-export function rebuildRendererBundle(root) {
-  return new Promise((resolve) => {
-    const esbuildBin = path.join(root, "node_modules", ".bin", process.platform === "win32" ? "esbuild.cmd" : "esbuild");
-    if (!existsSync(esbuildBin)) { console.log("[renderer] esbuild 未安装，跳过自动构建"); resolve(false); return; }
-    const child = spawn(esbuildBin, ["desktop/renderer/app.js", "--bundle", "--format=esm", "--outfile=desktop/renderer/app.bundle.js", "--log-level=warning"], {
-      cwd: root, windowsHide: true, stdio: "ignore",
+/** 重建 app.bundle.js（esbuild JS API；任何失败都不抛错，返回是否成功） */
+export async function rebuildRendererBundle(root) {
+  try {
+    // 用 esbuild JS API（不 spawn .cmd）——Windows 上 spawn .cmd 直接抛 EINVAL（同步 throw），
+    // 曾导致重启流程在重建步骤整体 reject → 按钮卡死、重启永不发生
+    const esbuild = await import("esbuild");
+    await esbuild.build({
+      entryPoints: [path.join(root, "desktop", "renderer", "app.js")],
+      bundle: true,
+      format: "esm",
+      outfile: path.join(root, "desktop", "renderer", "app.bundle.js"),
+      logLevel: "warning",
     });
-    const timer = setTimeout(() => { try { child.kill(); } catch { /* ignore */ } resolve(false); }, 60000);
-    child.on("exit", (code) => { clearTimeout(timer); console.log(`[renderer] 自动重建 bundle ${code === 0 ? "成功" : "失败(code=" + code + ")"}`); resolve(code === 0); });
-    child.on("error", () => { clearTimeout(timer); console.log("[renderer] esbuild 启动失败"); resolve(false); });
-  });
+    console.log("[renderer] 自动重建 bundle 成功");
+    return true;
+  } catch (e) {
+    console.log("[renderer] 自动重建 bundle 失败（不阻塞重启）:", e?.message || e);
+    return false;
+  }
 }
 
 /**
