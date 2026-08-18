@@ -709,6 +709,18 @@ ipcMain.handle("speech:transcribe", async (e, { audio }) => {
   }
 });
 
+// ASR 预热：启动 5s 后后台加载语音模型（worker 内，不占主进程），
+// 用户第一次点 🎤 语音时无需再等模型加载（首次加载约 2-4s）
+setTimeout(() => {
+  try {
+    const worker = getAsrWorker();
+    const id = ++asrSeq;
+    asrPending.set(id, { resolve: () => {}, reject: () => {} }); // 预热结果直接丢弃
+    const warm = new Float32Array(1600); // 0.1s 静音，触发模型加载 + 一次解码
+    worker.postMessage({ id, audio: warm.buffer }, [warm.buffer]);
+  } catch { /* 预热失败不影响使用（首次调用会正常重试） */ }
+}, 5000);
+
 // 简历文件解析（PDF/docx）：Node 端本地解析
 // 原因：浏览器端 bare specifier import + CDN worker 不可靠（无网络/被墙即失败）
 ipcMain.handle("resume:parse-file", async (e, { name, data }) => {
