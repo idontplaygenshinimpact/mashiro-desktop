@@ -253,6 +253,17 @@
       </div>
     </div>
 
+    <!-- 面试复盘弹层（毛玻璃弹窗展示 Markdown 报告，比内嵌区美观且可读） -->
+    <div id="iv-report-overlay" class="sd-overlay hidden">
+      <div class="sd-modal" style="width:min(760px,94vw);">
+        <div class="sd-modal-head">
+          <b>📋 面试复盘报告</b>
+          <button id="iv-report-close" class="sd-close" title="关闭">✕</button>
+        </div>
+        <div class="sd-modal-body" id="iv-report-body" style="max-height:calc(82vh - 60px);overflow-y:auto;">加载中...</div>
+      </div>
+    </div>
+
     <!-- 学习详情弹层（占面板大空间，避免小框滑动） -->
     <div id="study-detail-overlay" class="sd-overlay hidden">
       <div class="sd-modal">
