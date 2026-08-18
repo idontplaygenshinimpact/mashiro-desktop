@@ -1,13 +1,22 @@
-fix: 语音输入打通全链路——三层根因（无声默认设备 / ScriptProcessor 全零 / 返回解包 bug）
+fix: 面试编排三问题——追问不耗轮 / 深度硬上限 / 八股轮必然到达 + 结束面试反馈
 
-日志驱动的三层修复：
-1. 采集 API：ScriptProcessor 在 Electron 43 下 inputBuffer 全零（实测 0/106496 非零）
-   → 换 AudioWorklet（pcm-worklet.js），面板 + 面试录音同步替换
-2. 设备选择：Windows 默认输入设备是无声的 MCHOSE 麦克风（探针实测默认=0 非零，
-   显式 Realtek=98.5% 非零）→ enumerateDevices + 优先物理麦克风（Realtek/麦克风）
-3. 返回解包：worker 化时 handler 把整个响应对象当文本返回（text.slice 崩溃，
-   r.text 一直是对象）→ 解包 result.text 为字符串
-附：主进程日志持久化（追加模式，relaunch 不丢）、面板内语音提示行、VAD/能量诊断日志、
-采集自检 2s、处理链禁用（防设备组合下全零）
+【用户反馈的三个编排问题】
+1. 项目追问被当成新轮次（状态转移表问题应算一轮，后续是追问）
+   → 根因：submitAnswer 每次提交都推进 roundIndex，追问也耗轮 → 12 轮被项目追问耗光
+2. AI 无限深挖没拦住
+   → 根因：depth 判定靠 next_basis === current.basis（LLM 不会原样返回）→ depth 恒 0
+   → MAX_DEPTH=3 形同虚设
+3. 基础八股没考
+   → 根因：轮次被追问耗尽，八股轮根本轮不到
 
-验证：639/639 全绿；真实链路：探针 98.5% 非零 → VAD 放行 → sherpa 识别。
+【修复】next_kind 三态编排（服务端强控制，LLM 只给信号）
+- LLM 显式返回 next_kind: followup（就本题深挖）/ new（本轮换新题）/ stage（进入下一阶段）
+- followup：roundIndex/round 不推进，depth+1（追问链指示，不增加"第 N 轮"）
+- 深度达 MAX_DEPTH 后服务端强制推进（LLM 违规也拦得住）——防无限深挖硬约束
+- 追问不耗轮 → 九阶段编排（项目→八股→回马枪→八股→手写→反问）必然完整走完
+
+【附带】结束面试卡住：LLM 生成复盘报告 30-60s 无反馈 → 按钮禁用 + 状态行
+「正在生成复盘报告（约 30-60 秒）」+ 失败提示恢复
+
+【测试 +4】追问不推进轮次 / 深度上限强制推进 / new 推进 / 八股轮定位与衔接
+全量 643/643。

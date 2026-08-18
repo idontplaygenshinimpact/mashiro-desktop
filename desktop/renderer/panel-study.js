@@ -384,16 +384,33 @@ function drawIvRadar(canvas, dims) {
 
 $("iv-end").addEventListener("click", async () => {
   stopIvTimer();
-  const end = await window.kanban.invEnd();
-  if (end?.ok && end.report) {
-    renderIvSummary();
-    $("iv-review").classList.remove("hidden");
-    $("iv-review").textContent = end.report;
-    $("iv-status").textContent = "面试已结束";
-    addIvLog(end.hint || "");
-    if (end.weakTotal > 0) {
-      addIvLog(`🎯 本场薄弱点覆盖：${end.weakCovered ?? 0}/${end.weakTotal}${end.weakCoveredTopics?.length ? "（" + end.weakCoveredTopics.join("、") + "）" : ""}`);
+  // 反馈：复盘报告由 LLM 生成（30-60s），无反馈会看起来像卡死
+  const endBtn = $("iv-end");
+  const statusEl = $("iv-status");
+  endBtn.disabled = true;
+  endBtn.textContent = "⏳ 生成复盘报告…";
+  if (statusEl) statusEl.textContent = "面试已结束，正在生成复盘报告（约 30-60 秒，请稍候）…";
+  try {
+    const end = await window.kanban.invEnd();
+    if (end?.ok && end.report) {
+      renderIvSummary();
+      $("iv-review").classList.remove("hidden");
+      $("iv-review").textContent = end.report;
+      $("iv-status").textContent = "面试已结束";
+      addIvLog(end.hint || "");
+      if (end.weakTotal > 0) {
+        addIvLog(`🎯 本场薄弱点覆盖：${end.weakCovered ?? 0}/${end.weakTotal}${end.weakCoveredTopics?.length ? "（" + end.weakCoveredTopics.join("、") + "）" : ""}`);
+      }
+    } else {
+      if (statusEl) statusEl.textContent = "⚠️ " + (end?.error || "结束失败，请重试");
+      window.kanban.notify("模拟面试", end?.error || "结束失败，请重试");
     }
+  } catch (err) {
+    if (statusEl) statusEl.textContent = "⚠️ 结束异常: " + String(err?.message || err).slice(0, 80);
+    window.kanban.notify("模拟面试", "结束异常: " + String(err?.message || err).slice(0, 80));
+  } finally {
+    endBtn.disabled = false;
+    endBtn.textContent = "结束面试";
   }
 });
 
