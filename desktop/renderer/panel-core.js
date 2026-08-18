@@ -59,6 +59,19 @@ window.kanban?.onPanelGotoTab?.((tab) => {
 
 const $ = (id) => document.getElementById(id);
 
+// 选择可用麦克风：Chromium getUserMedia 用系统默认输入设备——若默认设备是无声的
+// （实测本机默认=MCHOSE 麦克风采集全零，Realtek 显式指定 98.5% 非零），必须显式选物理麦克风
+async function pickMicDevice() {
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const inputs = devs.filter((d) => d.kind === "audioinput" && !/^(default|communications)$/i.test(String(d.deviceId)));
+    if (!inputs.length) return null;
+    // 优先物理麦克风（Realtek/麦克风/Microphone），避开 立体声混音/虚拟/无实际输入设备
+    const physical = inputs.find((d) => /realtek|麦克风|microphone/i.test(d.label || "") && !/stereo|mix|混音|virtual|virtual audio/i.test(d.label || ""));
+    return (physical || inputs[0]).deviceId;
+  } catch { return null; }
+}
+
 // 链接安全：只允许 http/https/mailto（防 javascript: 协议注入）
 function safeUrl(u) {
   return /^(https?:|mailto:)/i.test(String(u || "")) ? u : "#";

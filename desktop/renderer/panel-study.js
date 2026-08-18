@@ -460,9 +460,11 @@ function pickIvRecMime() {
 
 async function startIvMic() {
   try {
-    ivMicStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
-    });
+    // 禁用音频处理链 + 显式选择物理麦克风（默认设备可能无声——实测全零根因）
+    const micId = await pickMicDevice();
+    const audioConstraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
+    if (micId) audioConstraints.deviceId = { exact: micId };
+    ivMicStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
   } catch (err) {
     window.kanban.notify("面试录音", "麦克风不可用: " + (err?.name || "请检查系统麦克风权限"));
     return;
@@ -480,18 +482,18 @@ async function startIvMic() {
     transcribeIvPcm(); // 转写回填（录音已保存，转写失败不影响回听）
   };
   ivMicRec.start(250);
-  // PCM 采集（16k 单声道，ASR 期望采样率）
+  // PCM 采集（16k 单声道，ASR 期望采样率）——AudioWorklet（ScriptProcessor 废弃，Electron 43 下全零）
   try {
     ivMicCtx = new AudioContext({ sampleRate: 16000 });
-    // AudioContext 可能 suspended（自动播放策略）→ 采集回调不触发 → 转写无数据（与 🎤 同坑）
+    // AudioContext 可能 suspended（自动播放策略）→ 采集回调不触发（与 🎤 同坑）
     if (ivMicCtx.state === "suspended") await ivMicCtx.resume();
     ivMicSource = ivMicCtx.createMediaStreamSource(ivMicStream);
-    ivMicProc = ivMicCtx.createScriptProcessor(4096, 1, 1);
-    ivMicProc.onaudioprocess = (e) => {
-      if (ivMicRecording) ivMicPcm.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    await ivMicCtx.audioWorklet.addModule("pcm-worklet.js");
+    ivMicProc = new AudioWorkletNode(ivMicCtx, "pcm-capture");
+    ivMicProc.port.onmessage = (e) => {
+      if (ivMicRecording) ivMicPcm.push(e.data);
     };
     ivMicSource.connect(ivMicProc);
-    ivMicProc.connect(ivMicCtx.destination);
   } catch { /* ignore（MediaRecorder 录音不受影响，仅转写可能空） */ }
   ivMicRecording = true;
   setIvMicState("rec");
