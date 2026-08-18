@@ -247,6 +247,11 @@ const STUDY_HOURS = [20, 21]; // 每天 20:00 / 21:00 提醒学习
 const remindedToday = new Set();
 
 async function checkStudyReminder() {
+  // 设置中心开关（默认开；"0" = 关闭）
+  try {
+    const enabled = (db.prepare("SELECT value FROM settings WHERE key='notify_study_reminder'").get()?.value ?? "1") !== "0";
+    if (!enabled) return;
+  } catch { /* settings 不可用按默认开 */ }
   const now = new Date();
   const h = now.getHours();
   const todayKey = now.toISOString().slice(0, 10);
@@ -267,23 +272,26 @@ async function checkStudyReminder() {
   }
 }
 
-// ============ 复习到期提醒（有到期卡主动提示，30 分钟检查 + 2 小时冷却防骚扰） ============
-let lastReviewNotify = 0; // 上次复习提醒时间戳（ms），2 小时冷却
-
+// ============ 复习到期提醒（有到期卡主动提示：设置开关 + 19-22 点 + 每天一次，不打扰白天） ============
 async function checkReviewReminder() {
   try {
+    // 设置中心开关（默认开；"0" = 关闭）
+    const enabled = (db.prepare("SELECT value FROM settings WHERE key='notify_review_reminder'").get()?.value ?? "1") !== "0";
+    if (!enabled) return;
     const due = reviewApi.review.getDueCards();
     if (due.length === 0) return;
-    // 9 点后才提醒（避免半夜打扰）；距上次提醒 >2 小时才再次提醒（最易忘的先复习——getDueCards 已按稳定性升序）
+    // 只在晚间活跃时段提醒（19-22 点）——此前 9 点后随时弹（启动 1 分钟 + 30 分钟一轮）被用户感知为"突然触发复习"
     const h = new Date().getHours();
-    if (h < 9) return;
-    const now = Date.now();
-    if (now - lastReviewNotify < 2 * 3600 * 1000) return;
-    lastReviewNotify = now;
+    if (h < 19 || h > 22) return;
+    // 每天最多一次（替代 2h 冷却，进一步降打扰）
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const lastDay = db.prepare("SELECT value FROM settings WHERE key='last_review_remind_date'").get()?.value || "";
+    if (lastDay === todayKey) return;
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('last_review_remind_date', ?, ?)").run(todayKey, Date.now());
     console.log(`[widget] 复习到期提醒：${due.length} 张`);
     await sendNotification(
       "📚 复习提醒",
-      `${due.length} 张复习卡到期（最易忘的优先）\n在面板「🔁 复习」Tab 完成，答对会自动拉长下次间隔`
+      `${due.length} 张复习卡到期（最易忘的优先）\n方便时在面板「🔁 复习」Tab 完成，答对会自动拉长下次间隔`
     );
   } catch { /* ignore */ }
 }

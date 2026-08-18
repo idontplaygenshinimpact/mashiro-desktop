@@ -686,6 +686,18 @@
           </div>
         </div>
         <div class="form-row" style="margin-top:8px;align-items:flex-start;">
+          <label>🔔 通知提醒<span style="font-weight:normal;color:#8a87a8;font-size:11px;">——复习卡到期提醒每天一次（19-22 点），定时学习提醒每天 20/21 点；关闭后不再弹对应通知</span></label>
+          <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+            <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#4a3a9d;cursor:pointer;">
+              <input type="checkbox" id="set-notify-review" style="width:15px;height:15px;accent-color:#6d4fd8;"> 复习卡到期提醒
+            </label>
+            <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#4a3a9d;cursor:pointer;">
+              <input type="checkbox" id="set-notify-study" style="width:15px;height:15px;accent-color:#6d4fd8;"> 定时学习提醒
+            </label>
+            <span style="font-size:11px;color:#8a87a8;" id="set-notify-status"></span>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:8px;align-items:flex-start;">
           <label>🎯 简历项目源码<span style="font-weight:normal;color:#8a87a8;font-size:11px;">——填你的项目名与本地源码目录（每行一个，格式：项目名=目录）。面试官会在项目拷打轮基于真实代码追问（技术选型/实现/坑），不再只靠简历一句话</span></label>
           <textarea id="set-personal-projects" rows="3" style="font-size:11px;font-family:Consolas,monospace;" placeholder="低代码平台=D:\projects\lowcode&#10;面试辅导Agent=D:\projects\interview-agent"></textarea>
           <div style="display:flex;gap:6px;margin-top:6px;">

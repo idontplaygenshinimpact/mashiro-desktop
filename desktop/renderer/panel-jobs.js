@@ -680,6 +680,16 @@ async function loadSettings() {
         : `已关闭（0 内存占用）${r.assets > 0 ? ` · 库内仍有 ${r.assets} 条历史数据，开启后自动重建` : ""}`;
     }
   } catch { /* ignore */ }
+  // 通知提醒开关（复习到期 / 定时学习）
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/settings/reminders");
+    const j = await r.json();
+    if (j?.ok) {
+      $("set-notify-review").checked = !!j.reviewReminder;
+      $("set-notify-study").checked = !!j.studyReminder;
+      $("set-notify-status").textContent = j.reviewReminder || j.studyReminder ? "✅ 已生效" : "已全部关闭";
+    }
+  } catch { /* ignore */ }
   // 简历项目源码（面试官拷打素材）
   try {
     const r = await fetch("http://127.0.0.1:8899/api/settings/personal-projects");
@@ -966,6 +976,28 @@ $("set-rag-enabled")?.addEventListener("change", async () => {
     $("set-rag-status").textContent = "⚠️ " + (r?.error || "保存失败");
   }
 });
+
+// 通知提醒开关（复习到期 / 定时学习）
+async function saveReminderSwitch(key, on) {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/settings/reminders", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [key]: on }),
+    });
+    const j = await r.json();
+    $("set-notify-status").textContent = j.ok ? "✅ 已保存" : "⚠️ " + (j.error || "保存失败");
+    if (!j.ok) {
+      if (key === "reviewReminder") $("set-notify-review").checked = !on;
+      else $("set-notify-study").checked = !on;
+    }
+  } catch (e) {
+    $("set-notify-status").textContent = "⚠️ " + e.message;
+    if (key === "reviewReminder") $("set-notify-review").checked = !on;
+    else $("set-notify-study").checked = !on;
+  }
+}
+$("set-notify-review")?.addEventListener("change", (e) => saveReminderSwitch("reviewReminder", e.target.checked));
+$("set-notify-study")?.addEventListener("change", (e) => saveReminderSwitch("studyReminder", e.target.checked));
 
 // 简历项目源码（面试官拷打素材）：保存 → 生成档案进知识库
 $("set-personal-projects-save")?.addEventListener("click", async () => {
