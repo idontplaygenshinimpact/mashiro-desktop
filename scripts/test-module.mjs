@@ -29,7 +29,7 @@ const MODULES = {
   mcp: ["mcp-client"],
   widget: ["widget-core", "widget-auth", "path-all", "integration-widget"],
   routes: ["routes-registry"],
-  panel: ["panel-dom-consistency", "panel-focus-jsdom"],
+  panel: ["panel-dom-consistency", "panel-focus-jsdom", "panel-interview-jsdom", "panel-study-jsdom"],
   desktop: ["desktop-utils"],
   llm: ["llm-retry", "llm-utils"],
   misc: ["ask-user", "atomic-json", "permission", "prompt-guard", "self-check", "todo-context", "trace", "web-search", "fetch-page", "learning", "dreaming", "hooks"],

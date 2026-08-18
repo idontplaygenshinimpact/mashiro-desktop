@@ -592,6 +592,7 @@ async function loadReview() {
   reviewIdx = 0;
   if (reviewQueue.length) {
     $("review-empty").classList.add("hidden");
+    $("review-card").classList.remove("hidden"); // 主流程漏移除（此前只有错题本路径移除 → 复习 Tab 有卡时卡片区空白）
     showReviewCard();
   } else {
     $("review-card").classList.add("hidden");
