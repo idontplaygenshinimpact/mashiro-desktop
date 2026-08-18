@@ -11,11 +11,15 @@
 | 模块 | 作用 |
 |---|---|
 | **爬取引擎** | 自动逛牛客/掘金/CSDN，抓取前端 & AI Agent 面经/笔试题，AI 筛选出**具体题目**并完整讲解（结论/原理/JS实现/边界），归档 Markdown |
-| **学习闭环** | 从产出提炼"优先学习清单" → 勾选完成 → 复盘出题 → 判分 → 错题自动进入**薄弱点**，下次优先学 |
+| **学习闭环** | 从产出提炼"优先学习清单" → 勾选完成 → 复盘出题 → 判分 → 错题自动进入**薄弱点**，下次优先学；FSRS 间隔复习 + 选择题自测 + 到期提醒 |
 | **专项练习** | 牛客 TOP101 算法题（免登录随时刷）+ **手写/算法题库 91 道**（本地沙箱判题：写完直接跑测试，通过自动记进度，答错回流薄弱点） |
-| **桌宠** | Electron 透明窗口 + Live2D 椎名真白，桌面悬浮、点击对话、气泡提醒、全屏自动隐藏、开机自启 |
+| **模拟面试** | 面试官按 STaR 五维评分、追问深挖、复盘报告 + 薄弱点回流；**设置中心上传简历自动接面试官项目拷打** |
+| **桌宠** | Electron 透明窗口 + Live2D 椎名真白，桌面悬浮、点击对话（短句语音反馈）、气泡提醒、全屏自动隐藏、开机自启 |
+| **求职闭环** | 简历 → 方向画像 → 岗位匹配/投递 → 笔试日程 → 面试邀约（邮箱自动识别）→ 全节点回流（LORF 规则引擎给"现在最该做什么"） |
 
 对话式 agent：在桌宠输入框直接说"帮我搜 React 面经并讲讲事件循环"，它自己规划任务、调工具、给答案。
+
+> **个人数据闭环**：简历/岗位/日程/学习进度 全链路互通，自动识别邮箱面试邀约（含"时间待定"条目）、投递状态实时同步、笔试进入统一日程表——不用手动搬数据。
 
 ---
 
@@ -39,17 +43,18 @@ npx playwright install chromium
 
 ### 配置
 
-编辑 `.env`（API Key 优先级：`.env` > 环境变量 `DEEPSEEK_API_KEY`）：
+**全部可在面板「⚙️ 设置」配置，无需改文件**（开源复用友好）：
 
-```
-# 走 OpenCode Go 订阅额度（省钱）或官方 API
-DEEPSEEK_API_KEY=sk-xxxx
-# 可选：切换模型/端点
-# MIANSHI_MODEL=deepseek-v4-flash
-# DEEPSEEK_BASE_URL=https://opencode.ai/zen/go/v1
-```
+| 配置项 | 面板入口 | 说明 |
+|---|---|---|
+| API Key / Base URL / 模型名 | 设置 → LLM 服务配置 | 接任意 OpenAI 兼容端点（含本地 Ollama/中转）；配了 Base URL 即单端点直连 |
+| 方向画像 / 知识树模板 | 设置 → 方向画像 / 知识树 | 转方向/开源复用改这里即可，全链路（面试/出题/巡检/分组）跟随 |
+| 邮箱（自动检查开关） | 设置 → 邮箱 | 授权码仅存本机；每 30 分钟自动拉取识别面试邀约 |
+| 自动巡检 + 每日 token 预算 | 设置 → 自动化 | 关注点定时搜新面经 → 讲解 → 通知；token 上限防超支 |
+| 本地知识库（RAG） | 设置 → 本地知识库 | 默认关；**纯关键词检索（FTS5）零模型零内存**，秒级构建 |
+| 招聘平台（BOSS） | 校招 Tab → 平台账号 | 启用/登录态/投递设置/招呼语 |
 
-> 默认端点 `https://opencode.ai/zen/go/v1`（OpenCode Go 订阅），改用官方 API 时设为 `https://api.deepseek.com/v1`。
+> 兜底：`.env` 仍生效（`DEEPSEEK_API_KEY`/`MIANSHI_MODEL`/`DEEPSEEK_BASE_URL`/`RAG_EMBED_MODEL` 等），面板配置优先。
 
 ### 启动
 
@@ -121,6 +126,22 @@ node discover.mjs "https://juejin.cn/search?query=React面经" 5
 - **陪伴**：开始/完成/休息结束/中途鼓励（每 10 分钟）都有对应气泡与语音场景
 - **统计**：今日分钟/次数/分心 + 连续天数（streak）+ 近 7 天柱状图
 
+### 6. 语音交互（真白声线）
+
+- **单击桌宠** → 短句应答（2-8s 快速反馈，部位人设：摸头/戳脸/身体/手）
+- **空闲关怀**（5 分钟无交互）→ 长句独白（GPT-SoVITS 真白声线 20-30s，内容完整）
+- **修改/暂停播放器**：`desktop/voice-pack.mjs`（ffplay → SoundPlayer 兜底；长句播放中不被打断）
+- **合成长句**：`npm run voice:synth`（分句多采样最优拼接）
+- **质量评测**：`npm run voice:score`（内容完整度/音色/节奏/污染 → A-D 分 + 历史对比）；`npm run voice:audit`（含"话没说完"末尾完整度预警）
+- **训练新声线**：`npm run voice:train -- <step>`（详见 [`scripts/voice-train/README.md`](scripts/voice-train/README.md)：原始音频 → 数据准备 → GPT/SoVITS 训练 → 权重接入 → 合成 → 评测，全流程内置）
+
+### 7. 本地知识库（RAG，可选）
+
+把面经/学习清单/复习卡/岗位/真题/文档做成可检索库，对话与复习选题可引用。**默认关闭**（评估使用率低 + 省资源），需要时在「⚙️ 设置」开启：
+
+- **纯关键词检索（FTS5 trigram）**：零模型、零内存、秒级构建——不再是 embedding 语义检索
+- 开启后自动重建索引；复习选择题生成时可选引用知识库真题素材（带"📚 引用知识库"标记）
+
 ---
 
 ## 项目结构
@@ -128,39 +149,38 @@ node discover.mjs "https://juejin.cn/search?query=React面经" 5
 ```
 mianshi-agent/
 ├── desktop/                  # 桌宠（Electron）
-│   ├── main.mjs              # 主进程：透明窗口/置顶/拖拽/托盘/全屏检测
-│   ├── foreground.mjs        # Win32 前台窗口检测（koffi FFI，毫秒级）
-│   ├── foreground-check.ps1  # （备用）PowerShell 检测脚本
+│   ├── main.mjs              # 主进程薄壳：窗口/托盘/生命周期
+│   ├── lib/                  # 主进程拆出模块（无 electron 依赖可单测）
+│   │   ├── widget-server.mjs # widget 服务守护（探测拉起/退出清理）
+│   │   ├── window-state.mjs  # 窗口位置持久化（防抖保存）
+│   │   └── restart.mjs       # 一键重启（bundle 防呆 + 杀进程）
+│   ├── voice-pack.mjs        # 语音包播放（短句/长句/场景，防抖+互斥+长句保护）
 │   ├── preload.js            # IPC 桥接
-│   └── renderer/             # 渲染层：Live2D 真白 + 气泡 + 面板 + 对话
+│   └── renderer/             # 渲染层（按 Tab 拆 5 文件：panel-core/study/chat/jobs/rest）
 ├── lib/
-│   ├── agent.mjs             # 对话 agent：工具调用循环 + 任务规划
-│   ├── ai.mjs                # LLM 调用：分类/挑帖/题目检测/讲解/情报
-│   ├── fetch-page.mjs        # Playwright 抓页 + Readability 正文提取
-│   ├── memory.mjs            # 记忆：画像/关注点/薄弱点/已掌握/对话历史
-│   ├── study.mjs             # 学习清单：生成/勾选/复盘出题/判分
-│   ├── job-platforms.mjs     # 招聘平台注册表（搜岗入库/半自动投递/频率限制）
-│   ├── platform-accounts.mjs # 平台账号配置（登录态/招呼语/每日限额）
-│   ├── platforms/            # 平台实现：boss.mjs（BOSS 直聘：搜索/详情/立即沟通投递）
-│   ├── skills.mjs            # Skills 插件：SKILL.md 声明 + skill.mjs 工具/hooks
-│   ├── hooks.mjs             # Hooks 事件系统（before_tool/after_tool/llm_done/chat_done）
-│   ├── subagent.mjs          # Subagent 编排（spawn_subagent 并行子任务）
-│   └── win-toast.mjs         # Windows 通知（base64 + EncodedCommand，无注入面）
-├── discover.mjs              # AI 逛网爬取（7 源 → 挑帖 → 讲解 → 归档）
-├── run.mjs                   # 手动模式（处理 links.txt）
-├── widget.mjs                # 后台数据服务（HTTP :8899）：进度/对话/学习清单 API
-├── mcp-server.mjs            # MCP Server（暴露 8 工具给 Claude Code/Cursor/OpenCode）
-├── skills/                   # Skills 插件目录（<name>/SKILL.md 声明 + skill.mjs 可编程，即插即用）
-│   ├── github-repo/          # 预设：GitHub 仓库信息查询（示例）
-│   ├── frontend-cheatsheet/  # 预设：前端八股速查（高频考点清单，讲解防漏）
-│   ├── interview-warmup/     # 预设：面试前 5 分钟热身流程（摸底→定向→演练→收尾）
-│   ├── tech-compare/         # 预设：技术选型对比框架（React vs Vue / Vite vs Webpack）
-│   ├── resume-coach/         # 预设：简历优化（亮点/风险/量化改进/面试预设问题）
-│   ├── company-intel/        # 预设：公司面经情报（高频考点+真题线索）
-│   └── README.md             # 插件开发文档
-├── config.mjs                # 配置（API Key/模型/多 Provider 路由）
-├── links.txt                 # 手动模式输入：每行一个 URL
-├── data/                     # agent-memory.json（记忆持久化）
+│   ├── agent.mjs             # 对话 agent 核心：工具循环 + 权限 + 规划
+│   ├── tools/                # agent 工具层（拆分）：schemas/impl/exec-utils/mcp
+│   ├── routes/               # widget 全部 HTTP 路由（纵向拆分 13 域：core/review/kb/practice/misc/study/interview/jobs/zhenti/oj/focus/mail/rss）
+│   ├── career.mjs            # 方向画像中心（简历 → 方向 → 知识树联动）
+│   ├── knowledge.mjs         # 知识树模板（frontend/backend/algorithm 可配置）
+│   ├── patrol.mjs            # 主动巡检（关注点定时搜帖→讲解→存档→通知）
+│   ├── rag.mjs               # 本地知识库（FTS5 关键词检索 + 开关）
+│   ├── mail.mjs              # 邮箱邀约识别日程（IMAP → LLM → schedule_events）
+│   ├── study.mjs / review.mjs / interview.mjs / quiz.mjs
+│   ├── job-platforms.mjs / platform-accounts.mjs / platforms/
+│   ├── context-providers.mjs # 个人数据注册表（MCP 单数据源）
+│   ├── skills.mjs / hooks.mjs / subagent.mjs / llm.mjs / ai.mjs
+│   └── db.mjs                # node:sqlite 主存储（WAL）
+├── discover.mjs / run.mjs    # 爬取入口（核心逻辑在 lib/）
+├── widget.mjs                # 后台数据服务（HTTP :8899）——已无内联路由，纯服务生命周期
+├── mcp-server.mjs            # MCP Server（暴露个人数据/工具给外部 agent）
+├── scripts/
+│   ├── voice-train/          # 语音训练完整流程（README.md 内置）
+│   ├── synth-mashiro-long.py / score-voices.py / audit-voices.py  # 合成长句/评测/审计
+│   └── test-module.mjs       # 按模块跑测试（升级单模块不用全量）
+├── skills/                   # Skills 插件（即插即用）
+├── config.mjs                # 配置（API Key/模型/多 Provider）；面板设置>环境变量
+├── data/                     # mianshi.db + 配置 + 语音评分缓存
 └── output/                   # 产出：日期目录 + Markdown 题库
 ```
 
@@ -317,17 +337,20 @@ COMPACT_KEEP_RECENT=4000   # 保留最近 N token 的完整消息
 
 ## 工程质量门禁
 
-> 数字为 2026-08-15 实测（全量重跑），非历史快照。
+> 数字为 2026-08-17 实测（全量重跑），非历史快照。
 
 | 门禁 | 命令 | 当前状态 |
 |---|---|---|
-| 单元/集成测试 | `npm test` | ✅ 483/483 通过（含桌宠形象管理、闭环数据回流、专注番茄循环、人机交互、预设技能、平台注册表） |
+| 单元/集成测试 | `npm test` | ✅ **593/593 通过**（含多轮回环审计修复、语音长句保护、邮箱日程、待定邀约、desktop 模块） |
 | 类型检查 | `npm run typecheck`（tsc --noEmit + checkJs） | ✅ 0 错误（注意：tsconfig 未开 strict/noImplicitAny） |
 | Lint | `npm run lint`（ESLint flat config） | ✅ 0 error / 52 warning（no-unused-vars 为主） |
-| 覆盖率 | `npm run coverage` | 测试文件外圈全绿；12 个核心模块 93–100%（ai/interview/knowledge/memory/mcp-client/permission/review/study/trace/atomic-json/emotions/db）；agent.mjs（工具循环）86.4%；llm.mjs 被测试 mock 隔离（统计失真，单文件实测 67%）；fetch-page 需真浏览器为人工验证域 |
-| Agent 能力评测 | `npm run bench:agent` | ✅ 13/13（pass³ 一致率 13/13，mock LLM 故障注入） |
-| 模型基线 | `npm run bench` | 以 `benchmark/reports/latest.json` 为准（最近一次 quick 模式 97；完整模式历史 73–100 波动，README 不固化单次快照） |
-| CI | `.github/workflows/ci.yml` | push/PR 自动跑：`npm ci`（跳过 electron/playwright 二进制）→ typecheck + lint + test + bench:agent |
+| 覆盖率 | `npm run coverage` | 测试文件外圈全绿；12 个核心模块 93–100%；agent.mjs 86.4%；llm.mjs 被 mock 隔离（单测失真）；fetch-page 人工验证域 |
+| 按模块测试 | `npm run test:module -- <模块>` | 升级单模块只跑它及依赖，不用全量 |
+| Agent 能力评测 | `npm run bench:agent` | ✅ 13/13（mock LLM 故障注入，与模型无关） |
+| 模型基线 | `npm run bench` | 以 `benchmark/reports/latest.json` 为准 |
+| 语音评测 | `npm run voice:score` / `voice:audit` | 内容完整度/音色/节奏/污染 综合评分 + "话没说完"末尾完整度审计（长句合成质量回归监控） |
+| 闭环审计 | scripts/_verify-route-parity.mjs 等 | 路由注册表回归测试（`tests/routes-registry.test.mjs`）防拆分丢路由；多轮 workflow 闭环复查已修 30+ 断裂点 |
+| CI | `.github/workflows/ci.yml` | push/PR 自动跑：typecheck + lint + test + bench:agent |
 
 ---
 
@@ -349,7 +372,7 @@ COMPACT_KEEP_RECENT=4000   # 保留最近 N token 的完整消息
 首次调用要启动 Chromium（几秒），搜索 2 站并行约 15 秒，完整"搜索+讲解"约 1 分钟属正常。简单问题直接问（不触发搜索）会快很多。
 
 **Q：想换模型/端点？**
-改 `.env`：`DEEPSEEK_BASE_URL`（OpenCode Go 或官方 API）、`MIANSHI_MODEL`（`deepseek-v4-flash` / `deepseek-v4-pro`）。多 Provider 同时配置：`MIANSHI_PROVIDERS=[{"name":"deepseek","baseUrl":"https://api.deepseek.com/v1","apiKey":"sk-xxx","model":"deepseek-chat"},{"name":"local","baseUrl":"http://127.0.0.1:11434/v1","apiKey":"ollama","model":"qwen2.5"}]`（按顺序 failover）。
+面板「⚙️ 设置 → LLM 服务配置」直接填 API Key / Base URL / 模型名（含本地 Ollama `http://127.0.0.1:11434/v1`，配了 Base URL 即单端点直连）。也可改 `.env` 或用 `MIANSHI_PROVIDERS=[{"name":"deepseek","baseUrl":"...","apiKey":"...","model":"deepseek-chat"},{"name":"local","baseUrl":"http://127.0.0.1:11434/v1","apiKey":"ollama","model":"qwen2.5"}]`（按顺序 failover）。面板配置 > .env。
 
 **Q：怎么打安装包？**
 ```bash
@@ -375,6 +398,10 @@ npm run dist                # 生成 release/ 下 NSIS 安装包 + 便携版（�
 - [x] 可观测性：LLM 调用/token/耗时监控（面板实时可见）
 - [x] 系统自检：启动 + 每 6h 自动扫隐患（表堆积自动清理 / 产出污染 / 巡检停摆 / LLM 失败率 / 错误日志 / DB 体积），问题自动修复或弹通知（面板「爬取产出」Tab 可手动检查）
 - [x] 产品化基础：多 Provider 路由 / Hooks 事件系统 / Skills 插件机制 / Subagent 编排 / 对话历史恢复 / 面板 CSP + 渲染沙箱 / CI 修复 / 安装包配置
+- [x] 纵向拆分（工程质量）：widget → lib/routes 13 域、agent → lib/tools、main → desktop/lib、panel → 5 文件，全部可独立测试；`test:module` 按模块跑
+- [x] 多轮回环审计（workflow 并行 + 修复 50+ 断裂点）：简历→面试官、岗位投递状态、邮箱自动检查+待定邀约、笔试进日程、复习答错回流、LLM 配置互清等
+- [x] 语音系统：GPT-SoVITS 长句合成（防"话没说完"分块优化）+ 评测/审计（score/audit）+ 训练流程内置（voice-train）+ 交互重设计（单击短句/空闲长句/长句播放保护）
+- [x] 设置中心可配：API Key/Base URL/模型、方向画像/知识树模板、邮箱自动检查、巡检 token 预算、本地知识库开关、招聘平台账号——全部免改代码
 - [ ] 进化闭环：内置评测集（LLM-as-Judge）+ 自动改进 prompt（bench 评分与 must_cover 已解耦，下一步：在线评测进 CI + 自动改进）
 
 ---
