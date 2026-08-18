@@ -101,3 +101,38 @@ test("空回答提交 → 不调用后端（按钮安全）", async () => {
     assert.equal(called, false, "空回答不应提交");
   });
 });
+
+test("残留会话自愈：start 报「已有面试进行中」→ 自动 end 旧会话 → 重新开始 → 问题显示", async () => {
+  await withPanel(async ({ window, kanban, alerts }) => {
+    const starts = [];
+    let ends = 0;
+    // 第一次 start 被残留会话拒绝，第二次成功
+    kanban.invStart = async () => {
+      starts.push(starts.length);
+      if (starts.length === 1) return { error: "已有一场面试进行中，先结束（end_interview）或继续回答", session: {} };
+      return { ok: true, round: 1, roundType: "开场与自我介绍", question: "自我介绍并讲一个项目", totalRounds: 9, weakQueue: [], depth: 0 };
+    };
+    kanban.invEnd = async () => { ends++; return { ok: true, report: "旧场复盘" }; };
+    window.document.getElementById("iv-start").click();
+    await tick(80);
+    assert.equal(ends, 1, "旧会话被自动收尾");
+    assert.equal(starts.length, 2, "自动重试 start");
+    const q = window.document.getElementById("iv-question");
+    assert.equal(q.textContent, "自我介绍并讲一个项目", "问题最终显示");
+    assert.equal(alerts.length, 0, "不弹错误框（自愈成功）");
+  });
+});
+
+test("残留会话且收尾失败 → 明确提示（不崩、可重试）", async () => {
+  await withPanel(async ({ window, kanban, alerts }) => {
+    kanban.invStart = async () => ({ error: "已有一场面试进行中，先结束（end_interview）或继续回答", session: {} });
+    kanban.invEnd = async () => ({ error: "LLM 不可用" });
+    window.document.getElementById("iv-start").click();
+    await tick(60);
+    assert.ok(alerts.length >= 1, "有明确错误提示");
+    assert.match(alerts[0], /启动失败/);
+    // 按钮恢复可重试
+    const btn = window.document.getElementById("iv-start");
+    assert.equal(btn.disabled, false, "按钮恢复");
+  });
+});

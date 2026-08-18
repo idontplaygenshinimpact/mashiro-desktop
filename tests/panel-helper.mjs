@@ -78,6 +78,8 @@ export function bootPanel(overrides = {}) {
   // jsdom 无 canvas 2d：stub 掉（drawIvRadar 等画图路径不崩）
   window.HTMLCanvasElement.prototype.getContext = () => new Proxy({}, { get: () => () => {} });
   const calls = [];
+  const alerts = [];
+  window.alert = (msg) => { alerts.push(String(msg)); }; // jsdom 无 alert，mock 记录
   const kanban = defaultKanban(overrides);
   window.kanban = kanban;
   window.fetch = async (url, opts = {}) => {
@@ -85,7 +87,7 @@ export function bootPanel(overrides = {}) {
     return { ok: true, json: async () => ({ ok: true, items: [], list: [], plan: SAMPLE_PLAN.plan }) };
   };
   window.eval(srcs.join("\n"));
-  return { dom, window, calls, kanban };
+  return { dom, window, calls, kanban, alerts };
 }
 
 /** 用例包装：跑完排空异步链 → 停轮询 → 关 window（防异步泄漏挂住测试） */

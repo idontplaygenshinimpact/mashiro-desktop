@@ -196,29 +196,41 @@ async function loadIvResumeAuto() {
 }
 
 // 启动面试会话（iv-start 按钮 + 复习检验共用）：成功即切到面试中形态
+// 残留会话自愈：上一场面试没正常结束（关面板/杀进程等）→ 会话留在服务端内存，
+// start 返回"已有一场面试进行中"→ 自动 end 收尾旧会话（生成复盘）再重新开始，用户无感
 async function startIvSession(cfg) {
   $("iv-start").disabled = true;
   $("iv-start").textContent = "⏳ 面试官准备中...";
   try {
-    const r = await window.kanban.invStart(cfg);
+    let r = await window.kanban.invStart(cfg);
+    if (r.error && /进行中/.test(r.error)) {
+      $("iv-status").textContent = "检测到上一场未结束的面试，正在收尾并重新开始…";
+      const end = await window.kanban.invEnd();
+      if (end?.ok) r = await window.kanban.invStart(cfg); // 旧会话已清，重试
+    }
     if (r.error) { alert("启动失败: " + r.error); return; }
-    ivSetup.classList.add("hidden");
-    ivSessionEl.classList.remove("hidden");
-    $("iv-log").innerHTML = "";
-    $("iv-review").classList.add("hidden");
-    $("iv-review").textContent = "";
-    $("iv-summary").classList.add("hidden");
-    $("iv-scores").innerHTML = "";
-    $("iv-answer-area").style.display = "";
-    ivTotalRounds = Number(r.totalRounds) || 9;
-    ivScoreSum = { tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0 };
-    ivScoreCount = 0;
-    clearIvRecordings(); // 新面试开始 → 清理上一场录音（本场录音从 0 开始）
-    showQuestion(r);
+    showInterviewUi(r);
   } finally {
     $("iv-start").disabled = false;
     $("iv-start").textContent = "🎤 开始模拟面试";
   }
+}
+
+// 面试中形态切换 + 首问渲染（startIvSession 与残留会话重试共用）
+function showInterviewUi(r) {
+  ivSetup.classList.add("hidden");
+  ivSessionEl.classList.remove("hidden");
+  $("iv-log").innerHTML = "";
+  $("iv-review").classList.add("hidden");
+  $("iv-review").textContent = "";
+  $("iv-summary").classList.add("hidden");
+  $("iv-scores").innerHTML = "";
+  $("iv-answer-area").style.display = "";
+  ivTotalRounds = Number(r.totalRounds) || 9;
+  ivScoreSum = { tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0 };
+  ivScoreCount = 0;
+  clearIvRecordings(); // 新面试开始 → 清理上一场录音（本场录音从 0 开始）
+  showQuestion(r);
 }
 
 const IV_MAX_CHAIN = 3; // 同一追问点最大深挖次数（与服务端 MAX_DEPTH 一致）
