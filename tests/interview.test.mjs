@@ -34,6 +34,32 @@ test("startInterview 已有面试进行中 → error", async () => {
   assert.ok(r.error, "应返回错误");
 });
 
+// 回归护栏：配置了简历项目源码（personal-projects）后，startInterview 必须仍正常返回第一问（问题可见），
+// 且档案注入到 prompt（此前"看不到问题"类回归——档案注入把启动弄挂时会在此暴露）
+test("startInterview 配置个人项目档案后仍正常返回问题（档案注入不破坏启动）", async () => {
+  // 临时假项目：package.json（技术栈）+ 一个源码文件 → 有可注入档案
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const projDir = mkdtempSync(path.join(tmpdir(), "iv-proj-"));
+  mkdirSync(path.join(projDir, "src"), { recursive: true });
+  writeFileSync(path.join(projDir, "package.json"), JSON.stringify({ name: "iv-proj", dependencies: { react: "^18", express: "^4" }, description: "测试项目" }));
+  writeFileSync(path.join(projDir, "src", "server.js"), "const express = require('express');\nconst app = express();\nmodule.exports = app;");
+  const { savePersonalProjects } = await import("../lib/personal-projects.mjs");
+  savePersonalProjects([{ name: "iv-proj", dir: projDir }]);
+  setLlmResponses(FIRST_Q);
+  const r = await startInterview({ position: "前端" });
+  assert.equal(r.ok, true, "档案注入后 startInterview 仍成功（不抛错）");
+  assert.ok(r.question && r.question.length > 0, "返回第一问（问题可见）");
+  // prompt 应含项目档案（面试官拷打真实代码）
+  const prompt = (await import("./helpers.mjs")).getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(prompt.includes("简历项目源码档案"), "档案段注入 prompt");
+  assert.ok(prompt.includes("iv-proj") || prompt.includes("react"), "档案内容（项目名/技术栈）出现在 prompt");
+  // 清理
+  savePersonalProjects([]);
+  try { rmSync(projDir, { recursive: true, force: true }); } catch { /* ignore */ }
+});
+
 test("startInterview LLM 返回非法 → 兜底破冰问题", async () => {
   setLlmResponses("乱码");
   const r = await startInterview({ position: "前端" });

@@ -29,3 +29,6 @@ scripts/_*.npy
 scripts/_short_origin.txt
 scripts/_voiceid_mashiro.tsv
 
+# 本地 ASR 模型（sherpa-onnx paraformer，~230MB，按需下载）
+models/
+
