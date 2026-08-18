@@ -47,6 +47,13 @@ function bootPanel() {
     onUpdate?.("测试讲解内容");
     return { fromFile: true, content: "测试讲解内容", topic: "测试讲解" };
   };
+  // 模拟面试：完整首问响应（含全部展示字段）
+  kanban.invStart = async () => ({
+    ok: true, round: 1, roundType: "开场与自我介绍",
+    question: "请先做个自我介绍，并讲讲你的项目经历",
+    totalRounds: 9, weakQueue: [], depth: 0,
+    dimension: "表达与项目梳理", basis: "开场固定流程", criteria: "结构清晰", boundary: "2 分钟以内",
+  });
   window.kanban = kanban;
   window.fetch = async (url, opts = {}) => {
     calls.push({ url: String(url), method: opts.method || "GET" });
@@ -96,6 +103,20 @@ test("学习清单主列表「📖 学习」按钮有响应：点击打开讲解
     assert.doesNotThrow(() => learnBtn.click());
     await new Promise((r) => setTimeout(r, 30)); // 等异步详情加载
     assert.ok(!overlay.classList.contains("hidden"), "点击学习后弹窗应打开（此前按钮无事件 → 没反应）");
+  });
+});
+
+test("模拟面试开始 → 问题正常显示（iv-answer-area 曾是 class 被当 id 用，修复前此处必崩 → 问题永远不显示）", async () => {
+  withPanel(async ({ window }) => {
+    const startBtn = window.document.getElementById("iv-start");
+    assert.ok(startBtn, "开始面试按钮存在");
+    assert.doesNotThrow(() => startBtn.click());
+    await new Promise((r) => setTimeout(r, 30)); // 等 invStart 异步返回 + 渲染
+    const q = window.document.getElementById("iv-question");
+    assert.equal(q.textContent, "请先做个自我介绍，并讲讲你的项目经历", "问题应显示在面板上（此前 showQuestion 从不执行）");
+    const area = window.document.getElementById("iv-answer-area");
+    assert.notEqual(area.style.display, "none", "回答区应显示（iv-answer-area 的 display 操作不应崩）");
+    assert.match(window.document.getElementById("iv-status").textContent, /面试中/, "状态切到面试中");
   });
 });
 
