@@ -299,8 +299,8 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
   font-size: 12px; font-weight: 700;
   padding: 6px 8px; margin: 8px 0 2px;
   border-radius: 7px;
-  background: rgba(109, 79, 216, 0.10);
-  color: #5d48b8;
+  background: rgba(109, 79, 216, 0.14); /* 加深：原 0.10 对比度不足 */
+  color: #4a3a9d;
   cursor: pointer;
   user-select: none;
   transition: background 0.15s;
@@ -320,8 +320,14 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .sg-head.lv-ext { background: rgba(60, 160, 100, 0.12); color: #3a8a5a; }
 .study-item {
   display: flex; align-items: flex-start; gap: 8px;
-  padding: 9px 0; border-bottom: 1px dashed rgba(109,79,216,0.15); cursor: pointer;
+  padding: 9px 10px; margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.9); /* 卡片化底色：正文不再直接压背景图（此前透明 → 看不清） */
+  border: 1px solid rgba(109, 79, 216, 0.12);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
 }
+.study-item:hover { background: rgba(255, 255, 255, 0.97); }
 /* 自定义小巧复选框（原生 checkbox 在 Windows 上偏大；需覆盖全局 input 规则） */
 .study-item input[type="checkbox"] {
   appearance: none; -webkit-appearance: none;
@@ -345,17 +351,17 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .study-item .s-topic { font-size: 13px; color: #2d2a45; font-weight: 600; }
 /* 条目内 level 徽章（grp 分组后层级信息靠徽章展示） */
 .study-item .s-lv {
-  font-size: 9px; font-weight: 600; border-radius: 3px;
-  padding: 0 4px; margin-left: 4px; vertical-align: 1px;
+  font-size: 10px; font-weight: 700; border-radius: 3px;
+  padding: 0 5px; margin-left: 4px; vertical-align: 1px;
 }
-.study-item .s-lv.lv-must { background: rgba(200, 80, 80, 0.12); color: #b04a4a; }
-.study-item .s-lv.lv-adv { background: rgba(200, 160, 60, 0.14); color: #9a7a2a; }
-.study-item .s-lv.lv-ext { background: rgba(60, 160, 100, 0.12); color: #3a8a5a; }
-.study-item .s-why { font-size: 11px; color: #8a87a8; margin-top: 3px; }
+.study-item .s-lv.lv-must { background: rgba(200, 80, 80, 0.16); color: #a03a3a; }
+.study-item .s-lv.lv-adv { background: rgba(200, 160, 60, 0.18); color: #8a6a1a; }
+.study-item .s-lv.lv-ext { background: rgba(60, 160, 100, 0.16); color: #2e7d4e; }
+.study-item .s-why { font-size: 11.5px; color: #6a6790; margin-top: 3px; } /* 加深：原 #8a87a8 对比度不足 */
 .study-item.done .s-topic { color: #7a8a7a; text-decoration: line-through; }
-.study-item .s-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: rgba(80,110,170,0.15); color: #4a6a9d; flex-shrink: 0; }
-.study-item .s-badge.reviewed { background: rgba(60,160,100,0.15); color: #3a8a5a; }
-.study-item .s-src { font-size: 9px; background: rgba(140,80,180,0.15); color: #8a4ab0; border-radius: 3px; padding: 0 4px; margin-left: 4px; }
+.study-item .s-badge { font-size: 11px; padding: 1px 7px; border-radius: 4px; background: rgba(80,110,170,0.18); color: #3a5a8d; flex-shrink: 0; }
+.study-item .s-badge.reviewed { background: rgba(60,160,100,0.18); color: #2e7d4e; }
+.study-item .s-src { font-size: 10px; background: rgba(140,80,180,0.18); color: #7a3aa0; border-radius: 3px; padding: 0 5px; margin-left: 4px; }
 .study-item .s-learn {
   flex-shrink: 0; margin-top: -1px;
   font-size: 11px; padding: 2px 8px; border: 1px solid rgba(109,79,216,0.3);
@@ -364,7 +370,7 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 }
 /* 归并选中条目：紫色左边框 + 紫色背景，明确"已选入归并"（区别于「已完成」的删除线态） */
 .study-item.cluster-selected {
-  background: rgba(109, 79, 216, 0.12);
+  background: rgba(138, 90, 220, 0.22); /* 卡片底色上叠加（原 0.12 太浅看不清选中） */
   border-left: 3px solid #8a5adc;
   border-radius: 8px;
   padding-left: 8px;
