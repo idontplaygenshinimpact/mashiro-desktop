@@ -506,16 +506,23 @@ const RENDERER_DIR = path.join(__dirname, "renderer");
 const RENDERER_SRC = ["app.js", "index.html", "style.css"];
 
 ipcMain.handle("app:restart", async () => {
-  // 渲染源码比 bundle 新 → 先自动重建（改代码后点面板重启即生效，无需手动构建）
-  if (bundleStale(RENDERER_DIR, RENDERER_SRC)) {
-    console.log("[renderer] 检测到渲染源码更新，重启前自动重建 bundle…");
-    await rebuildBundle(ROOT);
+  // 任何一步失败都不静默：返回错误让面板提示（此前重建步骤 EINVAL 抛错被吞 → 按钮卡死无重启）
+  try {
+    // 渲染源码比 bundle 新 → 先自动重建（改代码后点面板重启即生效，无需手动构建）
+    if (bundleStale(RENDERER_DIR, RENDERER_SRC)) {
+      console.log("[renderer] 检测到渲染源码更新，重启前自动重建 bundle…");
+      await rebuildBundle(ROOT);
+    }
+    try { widgetServer.cleanup(); } catch { /* ignore */ }
+    killAllWidgets();
+    console.log("[kanban] 重启中（relaunch + exit）…");
+    app.relaunch();
+    app.exit(0);
+    return { ok: true };
+  } catch (err) {
+    console.error("[kanban] 重启失败:", err?.message || err);
+    return { ok: false, error: `重启失败: ${String(err?.message || err).slice(0, 120)}` };
   }
-  try { widgetServer.cleanup(); } catch { /* ignore */ }
-  killAllWidgets();
-  app.relaunch();
-  app.exit(0);
-  return { ok: true };
 });
 
 // 打开指定文件（用系统默认程序，如 md 编辑器/浏览器）

@@ -1,12 +1,12 @@
 // desktop/lib 模块单测（纵向拆分产物：window-state/restart 纯逻辑，无 electron 依赖）
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync, utimesSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, utimesSync, mkdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 const { readWindowState, saveWindowState, scheduleSaveWindowState, isOnScreen } = await import("../desktop/lib/window-state.mjs");
-const { rendererBundleStale } = await import("../desktop/lib/restart.mjs");
+const { rendererBundleStale, rebuildRendererBundle } = await import("../desktop/lib/restart.mjs");
 
 test("window-state：读写 + 损坏文件容错", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "ws-"));
@@ -62,5 +62,27 @@ test("restart：rendererBundleStale 检测源码比 bundle 新", () => {
   // bundle 缺失 → stale
   rmSync(path.join(dir, "app.bundle.js"));
   assert.equal(rendererBundleStale(dir, ["app.js"]), true, "无 bundle 视为过期");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+// 回归：重建曾用 spawn .cmd（Windows 上直接 EINVAL 同步 throw → Promise reject →
+// 重启流程中断、按钮卡死）。现在 esbuild JS API + 永不 reject。
+test("restart：rebuildRendererBundle 成功路径（esbuild JS API 产出 bundle）", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "rb2-"));
+  mkdirSync(path.join(dir, "desktop", "renderer"), { recursive: true });
+  writeFileSync(path.join(dir, "desktop", "renderer", "app.js"), "console.log('hi');", "utf8");
+  const ok = await rebuildRendererBundle(dir);
+  assert.equal(ok, true, "构建成功");
+  assert.ok(existsSync(path.join(dir, "desktop", "renderer", "app.bundle.js")), "bundle 已生成");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("restart：rebuildRendererBundle 失败不抛错（返回 false，重启不被中断）", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "rb3-")); // 无入口文件 → esbuild 报错
+  let threw = false;
+  let ok;
+  try { ok = await rebuildRendererBundle(dir); } catch { threw = true; }
+  assert.equal(threw, false, "不得抛错（曾在此 EINVAL 抛错导致重启死掉）");
+  assert.equal(ok, false, "失败返回 false");
   rmSync(dir, { recursive: true, force: true });
 });

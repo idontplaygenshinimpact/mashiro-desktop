@@ -1,4 +1,20 @@
-feat: ASR 模型启动预热——重启后第一次语音无需等模型加载（2-4s）
+fix: 一键重启按钮失效——Windows spawn .cmd EINVAL 吞错导致重启永不发生
 
-桌宠启动 5s 后后台预热语音 worker（0.1s 静音触发模型加载+解码），
-用户第一次点 🎤 语音直接出结果。预热失败静默（首次调用正常重试）。
+【根因链（实测复现）】
+1. desktop/renderer/app.js mtime 比 app.bundle.js 新 → 每次点重启都进重建分支
+2. rebuildRendererBundle 用 spawn 直接跑 node_modules/.bin/esbuild.cmd
+   → Windows 上 spawn .cmd 同步抛 EINVAL（非 error 事件）→ Promise reject
+3. main.mjs app:restart handler 无 try-catch → invoke reject
+4. 面板 catch 为空 + 无 finally → 按钮永久卡 ⏳、重启永不发生（8/17 起必现）
+
+【修复】
+- rebuildRendererBundle 改用 esbuild JS API（import("esbuild").build），任何失败 resolve(false)
+  永不 reject——不再依赖 spawn .cmd
+- main.mjs handler 加 try-catch：失败返回 {ok:false,error} 并打日志，不再静默
+- 面板按钮：finally 恢复按钮 + 失败 notify 明确提示（此前静默卡死）
+
+【测试（+5）】
+- desktop-utils：rebuild 成功路径（真实构建产出 bundle）/ 失败路径（不抛错返回 false）
+  ——正是出 bug 的函数，此前零覆盖
+- jsdom：重启失败返回错误→按钮恢复+提示 / reject→恢复 / 成功不抛 / 取消确认不触发
+全量 639/639。

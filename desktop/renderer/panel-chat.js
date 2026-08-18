@@ -428,8 +428,16 @@ document.getElementById("restart-btn")?.addEventListener("click", async () => {
   btn.disabled = true;
   btn.textContent = "⏳";
   try {
-    await window.kanban.restartApp();
-  } catch { /* 进程即将退出，忽略 */ }
+    const r = await window.kanban.restartApp();
+    // 重启失败（主进程返回错误，如构建/杀进程异常）→ 明确提示，不静默卡死
+    if (r && r.ok === false) window.kanban.notify("🔄 重启失败", r.error || "未知错误，请看面板控制台");
+  } catch (err) {
+    window.kanban.notify("🔄 重启失败", String(err?.message || err).slice(0, 80));
+  } finally {
+    // 进程未退出（失败）时恢复按钮可点；正常重启时进程已退出，这里不会执行到
+    btn.disabled = false;
+    btn.textContent = "🔄 一键重启";
+  }
 });
 
 // ============ 服务版本检测（后台 widget 是旧进程时提示重启桌宠） ============
