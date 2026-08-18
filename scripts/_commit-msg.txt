@@ -1,0 +1,20 @@
+fix: 面板交互回归——学习清单「点学习没反应」+ 专注「25分钟报错」+ 同类隐患排查
+
+用户报的两个功能异常根因：
+1. 专注监督点「🍅 25/45 分钟」报 Cannot read properties of null (reading 'value')
+   → focus-goal 输入框 JS 在读取，但 panel.html 从未有这个元素（历史遗留，
+   拆分前就存在，此前无人点过）。修复：HTML 补输入框 + JS 判空兜底
+2. 学习清单「📖 学习」按钮没反应
+   → loadStudyPlan 渲染主列表后从未调用 bindPlanItems（按钮渲染了但没绑点击事件，
+   拆分前就丢，非拆分引入）。修复：主列表渲染后补绑定（连带修好组头折叠）
+
+同类隐患排查（静态对比 JS $() 引用 vs HTML id）：
+- iv-answer-area：class 被当 id 用 → 开始模拟面试时 display 操作必崩（可能是
+  「面试看不到问题」的候选根因），HTML 补 id
+- mail-check-btn：设计存在但 HTML 没按钮 → 补「📥 立即检查」按钮
+- study-batch-del：批量删除仅禁用联动、无事件无后端 → 删死代码
+
+测试体系补两块（此前面板 UI 交互层零测试——这是测不出来的根因）：
+- panel-dom-consistency：静态断言 JS 引用的每个 id 都存在（防 null 崩溃回归）
+- panel-focus-jsdom：jsdom 真实加载全部 5 个面板脚本 + 模拟点击
+  （25 分钟请求正确 / 学习按钮打开弹窗 / 名单不崩），全量 615/615
