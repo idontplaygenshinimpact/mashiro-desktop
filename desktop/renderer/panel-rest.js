@@ -969,14 +969,15 @@ function renderFocus(j) {
 
 async function focusStart(mode) {
   try {
-    const goal = $("focus-goal").value.trim();
+    const goalInput = $("focus-goal");
+    const goal = goalInput?.value.trim() || ""; // 输入框缺失时不崩（HTML 改动后一般存在）
     const res = await fetch("http://127.0.0.1:8899/api/focus/start", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode, goal }),
     });
     const j = await res.json();
     if (!j.ok) { $("focus-status").textContent = "⚠️ " + (j.error || "开始失败"); return; }
-    $("focus-goal").value = "";
+    if (goalInput) goalInput.value = "";
     if (j.goal) window.kanban.notify("🍅 专注开始", `本次目标：${j.goal}`);
     loadFocus();
   } catch (e) { $("focus-status").textContent = "⚠️ " + e.message; }

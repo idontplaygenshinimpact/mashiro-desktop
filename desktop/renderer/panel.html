@@ -106,7 +106,7 @@
         <div class="iv-round-type" id="iv-round-type"></div>
         <div class="iv-question" id="iv-question"></div>
         <div class="iv-meta" id="iv-meta"></div>
-        <div class="iv-answer-area">
+        <div class="iv-answer-area" id="iv-answer-area">
           <textarea id="iv-answer" placeholder="输入你的回答...（也可点 🎙️ 直接说，语音自动转写 + 录音留存可回听；Ctrl+Enter 提交）"></textarea>
           <div class="iv-answer-row">
             <button id="iv-mic" class="secondary" title="录音回答：说答案 → 自动转写回填输入框，录音留存本场可回听">🎙️</button>
@@ -183,6 +183,9 @@
           <button id="focus-stop" class="danger" hidden>⏹ 结束</button>
           <button id="focus-skip-rest" class="secondary" hidden title="跳过休息，直接开始下一轮">⏭️ 跳过休息</button>
           <button id="focus-blacklist-toggle" class="secondary" title="分心应用黑名单/白名单（设置中心也可改）">🚫 名单</button>
+        </div>
+        <div class="form-row" style="margin-top:6px;">
+          <input id="focus-goal" placeholder="本次专注目标（可选，如：刷完动态规划 5 题）" style="flex:1;min-width:0;padding:6px 10px;font-size:11px;">
         </div>
         <div class="resume-status" id="focus-status">未开始专注</div>
         <div class="focus-countdown hidden" id="focus-countdown"></div>
@@ -446,6 +449,7 @@
       <div class="jobs-setup" style="margin-top:12px;">
         <div class="form-row">
           <label>📅 面试邀约识别 + 日程提醒（邮箱配置在「⚙️ 设置」，识别后这里按紧迫度分组）</label>
+          <button id="mail-check-btn" class="secondary" title="立即拉取邮箱并识别邀约">📥 立即检查</button>
         </div>
         <div class="resume-status" id="mail-status">加载中…</div>
       </div>

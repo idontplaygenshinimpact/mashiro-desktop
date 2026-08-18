@@ -1181,6 +1181,7 @@ async function loadStudyPlan() {
     { key: "learning", label: "📖 学习中", items: groups.learning },
     { key: "review", label: "🔁 待复习（复习卡到期）", items: groups.review, cls: "lv-adv" },
   ]);
+  bindPlanItems(list, false); // 主列表绑定：学习/讲解按钮 + 勾选 + 组头折叠（此前缺失 → 点学习没反应）
   if (!filtered.length && (q || lv || st)) {
     list.innerHTML = `<div style="color:#8a87a8;font-size:12px">没有匹配「${esc(q || lv || st)}」的条目</div>`;
   }
@@ -1336,8 +1337,6 @@ function updateClusterBtn() {
     if (count) count.textContent = `已选 ${n} 项`;
     const doneBtn = $("study-batch-done");
     if (doneBtn) doneBtn.disabled = n === 0;
-    const delBtn = $("study-batch-del");
-    if (delBtn) delBtn.disabled = n === 0;
   }
 }
 
