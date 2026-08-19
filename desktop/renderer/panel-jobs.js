@@ -648,11 +648,12 @@ async function loadSettings() {
       $("set-patrol-enabled").checked = !!r.enabled;
       $("set-patrol-interval").value = String(r.intervalMin);
       $("set-patrol-budget").value = String(r.dailyTokenBudget ?? 100000);
+      $("set-patrol-avoid-peak").checked = !!r.avoidPeak;
       const used = r.usedToday || 0;
       const budget = r.dailyTokenBudget ?? 100000;
       const budgetTxt = budget > 0 ? ` · 今日 token ${used}/${budget}${used >= budget ? "（已用尽）" : ""}` : " · token 不限";
       $("set-patrol-status").textContent = r.enabled
-        ? `每 ${r.intervalMin} 分钟${r.nextRun ? " · 下次 " + new Date(r.nextRun).toLocaleString("zh-CN", { hour12: false }) : ""}${budgetTxt}`
+        ? `每 ${r.intervalMin} 分钟${r.nextRun ? " · 下次 " + new Date(r.nextRun).toLocaleString("zh-CN", { hour12: false }) : ""}${r.avoidPeak ? "（避开 DS 高峰）" : ""}${budgetTxt}`
         : (r.note || "已关闭") + budgetTxt;
     }
   } catch { /* ignore */ }
@@ -959,6 +960,17 @@ $("set-patrol-budget")?.addEventListener("change", async () => {
       ? `✅ 每日 token 上限 ${b}（今日已用 ${used}）${used >= b ? " · 已用尽" : ""}`
       : "✅ token 不限（0）";
   } else {
+    $("set-patrol-status").textContent = "⚠️ " + (r?.error || "保存失败");
+  }
+});
+// 避开 DS 高峰开关（高峰时段价格上浮 50%）
+$("set-patrol-avoid-peak")?.addEventListener("change", async () => {
+  const on = $("set-patrol-avoid-peak").checked;
+  const r = await window.kanban.patrolConfig({ avoidPeak: on });
+  if (r?.ok) {
+    $("set-patrol-status").textContent = on ? "✅ 已开启：高峰时段（北京 00:30-08:30）自动推迟巡检" : "已关闭（高峰时段也会巡检）";
+  } else {
+    $("set-patrol-avoid-peak").checked = !on;
     $("set-patrol-status").textContent = "⚠️ " + (r?.error || "保存失败");
   }
 });
