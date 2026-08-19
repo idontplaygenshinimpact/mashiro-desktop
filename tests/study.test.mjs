@@ -51,7 +51,8 @@ test("checkItem 勾选完成：doneAt + 自动建复习卡", async () => {
   const { review } = await import("../lib/review.mjs");
   const card = review.loadCards().cards.find((c) => c.topic === item.topic);
   assert.ok(card, "勾选完成自动建复习卡");
-  assert.equal(card.answer, item.verify_question, "复习卡 answer 用 verify_question 兜底");
+  // 参考答案：verify_question 兜底 或 讲解存档（study_notes/{topic}.md，真实环境存在时优先——测试不假设文件系统）
+  assert.ok(card.answer && card.answer.length > 0, "复习卡有参考答案");
 });
 
 test("checkItem 取消勾选", () => {
