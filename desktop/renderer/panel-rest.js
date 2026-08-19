@@ -792,7 +792,7 @@ $("zhenti-cookie-btn")?.addEventListener("click", async () => {
 // ============ 语音输入（🎤）：本地 ASR 转写 → 回填输入框 ============
 // 点击开始录音（16kHz 单声道，浏览器自动重采样）→ 再点停止 → IPC 送主进程转写
 let micStream = null, micCtx = null, micSource = null, micProc = null;
-let micChunks = [], micRecording = false, micAutoStop = null;
+let micChunks = [], micRecording = false, micAutoStop = null, micStarting = false;
 
 async function stopRecording() {
   micRecording = false;
@@ -887,33 +887,41 @@ async function resampleTo16k(pcm, fromRate) {
 }
 
 async function startRecording() {
+  // 防抖互斥：启动中/录音中再次点击直接忽略（getUserMedia 是异步的，
+  // 无此标志快速连点会重复拉起麦克风 → 多路音频叠加、按钮状态错乱）
+  if (micRecording || micStarting) return;
+  micStarting = true;
+  const micBtn = $("chat-mic");
+  micBtn.disabled = true; // 启动期间禁用，防止连点
+  micBtn.textContent = "⏳";
   console.log("[panel] 语音开始录音…");
   try {
-    // 禁用音频处理链 + 显式选择物理麦克风（默认设备可能无声——实测 MCHOSE 默认=全零）
-    const micId = await pickMicDevice();
-    const audioConstraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
-    if (micId) audioConstraints.deviceId = { exact: micId };
-    console.log("[panel] 使用麦克风:", micId ? micId.slice(0, 24) : "系统默认");
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-  } catch (err) {
-    console.log("[panel] 麦克风不可用:", err?.name || err?.message || err);
-    window.kanban.notify("语音输入", "麦克风不可用: " + (err?.name || "请检查系统麦克风权限"));
-    return;
-  }
-  micChunks = [];
-  micCtx = new AudioContext({ sampleRate: 16000 }); // 16k（ASR 期望采样率，浏览器自动重采样；个别平台会退回 48k，停止时兜底重采样）
-  // 关键：AudioContext 可能处于 suspended（自动播放策略）→ 采集回调（onaudioprocess）不触发
-  // → 录不到任何数据且无报错。必须显式 resume（用户点击 🎤 是有效手势，通常可恢复）
-  try {
-    if (micCtx.state === "suspended") await micCtx.resume();
-    if (micCtx.state !== "running") {
-      window.kanban.notify("语音输入", "音频上下文未就绪（" + micCtx.state + "），请重试");
+    try {
+      // 禁用音频处理链 + 显式选择物理麦克风（默认设备可能无声——实测 MCHOSE 默认=全零）
+      const micId = await pickMicDevice();
+      const audioConstraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
+      if (micId) audioConstraints.deviceId = { exact: micId };
+      console.log("[panel] 使用麦克风:", micId ? micId.slice(0, 24) : "系统默认");
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    } catch (err) {
+      console.log("[panel] 麦克风不可用:", err?.name || err?.message || err);
+      window.kanban.notify("语音输入", "麦克风不可用: " + (err?.name || "请检查系统麦克风权限"));
       return;
     }
-  } catch (e) {
-    window.kanban.notify("语音输入", "音频启动失败: " + String(e?.message || e).slice(0, 60));
-    return;
-  }
+    micChunks = [];
+    micCtx = new AudioContext({ sampleRate: 16000 }); // 16k（ASR 期望采样率，浏览器自动重采样；个别平台会退回 48k，停止时兜底重采样）
+    // 关键：AudioContext 可能处于 suspended（自动播放策略）→ 采集回调（onaudioprocess）不触发
+    // → 录不到任何数据且无报错。必须显式 resume（用户点击 🎤 是有效手势，通常可恢复）
+    try {
+      if (micCtx.state === "suspended") await micCtx.resume();
+      if (micCtx.state !== "running") {
+        window.kanban.notify("语音输入", "音频上下文未就绪（" + micCtx.state + "），请重试");
+        return;
+      }
+    } catch (e) {
+      window.kanban.notify("语音输入", "音频启动失败: " + String(e?.message || e).slice(0, 60));
+      return;
+    }
   micSource = micCtx.createMediaStreamSource(micStream);
   // AudioWorklet 采集（ScriptProcessor 废弃，在 Electron 43 下 inputBuffer 全零——实测 0/106496 非零采样）
   try {
@@ -941,6 +949,17 @@ async function startRecording() {
     }
   }, 2000);
   micAutoStop = setTimeout(() => { if (micRecording) stopRecording(); }, 60000); // 60s 上限自动停
+  } finally {
+    // 启动结束：恢复按钮（成功 → ⏹ 录音态；失败 → 🎤）；清除互斥标志
+    micStarting = false;
+    micBtn.disabled = false;
+    if (!micRecording) {
+      micBtn.textContent = "🎤";
+      // 启动失败 → 释放麦克风流与音频上下文（防占用导致下次拉不起）
+      if (micStream) { try { micStream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ } micStream = null; }
+      try { micCtx?.close(); } catch { /* ignore */ }
+    }
+  }
 }
 
 $("chat-mic").addEventListener("click", () => {

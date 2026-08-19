@@ -1,20 +1,12 @@
-fix: widget 启动即崩（avoidPeakTime 无限递归）→ 自启动/重启拉不起后台服务
+fix: 面试录音回听防叠加 + 录音启动防抖互斥（麦克风不再被反复拉起）
 
-【用户反馈】开机自启动后后台进程没拉起；一键重启后也没拉起
-【现场】8899 无响应、无 widget 进程、主进程日志 20+ 条"widget.mjs 已后台拉起"
-【根因链】
-1. 改峰谷时段时，createPatrol 内部残留同名函数 avoidPeakTime(at)
-   （遮蔽模块级导出）→ 内部自调用 → 无限递归栈溢出
-2. widget 启动 → scheduleNext → 递归崩 → uncaughtException → 进程退出
-3. widget-server ensure 每 30s 探测失败 → 重拉 → 再崩 → 无限循环
-   （日志爆炸），自启动/一键重启全部失效
-【为什么测试没抓到】patrol.test 只测模块级导出的 avoidPeakTime（干净），
-createPatrol 内部遮蔽路径零覆盖——测试盲区
+【用户反馈】面试底下回听自己说的话：点击一次就拉起一个播放器，连点叠加同时响
 【修复】
-- 删除内部同名函数（scheduleNext 直接用模块级 avoidPeakTime(at, state.avoidPeak)）
-- createPatrol 新增 stop()（清排程 timer，测试清理用）
-- 补 createPatrol 集成回归：scheduleNext 不崩 + 排程时间避开峰时
-  （setupTempDb + 真实 createPatrol 路径）；avoidPeakTime 测试日期改未来防撞当前时间
-- 手动验证：修复后 widget 启动成功（8899 健康）
+1. 回听单例播放：模块级 ivReplayAudio/ivReplayBtn——再点当前播放中的按钮 = 停止
+   （▶️↔⏹ 状态切换）；点其他录音 = 先停旧的再播（防叠加）；播完/出错自动复位；
+   新面试开始（clearIvRecordings）强制停止旧回听
+2. 录音启动防抖（🎤 与 🎙️ 同修）：micStarting/ivMicStarting 互斥标志——
+   getUserMedia 异步期间快速连点不再重复拉起麦克风（此前会多路流叠加）；
+   启动期间按钮禁用 + ⏳；失败统一释放麦克风流与 AudioContext（防占用）
 
 全量 652/652。
