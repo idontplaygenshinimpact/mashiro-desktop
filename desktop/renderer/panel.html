@@ -666,8 +666,8 @@
               每日 token 上限
               <input id="set-patrol-budget" type="number" min="0" step="10000" style="width:110px;padding:5px 8px;" title="巡检讲解消耗的 token 每日上限（0=不限）" />
             </span>
-            <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#4a3a9d;cursor:pointer;" title="DS 高峰时段（北京 00:30-08:30）API 价格上浮 50%——高峰内的触发自动推迟到 08:30 后">
-              <input type="checkbox" id="set-patrol-avoid-peak" style="width:15px;height:15px;accent-color:#6d4fd8;"> 避开 DS 高峰
+            <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#4a3a9d;cursor:pointer;" title="DS 峰谷计价：峰时（北京 09:00-12:00 + 14:00-18:00）价格 2 倍，谷时半价——峰时内的巡检自动推迟到谷时（12:00 或 18:00 后），账单直接减半">
+              <input type="checkbox" id="set-patrol-avoid-peak" style="width:15px;height:15px;accent-color:#6d4fd8;"> 避开 DS 峰时
             </label>
             <span style="font-size:11px;color:#8a87a8;" id="set-patrol-status"></span>
           </div>
