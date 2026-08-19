@@ -1,14 +1,20 @@
-fix: 巡检避开 DS 峰时改为新峰谷口径（08-16 起峰谷计价：峰时 09:00-12:00 + 14:00-18:00）
+fix: widget 启动即崩（avoidPeakTime 无限递归）→ 自启动/重启拉不起后台服务
 
-【背景】DeepSeek 2026-08-16 起改峰谷计价（官方 + dsh-handbook 14-cost 实测）：
-峰时（北京时间）09:00-12:00 + 14:00-18:00 价格 2 倍，谷时半价。
-此前实现的"00:30-08:30"是旧政策——那个时段现在反而是谷时（便宜），必须改。
+【用户反馈】开机自启动后后台进程没拉起；一键重启后也没拉起
+【现场】8899 无响应、无 widget 进程、主进程日志 20+ 条"widget.mjs 已后台拉起"
+【根因链】
+1. 改峰谷时段时，createPatrol 内部残留同名函数 avoidPeakTime(at)
+   （遮蔽模块级导出）→ 内部自调用 → 无限递归栈溢出
+2. widget 启动 → scheduleNext → 递归崩 → uncaughtException → 进程退出
+3. widget-server ensure 每 30s 探测失败 → 重拉 → 再崩 → 无限循环
+   （日志爆炸），自启动/一键重启全部失效
+【为什么测试没抓到】patrol.test 只测模块级导出的 avoidPeakTime（干净），
+createPatrol 内部遮蔽路径零覆盖——测试盲区
+【修复】
+- 删除内部同名函数（scheduleNext 直接用模块级 avoidPeakTime(at, state.avoidPeak)）
+- createPatrol 新增 stop()（清排程 timer，测试清理用）
+- 补 createPatrol 集成回归：scheduleNext 不崩 + 排程时间避开峰时
+  （setupTempDb + 真实 createPatrol 路径）；avoidPeakTime 测试日期改未来防撞当前时间
+- 手动验证：修复后 widget 启动成功（8899 健康）
 
-【修改】
-- isDsPeakHour：新窗口（09-12 / 14-18，本地时间）
-- avoidPeakTime：上午峰时 → 推 12:00；下午峰时 → 推 18:00；窗口结束已过 → 次日 00:30 谷时
-- 设置中心文案/title 更新（避开 DS 峰时 · 09:00-12:00 / 14:00-18:00 · 谷时半价）
-
-【测试】重写 patrol.test.mjs（6 用例）：新窗口边界（08:59/09:00/11:59/12:00/13:00/
-14:00/17:59/18:00/20:00/凌晨）、上午推 12:00、下午推 18:00、谷时不动、开关关闭、
-推迟结果必落谷时。全量 651/651。
+全量 652/652。
