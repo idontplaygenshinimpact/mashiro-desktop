@@ -963,12 +963,12 @@ $("set-patrol-budget")?.addEventListener("change", async () => {
     $("set-patrol-status").textContent = "⚠️ " + (r?.error || "保存失败");
   }
 });
-// 避开 DS 高峰开关（高峰时段价格上浮 50%）
+// 避开 DS 峰时开关（峰谷计价：峰时 09:00-12:00 + 14:00-18:00 价格 2 倍，谷时半价）
 $("set-patrol-avoid-peak")?.addEventListener("change", async () => {
   const on = $("set-patrol-avoid-peak").checked;
   const r = await window.kanban.patrolConfig({ avoidPeak: on });
   if (r?.ok) {
-    $("set-patrol-status").textContent = on ? "✅ 已开启：高峰时段（北京 00:30-08:30）自动推迟巡检" : "已关闭（高峰时段也会巡检）";
+    $("set-patrol-status").textContent = on ? "✅ 已开启：峰时（09:00-12:00 / 14:00-18:00）自动推迟巡检，谷时半价" : "已关闭（峰时也会巡检，价格 2 倍）";
   } else {
     $("set-patrol-avoid-peak").checked = !on;
     $("set-patrol-status").textContent = "⚠️ " + (r?.error || "保存失败");
