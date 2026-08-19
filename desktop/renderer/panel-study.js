@@ -425,22 +425,51 @@ $("iv-end").addEventListener("click", async () => {
   }
 });
 
+// 回听播放单例：防连点叠加播放（此前每次点击 new Audio().play() → 点 N 次 N 个播放器同时响）
+let ivReplayAudio = null; // 当前播放中的 Audio（单例）
+let ivReplayBtn = null;   // 当前播放中的按钮
+
+function stopIvReplay() {
+  if (ivReplayAudio) {
+    try { ivReplayAudio.pause(); ivReplayAudio.src = ""; } catch { /* ignore */ }
+    ivReplayAudio = null;
+  }
+  if (ivReplayBtn) {
+    const b = ivReplayBtn;
+    ivReplayBtn = null;
+    try { b.textContent = `▶️ 回听 ${fmtIvTime(Number(b.dataset.secs) || 0)}`; } catch { /* ignore */ }
+    b.classList.remove("playing");
+  }
+}
+
 function addIvLog(text, opts = {}) {
   const log = $("iv-log");
   const div = document.createElement("div");
   div.textContent = text;
-  // 录音回听：本轮有录音 → 附 ▶️ 回听按钮
+  // 录音回听：本轮有录音 → 附 ▶️ 回听按钮（单例播放：再点同一按钮=停止，点其他=切播）
   if (opts.play && ivRecordings[ivRound]) {
     const rec = ivRecordings[ivRound];
     const btn = document.createElement("button");
     btn.className = "iv-replay";
     btn.textContent = `▶️ 回听 ${fmtIvTime(rec.secs)}`;
-    btn.title = "回听自己刚才的回答录音（说出来的才是真实表达）";
+    btn.dataset.secs = String(rec.secs);
+    btn.title = "回听自己刚才的回答录音（再点停止）";
     btn.addEventListener("click", () => {
       try {
+        if (ivReplayAudio && ivReplayBtn === btn) { stopIvReplay(); return; } // 再点当前播放中 → 停止
+        if (ivReplayAudio) stopIvReplay(); // 切播：先停旧的（防叠加）
         const a = new Audio(rec.url);
-        a.play().catch(() => window.kanban.notify("面试录音", "播放失败：浏览器不支持该录音格式"));
-      } catch { /* ignore */ }
+        ivReplayAudio = a;
+        ivReplayBtn = btn;
+        btn.textContent = "⏹ 停止回听";
+        btn.classList.add("playing");
+        a.onended = () => stopIvReplay();
+        a.onerror = () => { stopIvReplay(); window.kanban.notify("面试录音", "播放失败：浏览器不支持该录音格式"); };
+        a.play().catch(() => { stopIvReplay(); window.kanban.notify("面试录音", "播放失败，请重试"); });
+      } catch (err) {
+        stopIvReplay();
+        window.kanban.notify("面试录音", "播放异常: " + String(err?.message || err).slice(0, 60));
+      }
     });
     div.appendChild(btn);
   }
@@ -455,7 +484,7 @@ function fmtIvTime(s) {
 // ============ 面试录音（🎙️ 说答案 → ASR 转写回填 + 录音留存本场回听） ============
 // 一路双采：MediaRecorder → webm（回听）；ScriptProcessor → 16k PCM（转写，worker 内本地 ASR）
 let ivMicStream = null, ivMicRec = null, ivMicCtx = null, ivMicSource = null, ivMicProc = null;
-let ivMicChunks = [], ivMicPcm = [], ivMicRecording = false, ivMicAutoStop = null;
+let ivMicChunks = [], ivMicPcm = [], ivMicRecording = false, ivMicAutoStop = null, ivMicStarting = false;
 let ivMicTimer = null, ivMicSecs = 0, ivMicRecordSr = 16000;
 const ivRecordings = {}; // 轮次 -> { url, secs }
 
@@ -487,16 +516,20 @@ function pickIvRecMime() {
 }
 
 async function startIvMic() {
+  // 防抖互斥：启动中/录音中重复点击忽略（getUserMedia 异步期间快速连点会重复拉起麦克风）
+  if (ivMicRecording || ivMicStarting) return;
+  ivMicStarting = true;
   try {
-    // 禁用音频处理链 + 显式选择物理麦克风（默认设备可能无声——实测全零根因）
-    const micId = await pickMicDevice();
-    const audioConstraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
-    if (micId) audioConstraints.deviceId = { exact: micId };
-    ivMicStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-  } catch (err) {
-    window.kanban.notify("面试录音", "麦克风不可用: " + (err?.name || "请检查系统麦克风权限"));
-    return;
-  }
+    try {
+      // 禁用音频处理链 + 显式选择物理麦克风（默认设备可能无声——实测全零根因）
+      const micId = await pickMicDevice();
+      const audioConstraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
+      if (micId) audioConstraints.deviceId = { exact: micId };
+      ivMicStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    } catch (err) {
+      window.kanban.notify("面试录音", "麦克风不可用: " + (err?.name || "请检查系统麦克风权限"));
+      return;
+    }
   ivMicChunks = []; ivMicPcm = []; ivMicSecs = 0;
   const mime = pickIvRecMime();
   ivMicRec = mime ? new MediaRecorder(ivMicStream, { mimeType: mime }) : new MediaRecorder(ivMicStream);
@@ -531,6 +564,15 @@ async function startIvMic() {
     if (btn) btn.textContent = "⏹ " + fmtIvTime(ivMicSecs);
   }, 1000);
   ivMicAutoStop = setTimeout(() => { if (ivMicRecording) stopIvMic(); }, 120000); // 2 分钟上限
+  } finally {
+    // 启动结束：清互斥；失败时释放麦克风流与音频上下文（防占用）
+    ivMicStarting = false;
+    if (!ivMicRecording) {
+      if (ivMicStream) { try { ivMicStream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ } ivMicStream = null; }
+      try { ivMicCtx?.close(); } catch { /* ignore */ }
+      setIvMicState("idle");
+    }
+  }
 }
 
 async function stopIvMic() {
@@ -586,6 +628,7 @@ async function transcribeIvPcm() {
 $("iv-mic").addEventListener("click", () => { ivMicRecording ? stopIvMic() : startIvMic(); });
 
 function clearIvRecordings() {
+  stopIvReplay(); // 新面试开始 → 停止旧回听（防残留播放）
   for (const k of Object.keys(ivRecordings)) {
     try { URL.revokeObjectURL(ivRecordings[k].url); } catch { /* ignore */ }
     delete ivRecordings[k];
