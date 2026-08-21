@@ -1,12 +1,19 @@
-fix: 面试录音回听防叠加 + 录音启动防抖互斥（麦克风不再被反复拉起）
+feat: 手动导入面经——别处获取的面经/文档一键入库（爬取 Tab「📥 导入面经」）
 
-【用户反馈】面试底下回听自己说的话：点击一次就拉起一个播放器，连点叠加同时响
-【修复】
-1. 回听单例播放：模块级 ivReplayAudio/ivReplayBtn——再点当前播放中的按钮 = 停止
-   （▶️↔⏹ 状态切换）；点其他录音 = 先停旧的再播（防叠加）；播完/出错自动复位；
-   新面试开始（clearIvRecordings）强制停止旧回听
-2. 录音启动防抖（🎤 与 🎙️ 同修）：micStarting/ivMicStarting 互斥标志——
-   getUserMedia 异步期间快速连点不再重复拉起麦克风（此前会多路流叠加）；
-   启动期间按钮禁用 + ⏳；失败统一释放麦克风流与 AudioContext（防占用）
+【需求】微信/浏览器/别人发的面经怎么导入
+【实现】
+- lib/output-import.mjs：saveImportedPost 纯函数——落盘产出目录与爬取同构
+  （output/YYYY-MM-DD/NN_标题_来源.md：# 标题 + > 来源 + 正文），
+  自动被最新产出/面试素材（recentOutputsText）/巡检识别
+- POST /api/output/import（标题/内容/来源；标题内容非空、内容 ≥20 字校验）
+- 面板「爬取」Tab 新增「📥 导入面经」弹窗（复用毛玻璃 sd-modal）：
+  · 粘贴文本导入 + 选文件导入
+  · 支持格式：md / txt / html / htm / docx / pdf（主进程 import:parse-file
+    IPC 解析：文本直读、HTML 去标签提取正文、docx=mammoth、pdf=pdfjs——
+    全部复用现有依赖，零新增）
+  · 文件名自动当标题、解析后可编辑再保存
+- 重构：resume:parse-file 与 import:parse-file 共用 parseDocFile（pdf/docx）
 
-全量 652/652。
+【测试 +7】output-import 纯函数 4（落盘格式/序号/校验/非法字符安全化）
++ jsdom 导入流程 3（打开→提交→API 请求 / 空校验 / 关闭）
+全量 659（2 个 voice-pack 防抖为并行负载 flaky，单独跑全过）。

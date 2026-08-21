@@ -34,6 +34,72 @@ async function sendChat() {
   }
 }
 
+// ============ 手动导入面经（别处获取的面经/文档 → 产出目录） ============
+$("crawl-import")?.addEventListener("click", () => {
+  $("import-overlay").classList.remove("hidden");
+  $("import-title").focus();
+});
+$("import-close")?.addEventListener("click", () => $("import-overlay").classList.add("hidden"));
+$("import-overlay")?.addEventListener("click", (e) => {
+  if (e.target === $("import-overlay")) $("import-overlay").classList.add("hidden"); // 点遮罩关闭
+});
+// 选文件导入：支持 md/txt/html/docx/pdf（主进程解析 → 文本到内容区，文件名当标题）
+$("import-file")?.addEventListener("click", () => $("import-file-input")?.click());
+$("import-file-input")?.addEventListener("change", async (e) => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  const btn = $("import-file");
+  btn.disabled = true;
+  btn.textContent = "解析中…";
+  try {
+    const buf = await f.arrayBuffer();
+    const r = await window.kanban.parseImportFile(f.name, buf);
+    if (r?.ok && r.text) {
+      $("import-content").value = r.text.trim();
+      if (!$("import-title").value.trim()) {
+        $("import-title").value = f.name.replace(/\.(md|txt|html|htm|docx|pdf)$/i, "");
+      }
+      $("import-status").textContent = `✅ ${r.msg || "已解析"}（${r.text.length} 字符，可编辑后保存）`;
+    } else {
+      $("import-status").textContent = "⚠️ " + (r?.error || "解析失败");
+    }
+  } catch (err) {
+    $("import-status").textContent = "⚠️ 读取文件失败: " + String(err?.message || err).slice(0, 60);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📄 选文件导入";
+    e.target.value = ""; // 允许重复选同一文件
+  }
+});
+$("import-save")?.addEventListener("click", async () => {
+  const title = $("import-title").value.trim();
+  const content = $("import-content").value.trim();
+  if (!title || !content) { $("import-status").textContent = "⚠️ 标题和内容不能为空"; return; }
+  const btn = $("import-save");
+  btn.disabled = true;
+  btn.textContent = "保存中…";
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/output/import", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, content, source: $("import-source").value.trim() }),
+    }).then((x) => x.json());
+    if (r?.ok) {
+      $("import-status").textContent = `✅ 已保存：${r.file}（面试/巡检自动识别）`;
+      setTimeout(() => {
+        $("import-overlay").classList.add("hidden");
+        $("import-title").value = ""; $("import-source").value = ""; $("import-content").value = ""; $("import-status").textContent = "";
+      }, 1500);
+    } else {
+      $("import-status").textContent = "⚠️ " + (r?.error || "保存失败");
+    }
+  } catch (err) {
+    $("import-status").textContent = "⚠️ " + String(err?.message || err).slice(0, 80);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "💾 保存到产出";
+  }
+});
+
 // ============ 爬取产出 ============
 async function loadCrawlData() {
   const r = await window.kanban.getData();

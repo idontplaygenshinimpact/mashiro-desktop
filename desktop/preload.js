@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld("kanban", {
   musicVolume: (volume) => ipcRenderer.invoke("music:volume", { volume }),
   musicAutoplay: (on) => ipcRenderer.invoke("music:autoplay", { on }),
   parseResumeFile: (name, data) => ipcRenderer.invoke("resume:parse-file", { name, data }),
+  parseImportFile: (name, data) => ipcRenderer.invoke("import:parse-file", { name, data }),
   speechToText: (audio) => ipcRenderer.invoke("speech:transcribe", { audio }),
   setVoiceEnabled: (on) => { voiceEnabled = !!on; },
   isVoiceEnabled: () => voiceEnabled,
