@@ -265,6 +265,28 @@
       </div>
     </div>
 
+    <!-- 手动导入面经弹窗（别处获取的面经/文档 → 产出目录） -->
+    <div id="import-overlay" class="sd-overlay hidden">
+      <div class="sd-modal" style="width:min(680px,92vw);">
+        <div class="sd-modal-head">
+          <b>📥 导入面经</b>
+          <button id="import-close" class="sd-close" title="关闭">✕</button>
+        </div>
+        <div class="sd-modal-body" style="display:flex;flex-direction:column;gap:8px;max-height:calc(82vh - 60px);overflow-y:auto;">
+          <div style="font-size:11px;color:#8a87a8;">支持粘贴文本或选择 .md/.txt 文件。保存后进入产出目录（与爬取同构），自动被面试素材/巡检识别。</div>
+          <input id="import-title" type="text" placeholder="标题（必填，如：字节前端一面面经）" style="padding:6px 10px;font-size:12px;" />
+          <input id="import-source" type="text" placeholder="来源（可选，链接或公众号名）" style="padding:6px 10px;font-size:12px;" />
+          <textarea id="import-content" rows="10" placeholder="粘贴面经内容（必填）..." style="padding:6px 10px;font-size:12px;font-family:Consolas,monospace;line-height:1.6;"></textarea>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button id="import-file" class="secondary" style="padding:6px 12px;font-size:11px;">📄 选文件导入</button>
+            <input type="file" id="import-file-input" accept=".md,.txt,.html,.htm,.docx,.pdf" hidden />
+            <button id="import-save" class="primary" style="padding:6px 12px;font-size:11px;">💾 保存到产出</button>
+            <span style="font-size:11px;color:#8a87a8;" id="import-status"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 学习详情弹层（占面板大空间，避免小框滑动） -->
     <div id="study-detail-overlay" class="sd-overlay hidden">
       <div class="sd-modal">
@@ -309,6 +331,7 @@
     <section id="tab-crawl" class="tab-panel">
       <div class="crawl-toolbar">
         <button id="crawl-run" class="primary">🔍 开始爬取</button>
+        <button id="crawl-import" class="secondary">📥 导入面经</button>
         <button id="crawl-output" class="secondary">📁 打开输出目录</button>
       </div>
       <div class="crawl-progress" id="crawl-progress">暂无任务</div>

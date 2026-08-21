@@ -746,44 +746,80 @@ setTimeout(() => {
   } catch { /* 预热失败不影响使用（首次调用会正常重试） */ }
 }, 5000);
 
-// 简历文件解析（PDF/docx）：Node 端本地解析
+// 文档解析公共实现（简历解析 + 面经导入共用）：pdf/docx → 纯文本
 // 原因：浏览器端 bare specifier import + CDN worker 不可靠（无网络/被墙即失败）
+async function parseDocFile(ext, data) {
+  if (ext === ".pdf") {
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const { pathToFileURL } = await import("node:url");
+    // 中文 PDF 需要 cmap 数据（CID 字体映射）；Node 端要求 file:// URL（含尾斜杠）
+    const pdfjsRoot = path.join(import.meta.dirname, "..", "node_modules", "pdfjs-dist");
+    const pdf = await getDocument({
+      data: new Uint8Array(data),
+      cMapUrl: pathToFileURL(path.join(pdfjsRoot, "cmaps") + path.sep).toString(),
+      cMapPacked: true,
+      standardFontDataUrl: pathToFileURL(path.join(pdfjsRoot, "standard_fonts") + path.sep).toString(),
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      disableFontFace: true,
+    }).promise;
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      pages.push(content.items.map((it) => (it.str || "")).filter(Boolean).join(" "));
+    }
+    const text = pages.join("\n").trim();
+    if (!text) return { ok: false, error: "PDF 没有可提取文本，可能是图片型 PDF，请复制文本粘贴" };
+    return { ok: true, text, msg: `已解析 PDF（${pdf.numPages} 页）` };
+  }
+  if (ext === ".docx") {
+    const mammoth = (await import("mammoth")).default;
+    const result = await mammoth.extractRawText({ buffer: Buffer.from(data) });
+    const text = (result.value || "").trim();
+    if (!text) return { ok: false, error: "Word 文件中没有可分析文本" };
+    return { ok: true, text, msg: "已解析 Word 文档" };
+  }
+  return { ok: false, error: "unsupported" };
+}
+
+// 简历文件解析（PDF/docx）：Node 端本地解析
 ipcMain.handle("resume:parse-file", async (e, { name, data }) => {
   const n = String(name || "");
   const ext = n.slice(n.lastIndexOf(".")).toLowerCase();
   try {
-    if (ext === ".pdf") {
-      const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      const { pathToFileURL } = await import("node:url");
-      // 中文 PDF 需要 cmap 数据（CID 字体映射）；Node 端要求 file:// URL（含尾斜杠）
-      const pdfjsRoot = path.join(import.meta.dirname, "..", "node_modules", "pdfjs-dist");
-      const pdf = await getDocument({
-        data: new Uint8Array(data),
-        cMapUrl: pathToFileURL(path.join(pdfjsRoot, "cmaps") + path.sep).toString(),
-        cMapPacked: true,
-        standardFontDataUrl: pathToFileURL(path.join(pdfjsRoot, "standard_fonts") + path.sep).toString(),
-        useWorkerFetch: false,
-        isEvalSupported: false,
-        disableFontFace: true,
-      }).promise;
-      const pages = [];
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        pages.push(content.items.map((it) => (it.str || "")).filter(Boolean).join(" "));
-      }
-      const text = pages.join("\n").trim();
-      if (!text) return { ok: false, error: "PDF 没有可提取文本，可能是图片型 PDF，请复制文本粘贴" };
-      return { ok: true, text, msg: `已解析 PDF 简历（${pdf.numPages} 页）` };
+    return await parseDocFile(ext, data);
+  } catch (err) {
+    return { ok: false, error: `解析失败: ${String(err?.message || err).slice(0, 120)}` };
+  }
+});
+
+// 面经导入文档解析：md/txt/html/docx/pdf → 纯文本（面板「📥 导入面经」用）
+ipcMain.handle("import:parse-file", async (e, { name, data }) => {
+  const n = String(name || "");
+  const ext = n.slice(n.lastIndexOf(".")).toLowerCase();
+  try {
+    if (ext === ".md" || ext === ".txt") {
+      const text = Buffer.from(data).toString("utf8").trim();
+      if (!text) return { ok: false, error: "文件内容为空" };
+      return { ok: true, text, msg: `已读取 ${ext} 文档` };
     }
-    if (ext === ".docx") {
-      const mammoth = (await import("mammoth")).default;
-      const result = await mammoth.extractRawText({ buffer: Buffer.from(data) });
-      const text = (result.value || "").trim();
-      if (!text) return { ok: false, error: "Word 文件中没有可分析文本" };
-      return { ok: true, text, msg: "已解析 Word 简历" };
+    if (ext === ".html" || ext === ".htm") {
+      const html = Buffer.from(data).toString("utf8");
+      const text = html
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;/g, "'")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!text) return { ok: false, error: "HTML 中没有可提取的文本内容" };
+      return { ok: true, text, msg: "已提取 HTML 正文文本" };
     }
-    return { ok: false, error: "unsupported" };
+    const r = await parseDocFile(ext, data);
+    if (r.ok) return r;
+    return { ok: false, error: `暂不支持 ${ext || "未知"} 格式（支持 md/txt/html/docx/pdf）` };
   } catch (err) {
     return { ok: false, error: `解析失败: ${String(err?.message || err).slice(0, 120)}` };
   }
