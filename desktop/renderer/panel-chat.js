@@ -158,17 +158,23 @@ async function loadCrawlData() {
         <div class="stat-chip">📚 复习 <b>${r.review?.total || 0}</b></div>`;
     }
   } catch { /* ignore */ }
-  // 可观测性：LLM 调用统计
+  // 可观测性：LLM 调用统计 + 成本估算（DeepSeek 官方价目可调：输入 $0.14/M、输出 $0.28/M）
   try {
     const o = await window.kanban.getObservability();
     if (o?.ok && o.llm) {
       const l = o.llm;
+      // 成本估算（USD，按输入 $0.14/M + 输出 $0.28/M，缓存命中约 1/10 未单列——保守估算）
+      const estCostUsd = (Number(l.totalInputTokens || 0) / 1e6 * 0.14) + (Number(l.totalOutputTokens || 0) / 1e6 * 0.28);
+      const roleBreakdown = (l.byRole || []).map((r) =>
+        `<span class="tag" style="margin-right:4px">${esc(r.role)} ${r.calls}次/${((r.inputTokens + r.outputTokens) / 1000).toFixed(0)}k</span>`).join("");
       $("obs-row").innerHTML = `
         <div class="stat-chip">⚡ LLM 调用 <b>${l.total}</b></div>
         <div class="stat-chip">⏱️ 总耗时 <b>${(l.totalDurationMs / 1000).toFixed(1)}s</b></div>
         <div class="stat-chip">📥 输入 <b>${(l.totalInputTokens / 1000).toFixed(1)}k</b></div>
         <div class="stat-chip">📤 输出 <b>${(l.totalOutputTokens / 1000).toFixed(1)}k</b></div>
-        <div class="stat-chip ${l.fail > 0 ? "chip-fail" : ""}">❌ 失败 <b>${l.fail}</b></div>`;
+        <div class="stat-chip" title="按 DeepSeek 官方价目估算（输入 $0.14/M token，输出 $0.28/M token）">💰 约 <b>$${estCostUsd.toFixed(3)}</b></div>
+        <div class="stat-chip ${l.fail > 0 ? "chip-fail" : ""}">❌ 失败 <b>${l.fail}</b></div>
+        <div style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:4px;font-size:11px;color:#6c6c7c;">${roleBreakdown}</div>`;
       // 最近调用
       $("obs-list").innerHTML = (l.recent || []).map((r2) => `
         <div class="obs-item">
