@@ -1,0 +1,60 @@
+name: Release
+
+# 打 tag（v*）→ Windows 自动构建安装包（NSIS + portable）→ 发布 GitHub Release
+# 用法：git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps (含 electron 二进制——打包必需)
+        run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      - name: Quality gates (测试 / lint / 类型 / 渲染层一致性)
+        run: |
+          npm test
+          npm run lint
+          npm run typecheck
+          npm run check:renderer
+
+      - name: Build installer (NSIS + portable)
+        run: npm run dist
+        env:
+          # 无签名证书时跳过签名尝试（CI 无证书；正式发布可在仓库 Secrets 配 WIN_CSC_LINK/WIN_CSC_KEY_PASSWORD）
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          Get-ChildItem release -Recurse -File | Where-Object { $_.Extension -in ".exe",".yml",".blockmap" } | ForEach-Object { $_.FullName }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mashiro-installer
+          path: |
+            release/*.exe
+            release/*.yml
+            release/*.blockmap
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.exe
+            release/*.yml
+            release/*.blockmap
+          generate_release_notes: true
+          fail_on_unmatched_files: false

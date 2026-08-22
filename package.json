@@ -14,7 +14,7 @@
     "run": "node run.mjs",
     "smoke": "node scripts/smoke-test.mjs",
     "e2e": "node scripts/electron-e2e.mjs",
-    "test": "node --experimental-test-module-mocks --test \"tests/*.test.mjs\"",
+    "test": "node --experimental-test-module-mocks --test \"tests/*.test.mjs\" --test-skip-pattern \"integration\" && node --test tests/integration-widget.test.mjs",
     "test:unit": "node --experimental-test-module-mocks --test \"tests/*.test.mjs\" --test-skip-pattern \"integration\"",
     "test:integration": "node --test \"tests/integration-widget.test.mjs\"",
     "bench": "node scripts/benchmark.mjs",
