@@ -178,6 +178,11 @@ test("对话反哺链路：add_study_items 写清单 + create_review_card 建复
   const card = review.loadCards().cards.find((c) => c.topic === "动态规划");
   assert.ok(card, "复习卡已建");
   assert.ok(card.question.includes("动态规划"), "复习卡问题正确");
+  // 自动挂 todo 任务（对话建清单 → 面板可见学习进度）
+  const { getTodo } = await import("../lib/todo.mjs");
+  const todo = getTodo();
+  assert.ok(todo.items.some((i) => i.content.includes("动态规划")), "动态规划挂学习任务");
+  assert.ok(todo.items.some((i) => i.content.includes("二分查找")), "二分查找挂学习任务");
 });
 
 test("chatWithAgent web_search 工具：联网搜索后基于结果回答", async () => {
