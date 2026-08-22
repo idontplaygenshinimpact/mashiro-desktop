@@ -8,7 +8,8 @@ const modelArg = process.argv.find((a) => a.startsWith("--model-path="));
 const modelPath = modelArg ? modelArg.split("=").slice(1).join("=") : "";
 
 // SSE 流封装：订阅 chunk 事件 + 120s 安全超时（防止 invoke 永不 settle 时监听器泄漏）
-function streamPromise({ channel, invokeName, args, onChunk, jsonMode = false, extraDone = null }) {
+// onEvent 可选：透传非 delta 的自定义事件（如缓存命中 cache）
+function streamPromise({ channel, invokeName, args, onChunk, jsonMode = false, extraDone = null, onEvent = null }) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let timer = null;
@@ -27,6 +28,7 @@ function streamPromise({ channel, invokeName, args, onChunk, jsonMode = false, e
       else if (j.type === "error") finish(reject, new Error(j.error));
       else if (j.type === "delta") onChunk(j.delta);
       else if (j.type === "start") { /* 忽略 start */ }
+      else if (onEvent) onEvent(j); // 自定义事件（cache 命中提示等）
       else if (jsonMode && j.ok) { // JSON 模式（有文件）：直接完成
         onChunk(j.content);
         finish(resolve, { done: true, fromFile: true, topic: j.topic, content: j.content });
@@ -59,8 +61,8 @@ contextBridge.exposeInMainWorld("kanban", {
   studyDetailStream: (id, onChunk) => streamPromise({
     channel: "study-detail-chunk", invokeName: "widget:study-detail-stream", args: { id }, onChunk, jsonMode: true,
   }),
-  studyDetailAppend: (id, question, onChunk) => streamPromise({
-    channel: "study-append-chunk", invokeName: "widget:study-append-stream", args: { id, question }, onChunk,
+  studyDetailAppend: (id, question, onChunk, onEvent) => streamPromise({
+    channel: "study-append-chunk", invokeName: "widget:study-append-stream", args: { id, question }, onChunk, onEvent,
   }),
   studyConsolidate: (id, onChunk) => streamPromise({
     channel: "study-consolidate-chunk", invokeName: "widget:study-consolidate-stream", args: { id }, onChunk,
