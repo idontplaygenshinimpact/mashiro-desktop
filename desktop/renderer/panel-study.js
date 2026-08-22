@@ -1579,17 +1579,32 @@ async function askStudyDetail() {
     // 追加分隔 + 追问标题
     sdBody().innerHTML = renderMd(base) + `<div class="sd-ask-q">💬 追问：${esc(question)}</div><div class="sd-streaming">⏳ 补充中...</div>`;
     sdBody().scrollTop = sdBody().scrollHeight;
-    // 流式补充
+    // 流式补充（可命中语义缓存：历史追问过相似问题 → 直接返回已有回答，零 LLM 请求）
     let extra = "";
+    let cacheHit = false;
+    const onEvent = (j) => {
+      if (j?.type === "cache" && j.hit) {
+        cacheHit = true;
+        const tip = document.createElement("div");
+        tip.style.cssText = "color:#3a8d5a;font-size:12px;padding:6px 8px;background:rgba(58,141,90,.08);border-radius:6px;margin:4px 0;";
+        tip.textContent = `🔁 命中历史追问（相似度 ${Math.round((j.similarity || 0) * 100)}%）：与「${j.cachedQuestion || ""}」的回答相同，未消耗新生成`;
+        sdBody().appendChild(tip);
+      }
+    };
     await window.kanban.studyDetailAppend(sdCurrentId, question, (delta) => {
       extra += delta;
       sdBody().innerHTML = renderMd(base) + `<div class="sd-ask-q">💬 追问：${esc(question)}</div>` + renderMd(extra) + '<div class="sd-streaming">⏳ 补充中...</div>';
       sdBody().scrollTop = sdBody().scrollHeight;
-    });
+    }, onEvent);
     // 完成：更新缓存（下次打开能看到补充内容）
     const topic = studyDetailCache[sdCurrentId]?.topic || "讲解";
-    studyDetailCache[sdCurrentId] = { content: base + `\n\n## 💬 追问：${question}\n\n` + extra, topic };
-    sdBody().innerHTML = renderMd(studyDetailCache[sdCurrentId].content);
+    if (cacheHit) {
+      // 命中缓存：不重复追加追问章节（回答已在存档中），只保留提示
+      $("sd-modal-title").textContent = "📖 " + topic + "（命中历史回答）";
+    } else {
+      studyDetailCache[sdCurrentId] = { content: base + `\n\n## 💬 追问：${question}\n\n` + extra, topic };
+      sdBody().innerHTML = renderMd(studyDetailCache[sdCurrentId].content);
+    }
     buildToc(); // 锚点目录（含新追问章节）
     sdBody().scrollTop = sdBody().scrollHeight; // 停留在补充处
   } catch (e) {
