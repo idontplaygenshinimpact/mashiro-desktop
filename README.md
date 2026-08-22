@@ -219,7 +219,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 ├── docs/                           # 插件化架构方案 / 语音训练流程
 ├── scripts/                        # 语音合成评测 / 模型下载 / 按模块测试等工具
 ├── skills/                         # Skills 插件（即插即用）
-├── tests/                          # 680 用例（单元 + jsdom 面板交互 + 集成）
+├── tests/                          # 730+ 用例（单元 + jsdom 面板交互 + 集成，mock LLM 无 key 可跑）
 ├── .github/workflows/ci.yml        # CI：全量测试门禁
 ├── config.mjs                      # 配置（API Key/模型）；面板设置 > 环境变量
 ├── data/                           # 运行数据（不入库：db/token/日志）
