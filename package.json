@@ -97,6 +97,6 @@
     "esbuild": "^0.28.1",
     "eslint": "^10.8.0",
     "globals": "^17.9.0",
-    "typescript": "^7.0.2"
+    "typescript": "^5.9.3"
   }
 }
