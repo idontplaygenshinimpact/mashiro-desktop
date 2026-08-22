@@ -489,7 +489,7 @@ async function loadChallenges() {
     const cats = $("challenge-cats");
     const list = $("challenge-list");
     if (!j.challenges?.length) {
-      statusEl.textContent = "题库为空——运行 scripts/import-ai-career.mjs 导入（D:\\ai-career 的 91 道题）";
+      statusEl.textContent = "题库为空——运行 scripts/import-ai-career.mjs（手写题）或 scripts/import-codetop-top400.mjs（CodeTop 高频 400）导入";
       cats.innerHTML = "";
       list.innerHTML = "";
       return;
