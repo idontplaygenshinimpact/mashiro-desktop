@@ -77,6 +77,7 @@ export function registerInterviewRoutes(router, { laneSubmit = (fn) => fn() } = 
             source: "面试实录",
             verify_question: `请完整回答并讲清原理：${topic}`,
             level: "必会",
+            fromInterview: true, // 真实面试实录 → 面板"面试"徽标
           }]);
           if (r.added > 0) {
             added.push(topic);

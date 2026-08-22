@@ -7,6 +7,7 @@ const dbDir = setupTempDb("interview");
 mockLLM();
 const { startInterview, submitAnswer, endInterview } = await import("../lib/interview.mjs");
 const { memory } = await import("../lib/memory.mjs");
+const { review } = await import("../lib/review.mjs");
 
 beforeEach(async () => {
   await clearAllTables();
@@ -292,4 +293,21 @@ test("轮次推进到底 → 八股轮必然到达（ROUND_SEQ[3] 是八股穿�
   const r = await submitAnswer("回答");
   assert.equal(r.roundType, "八股穿插", "本轮类型应为八股（ROUND_SEQ[3]）");
   assert.equal(r.stage, "项目拷打·回马枪", "下一轮衔接正确");
+});
+
+test("endInterview：复习卡 answer 回填候选人回答 + 薄弱点 failCount 单记（Bug#2/#3 回归）", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses('{"scores":{"tech":30,"expr":30,"depth":30,"edge":30,"reflect":30},"comment":"差","finish":true,"next_kind":"stage","weak_topic":"事件循环"}');
+  const r = await submitAnswer("宏任务先执行，微任务后执行，这是我的回答");
+  assert.equal(r.ok, true);
+  // submit 时已建卡（answer 空）
+  let card = review.loadCards().cards.find((c) => c.topic === "事件循环");
+  assert.ok(card, "submit 时建卡");
+  assert.equal(card.answer, "", "submit 时 answer 为空（当时无回答）");
+  await endInterview();
+  card = review.loadCards().cards.find((c) => c.topic === "事件循环");
+  assert.ok(card && card.answer.includes("宏任务先执行"), "end 后 answer 回填候选人回答（Bug#3）");
+  const weak = memory.getTrustedWeakPoints(10).find((w) => w.topic === "事件循环");
+  assert.equal(weak?.failCount, 1, "failCount 单记（Bug#2 不双记）");
 });
