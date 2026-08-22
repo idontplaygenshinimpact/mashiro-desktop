@@ -23,6 +23,7 @@ import { classifyStudyFiles, pickDistinct } from "./lib/recommend.mjs";
 import { createRouter } from "./lib/routes/router.mjs";
 import { registerCoreRoutes } from "./lib/routes/core.mjs";
 import { loadEnabledPlugins, listPlugins, setPluginEnabled, readPluginSettings, writePluginSetting, installPlugin, getPluginMarket } from "./lib/plugin-admin.mjs";
+import { createBackup, listBackups, markRestore, hoursSinceLastBackup, backupConfig } from "./lib/backup.mjs";
 import { db } from "./lib/db.mjs";
 import { createPatrol } from "./lib/patrol.mjs";
 
@@ -69,6 +70,9 @@ registerCoreRoutes(router, {
     pluginWriteSetting: (id, key, value) => writePluginSetting(id, key, value),
     pluginInstall: (id) => installPlugin(id),
     pluginMarket: () => getPluginMarket(),
+    backupCreate: () => createBackup("manual"),
+    backupList: () => listBackups(),
+    backupRestore: (name) => markRestore(name),
   },
 });
 
@@ -531,6 +535,21 @@ const runSelfCheckAndSave = async () => {
 if (!DISABLE_BACKGROUND) {
   registerTimer(runSelfCheckAndSave, 60 * 1000);          // 启动 60s 后首检（面板承诺）
   registerInterval(runSelfCheckAndSave, 6 * 3600 * 1000); // 每 6 小时
+}
+// 数据自动备份（数据安全：距上次备份超过最小间隔自动备份；失败静默记日志不打扰）
+const runAutoBackup = async () => {
+  try {
+    const h = hoursSinceLastBackup();
+    if (h < backupConfig.minIntervalHours) return; // 间隔内不重复备份
+    console.log(`[backup] 距上次备份 ${h.toFixed(1)}h，自动备份中…`);
+    const r = await createBackup("auto");
+    if (r.ok) console.log(`[backup] 自动备份完成：${r.name}（${r.files.length} 项）`);
+    else logErr(`自动备份失败: ${r.error}`);
+  } catch (e) { logErr(`自动备份异常: ${String(e?.message || e).slice(0, 80)}`); }
+};
+if (!DISABLE_BACKGROUND) {
+  registerTimer(runAutoBackup, 20 * 1000);          // 启动 20 秒后检查（无备份或超期则备份）
+  registerInterval(runAutoBackup, 6 * 3600 * 1000); // 每 6 小时检查一次
 }
 // 邮箱自动检查（闭环：设置中心配置邮箱 → 定时拉未读 → LLM 识别邀约 → schedule_events → 提醒）。
 // 此前只有手动「立即检查」触发，配置后从不自动拉取，日程/提醒永远空
