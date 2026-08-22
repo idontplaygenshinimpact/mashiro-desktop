@@ -129,7 +129,10 @@ test("getTrustedWeakPoints 过滤 untrusted", () => {
 });
 
 test("_cleanTopic 长度/模式过滤", () => {
-  assert.equal(memory._cleanTopic("这是一个超过三十个字符的知识点名字用来测试过滤逻辑是否正常工作的例子"), null);
+  // 超长 topic：截断到 30 字（修复 LOW-9：原实现 31~40 字被丢弃）
+  const long = memory._cleanTopic("这是一个超过三十个字符的知识点名字用来测试过滤逻辑是否正常工作的例子");
+  assert.equal(long.length, 30, "超长 topic 截断到 30 字而非丢弃");
+  assert.ok(long.startsWith("这是一个超过三十个字符的知识点名字用来测试过滤逻辑是否正常工"), "保留前 30 字");
   assert.equal(memory._cleanTopic("整体表现"), null);
   assert.equal(memory._cleanTopic("暂无"), null);
   assert.equal(memory._cleanTopic("none"), null);

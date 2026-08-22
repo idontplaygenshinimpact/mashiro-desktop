@@ -373,10 +373,9 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
 
   router.route("/api/study-check", (req, res) => {
     // 勾选完成 → 返回真白情感反馈（庆祝/取消）
-    try {
-      const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
-      const done = u.searchParams.get("done") === "1";
-      const r = studyApi.checkItem(u.searchParams.get("id"), done);
+    const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
+    const done = u.searchParams.get("done") === "1";
+    studyApi.checkItem(u.searchParams.get("id"), done).then((r) => {
       let emotion = null;
       let emotionScene = null;
       try {
@@ -390,10 +389,10 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
       } catch { /* ignore */ }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ...r, emotion, emotionScene }));
-    } catch (e) {
+    }).catch((e) => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
-    }
+    });
   });
 
   router.route("/api/study-review", (req, res) => {
