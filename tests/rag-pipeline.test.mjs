@@ -151,3 +151,35 @@ test("incrementalRebuild：修改 md → 旧切片替换；删除 md → 旧切�
   const titles = db.prepare("SELECT title FROM knowledge_items").all().map((x) => x.title);
   assert.ok(!titles.some((t) => t.includes("事件循环面经")), "旧条目已清理");
 });
+
+test("rebuild 全量：跨文件相同 md 只保留一份切片", async () => {
+  writeMd("2026-08-05_discover/面经.md", MIANJING_MD);
+  writeMd("2026-08-05_discover/面经副本.md", MIANJING_MD); // 完全相同的第二个文件
+  await rag.rebuildKnowledgeBase();
+  const titles = db.prepare("SELECT title FROM knowledge_items").all().map((x) => x.title);
+  assert.equal(titles.filter((t) => t.includes("事件循环面经（字节一面） · 结论")).length, 1, "跨文件重复切片只留一份");
+});
+
+test("rebuild 后首轮增量零 churn（DB 资产 hash 已记录）", async () => {
+  writeMd("2026-08-05_discover/面经.md", MIANJING_MD);
+  await rag.rebuildKnowledgeBase();
+  const r = await rag.incrementalRebuild();
+  assert.equal(r.changed, false, "rebuild 已记录 DB hash → 增量无增删");
+  assert.equal(r.added, 0);
+  assert.equal(r.removed, 0);
+});
+
+test("incrementalRebuild：mtime 相同但内容变化（size 变化）也能检测", async () => {
+  writeMd("2026-08-05_discover/面经.md", MIANJING_MD);
+  await rag.rebuildKnowledgeBase();
+  const p = path.join(outDir, "2026-08-05_discover", "面经.md");
+  const before = db.prepare("SELECT COUNT(*) n FROM knowledge_items").get().n;
+  // 改内容（长度变化）但把 mtime 还原成重建时记录的值
+  writeFileSync(p, MIANJING_MD.replace("Promise.then 属于微任务", "Promise.then 属于微任务，且微任务队列在渲染前清空"), "utf8");
+  const rec = rag.getIndexedMtimes()[p];
+  const orig = typeof rec === "number" ? rec : rec.m;
+  utimesSync(p, new Date(orig), new Date(orig));
+  const r = await rag.incrementalRebuild();
+  assert.ok(r.added >= 1 && r.removed >= 1, "mtime 相同但内容变化仍被检测（size 兜底）");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM knowledge_items").get().n, before + r.added - r.removed, "总数守恒");
+});

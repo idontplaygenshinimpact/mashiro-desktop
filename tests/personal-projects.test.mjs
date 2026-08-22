@@ -81,3 +81,18 @@ test("项目档案进知识库：开启 RAG 后 searchKnowledge 可检索到（�
   assert.ok(hits.length > 0, "检索有结果");
   assert.ok(hits.some((h) => String(h.title).includes("低代码平台") || String(h.kind) === "project"), "命中项目档案");
 });
+
+test("全量重建（rebuildKnowledgeBase）后项目档案仍在（不丢失/可恢复）", async () => {
+  const { db } = await import("../lib/db.mjs");
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('rag_enabled', '1', ?)").run(Date.now());
+  const { rebuildKnowledgeBase, incrementalRebuild } = await import("../lib/rag.mjs");
+  const r = await rebuildKnowledgeBase();
+  assert.ok(r.items >= 1, "全量重建完成");
+  const rows = db.prepare("SELECT id, source, kind, title FROM knowledge_items WHERE source LIKE 'project:%'").all();
+  assert.ok(rows.length >= 1, "项目档案在全量重建后仍存在（rebuild 重灌 project:*）");
+  assert.equal(rows[0].kind, "project");
+  // 重建后再跑增量：项目档案也不被清掉
+  await incrementalRebuild();
+  const n = db.prepare("SELECT COUNT(*) n FROM knowledge_items WHERE source LIKE 'project:%'").get().n;
+  assert.ok(n >= 1, "增量后项目档案仍在（增量白名单含 project:*）");
+});
