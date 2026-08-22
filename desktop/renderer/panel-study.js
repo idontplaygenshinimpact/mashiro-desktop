@@ -234,7 +234,7 @@ function showInterviewUi(r) {
   showQuestion(r);
 }
 
-const IV_MAX_CHAIN = 3; // 同一追问点最大深挖次数（与服务端 MAX_DEPTH 一致）
+const IV_MAX_CHAIN = 6; // 同一追问点最大深挖次数（与服务端 MAX_DEPTH=6 一致，修复：原 3 vs 6 不一致）
 
 function showQuestion(r) {
   ivRound = Number(r.round) || 1;
