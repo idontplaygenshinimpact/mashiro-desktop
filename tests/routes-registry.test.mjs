@@ -47,6 +47,10 @@ test("全部域路由注册齐全（原版 55 条内联路径一个不少；业�
   const { registerCoreRoutes } = await import("../lib/routes/core.mjs");
   register({ router, db: null, getCorsOrigin: () => "*", laneSubmit: (fn) => fn() });
   registerCoreRoutes(router); // runtime 全用默认空实现，注册本身不依赖 widget 运行时
+  // 示例插件模板（阶段 2：新插件路由也应注册）
+  const { loadPlugin, discoverPlugins } = await import("../lib/plugin-loader.mjs");
+  const tmpl = discoverPlugins().find((p) => p.manifest.id === "plugin-template");
+  if (tmpl) await loadPlugin(tmpl, { router, db: null, getCorsOrigin: () => "*", laneSubmit: (fn) => fn(), log: () => {} });
 
   // 原版路径：任意方法命中即可（method 拆分后 GET/POST 分开注册也算命中）
   const missing = ORIGINAL_PATHS.filter((p) => {
@@ -62,6 +66,15 @@ test("全部域路由注册齐全（原版 55 条内联路径一个不少；业�
 
   // 注册总数 sanity（现 13 个域注册条数，防整个域文件被误删）
   assert.ok(router.size() >= 100, `注册路由总数异常少：${router.size()}`);
+
+  // 新增路由回归（阶段 2/多源聚合后新增的路径）
+  const NEW_PATHS = [
+    "/api/iv-focus-sources", // 面试优先考察多源聚合（手动选配）
+    "/api/plg/template/hello", // 示例插件模板路由
+    "/api/plg/template/data",
+  ];
+  const missingNew = NEW_PATHS.filter((p) => !router.resolve(p, "GET") && !router.resolve(p, "POST"));
+  assert.deepEqual(missingNew, [], `新增路由缺失：\n${missingNew.join("\n")}`);
 });
 
 test.after(() => cleanupTempDb(tmpDir));
