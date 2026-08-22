@@ -22,6 +22,7 @@ import * as rssApi from "./lib/rss.mjs";
 import * as focusApi from "./lib/focus.mjs";
 import * as mailApi from "./lib/mail.mjs";
 import { scanNewestFiles, loadOrCreateToken, checkBearerAuth, createCrawlMutex } from "./lib/widget-core.mjs";
+import { classifyStudyFiles, pickDistinct } from "./lib/recommend.mjs";
 import { createRouter } from "./lib/routes/router.mjs";
 import { registerReviewRoutes } from "./lib/routes/review.mjs";
 import { registerKbRoutes } from "./lib/routes/kb.mjs";
@@ -132,20 +133,15 @@ function parseTitle(file) {
 
 function getStudyPlan() {
   const files = scanNewestFiles(30, config.outputDir);
-  const bishi = files.filter((f) => f.dir.includes("discover") || /笔试|bishi/.test(f.file));
-  const mianshi = files.filter((f) => !bishi.includes(f));
+  // 分类：笔试（文件名含 笔试/bishi/机试）vs 面经（其余，含 discover 巡检产出）
+  const { bishi, mianshi } = classifyStudyFiles(files);
   const today = new Date().toISOString().slice(0, 10);
-  // 简单轮转：每天建议看 2 篇笔试 + 2 篇面经（从最新产出里轮）
+  // 简单轮转：每天建议看 2 篇笔试 + 2 篇面经（从最新产出里轮，按 path 去重防堆叠）
   const dayNum = parseInt(today.replace(/-/g, ""), 10);
-  const pick = (arr, n) => {
-    const out = [];
-    for (let i = 0; i < n && i < arr.length; i++) out.push(arr[(dayNum + i) % arr.length]);
-    return out;
-  };
   return {
     date: today,
-    bishi: pick(bishi, 2),
-    mianshi: pick(mianshi, 2),
+    bishi: pickDistinct(bishi, 2, dayNum),
+    mianshi: pickDistinct(mianshi, 2, dayNum),
   };
 }
 

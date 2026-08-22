@@ -185,7 +185,8 @@ export function resolveFfplay() {
 let activeVoicePlayer = null; // 当前语音播放进程（互斥）
 let activeIsLong = false;     // 当前播放是否为长句（/long/ 目录）
 let lastVoicePlayAt = 0;      // 上次播放时间戳（防抖）
-const VOICE_DEBOUNCE_MS = 1500;
+// 防抖窗口（连点/连触发抑制；测试用环境变量缩短窗口，避免并行负载影响时序 → flaky）
+const VOICE_DEBOUNCE_MS = Number(process.env.MIANSHI_TEST_DEBOUNCE_MS) || 1500;
 
 /** 长句判定：路径在 assets/voice/long/ 下 */
 function isLongFile(file) {
