@@ -2,7 +2,6 @@
 // 手写/算法题库（ai-career.mjs 沙箱判题）+ 牛客刷题进度（oj.mjs）
 import * as challengeApi from "#lib/ai-career.mjs";
 import * as ojApi from "#lib/oj.mjs";
-import * as reviewApi from "#lib/review.mjs";
 import { readBody } from "#lib/widget-core.mjs";
 
 export function registerPracticeRoutes(router) {
@@ -50,7 +49,8 @@ export function registerPracticeRoutes(router) {
           skeleton: detail.skeleton,
         });
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, success: r.success, error: r.error || null, output: r.output || "" }));
+        // 契约：tests/logs/durationMs 必须回传（前端逐条展示断言结果与 console 输出定位失败）
+        res.end(JSON.stringify({ ok: true, success: r.success, error: r.error || null, tests: r.tests || [], logs: r.logs || [], durationMs: r.durationMs || 0 }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
@@ -75,22 +75,13 @@ export function registerPracticeRoutes(router) {
 
   router.route("/api/challenges/mark-wrong", "POST", (req, res) => {
     // 答错 → 自动建复习卡（错题进 FSRS 间隔复习，闭环）
+    // 注意：markChallengeWrong 内部已建 `手写题·X` 卡——此处不再重复建卡（历史 bug：路由层又建一张 `X` 卡，
+    // 导致每答错一次两张同题卡；且 `X` 与薄弱点 key 不一致导致答对复习清不掉薄弱点）
     readBody(req, res, (body) => {
       try {
         const { id } = JSON.parse(body || "{}");
         if (!id) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "id required" })); return; }
         const r = challengeApi.markChallengeWrong(String(id));
-        const detail = challengeApi.getChallengeDetail(String(id));
-        if (detail) {
-          try {
-            reviewApi.review.addCard({
-              topic: detail.title,
-              question: `请现场手写并讲清思路：${detail.title}`,
-              answer: "",
-              source: "手写题库答错",
-            });
-          } catch { /* ignore */ }
-        }
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ok: r?.ok ?? true, message: "已记录答错，自动加入复习卡" }));
       } catch (e) {

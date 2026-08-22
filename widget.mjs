@@ -354,7 +354,9 @@ async function checkFocusEnd() {
   try {
     const s = focusApi.getFocusStatus();
     if (!s.active) return;
-    if (Date.now() >= s.endAt) {
+    // 只结算 focusing 阶段：resting（自动休息）阶段 endAt 为 null，
+    // 无 phase 判断会让休息被同一 tick 立即掐断并报 "null 分钟到了"
+    if (s.phase === "focusing" && Date.now() >= s.endAt) {
       focusApi.stopFocus(true);
       console.log("[widget] 专注结束自动结算");
       await sendNotification("⏰ 专注结束", `${s.mode} 分钟到了，休息一下`);
