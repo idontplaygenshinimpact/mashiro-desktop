@@ -6,6 +6,7 @@ import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
 import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
 import { findStudyFile, studyNotesDir, sanitizeFilename } from "#lib/study-files.mjs";
+import { queryFollowupCache } from "#lib/followup-cache.mjs";
 import { readBody } from "#lib/widget-core.mjs";
 import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
 
@@ -133,6 +134,20 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     const filePath = findStudyFile(item);
     if (filePath) {
       try { existing = readFileSync(filePath, "utf8"); } catch { /* ignore */ }
+    }
+    // 轻量语义缓存：同一知识点历史追问过语义相似的问题 → 直接返回已有回答（零 LLM 请求）
+    // （省成本：重复/近似追问不再花钱；命中时前端提示来源，避免用户误以为回答是新的）
+    const cached = queryFollowupCache(item.topic, question);
+    if (cached) {
+      res.writeHead(200, sseHeaders(req));
+      res.on("error", () => {});
+      const push = send(res);
+      push({ type: "start", topic: item.topic });
+      push({ type: "delta", delta: cached.answer });
+      push({ type: "cache", hit: true, similarity: cached.similarity, cachedQuestion: cached.question });
+      push({ type: "done", saved: false, fromCache: true });
+      res.end();
+      return;
     }
     res.writeHead(200, sseHeaders(req));
     res.on("error", () => {});
