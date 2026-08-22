@@ -51,12 +51,14 @@ test("getMcpTools 转成 OpenAI function calling 格式（命名空间 mcp__serv
   assert.ok(add.function.parameters.properties.a, "zod schema 转成 JSON schema");
 });
 
-test("callMcpTool 转发调用返回文本结果", async () => {
+test("callMcpTool 转发调用返回文本结果（按不可信数据包裹）", async () => {
   const r = await callMcpTool("mcp__test-server__add", { a: 2, b: 3 });
   assert.equal(r.ok, true);
-  assert.equal(r.result, "5");
+  // 外部 MCP server 输出按不可信数据包裹（提示注入防护：与 search_posts/web_search 同约定）
+  assert.ok(String(r.result).includes("5"), "结果文本透传");
+  assert.ok(String(r.result).includes("<untrusted_data>"), "结果被不可信包裹");
   const e = await callMcpTool("mcp__test-server__echo", { text: "你好" });
-  assert.equal(e.result, "你好");
+  assert.ok(String(e.result).includes("你好"), "echo 透传");
 });
 
 test("callMcpTool 非法/未连接 server → 可读错误", async () => {

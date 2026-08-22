@@ -994,7 +994,7 @@ async function submitQuizAnswers() {
   const btn = $("quiz-submit");
   btn.disabled = true;
   btn.textContent = "判分中…";
-  const answers = quizState.questions.map((q, qi) => ({ questionId: q.id, chosen: quizState.chosen[qi] ?? -1 }));
+  const answers = quizState.questions.map((q, qi) => ({ questionId: q.id, chosen: quizState.chosen[qi] ?? -1, map: q.map }));
   try {
     const r = await fetch("http://127.0.0.1:8899/api/review/quiz/submit", {
       method: "POST", headers: { "Content-Type": "application/json" },

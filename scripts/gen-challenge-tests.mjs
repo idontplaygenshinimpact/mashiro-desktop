@@ -66,7 +66,10 @@ function buildTestCode(fnName, examples) {
     const argText = args.map((a) => JSON.stringify(a)).join(", ");
     // JSON.stringify 两侧一致：fn 返回值序列化 === 期望值序列化（5 vs "5" 等类型不匹配会暴露）
     const expectText = JSON.stringify(out);
-    lines.push(`  __assert__(JSON.stringify(${fnName}(${argText})) === ${JSON.stringify(expectText)}, '示例${i + 1}: ${fnName}(${argText.slice(0, 60)}) = ${expectText.slice(0, 40)}');`);
+    // label 必须 JSON.stringify 包裹再嵌入单引号——示例文本含 ' 时直接拼接会产生语法错误
+    // （历史 bug：codetop-0557 反转字符串中的单词 III 的 test_code 因此损坏，正确代码也判失败）
+    const label = JSON.stringify(`示例${i + 1}: ${fnName}(${argText.slice(0, 60)}) = ${expectText.slice(0, 40)}`);
+    lines.push(`  __assert__(JSON.stringify(${fnName}(${argText})) === ${JSON.stringify(expectText)}, ${label});`);
   });
   lines.push("}");
   return lines.join("\n");

@@ -147,25 +147,26 @@ test("collectOjProblems 解析题目行入库：计数正确 + id=oj_分类_BM�
   assert.equal(bm1.url, "https://www.nowcoder.com/practice/pcKA7m8z7a");
 });
 
-test("collectOjProblems 幂等：重复抓取最终态一致（全量刷新）；批内同键触发 upsert 更新计数", async () => {
+test("collectOjProblems 幂等：重复抓取 upsert 更新不新增行（保留详情缓存）", async () => {
   fakeEvalResult = P3;
   const r1 = await oj.collectOjProblems();
   const r2 = await oj.collectOjProblems();
   assert.equal(r1.added, 3);
   assert.equal(r2.ok, true);
   assert.equal(r2.total, 3);
-  // 全量刷新是 DELETE 后重插：重复抓取仍计 added=总数，但最终表状态幂等（无残留/无重复）
-  assert.equal(r2.added, 3);
-  assert.equal(r2.updated, 0);
+  // 修复后语义：upsert（不 DELETE）——重复抓取计 updated=总数、added=0，
+  // 保留 fetchOjDetail 懒加载的详情缓存（历史 bug：DELETE 后详情列丢失导致整库重抓）
+  assert.equal(r2.added, 0, "无新行");
+  assert.equal(r2.updated, 3, "同键更新计数");
   assert.equal(db.prepare("SELECT COUNT(*) n FROM exam_problems").get().n, 3, "重复抓取不产生重复行");
-  // 数据变化后旧分类/旧行不残留（全量刷新语义）
+  // 数据变化后同键更新（旧分类行保留——缓存保护语义，题库固定 101 道残留可接受）
   fakeEvalResult = [{ category: "链表", bm_no: "BM1", title: "反转链表", difficulty: "简单", people: "41.0w", href: "https://www.nowcoder.com/practice/pcKA7m8z7a" }];
   const r3 = await oj.collectOjProblems();
   assert.equal(r3.total, 1);
   const rows = db.prepare("SELECT category, bm_no, people FROM exam_problems").all();
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].people, "41.0w", "同键数据更新");
-  assert.ok(!rows.some((x) => x.category === "二叉树"), "旧分类行被清");
+  assert.equal(rows.length, 3, "旧行保留（详情缓存不丢）");
+  const bm1 = rows.find((x) => x.bm_no === "BM1");
+  assert.equal(bm1.people, "41.0w", "同键数据更新");
   // 批内同键重复（evaluate 返回两个相同 category+bm_no 的行）→ ON CONFLICT 更新 + updated 计数
   fakeEvalResult = [
     { category: "链表", bm_no: "BM1", title: "A", difficulty: "简单", people: "1w", href: "u1" },
@@ -173,9 +174,9 @@ test("collectOjProblems 幂等：重复抓取最终态一致（全量刷新）�
   ];
   const r4 = await oj.collectOjProblems();
   assert.equal(r4.total, 2);
-  assert.equal(r4.added, 1);
-  assert.equal(r4.updated, 1, "批内同键第二次命中 existed → updated");
-  assert.equal(db.prepare("SELECT COUNT(*) n FROM exam_problems").get().n, 1, "同键冲突只留一行");
+  assert.equal(r4.added, 0, "两键均已存在（旧行保留语义）→ 无新增");
+  assert.equal(r4.updated, 2, "批内同键均命中 existed → updated");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM exam_problems WHERE category='链表' AND bm_no='BM1'").get().n, 1, "同键冲突只留一行");
   assert.equal(db.prepare("SELECT title FROM exam_problems WHERE id='oj_链表_BM1'").get().title, "B", "ON CONFLICT 更新为新值");
 });
 

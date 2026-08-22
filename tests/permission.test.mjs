@@ -209,7 +209,7 @@ test("agent：只读工具不触发审批（auto 分级）", async () => {
   assert.equal(permission.getPendingApprovals().length, 0, "只读工具无审批");
 });
 
-test("agent：会话级批准后同类工具不再询问", async () => {
+test("agent：会话级批准后同类工具不再询问（同一会话延续）", async () => {
   // 第一次：会话级允许
   setLlmResponses(
     'TOOLCALL:{"name":"record_interview_topics","arguments":"{\\"topics\\":[\\"A点\\"]}"}',
@@ -221,20 +221,49 @@ test("agent：会话级批准后同类工具不再询问", async () => {
     if (pendingOf("record_interview_topics")) break;
   }
   permission.resolveApproval("record_interview_topics", { allow: true, session: true });
-  await p1;
-  // 第二次：应直接放行（无 pending）
+  const r1 = await p1;
+  // 第二次：带 history 延续同一会话（面板真实链路）→ 不重置会话审批 → 直接放行
   setLlmResponses(
     'TOOLCALL:{"name":"record_interview_topics","arguments":"{\\"topics\\":[\\"B点\\"]}"}',
     "又记了一条。"
   );
-  const p2 = chatWithAgent("记一下 B点");
+  const p2 = chatWithAgent("记一下 B点", r1.history);
   let pended = false;
   for (let i = 0; i < 20; i++) {
     await new Promise((r) => setTimeout(r, 100));
     if (pendingOf("record_interview_topics")) { pended = true; break; }
   }
-  assert.equal(pended, false, "会话级批准后不再询问");
+  assert.equal(pended, false, "会话级批准后不再询问（会话内）");
   await p2;
   const { getPlan } = await import("../lib/study.mjs");
   assert.ok(getPlan().items.some((i) => i.topic === "B点"), "直接执行");
+});
+
+test("agent：新对话（无 history）重置会话级批准——不再静默执行敏感工具", async () => {
+  // 第一次会话：会话级允许
+  setLlmResponses(
+    'TOOLCALL:{"name":"record_interview_topics","arguments":"{\\"topics\\":[\\"A点\\"]}"}',
+    "记好了。"
+  );
+  const p1 = chatWithAgent("记一下 A点");
+  for (let i = 0; i < 50; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    if (pendingOf("record_interview_topics")) break;
+  }
+  permission.resolveApproval("record_interview_topics", { allow: true, session: true });
+  await p1;
+  // 新对话（不带 history）：会话边界重置 → 敏感工具再次需要审批
+  setLlmResponses(
+    'TOOLCALL:{"name":"record_interview_topics","arguments":"{\\"topics\\":[\\"C点\\"]}"}',
+    "又记了一条。"
+  );
+  const p2 = chatWithAgent("记一下 C点");
+  let pended = false;
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    if (pendingOf("record_interview_topics")) { pended = true; break; }
+  }
+  assert.equal(pended, true, "新对话重新要求审批（防常驻进程累积 auto-approve）");
+  permission.resolveApproval("record_interview_topics", { allow: false, session: false });
+  await p2;
 });

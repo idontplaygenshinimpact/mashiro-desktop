@@ -192,17 +192,19 @@ ${kbContext ? `本地知识库相关段落（仅作补充素材）：\n${kbConte
   });
 
   router.route("/api/review/submit", "POST", (req, res) => {
-    // 复习提交评级 0-3
+    // 复习提交评级 0-3（0=Again 忘了——注意 0 是合法值，不能用 || 兜底）
     readBody(req, res, (body) => {
       try {
         const { id, rating } = JSON.parse(body || "{}");
-        const r = reviewApi.review.reviewCard(id, parseInt(rating, 10) || 2);
+        const rt = parseInt(rating, 10);
+        const rn = Number.isInteger(rt) && rt >= 0 && rt <= 3 ? rt : 2; // 归一化一次：非法值才兜底 2
+        const r = reviewApi.review.reviewCard(id, rn);
         // 答错（Again/Hard）→ 真白安慰
         let emotion = null;
         try {
-          if ((parseInt(rating, 10) || 2) <= 1) {
+          if (rn <= 1) {
             emotion = pickEmotion(EMOTIONS.comfort);
-          } else if ((parseInt(rating, 10) || 2) >= 2 && r.card && r.card.fsrs && r.card.fsrs.stability >= 21) {
+          } else if (rn >= 2 && r.card && r.card.fsrs && r.card.fsrs.stability >= 21) {
             emotion = pickEmotion(EMOTIONS.celebrate);
           }
         } catch { /* ignore */ }
