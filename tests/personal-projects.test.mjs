@@ -46,3 +46,18 @@ test("未配置项目 → 返回空串不崩溃", async () => {
   assert.equal(ctx, "");
   savePersonalProjects([{ name: "低代码平台", dir: projDir }]); // 恢复
 });
+
+test("项目档案进知识库：开启 RAG 后 searchKnowledge 可检索到（对话/复习可引用）", async () => {
+  // 开启 RAG（searchKnowledge 受 rag_enabled 控制）
+  const { db } = await import("../lib/db.mjs");
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('rag_enabled', '1', ?)").run(Date.now());
+  // 索引项目档案 → knowledge_items/knowledge_fts（personal-projects 自建，不依赖 rag rebuild）
+  const { indexPersonalProjects } = await import("../lib/personal-projects.mjs");
+  const idx = indexPersonalProjects();
+  assert.ok(idx.ok >= 1, "项目档案已入库");
+  // 检索：对话/复习搜索源码标识应命中项目档案（kind=project；查询词用档案真实内容）
+  const { searchKnowledge } = await import("../lib/rag.mjs");
+  const hits = await searchKnowledge("DragEngine", 3);
+  assert.ok(hits.length > 0, "检索有结果");
+  assert.ok(hits.some((h) => String(h.title).includes("低代码平台") || String(h.kind) === "project"), "命中项目档案");
+});

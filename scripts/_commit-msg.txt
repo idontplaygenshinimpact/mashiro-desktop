@@ -1,20 +1,21 @@
-fix: 清单三问题——简历项目同步清理 / 项目讲解项目剖析化 / 简历项目固定分组
+feat: 项目源码档案全模块打通——新增 MCP 工具 get_project_archives（对话也能教）
 
-【1. 简历更新后过时项目残留】resume-plan 只加不删 → 网易云音乐移除后清单还在
-  修复：syncResumeProjectItems（study.mjs，可单测）——简历更新时删除
-  source=简历拷打、项目不在当前简历、未完成的条目；已完成条目保留学习记录。
-  resume-plan 端点同步调用，消息提示"清理 N 个已过时项目条目"
+【需求】本地项目路径放进设置中心后，解析结果让所有模块都能用——
+即使不会表述项目，系统也能基于源码教
 
-【2. 项目讲解逻辑奇怪】topic 是「项目·网易云音乐」→ 讲解 prompt 变成
-  "请完整讲解：项目·网易云音乐" → LLM 凭空编。
-  修复：explainPromptFor——项目条目剥离"项目·"前缀，讲解引导改为
-  「项目剖析」（技术选型 trade-off/架构/个人贡献/难点踩坑/量化指标 +
-  信息不足时给框架并说明需补充什么），叠加真实代码档案注入
+【现状盘点（已打通）】
+- 模拟面试：startInterview 注入档案（面试官基于真实代码拷打）✓
+- 清单讲解/追问：项目·条目注入档案（项目剖析引导）✓
+- 知识库检索：indexPersonalProjects 写 knowledge_items/knowledge_fts
+  （kind=project，FTS trigram），RAG 开启时 searchKnowledge 可命中 ✓（本轮测试验证）
 
-【3. 清单分类乱】addPlanItems 不支持 group → 简历项目条目全落"未分类"
-  修复：addPlanItems 支持 group 落库 grp；resume-plan 条目固定
-  group「简历项目」→ 清单按组集中显示
+【缺口补上】对话 agent 没有项目档案工具
+- mcp-server.mjs 新增 get_project_archives：返回全部配置项目的源码档案
+  （技术栈/目录结构/README/核心源码，单项目 4KB）
+- agent prompt 新增第 12 条：用户问「我的项目怎么介绍/怎么讲/怎么表达/
+  哪里不足/面试会怎么问」时**必须先调 get_project_archives 拿真实代码**再辅导——
+  把项目组织成面试语言（选型理由/架构/贡献/难点/量化指标）；
+  未配置时告知配置入口
 
-【测试 +3】addPlanItems group 落库 / 简历同步删过时保当前保已完成 /
-无过时 removed 0；修 checkItem 建卡异步竞态（等 30ms）
-全量 672/672。
+【测试 +1】项目档案 → RAG 检索全链路（开启 rag_enabled → 索引 →
+searchKnowledge 命中 kind=project 档案），全量 673/673。
