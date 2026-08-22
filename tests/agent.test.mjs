@@ -145,6 +145,41 @@ test("agent 工具注册：TOOLS 含 web_search（query 必填）", async () => 
   assert.ok(t.function.description.includes("实时"), "描述提示用于实时信息");
 });
 
+test("对话反哺链路：add_study_items 写清单 + create_review_card 建复习卡（闭环互通）", async () => {
+  const { TOOLS } = await import("../lib/agent.mjs");
+  assert.ok(TOOLS.some((x) => x.function?.name === "add_study_items"), "add_study_items 工具已注册");
+  assert.ok(TOOLS.some((x) => x.function?.name === "create_review_card"), "create_review_card 工具已注册");
+  // 端到端：用户请求"提升算法能力" → LLM 调两个工具（confirm 权限 → 需批准）→ 清单/复习卡真实写入
+  setLlmResponses(
+    'TOOLCALL:{"name":"add_study_items","arguments":"{\\"items\\":[{\\"topic\\":\\"动态规划\\",\\"why\\":\\"用户想提升算法能力\\",\\"verify_question\\":\\"讲讲动态规划核心思想\\",\\"group\\":\\"算法\\"},{\\"topic\\":\\"二分查找\\",\\"why\\":\\"用户想提升算法能力\\",\\"group\\":\\"算法\\"}]}"}',
+    'TOOLCALL:{"name":"create_review_card","arguments":"{\\"topic\\":\\"动态规划\\",\\"question\\":\\"请完整讲讲动态规划\\"}"}',
+    "已为你加入学习清单并建了复习卡。"
+  );
+  const chatPromise = chatWithAgent("我想提升算法能力，帮我出个学习清单，并挂上复习任务");
+  // 等待并批准两个 confirm 工具（add_study_items + create_review_card）
+  const { getPendingApprovals, resolveApproval } = await import("../lib/permission.mjs");
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    const pending = getPendingApprovals();
+    for (const p of [...pending]) {
+      if (p.toolName === "add_study_items" || p.toolName === "create_review_card") resolveApproval(p.toolName, { allow: true });
+    }
+    if (getPendingApprovals().length === 0 && i > 10) break;
+  }
+  const r = await chatPromise;
+  assert.ok(r.reply.length > 0);
+  const { getPlan } = await import("../lib/study.mjs");
+  const plan = getPlan();
+  assert.ok(plan.items.some((i) => i.topic === "动态规划"), "动态规划入清单");
+  assert.ok(plan.items.some((i) => i.topic === "二分查找"), "二分查找入清单");
+  assert.equal(plan.items.find((i) => i.topic === "动态规划").grp, "算法", "group 生效");
+  assert.equal(plan.items.find((i) => i.topic === "动态规划").fromInterview, false, "对话添加非面试来源");
+  const { review } = await import("../lib/review.mjs");
+  const card = review.loadCards().cards.find((c) => c.topic === "动态规划");
+  assert.ok(card, "复习卡已建");
+  assert.ok(card.question.includes("动态规划"), "复习卡问题正确");
+});
+
 test("chatWithAgent web_search 工具：联网搜索后基于结果回答", async () => {
   setMockPages([{
     links: [
