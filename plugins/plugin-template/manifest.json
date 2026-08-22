@@ -1,0 +1,22 @@
+{
+  "manifestVersion": 1,
+  "id": "plugin-template",
+  "name": "示例插件模板",
+  "version": "0.1.0",
+  "description": "插件协议的可运行文档：新插件照抄本目录即可。演示：API 路由注册、设置项注册、面板区块注入、定时任务声明。",
+  "author": "zhenbai-community",
+  "license": "MIT",
+  "api": { "min": "0.1.0" },
+  "server": "server.mjs",
+  "panel": {
+    "tabs": [
+      { "id": "template", "label": "🧩 模板", "section": "template" }
+    ],
+    "settings": [
+      { "key": "template_greeting", "type": "text", "group": "示例插件", "label": "问候语", "default": "你好，我是真白！", "description": "模板插件的问候语（在模板 Tab 展示）" },
+      { "key": "template_enabled", "type": "toggle", "group": "示例插件", "label": "启用问候", "default": true, "description": "关闭后模板 Tab 显示提示" }
+    ]
+  },
+  "schedules": [],
+  "enabled": true
+}

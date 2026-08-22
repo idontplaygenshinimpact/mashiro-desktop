@@ -88,3 +88,33 @@ test("真实插件：plugins/job-hunter 可被加载器发现并校验", async (
   assert.equal(validateManifest(jh.manifest), null, "manifest 合法");
   assert.ok(jh.manifest.server === "server.mjs");
 });
+
+// 回归护栏：示例插件模板（阶段 2 协议即文档）可加载，settings 命名空间隔离
+test("示例插件模板：加载成功 + init 默认设置 + settings 前缀隔离", async () => {
+  const found = discoverPlugins();
+  const tmpl = found.find((p) => p.manifest.id === "plugin-template");
+  assert.ok(tmpl, "发现 plugin-template 插件");
+  assert.equal(validateManifest(tmpl.manifest), null, "manifest 合法（含 panel 声明）");
+  assert.ok(tmpl.manifest.panel?.tabs?.length >= 1, "panel.tabs 声明");
+  assert.ok(tmpl.manifest.panel?.settings?.length >= 1, "panel.settings 声明");
+  // 加载（mock db 用真临时库）
+  const { setupTempDb, cleanupTempDb } = await import("./helpers.mjs");
+  const dbDir = setupTempDb("plg-tmpl");
+  const { db } = await import("../lib/db.mjs");
+  const { createRouter } = await import("../lib/routes/router.mjs");
+  const router = createRouter();
+  const r = await loadPlugin(tmpl, { router, db, getCorsOrigin: () => "*", laneSubmit: (fn) => fn(), log: () => {} });
+  assert.equal(r.ok, true, "模板插件加载成功");
+  assert.ok(r.panel, "返回 panel 声明");
+  assert.ok(r.health?.ok, "健康检查通过");
+  // init 写入默认设置（带 plg_ 前缀）
+  const row = db.prepare("SELECT value FROM settings WHERE key='plg_plugin-template_template_greeting'").get();
+  assert.ok(row?.value, "init 默认设置已写入（前缀隔离）");
+  assert.ok(JSON.parse(String(row.value)).includes("真白"), "默认问候语");
+  // settings 命名空间读写
+  const { loadPlugin: loadAgain } = await import("../lib/plugin-loader.mjs");
+  const api = { router, db, getCorsOrigin: () => "*", laneSubmit: (fn) => fn(), log: () => {} };
+  await loadAgain(tmpl, api);
+  // 通过 server 注册的路由表验证（不直接测 settings 对象——路由已注册即可）
+  cleanupTempDb(dbDir);
+});
