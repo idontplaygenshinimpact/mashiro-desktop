@@ -311,3 +311,40 @@ test("endInterview：复习卡 answer 回填候选人回答 + 薄弱点 failCoun
   const weak = memory.getTrustedWeakPoints(10).find((w) => w.topic === "事件循环");
   assert.equal(weak?.failCount, 1, "failCount 单记（Bug#2 不双记）");
 });
+
+test("startInterview 优先考察多源聚合：题库错题/复习错题/今日复习/清单未完成/薄弱点", async () => {
+  const { addPlanItems } = await import("../lib/study.mjs");
+  const { db } = await import("../lib/db.mjs");
+  // 1) 题库错题（wrong_count>0）
+  db.prepare("INSERT OR REPLACE INTO challenges (id, title, category, difficulty, frequency, time_limit, description, skeleton, test_code, source, created_at) VALUES ('algo1','算法错题A','algorithm',2,3,15,'d','s','t','test',?)").run(Date.now());
+  db.prepare("UPDATE challenges SET wrong_count=3 WHERE id='algo1'").run();
+  // 2) 复习卡错题（答错≥2 次）
+  review.addCard({ topic: "复习错题B", question: "q", answer: "", source: "测试" });
+  const cardB = review.loadCards().cards.find((c) => c.topic === "复习错题B");
+  review.reviewCard(cardB.id, 0);
+  review.reviewCard(cardB.id, 0);
+  // 3) 今日复习主题
+  review.addCard({ topic: "今日复习C", question: "q", answer: "", source: "测试" });
+  const cardC = review.loadCards().cards.find((c) => c.topic === "今日复习C");
+  review.reviewCard(cardC.id, 2);
+  // 4) 清单未完成
+  addPlanItems([{ topic: "清单未完成D", why: "w", source: "测试" }]);
+  // 5) 薄弱点（fail=2）
+  memory.addWeakPoint("薄弱点E", "模拟面试", "agent");
+  memory.addWeakPoint("薄弱点E", "模拟面试", "agent");
+
+  setLlmResponses(FIRST_Q);
+  const r = await startInterview({ position: "前端" });
+  const topics = r.weakQueue.map((w) => w.topic);
+  assert.ok(topics.includes("算法错题A"), "题库错题入队列");
+  assert.ok(topics.includes("复习错题B"), "复习错题入队列");
+  assert.ok(topics.includes("今日复习C"), "今日复习入队列");
+  assert.ok(topics.includes("清单未完成D"), "清单未完成入队列");
+  assert.ok(topics.includes("薄弱点E"), "薄弱点入队列");
+  assert.ok(r.weakQueue.some((w) => w.topic === "算法错题A" && w.reason), "带来源原因");
+  // 优先级：薄弱点(fail2) > 复习错题 > 题库错题 > 今日复习 > 清单
+  const idx = (t) => topics.indexOf(t);
+  assert.ok(idx("薄弱点E") < idx("复习错题B"), "薄弱点优先");
+  assert.ok(idx("复习错题B") < idx("算法错题A"), "复习错题优先于题库错题");
+  assert.ok(idx("算法错题A") < idx("清单未完成D"), "题库错题优先于清单");
+});

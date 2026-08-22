@@ -247,10 +247,10 @@ function showQuestion(r) {
     : "";
   $("iv-round-type").innerHTML = `${ivRoundType ? `📍 本轮：${esc(ivRoundType)}` : ""}${chainHtml}`;
   $("iv-question").textContent = r.question || "请继续";
-  // 薄弱点优先考察计划（开场轮展示一次）
+  // 优先考察计划（开场轮展示一次）：自动聚合薄弱点/题库错题/复习错题/今日复习/清单
   let weakPlan = "";
   if (ivRound === 1 && Array.isArray(r.weakQueue) && r.weakQueue.length) {
-    weakPlan = `<div class="iv-weak-plan">🎯 本次优先考察薄弱点：${r.weakQueue.map((w) => `${esc(w.topic)}×${w.failCount}`).join("、")}（技术轮逐个击破）</div>`;
+    weakPlan = `<div class="iv-weak-plan">🎯 本次优先考察（自动聚合你的练习数据）：${r.weakQueue.slice(0, 8).map((w) => `${esc(w.topic)}${w.reason ? `<span style="opacity:.75">（${esc(w.reason)}）</span>` : ""}`).join("、")}</div>`;
   }
   $("iv-meta").innerHTML = weakPlan + `
     <div>🎯 维度：${esc(r.dimension || "-")}</div>
