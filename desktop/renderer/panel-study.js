@@ -1029,6 +1029,12 @@ async function submitQuizAnswers() {
       summary.innerHTML = `❌ 对 ${r.correct}/${r.total}——记忆不牢，建议按「忘了/困难」评分，评分后自动换一批新题`;
       summary.className = "quiz-summary bad";
     }
+    // 存量题库解析过短（旧版"解析 ≤35 字"限制生成）→ 自动换一批（新解析 40-80 字讲清依据）
+    const explains = (r.results || []).map((x) => String(x.explain || "").length);
+    if (explains.length && Math.max(...explains) < 25) {
+      quizSwapBatch(card.id);
+      if (summary) summary.innerHTML = (summary.innerHTML || "") + `<div style="font-size:11px;color:#8a87a8;margin-top:4px;">📝 本题解析较简略（旧题库），已自动换一批更详细的</div>`;
+    }
     btn.classList.add("hidden");
   } catch (e) {
     const summary = $("quiz-summary");

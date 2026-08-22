@@ -42,6 +42,17 @@ test("generateQuiz：合法 JSON 批量入库（batch=1）", async () => {
   assert.ok(JSON.parse(rows[0].options).length >= 2);
 });
 
+test("generateQuiz：解析保留完整（不截断到 60 字——旧版截断导致解析语焉不详）", async () => {
+  const card = review.addCard({ topic: "事件循环", question: "q" });
+  const longExplain = "A 正确：微任务队列在当前宏任务执行完毕后、下一个宏任务开始前清空，这是事件循环的核心调度顺序；B 是常见误解，宏任务与微任务是嵌套调度而非并行。";
+  setLlmResponses(JSON.stringify({ questions: [{ question: "微任务何时执行？", options: ["宏任务后", "当前宏任务末尾", "下一轮", "立即"], answer: 1, explain: longExplain }] }));
+  const r = await generateQuiz(card);
+  assert.equal(r.ok, true);
+  const row = db.prepare("SELECT explain FROM quiz_questions WHERE card_id = ?").get(card.id);
+  assert.ok(String(row.explain).length > 60, "解析超过 60 字完整保留");
+  assert.ok(String(row.explain).includes("常见误解"), "解析内容完整（含误区说明）");
+});
+
 test("generateQuiz：烂题过滤（选项重复/答案越界/空解析 → 丢弃）", async () => {
   const card = review.addCard({ topic: "闭包", question: "q" });
   setLlmResponses(JSON.stringify({
