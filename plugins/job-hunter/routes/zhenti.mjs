@@ -2,7 +2,7 @@
 import { readBody } from "#lib/widget-core.mjs";
 import * as zhentiApi from "#lib/zhenti.mjs";
 
-export function registerZhentiRoutes(router, { getCorsOrigin = () => "*" } = {}) {
+export function registerZhentiRoutes(router) {
 router.route("/api/zhenti", (req, res) => {  // 牛客大厂官方真题清单（GET；?company= 过滤）
   try {
     const { searchParams } = new URL(req.url, "http://x");

@@ -7,7 +7,7 @@ import { mockFetchPage, setMockPages } from "./helpers.mjs";
 const calls = { pick: [], classify: [], detect: [] };
 mock.module(new URL("../lib/ai.mjs", import.meta.url).href, {
   namedExports: {
-    classifyPage: async ({ title, text }) => {
+    classifyPage: async ({ title, text: _text }) => {
       const r = { type: "other", direction: "other", company: "", position: "", worth: 50, reason: "mock" };
       if (title.includes("面经")) { r.type = "mianshi"; r.direction = "frontend"; }
       if (title.includes("招聘")) { r.type = "zhaopin"; r.direction = "frontend"; }
@@ -16,7 +16,7 @@ mock.module(new URL("../lib/ai.mjs", import.meta.url).href, {
       return r;
     },
     detectQuestions: async () => ({ hasQuestion: true, questions: [{ question: "题目1" }], reason: "mock" }),
-    pickPosts: async (posts, want, focus) => { calls.pick.push({ n: posts.length, want }); return posts.slice(0, want).map((p) => ({ ...p, reason: "mock" })); },
+    pickPosts: async (posts, want, _focus) => { calls.pick.push({ n: posts.length, want }); return posts.slice(0, want).map((p) => ({ ...p, reason: "mock" })); },
     solveQuestion: async () => "# 讲解",
     summarizeQiuzhao: async () => "# 情报",
   },

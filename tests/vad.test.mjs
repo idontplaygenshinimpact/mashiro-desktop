@@ -1,7 +1,6 @@
 // tests/vad.test.mjs —— 语音 VAD 裁剪单测
 // vad.js 是浏览器普通 script（挂 window），这里沙箱执行拿纯函数测
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
 

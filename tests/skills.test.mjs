@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  loadSkills, getSkillTools, getSkillPermission, getSkillNames, getSkillHints,
+  loadSkills, getSkillTools, getSkillPermission, getSkillNames,
   buildSkillHintsPrompt, callSkillTool, parseSkillMd, reloadSkills, inspectSkills,
 } from "../lib/skills.mjs";
 

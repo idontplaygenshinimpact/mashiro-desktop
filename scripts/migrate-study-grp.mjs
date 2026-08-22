@@ -4,7 +4,7 @@ import { db } from "../lib/db.mjs";
 const rows = db.prepare("SELECT id, topic, grp, why FROM study_plan_items").all();
 let changed = 0;
 for (const r of rows) {
-  const g = normalizeGroup(r.topic, "", r.why);
+  const g = normalizeGroup(String(r.topic || ""), "", String(r.why || ""));
   if (g !== r.grp) {
     db.prepare("UPDATE study_plan_items SET grp=? WHERE id=?").run(g, r.id);
     changed++;

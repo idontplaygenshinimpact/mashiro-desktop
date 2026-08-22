@@ -13,7 +13,6 @@ mockLLM();
 mockFetchPage();
 
 // 配置临时 MCP server（独立配置文件，不碰真实 data/mcp-servers.json——避免并发测试竞态）
-import { readFileSync as readFs } from "node:fs";
 const cfgDir = mkdtempSync(path.join(tmpdir(), "mcp-cfg-"));
 const cfgFile = path.join(cfgDir, "mcp-servers.json");
 process.env.MIANSHI_MCP_CONFIG = cfgFile;
@@ -134,7 +133,6 @@ test("MCP server 配置 permission:auto 时免审批", async () => {
 });
 
 test("read_tool_result 白名单：拒绝目录外路径", async () => {
-  const { chatWithAgent } = await import("../lib/agent.mjs");
   // 直接验证工具白名单逻辑（通过 chatWithAgent 调 read_tool_result 会被 LLM mock 挡，改测路径校验函数）
   // 用 executeTool 不可达，改通过读函数验证：临时写一个工具结果并尝试读目录外
   const { toolReadToolResult } = await import("../lib/agent.mjs");

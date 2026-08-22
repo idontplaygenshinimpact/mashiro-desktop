@@ -166,7 +166,7 @@ test("getDueCards 按遗忘概率排序：最可能忘的先复习，新卡最�
   // C：新卡（state 0，memPct=null）→ 恒排最后
   const a = review.addCard({ topic: "A卡", question: "q" });
   const b = review.addCard({ topic: "B卡", question: "q" });
-  const c = review.addCard({ topic: "C新卡", question: "q" });
+  review.addCard({ topic: "C新卡", question: "q" });
   db.prepare("UPDATE review_cards SET fsrs=? WHERE id=?").run(mkFsrs({ stability: 10, elapsedDays: 5 }), a.id);
   db.prepare("UPDATE review_cards SET fsrs=? WHERE id=?").run(mkFsrs({ stability: 5, elapsedDays: 4 }), b.id);
   // 全部回拨创建时间越过 1 天首复习缓冲

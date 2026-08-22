@@ -4,7 +4,7 @@
 // 背景：主列表渲染后未绑定事件（点学习没反应）——本文件是完整护栏。
 import test from "node:test";
 import assert from "node:assert/strict";
-import { withPanel, tick, SAMPLE_PLAN } from "./panel-helper.mjs";
+import { withPanel, tick } from "./panel-helper.mjs";
 
 test("清单渲染：状态流分组 + 学习按钮 + 折叠区", async () => {
   await withPanel(async ({ window }) => {
@@ -116,7 +116,7 @@ test("归并模式：进入批量 → 勾选 2 项 → 确认归并（≥2 才�
 });
 
 test("归并不足 2 项 → 不触发（提示）", async () => {
-  await withPanel(async ({ window, kanban }) => {
+  await withPanel(async ({ window, kanban: _kanban }) => {
     await tick(60);
     const clusterBtn = window.document.getElementById("study-cluster-btn");
     clusterBtn.click();

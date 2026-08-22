@@ -1,8 +1,7 @@
 ﻿// 真白语音：全部日语预设台词（GPT-SoVITS 真白声线 wav），零实时生成
 // 显示中文 → 按关键词匹配场景 → 播放对应日语预设；未命中 → ack 通用应答
 // 不再使用 edge-tts / VoiceVox 实时合成（内容对不上且开销大）
-import { spawn } from "node:child_process";
-import { resolveFfplay, matchVoicePack, playVoicePack, pickSceneFile } from "./voice-pack.mjs";
+import { matchVoicePack, playVoicePack, pickSceneFile } from "./voice-pack.mjs";
 
 // ---------- 入口 ----------
 export async function speak(text) {
@@ -27,22 +26,3 @@ export async function speak(text) {
 }
 
 // ---------- 播放（ffplay 直接播，最可靠；mp3 同样走 ffplay；路径可配置/自动探测） ----------
-function playWav(wav) {
-  const ff = resolveFfplay();
-  if (!ff) { console.log("[tts] ffplay 不可用，跳过播放"); return; }
-  try {
-    const child = spawn(ff, ["-autoexit", "-nodisp", "-loglevel", "quiet", wav], { windowsHide: true, detached: true, stdio: "ignore" });
-    child.on("error", (err) => console.log(`[tts] ffplay 播放失败: ${err.message}`));
-    child.unref();
-  } catch { /* ignore */ }
-}
-
-function playMp3(mp3) {
-  const ff = resolveFfplay();
-  if (!ff) { console.log("[tts] ffplay 不可用，跳过播放"); return; }
-  try {
-    const child = spawn(ff, ["-autoexit", "-nodisp", "-loglevel", "quiet", mp3], { windowsHide: true, detached: true, stdio: "ignore" });
-    child.on("error", (err) => console.log(`[tts] ffplay 播放失败: ${err.message}`));
-    child.unref();
-  } catch { /* ignore */ }
-}

@@ -100,8 +100,7 @@ let dragging = false, moved = false, offset = { x: 0, y: 0 }, downAt = null, las
 // 注意：pointerdown/pointermove/pointerup 监听器在下方「长按」区块统一注册（含长按/空闲逻辑），此处不再重复注册
 
 // 双击角色 → 打开大面板（单击=人设反应，双击=面板；双击会取消挂起的单击反应）
-let lastClickTs = 0;
-canvas.addEventListener("dblclick", (e) => {
+canvas.addEventListener("dblclick", (_e) => {
   clearTimeout(clickTimer); // 取消单击的延迟语音/气泡
   window.kanban.togglePanel();
 });
@@ -235,8 +234,6 @@ canvas.addEventListener("pointerdown", (e) => {
 
 canvas.addEventListener("pointermove", (e) => {
   if (!dragging) return;
-  const dx = e.screenX - offset.x - window.screenX;
-  const dy = e.screenY - offset.y - window.screenY;
   const dist = Math.hypot(e.screenX - downX, e.screenY - downY);
   if (dist > MOVE_THRESHOLD) moved = true; // 30px 以上才视为拖动
   if (moved) {
@@ -263,7 +260,7 @@ canvas.addEventListener("pointerup", (e) => {
 let lastActivityTs = Date.now();
 function touchActivity() { lastActivityTs = Date.now(); }
 const IDLE_MIN = 5; // 分钟
-let idleCheckTimer = setInterval(() => {
+let _idleCheckTimer = setInterval(() => {
   try {
     if (Date.now() - lastActivityTs < IDLE_MIN * 60 * 1000) return;
     if (document.hidden) return;

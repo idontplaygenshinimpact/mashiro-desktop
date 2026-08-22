@@ -1,5 +1,5 @@
 // pipeline 管线测试：顺序执行/中间产物/错误处理（fatal vs 非 fatal）+ discover 阶段函数
-import { test, mock } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runPipeline, pipelineSummary } from "../lib/pipeline.mjs";
 

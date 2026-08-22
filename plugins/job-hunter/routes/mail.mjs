@@ -2,7 +2,7 @@
 import { readBody } from "#lib/widget-core.mjs";
 import * as mailApi from "#lib/mail.mjs";
 
-export function registerMailRoutes(router, { getCorsOrigin = () => "*" } = {}) {
+export function registerMailRoutes(router) {
 router.route("/api/mail/config", (req, res) => {  // 邮箱配置：GET 读取（脱敏，不返回授权码），POST 保存（持久化到 settings mail_config）
   if (req.method === "GET") {
     try {

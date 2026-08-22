@@ -43,7 +43,6 @@ async function renderProfileDrive(profile) {
     return;
   }
   const skills = profile.skills || [];
-  const dirs = profile.directions || [];
   const skillChips = skills.slice(0, 10).map((s) =>
     `<span class="job-chip" style="padding:2px 9px;font-size:10px;background:rgba(138,90,220,.1);border-color:rgba(138,90,220,.25);color:#5d48b8;">${esc(s)}</span>`).join("");
   try {

@@ -112,7 +112,7 @@ test("addPaperToPlan 整套真题 → 学习清单（练习入口条目）", asy
   assert.equal(plan[0].level, "必会");
   assert.ok(String(plan[0].verify_question).includes("nowcoder.com"), "验证题含练习链接");
   // 重复加入去重（study addPlanItems 按 topic 去重）
-  const r2 = await zhenti.addPaperToPlan("62105698");
+  await zhenti.addPaperToPlan("62105698");
   assert.equal(db.prepare("SELECT COUNT(*) n FROM study_plan_items WHERE source='牛客真题'").get().n, 1, "重复不新增");
   // 不存在的试卷
   const r3 = await zhenti.addPaperToPlan("99999999");

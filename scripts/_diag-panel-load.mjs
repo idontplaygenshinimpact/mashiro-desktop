@@ -12,7 +12,7 @@ const SCRIPTS = ["panel-core.js", "panel-study.js", "panel-chat.js", "panel-jobs
 const dom = new JSDOM(html, { runScripts: "outside-only", url: "http://127.0.0.1:8899/panel.html", pretendToBeVisual: true });
 const { window } = dom;
 window.kanban = { notify() {}, speechToText: async () => ({ ok: false }) };
-window.fetch = async (url, opts = {}) => {
+window.fetch = async (url, _opts = {}) => {
   const u = String(url);
   if (u.includes("study/detail") || u.includes("stream")) {
     // SSE 流：mock 一个可读 body

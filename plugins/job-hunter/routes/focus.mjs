@@ -2,7 +2,7 @@
 import { readBody } from "#lib/widget-core.mjs";
 import * as focusApi from "#lib/focus.mjs";
 
-export function registerFocusRoutes(router, { getCorsOrigin = () => "*" } = {}) {
+export function registerFocusRoutes(router) {
 
 router.route("/api/focus/start", "POST", (req, res) => {  // 开始专注（番茄钟 25/45 分钟）
   readBody(req, res, (body) => {

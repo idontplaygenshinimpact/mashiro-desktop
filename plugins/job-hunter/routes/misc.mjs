@@ -6,8 +6,6 @@ import { loopSuggest, suggestFocusGoal } from "#lib/loop.mjs";
 import { getPendingAsks, answerAsk } from "#lib/ask-user.mjs";
 import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
-import * as challengeApi from "#lib/ai-career.mjs";
-import { getFocusStats } from "#lib/focus.mjs";
 import * as jobsApi from "#lib/jobs.mjs";
 import { db } from "#lib/db.mjs";
 import { buildGreeting as buildGreetingText, polishGreeting as polishGreetingText } from "#lib/greeting.mjs";
@@ -388,7 +386,6 @@ export function registerMiscRoutes(router) {
   // ---------- 求职驾驶舱（本周总览 + 7 天活动 + 累计进度 + 规则周报） ----------
   router.route("/api/dashboard", (req, res) => {
     try {
-      const WEEK_MS = 7 * 24 * 3600 * 1000;
       const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
       const weekStart = dayStart.getTime() - 6 * 24 * 3600 * 1000;
       const num = (v) => Number(v) || 0;

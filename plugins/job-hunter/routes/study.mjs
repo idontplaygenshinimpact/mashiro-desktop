@@ -163,7 +163,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
           writeFileSync(savePath, header + full.slice(0, 12000) + appendBlock, "utf8");
         }
         push({ type: "done", saved: true, filePath: savePath });
-      } catch (e) {
+      } catch {
         push({ type: "done", saved: false, filePath: null });
       }
       res.end();
@@ -208,7 +208,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档（已整理） | 整理于 ${new Date().toLocaleString("zh-CN")}\n\n`;
         writeFileSync(savePath, header + full.slice(0, 50000), "utf8");
         savedPath = savePath;
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
       push({ type: "done", saved: !!savedPath, filePath: savedPath });
       res.end();
     }).catch((e) => {
@@ -267,7 +267,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
             const header = `# ${clusterName}\n\n> 来源：多条目归并（${topics.map((t) => t.topic).join("、")}） | 归并于 ${new Date().toLocaleString("zh-CN")}\n\n`;
             writeFileSync(savePath2, header + full.replace(/【cluster】\s*/, "").slice(0, 50000), "utf8");
             savedPath = savePath2;
-          } catch (e) { /* ignore */ }
+          } catch { /* ignore */ }
           push({ type: "done", saved: !!savedPath, filePath: savedPath, clusterName });
           res.end();
         }).catch((e) => {
@@ -322,7 +322,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
         writeFileSync(savePath, header + content, "utf8");
         savedPath = savePath;
-      } catch (e) { /* 存档失败不影响返回 */ }
+      } catch { /* 存档失败不影响返回 */ }
       // 讲解生成完成 → 自动建复习卡
       try {
         reviewApi.review.addCard({

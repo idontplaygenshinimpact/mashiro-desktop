@@ -68,7 +68,6 @@ for (const f of TARGETS) {
   // 入口文件（顶层/desktop main）不算孤岛
   const isEntry = f === "widget.mjs" || f === "discover.mjs" || f === "run.mjs" || f === "mcp-server.mjs" || f === "desktop/main.mjs";
   // 排除 lib 内部相对引用后，检查是否被业务模块使用
-  const businessUsers = users.filter((u) => !u.startsWith("lib/") || u.startsWith("lib/platforms/"));
   const isLeaf = deps.length === 0; // 不依赖任何其他模块
   const isOrphan = !isEntry && users.length === 0; // 无任何引用
   if (isOrphan) console.log(`⚠️ 无引用（可能孤岛）: ${f}`);

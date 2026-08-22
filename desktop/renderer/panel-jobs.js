@@ -1,4 +1,5 @@
 // 真白面板 · 求职/设置域（纵向拆分）
+/* exported loadLoop, loadLoopBar, loadDocsProject, startJobsSchedTimer, stopJobsSchedTimer, loadSettings */
 // ============ 校招（简历驱动匹配 + 投递管理） ============
 const STATUS_LABEL = { new: "🆕 未处理", ready: "📮 已投递", ready_bishi: "✍️ 待笔试", done: "✅ 已拿offer/结束" };
 const DIRECTION_LABEL = { frontend: "前端", agent: "AI Agent", fullstack: "全栈", backend: "后端", other: "其他" };
@@ -565,7 +566,6 @@ async function loadDashboard() {
     // 7 天活动热力（四类活动堆叠条）
     const series = j.weekSeries || [];
     if (series.length) {
-      const maxFocus = Math.max(...series.map((d) => d.focus), 1);
       const maxAct = Math.max(...series.map((d) => d.study + d.review + d.challenge), 1);
       const todayStr = new Date().toISOString().slice(0, 10);
       const dayLabel = (d) => {
@@ -580,7 +580,6 @@ async function loadDashboard() {
             const h1 = Math.max(2, Math.round((d.study / maxAct) * 26));
             const h2 = Math.max(2, Math.round((d.review / maxAct) * 26));
             const h3 = Math.max(2, Math.round((d.challenge / maxAct) * 26));
-            const hf = Math.max(2, Math.round((d.focus / maxFocus) * 10));
             return `<div style="flex:1;text-align:center;">
               <div style="display:flex;gap:2px;justify-content:center;align-items:flex-end;height:30px;">
                 <span style="width:6px;height:${h1}px;background:${d.study ? "#3a8a5a" : "rgba(58,138,90,.08)"};border-radius:2px;" title="学习 ${d.study}"></span>

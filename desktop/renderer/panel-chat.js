@@ -1,4 +1,5 @@
 // 真白面板 · 对话/产出/杂项域（纵向拆分）
+/* exported checkServiceVersion, loadMascotModels, loadTodo */
 // ============ 对话 ============
 let chatHistory = [];
 $("chat-send").addEventListener("click", sendChat);
@@ -206,7 +207,7 @@ async function loadCrawlData() {
     $("interview-history").innerHTML = list.length
       ? list.map((it) => {
           const dims = DIM_LABELS.map(([k, l]) => [k, l, Math.round((it.dims || {})[k] ?? 0)]);
-          const dimsBars = dims.map(([k, l, v]) => scoreBarHtml(l, v)).join("");
+          const dimsBars = dims.map(([_k, l, v]) => scoreBarHtml(l, v)).join("");
           return `
         <div class="iv-hist-item">
           <div class="iv-hist-head">${esc(it.position || "模拟面试")} · ${esc(it.role || "")} · ${it.rounds || 0} 轮
@@ -572,7 +573,7 @@ async function loadTodo() {
     box.classList.remove("hidden");
     const done = items.filter((i) => i.done).length;
     document.getElementById("todo-progress").textContent = `（${done}/${items.length}）`;
-    document.getElementById("todo-items").innerHTML = items.map((i, idx) => `
+    document.getElementById("todo-items").innerHTML = items.map((i, _idx) => `
       <div style="display:flex;gap:6px;align-items:center;">
         <span>${i.done ? "✅" : "⬜"}</span>
         <span style="${i.done ? "text-decoration:line-through;color:#8a87a8" : "color:#e8e8ef"}">${esc(i.content)}</span>

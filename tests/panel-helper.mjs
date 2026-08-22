@@ -66,7 +66,7 @@ function defaultKanban(overrides = {}) {
 /**
  * 启动面板（jsdom 加载完整 HTML + 脚本）
  * @param {object} overrides 覆盖 kanban 方法（如 { studyPlan: {...} }）
- * @returns {{dom, window, calls, kanban}}
+ * @returns {{dom: any, window: any, calls: any[], kanban: any, alerts: any[]}}
  */
 export function bootPanel(overrides = {}) {
   const dom = new JSDOM(html, { runScripts: "outside-only", url: "http://127.0.0.1:8899/panel.html", pretendToBeVisual: true });

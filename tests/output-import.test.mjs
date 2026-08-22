@@ -1,5 +1,5 @@
 // tests/output-import.test.mjs —— 手动导入面经落盘单测（临时目录隔离）
-import { mkdtempSync, readdirSync, readFileSync, rmSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";

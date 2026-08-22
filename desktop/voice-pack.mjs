@@ -4,12 +4,11 @@
 // 未命中 → 返回 null，由调用方走实时 TTS 兜底
 import { readFileSync, existsSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
 const VOICE_DIR = process.env.MIANSHI_TEST_VOICE_DIR || path.join(import.meta.dirname, "..", "assets", "voice");
-const TMP_DIR = path.join(os.tmpdir(), "mashiro-tts");
+const _TMP_DIR = path.join(os.tmpdir(), "mashiro-tts");
 
 let linesCache = null;
 function loadLines() {

@@ -12,11 +12,8 @@ import { exec } from "node:child_process";
 import notifier from "node-notifier";
 import { config } from "./config.mjs";
 import * as reviewApi from "./lib/review.mjs";
-import * as knowledgeApi from "./lib/knowledge.mjs";
-import { pick as pickEmotion, EMOTIONS } from "./lib/emotions.mjs";
 import { submit as laneSubmit } from "./lib/lane.mjs";
 import * as jobsApi from "./lib/jobs.mjs";
-import * as learningApi from "./lib/learning.mjs";
 import * as ragApi from "./lib/rag.mjs";
 import * as rssApi from "./lib/rss.mjs";
 import * as focusApi from "./lib/focus.mjs";
@@ -44,7 +41,6 @@ await loadAllPlugins({ router, db, getCorsOrigin, laneSubmit }).then((results) =
 // 因为 patrolState/crawlMutex/DISABLE_PATROL/PATROL_MIN/MAX 声明在此之后（TDZ），
 // actualPort 端口回退后会变（闭包快照会取旧值）
 registerCoreRoutes(router, {
-  getCorsOrigin: (req) => req.headers.origin || "*",
   laneSubmit,
   runtime: {
     getActualPort: () => actualPort,
@@ -143,7 +139,7 @@ function sendNotification(title, message, { wait = false } = {}) {
         appID: "Mashiro",
         icon: path.join(config.outputDir, "..", "icon.png"),
       },
-      (err) => resolve(undefined)
+      (_err) => resolve(undefined)
     );
   }));
 }
@@ -182,7 +178,7 @@ async function runDiscoverHidden() {
 }
 
 // Windows toast 备用（node-notifier 在某些环境 silent）
-function toastFallback(title, message) {  const ps = `
+function _toastFallback(title, message) {  const ps = `
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
 $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
 $textNodes = $template.GetElementsByTagName('text')
@@ -210,7 +206,6 @@ async function checkTrends() {
   const fresh = files.filter((f) => !state.seenFiles.has(f.path));
   if (fresh.length > 0) {
     for (const f of fresh) state.seenFiles.add(f.path);
-    const { company, title } = parseTitle(fresh[0].file);
     const names = fresh.map((f) => parseTitle(f.file).company).join("、");
     console.log(`[widget] 发现 ${fresh.length} 个新产出: ${names}`);
     await sendNotification("📌 真白新产出", `新增 ${fresh.length} 篇：${names}\n${fresh[0].dir}`);
@@ -401,7 +396,7 @@ const server = createServer((req, res) => {
 try {
   const { assertConfig } = await import("./config.mjs");
   assertConfig();
-} catch (e) { /* config.mjs 无此导出时忽略 */ }
+} catch { /* config.mjs 无此导出时忽略 */ }
 
 // ============ 启动：端口占用回退（EADDRINUSE 不再静默崩溃） ============
 let actualPort = PORT;
