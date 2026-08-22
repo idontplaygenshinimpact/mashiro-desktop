@@ -1,7 +1,7 @@
 // tests/personal-projects.test.mjs —— 个人项目档案上下文注入单测
 // 背景：清单"简历项目"条目讲解时 LLM 只能看到 topic 名称 → 讲解空泛；
 //       getProjectArchiveContext 按 topic/来源匹配项目档案注入真实代码
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test, beforeEach, after } from "node:test";

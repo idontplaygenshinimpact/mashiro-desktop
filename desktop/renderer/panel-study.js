@@ -1,4 +1,5 @@
 // 真白面板 · 学习/复习/面试域（纵向拆分）
+/* exported loadIvResumeAuto, loadIvWeakChips */
 // ============ 简历文件解析（移植 ai-career：txt/md/json/docx/pdf） ============
 const fileBtn = $("iv-file-btn");
 const fileInput = $("iv-file");
@@ -107,7 +108,6 @@ uploadZone.addEventListener("drop", async (e) => {
 });
 
 // ============ 模拟面试 ============
-let ivSession = null; // { question, basis, dimension, criteria, boundary, round }
 let ivTotalRounds = 9;      // 后端 start 返回（兜底 9）
 let ivRound = 0;            // 当前轮
 let ivRoundType = "";       // 当前轮类型（项目拷打/八股…）
@@ -340,7 +340,7 @@ function renderIvSummary() {
   box.classList.remove("hidden");
   box.innerHTML = `
     <div class="iv-summary-head">🎓 本场小结 <span>共 ${n} 轮 · 均分 <b>${avg}</b></span></div>
-    ${dims.map(([k, l, v]) => scoreBarHtml(l, v)).join("")}
+    ${dims.map(([_k, l, v]) => scoreBarHtml(l, v)).join("")}
     <div class="iv-summary-tip">💡 强项：${esc(best[1])}（${best[2]}）· 待提升：${esc(worst[1])}（${worst[2]}）——复盘报告下方有逐题点评</div>
     <div class="iv-radar-wrap"><canvas id="iv-radar" width="240" height="190"></canvas></div>`;
   drawIvRadar($("iv-radar"), dims);
@@ -959,9 +959,7 @@ function renderQuiz(questions) {
   quizState = { questions, chosen: prevChosen, kbUsed: quizState?.kbUsed || false };
   const box = $("rc-quiz");
   // 累计自测正确率（/api/review/quiz/stats 消费 quiz_attempts；异步填充）
-  let acc = "";
   try {
-    const cardId = (quizState.questions[0]?.cardId) || "";
     // 通过 DOM 拿当前卡 id（rc- 区域）——简化：先不加这里，避免复杂
   } catch { /* ignore */ }
   // kbUsed 提示（新生成时含知识库素材）
@@ -1383,7 +1381,7 @@ function renderPlanItemHtml(it) {
     </div>`;
 }
 
-function bindPlanItems(root, isDone) {
+function bindPlanItems(root, _isDone) {
   root.querySelectorAll(".study-item").forEach((el) => {
     const cb = el.querySelector("input");
     cb.addEventListener("change", async (e) => {
@@ -1626,7 +1624,6 @@ async function consolidateStudyDetail() {
       });
       $("sd-modal-title").textContent = "📖 " + topic;
     }
-    const base = studyDetailCache[sdCurrentId]?.content || "";
     sdBody().innerHTML = '<div style="color:#8a87a8;font-size:13px;padding:12px">📚 正在整合全文（去重合并、统一结构）...</div>';
     // 流式整合
     let merged = "";

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 const w = readFileSync("widget.mjs", "utf8");
 for (const f of ["jobs", "zhenti", "oj", "focus", "mail", "rss", "core", "misc", "study", "review", "kb", "practice", "interview"]) {
   const s = readFileSync(`lib/routes/${f}.mjs`, "utf8");
-  const re = /route\(\"([^\"]+)\"/g;
+  const re = /route\("([^"]+)"/g;
   let m;
   const routes = [];
   while ((m = re.exec(s))) routes.push(m[1]);

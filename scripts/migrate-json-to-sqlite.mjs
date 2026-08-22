@@ -1,6 +1,6 @@
 // 一次性迁移：4 个 JSON → SQLite（单事务 + count 校验 + JSON 备份 .bak）
 // 用法: node scripts/migrate-json-to-sqlite.mjs [--dry-run]
-import { readFileSync, renameSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, renameSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { db, withTx } from "../lib/db.mjs";

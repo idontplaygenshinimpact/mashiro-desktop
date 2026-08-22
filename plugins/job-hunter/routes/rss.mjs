@@ -2,7 +2,7 @@
 import { readBody } from "#lib/widget-core.mjs";
 import * as rssApi from "#lib/rss.mjs";
 
-export function registerRssRoutes(router, { getCorsOrigin = () => "*" } = {}) {
+export function registerRssRoutes(router) {
 router.route("/api/rss/digest", (req, res) => {  // 今日技术资讯摘要（读取，不触发抓取）
   res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify({

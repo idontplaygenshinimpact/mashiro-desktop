@@ -1,4 +1,5 @@
 // 真白面板 · 核心（纵向拆分：desktop/renderer/panel.js → 5 个文件，普通 script 按序加载共享全局作用域）
+/* exported pickMicDevice, safeUrl */
 // 加载顺序：panel-core.js → panel-study.js → panel-chat.js → panel-jobs.js → panel-rest.js
 // 真白面板逻辑：模拟面试 / 学习清单 / 对话 / 爬取产出
 // 通过 preload 的 window.kanban 访问主进程 IPC（与桌宠共享）

@@ -81,7 +81,7 @@ test("interview.mjs 默认岗位跟随画像（转后端后默认岗位变化）
   const { startInterview } = await import("../lib/interview.mjs");
   const { memory } = await import("../lib/memory.mjs");
   // mock LLM 返回合法首问
-  const { mockLLM, setLlmResponses } = await import("./helpers.mjs");
+  const { setLlmResponses } = await import("./helpers.mjs");
   setLlmResponses('{"question":"讲讲数据库索引","basis":"开场","dimension":"原理","criteria":"B+树","boundary":"不涉及"}}');
   const r = await startInterview({}); // 不传 position
   assert.equal(r.ok, true);

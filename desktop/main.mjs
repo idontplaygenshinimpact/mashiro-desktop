@@ -3,13 +3,12 @@
 import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell, session } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn, exec, spawnSync } from "node:child_process";
 import { Worker } from "node:worker_threads";
 import { writeFileSync, readFileSync, createWriteStream } from "node:fs";
 import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, healthUrl } from "../lib/widget-auth.mjs";
 // 纵向拆分：widget 服务守护 / 窗口位置持久化 / 重启设施（desktop/lib/*.mjs，无 electron 依赖可单测）
 import { safeSpawn, createWidgetServer } from "./lib/widget-server.mjs";
-import { readWindowState as readWinState, saveWindowState as saveWinState, scheduleSaveWindowState as scheduleSaveWinState, isOnScreen as isRectOnScreen } from "./lib/window-state.mjs";
+import { readWindowState as readWinState, scheduleSaveWindowState as scheduleSaveWinState, isOnScreen as isRectOnScreen } from "./lib/window-state.mjs";
 import { rendererBundleStale as bundleStale, rebuildRendererBundle as rebuildBundle, killAllWidgetProcesses as killAllWidgets } from "./lib/restart.mjs";
 
 // ---------- 启动加速 ----------
@@ -100,7 +99,6 @@ let panelState = { x: null, y: null, width: null, height: null };
 const getWinState = () => ({ mascot: mascotState, panel: panelState });
 const scheduleSaveWindowState = scheduleSaveWinState(STATE_FILE, getWinState);
 function readWindowState() { return readWinState(STATE_FILE); }
-function saveWindowState() { saveWinState(STATE_FILE, getWinState()); }
 function isOnScreen(x, y, w, h) {
   try { return isRectOnScreen(screen.getPrimaryDisplay().workArea, x, y, w, h); } catch { return false; }
 }
@@ -221,7 +219,7 @@ async function buildTrayMenu() {
           },
         }))
       : [{ label: "未找到模型", enabled: false }];
-  } catch (e) {
+  } catch {
     mascotItems = [{ label: "模型扫描失败", enabled: false }];
   }
   const menu = Menu.buildFromTemplate([
@@ -1022,9 +1020,9 @@ function detectForeground() {
   });
 }
 
-let panelOpen = false; // 渲染层上报：面板是否打开（打开时强制显示）
+let _panelOpen = false; // 渲染层上报：面板是否打开（打开时强制显示）
 ipcMain.handle("window:panel-state", (e, { open }) => {
-  panelOpen = !!open;
+  _panelOpen = !!open;
   return { ok: true };
 });
 
@@ -1208,6 +1206,6 @@ app.whenReady().then(() => {
   }
 }).catch(() => { /* 单实例锁未获取时提前退出，ready 可能 reject，忽略 */ });
 
-app.on("window-all-closed", (e) => {
+app.on("window-all-closed", (_e) => {
   // 看板娘关窗口不退出（托盘常驻）
 });

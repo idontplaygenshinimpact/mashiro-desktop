@@ -49,7 +49,7 @@ test("checkDocVersions 页面无效且无 registry 兜底时标记 ok:false 不�
 
 test("checkDocVersions registry 兜底：页面失败 → npm 版本兜底", async () => {
   setMockPages([{ text: "", invalid: true }]); // React 页面无效
-  const fakeRegistry = async (pkg, type) => ({ version: "19.2.0", date: "2026-08-01" });
+  const fakeRegistry = async (_pkg, _type) => ({ version: "19.2.0", date: "2026-08-01" });
   const r = await checkDocVersions(["React"], { registryFetch: fakeRegistry });
   assert.equal(r.React.ok, true, "兜底后 ok");
   assert.equal(r.React.version, "19.2.0", "版本来自 registry");

@@ -333,7 +333,7 @@ async function runClassify(cases) {
       const r = await classifyPage({ title: c.title, text: c.text });
       results.push({ id: c.id, expected: c.expected, actual: r.type, ok: r.type === c.expected });
       await sleep(120);
-    } catch (e) { results.push({ id: c.id, expected: c.expected, actual: "error", ok: false }); }
+    } catch { results.push({ id: c.id, expected: c.expected, actual: "error", ok: false }); }
   }
   const pass = results.filter((r) => r.ok).length;
   return { pass, total: results.length, rate: Math.round((pass / results.length) * 1000) / 10, results };
@@ -345,7 +345,7 @@ async function runDetect(cases) {
       const r = await detectQuestions({ title: c.title, text: c.text });
       results.push({ id: c.id, expected: c.expected, actual: r.hasQuestion, ok: r.hasQuestion === c.expected });
       await sleep(120);
-    } catch (e) { results.push({ id: c.id, expected: c.expected, actual: "error", ok: false }); }
+    } catch { results.push({ id: c.id, expected: c.expected, actual: "error", ok: false }); }
   }
   const pass = results.filter((r) => r.ok).length;
   return { pass, total: results.length, rate: Math.round((pass / results.length) * 1000) / 10, results };
@@ -388,7 +388,6 @@ const evalTrace = QUICK ? traceQuestions.slice(0, 1) : traceQuestions;
 console.log(`【1/5】讲解质量（${evalQuestions.length} 题：${evalQuestions.map((q) => q.type).join("/")}）...`);
 const qResults = [];
 for (const q of evalQuestions) {
-  const start = Date.now();
   try {
     const r = await evalQuestion(q);
     qResults.push(r);

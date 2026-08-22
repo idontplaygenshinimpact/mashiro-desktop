@@ -234,7 +234,7 @@ test("agent：会话级批准后同类工具不再询问", async () => {
     if (pendingOf("record_interview_topics")) { pended = true; break; }
   }
   assert.equal(pended, false, "会话级批准后不再询问");
-  const r2 = await p2;
+  await p2;
   const { getPlan } = await import("../lib/study.mjs");
   assert.ok(getPlan().items.some((i) => i.topic === "B点"), "直接执行");
 });

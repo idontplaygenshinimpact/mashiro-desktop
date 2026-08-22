@@ -13,7 +13,7 @@ after(() => {
 
 test("llmChat：空 content 响应自动重试成功", async () => {
   let calls = 0;
-  mock.method(globalThis, "fetch", async (url, opts) => {
+  mock.method(globalThis, "fetch", async (_url, _opts) => {
     calls++;
     if (calls === 1) {
       // 网关故障：HTTP 200 + 空 content
@@ -28,7 +28,7 @@ test("llmChat：空 content 响应自动重试成功", async () => {
 
 test("llmChat：tool_calls 响应 content 为空不算故障（工具调用场景）", async () => {
   let calls = 0;
-  mock.method(globalThis, "fetch", async (url, opts) => {
+  mock.method(globalThis, "fetch", async (_url, _opts) => {
     calls++;
     return {
       status: 200, ok: true,

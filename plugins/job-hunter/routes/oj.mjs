@@ -1,5 +1,4 @@
 // oj 域路由（纵向拆分：/api/oj* 从 widget.mjs 迁出）
-import { readBody } from "#lib/widget-core.mjs";
 import * as ojApi from "#lib/oj.mjs";
 
 export function registerOjRoutes(router, { getCorsOrigin = () => "*" } = {}) {

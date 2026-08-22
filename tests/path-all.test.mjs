@@ -184,7 +184,6 @@ test("POST /api/review/quiz/generate + submit：选择题闭环（dummy key 生�
 });
 
 test("POST /api/challenges/run 沙箱判题（正确实现 → 通过）", async () => {
-  const d = await json(await api("/api/challenges/detail?id=debounce"));
   const r = await json(await post("/api/challenges/run", {
     id: "debounce",
     userCode: "function debounce(fn, wait) { let t = null; return function(...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); }; }",

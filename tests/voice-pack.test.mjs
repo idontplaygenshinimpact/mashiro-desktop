@@ -23,7 +23,7 @@ process.env.MIANSHI_TEST_VOICE_DIR = voiceDir;
 // mock node:child_process：spawn 返回可控假进程（保留真实 spawnSync 供 ffplay 探测）
 const realCp = await import("node:child_process");
 const spawned = [];
-function fakeSpawn(cmd, args, opts) {
+function fakeSpawn(_cmd, _args, _opts) {
   const child = new EventEmitter();
   child.killed = false;
   child.kill = () => { child.killed = true; };

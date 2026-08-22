@@ -23,7 +23,7 @@ mock.module(new URL("../lib/web-search.mjs", import.meta.url).href, {
 // mock rag 模块：search_knowledge 工具依赖（不加载真实 embedding）
 mock.module(new URL("../lib/rag.mjs", import.meta.url).href, {
   namedExports: {
-    searchKnowledge: async (q) => [
+    searchKnowledge: async (_q) => [
       { id: "kb1", title: "学习·事件循环", content: "宏任务执行完清空微任务队列，Promise.then 属于微任务。", source: "study", kind: "note", score: 0.5, vectorScore: 0.5, ftsScore: 0 },
     ],
   },

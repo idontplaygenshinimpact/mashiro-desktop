@@ -3,7 +3,7 @@ import koffi from "koffi";
 
 const user32 = koffi.load("user32.dll");
 
-const RECT = koffi.struct("RECT", {
+const _RECT = koffi.struct("RECT", {
   left: "int32",
   top: "int32",
   right: "int32",
@@ -60,7 +60,7 @@ export function detectForegroundSync() {
     // 容差 4px（窗口边框）
     if (winW >= w - 4 && winH >= h - 4) return "fullscreen";
     return "normal";
-  } catch (e) {
+  } catch {
     return "normal"; // 检测失败保守不隐藏
   }
 }

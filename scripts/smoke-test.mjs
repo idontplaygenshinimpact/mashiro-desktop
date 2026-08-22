@@ -1,7 +1,7 @@
 // 冒烟测试：widget API 全路由 + 核心模块导入检查
 // 用法: node scripts/smoke-test.mjs [--skip-llm]
 // 退出码: 0=全过 1=有失败
-import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 

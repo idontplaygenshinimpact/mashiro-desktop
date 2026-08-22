@@ -19,9 +19,9 @@ const FUNCS = [
 ];
 
 const blocks = [];
-for (const [name, re] of FUNCS) {
-  const start = src.findIndex((l) => re.test(l));
-  if (start < 0) throw new Error(`函数 ${name} 未找到`);
+  for (const [name, re] of FUNCS) {
+    const regex = typeof re === "string" ? new RegExp(re) : re;
+    const start = src.findIndex((l) => regex.test(String(l)));
   // 找函数体结束：从 start 开始，大括号平衡（跳过注释/字符串近似：按行统计 { }，含模板串的风险可接受，这些函数无模板大括号）
   let depth = 0;
   let end = -1;

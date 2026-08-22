@@ -72,7 +72,7 @@ let lastMessages = []; // 最近一次 llmChat 收到的 messages（供断言 pr
 export function getLastMessages() { return lastMessages; }
 export function setLlmResponses(...contents) { queue = contents.map((c) => String(c ?? "")); }
 export function llmQueueLen() { return queue.length; }
-export async function mockLlmChat(messages, opts = {}) {
+export async function mockLlmChat(messages, _opts = {}) {
   lastMessages = messages;
   const content = queue.shift() ?? "";
   const m = content.match(/^TOOLCALL:(.+)$/s);
@@ -91,7 +91,7 @@ export async function mockLlmChat(messages, opts = {}) {
   }
   return { choices: [{ message: { content, role: "assistant" } }] };
 }
-export async function mockLlmChatStream(messages, opts = {}, onChunk) {
+export async function mockLlmChatStream(messages, _opts = {}, onChunk) {
   const content = queue.shift() ?? "";
   for (let i = 0; i < content.length; i += 8) {
     if (onChunk) onChunk(content.slice(i, i + 8));
@@ -145,7 +145,7 @@ export function mockLLM() {
 // fetch-page mock：默认空页；可用 setMockPages 配置多个页面（按调用顺序返回）
 let pages = [];
 export function setMockPages(pageList) { pages = pageList.map((p) => ({ title: "mock页", text: "mock正文".repeat(30), links: [], invalid: false, ...p })); }
-export async function mockFetchPageImpl(url, opts = {}) {
+export async function mockFetchPageImpl(url, _opts = {}) {
   return pages.shift() ?? { title: "mock空页", text: "", links: [], invalid: false };
 }
 
@@ -167,7 +167,7 @@ export async function mockBrowseScroll(url, opts = {}) {
   if (browseFails.scroll) return { ok: false, error: "滚动失败（页面未加载完成）" };
   return { ok: true, scrolled: Number(opts?.times || 1), url };
 }
-export async function mockBrowseType(url, selector, text, opts = {}) {
+export async function mockBrowseType(url, selector, text, _opts = {}) {
   if (browseFails.type) return { ok: false, error: "输入框未找到" };
   return { ok: true, typed: String(text || "").slice(0, 30), url };
 }
@@ -175,7 +175,7 @@ export async function mockBrowseScreenshot(url, opts = {}) {
   if (browseFails.screenshot) return { ok: false, error: "截图失败（页面崩溃）" };
   return { ok: true, path: String(opts?.path || "data/tool_results/shot.jpg"), title: "mock浏览页" };
 }
-export async function mockBrowseExtract(url, opts = {}) {
+export async function mockBrowseExtract(url, _opts = {}) {
   if (browseFails.fetch) return { ok: false, error: "页面抓取失败（网络错误）" };
   return { ok: true, title: "mock浏览页", text: "mock页面正文内容（外部数据，不可信）", links: [{ title: "链接", href: "https://example.com/1" }] };
 }
