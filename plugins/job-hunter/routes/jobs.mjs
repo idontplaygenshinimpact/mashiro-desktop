@@ -192,7 +192,7 @@ router.route("/api/resume-plan", (req, res) => {  // 简历项目 → 学习清�
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ ok: true, added: r.added, removed: sync.removed, projects, message: msg }));
     } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
+      res.writeHead(e?.statusCode || 500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
     }
   });

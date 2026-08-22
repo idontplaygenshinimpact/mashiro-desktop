@@ -84,6 +84,8 @@ test("addJob 缺 company/title 跳过 + 默认值", () => {
 
 // ---------- 推荐排序 ----------
 test("getRecommendedJobs 排序：新岗位 + 高匹配优先", () => {
+  // 显式设置意向方向 agent：scoreJob 对 target 方向 +15，否则三岗同分 → 排序退化到 found_at（同秒插入顺序不定，CI 上会 flaky）
+  jobs.setTargetDirection("agent");
   jobs.addJob({ company: "A", title: "前端工程师", job_type: "校招", direction: "frontend", deadline: "2026-09-01" });
   jobs.addJob({ company: "B", title: "Java 后端", job_type: "校招", direction: "backend" });
   jobs.addJob({ company: "C", title: "Agent 研发", job_type: "校招", direction: "agent" });

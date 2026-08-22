@@ -17,7 +17,27 @@ beforeEach(async () => {
   projDir = mkdtempSync(path.join(tmpdir(), "pp-"));
   mkdirSync(path.join(projDir, "src"), { recursive: true });
   writeFileSync(path.join(projDir, "package.json"), JSON.stringify({ name: "lowcode-platform", dependencies: { react: "^18", express: "^4" }, description: "低代码拖拽平台" }));
-  writeFileSync(path.join(projDir, "src", "engine.js"), "export class DragEngine { constructor() { this.nodes = []; } }");
+  // 源码内容要足够厚：buildProjectArchive 要求档案文本 >=200 字符才入库/注入，
+  // 且档案长度受临时目录路径长度影响（CI 的 /tmp 路径比 Windows Temp 短约 25 字符）——多写几行代码保证任何平台都达标
+  writeFileSync(path.join(projDir, "src", "engine.js"), [
+    "// 拖拽引擎：节点图模型 + 撤销重做栈",
+    "export class DragEngine {",
+    "  constructor() {",
+    "    this.nodes = [];",
+    "    this.edges = [];",
+    "    this.undoStack = [];",
+    "  }",
+    "  addNode(type, props = {}) {",
+    "    const id = `n${this.nodes.length + 1}`;",
+    "    this.nodes.push({ id, type, props, x: 0, y: 0 });",
+    "    return id;",
+    "  }",
+    "  connect(from, to) { this.edges.push({ from, to }); }",
+    "  undo() { return this.undoStack.pop() || null; }",
+    "  serialize() { return JSON.stringify({ nodes: this.nodes, edges: this.edges }); }",
+    "}",
+    "",
+  ].join("\n"));
   savePersonalProjects([{ name: "低代码平台", dir: projDir }]);
 });
 after(() => { cleanupTempDb(dbDir); });

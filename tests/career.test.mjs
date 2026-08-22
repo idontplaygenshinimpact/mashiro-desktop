@@ -1,9 +1,10 @@
 // career.mjs 单测：方向画像（讲解/面试/提炼链路的方向参数，默认前端）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
+import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses } from "./helpers.mjs";
 
 const dbDir = setupTempDb("career");
+mockLLM(); // 画像→面试/讲解链路会调 LLM（startInterview 等）：必须 mock，否则走真实 LLM（CI 无 key 会 401）
 const { getCareerProfile, saveCareerProfile, resetCareerProfile, invalidateCareerProfile, CAREER_FIELDS } = await import("../lib/career.mjs");
 const { db } = await import("../lib/db.mjs");
 
@@ -81,7 +82,6 @@ test("interview.mjs 默认岗位跟随画像（转后端后默认岗位变化）
   const { startInterview } = await import("../lib/interview.mjs");
   const { memory } = await import("../lib/memory.mjs");
   // mock LLM 返回合法首问
-  const { setLlmResponses } = await import("./helpers.mjs");
   setLlmResponses('{"question":"讲讲数据库索引","basis":"开场","dimension":"原理","criteria":"B+树","boundary":"不涉及"}}');
   const r = await startInterview({}); // 不传 position
   assert.equal(r.ok, true);

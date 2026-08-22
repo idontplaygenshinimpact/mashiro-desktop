@@ -2,9 +2,17 @@
 // mock llm.mjs 返回 OpenAI 协议对象——若代码对对象直接 .replace() 会在此暴露（回归防线）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses, getReplyText } from "./helpers.mjs";
 
 const dbDir = setupTempDb("study-llm");
+// generateStudyPlan 需要 outputDir 下有产出文件（CI 无真实 output/）——建临时输出目录并放一个产出 md
+process.env.MIANSHI_OUTPUT_DIR = path.join(dbDir, "output");
+try {
+  mkdirSync(path.join(dbDir, "output", "2026-08-05_discover"), { recursive: true });
+  writeFileSync(path.join(dbDir, "output", "2026-08-05_discover", "面经.md"), "# 事件循环面经\n\n".repeat(30) + "详细内容".repeat(30), "utf8");
+} catch { /* ignore */ }
 mockLLM(); // 必须在 import study 之前
 const { generateStudyPlan, getPlan, addPlanItems, answerReview } = await import("../lib/study.mjs");
 const { memory } = await import("../lib/memory.mjs");

@@ -229,7 +229,7 @@ test("工具结果超长 → 落盘 + 回填预览标记", async () => {
   assert.ok(parsed._file, "回填文件路径");
   assert.ok(parsed._preview.length <= 2000, "预览 ≤2KB");
   const { existsSync } = await import("node:fs");
-  assert.ok(existsSync("D:/mianshi-agent/" + parsed._file), "落盘文件存在");
+  assert.ok(existsSync(path.join(import.meta.dirname, "..", parsed._file)), "落盘文件存在");
   // 短结果不落盘
   const short = await toolResultContent({ ok: true, results: [] }, "call_short");
   assert.ok(!short.includes("_truncated"), "短结果原样返回");
