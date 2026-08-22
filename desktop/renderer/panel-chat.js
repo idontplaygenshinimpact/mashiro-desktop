@@ -127,18 +127,24 @@ async function loadCrawlData() {
         <span style="color:#6c6c7c;font-size:10px">${esc(f.dir || "")}</span>
       </div>`).join("")
     : '<div style="color:#7c7c7c;font-size:12px">暂无产出</div>';
-  // 今日推荐（笔试/面经轮转建议）
+  // 今日推荐（笔试/面经轮转建议；点击用系统默认程序打开）
   const reco = r.plan || {};
   const recoItems = [...(reco.bishi || []).map((f) => ({ ...f, tag: "笔试" })), ...(reco.mianshi || []).map((f) => ({ ...f, tag: "面经" }))];
   if (recoItems.length) {
     $("today-reco").classList.remove("hidden");
     $("today-reco-body").innerHTML = recoItems.map((f) => `
-      <div class="file-item">
+      <div class="file-item" data-path="${esc(f.path || "")}" style="cursor:pointer;" title="点击打开查看">
         <span class="tag reco-${f.tag === "笔试" ? "bishi" : "mianshi"}">${f.tag}</span>
         <span class="t">${esc(f.title || f.file || "")}</span>
       </div>`).join("");
+    // 事件委托：点击推荐项 → 系统默认程序打开（openFile 白名单限 output/data）
+    $("today-reco-body").onclick = (e) => {
+      const item = e.target.closest(".file-item");
+      if (item?.dataset?.path) window.kanban.openFile(item.dataset.path);
+    };
   } else {
     $("today-reco").classList.add("hidden");
+    $("today-reco-body").onclick = null;
   }
   // 使用统计（对话/复习/面试）
   try {

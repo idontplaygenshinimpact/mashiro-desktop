@@ -1,19 +1,23 @@
-feat: 手动导入面经——别处获取的面经/文档一键入库（爬取 Tab「📥 导入面经」）
+fix: 今日推荐三问题（分类错乱/重复堆叠/无作用）+ 清单讲解注入项目档案 + voice-pack flaky 根治
 
-【需求】微信/浏览器/别人发的面经怎么导入
-【实现】
-- lib/output-import.mjs：saveImportedPost 纯函数——落盘产出目录与爬取同构
-  （output/YYYY-MM-DD/NN_标题_来源.md：# 标题 + > 来源 + 正文），
-  自动被最新产出/面试素材（recentOutputsText）/巡检识别
-- POST /api/output/import（标题/内容/来源；标题内容非空、内容 ≥20 字校验）
-- 面板「爬取」Tab 新增「📥 导入面经」弹窗（复用毛玻璃 sd-modal）：
-  · 粘贴文本导入 + 选文件导入
-  · 支持格式：md / txt / html / htm / docx / pdf（主进程 import:parse-file
-    IPC 解析：文本直读、HTML 去标签提取正文、docx=mammoth、pdf=pdfjs——
-    全部复用现有依赖，零新增）
-  · 文件名自动当标题、解析后可编辑再保存
-- 重构：resume:parse-file 与 import:parse-file 共用 parseDocFile（pdf/docx）
+【1. 推荐分类错乱】实测 bishi=30/30、mianshi=0——旧条件 dir.includes('discover')
+把巡检产出的面经全归为笔试。修复：classifyStudyFiles 纯函数——
+笔试=文件名含 笔试/bishi/机试（真实笔试）；面经=其余（含 discover 面经）
+实测：1 笔试 + 29 面经 ✓
 
-【测试 +7】output-import 纯函数 4（落盘格式/序号/校验/非法字符安全化）
-+ jsdom 导入流程 3（打开→提交→API 请求 / 空校验 / 关闭）
-全量 659（2 个 voice-pack 防抖为并行负载 flaky，单独跑全过）。
+【2. 推荐重复堆叠】轮转 pick 在目录只有 1 个文件时 (dayNum+i)%n 同一文件取两次。
+修复：pickDistinct 按 path 去重轮转（n=1 时只推 1 项）
+
+【3. 推荐无作用】纯展示不可点。修复：点击推荐项 → 系统默认程序打开
+（openFile 白名单限 output/data）
+
+【4. 清单项目条目只传名称给 LLM】讲解/追问 prompt 只有 topic。
+修复：getProjectArchiveContext（personal-projects.mjs，可单测）——
+topic/来源匹配项目名 → 注入真实代码档案（技术栈/目录/核心实现，6KB 上限）；
+study-detail-stream / study-detail / study-append-stream 三处注入
+
+【5. voice-pack flaky 根治】全量并行下 2600ms 真实 sleep 受 CPU 竞争影响。
+修复：VOICE_DEBOUNCE_MS 支持 MIANSHI_TEST_DEBOUNCE_MS（测试 150ms），
+sleep 2600→500ms，测试快 5 倍且稳定
+
+测试 +9（recommend 5 + personal-projects 4），全量 668/668。
