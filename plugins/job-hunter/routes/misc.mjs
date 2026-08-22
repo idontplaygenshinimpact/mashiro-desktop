@@ -297,6 +297,11 @@ export function registerMiscRoutes(router) {
   });
 
   // ---------- 招聘平台（BOSS 等：列表/配置保存/搜索入库/投递） ----------
+  // 敏感字段脱敏：cookie（登录态）不回传渲染层——只回传"已配置"状态，防面板 XSS/日志链路泄露
+  const maskAccount = (a) => {
+    if (!a || typeof a !== "object") return a;
+    return { ...a, cookie: a.cookie ? "***（已配置）" : "" };
+  };
   router.route("/api/platforms", (req, res) => {
     // 先确保平台注册就绪（惰性动态 import；避免首屏 GET 拿到空列表）
     ensurePlatformsSafe().then(() => {
@@ -312,7 +317,7 @@ export function registerMiscRoutes(router) {
             const updated = savePlatformAccount(String(name), patch);
             if (!updated) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: `平台 ${name} 未注册` })); return; }
             res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-            res.end(JSON.stringify({ ok: true, account: updated, platforms: listPlatformsApi() }));
+            res.end(JSON.stringify({ ok: true, account: maskAccount(updated), platforms: listPlatformsApi().map(maskAccount) }));
           } catch (e) {
             res.writeHead(500, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: e.message }));
@@ -321,7 +326,7 @@ export function registerMiscRoutes(router) {
         return;
       }
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, platforms: listPlatformsApi() }));
+      res.end(JSON.stringify({ ok: true, platforms: listPlatformsApi().map(maskAccount) }));
     }).catch((e) => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
