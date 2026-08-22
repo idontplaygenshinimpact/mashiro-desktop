@@ -4,7 +4,7 @@ import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses, getReplyText } from "./helpers.mjs";
+import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses, getReplyText, getLastMessages } from "./helpers.mjs";
 
 const dbDir = setupTempDb("study-llm");
 // generateStudyPlan 需要 outputDir 下有产出文件（CI 无真实 output/）——建临时输出目录并放一个产出 md
@@ -106,6 +106,22 @@ test("generateStudyPlan：旧条目状态字段保留", async () => {
   assert.equal(old.reviewed, true, "旧条目复习状态保留");
   assert.equal(old.grp, "", "旧条目无 group → grp 保持空（归未分类），不被新条目 group 覆盖");
   assert.equal(r.items.find((i) => i.topic === "新知识点").grp, "算法与手写", "新条目按 LLM group 入库");
+});
+
+test("generateStudyPlan：产出内容真实注入（非 [object Object]）+ study_notes/chat_solutions 不计入产出", async () => {
+  // AI 讲解存档与对话回答目录——不应被 collect 当作爬取产出（避免自产内容循环提炼）
+  mkdirSync(path.join(dbDir, "output", "study_notes"), { recursive: true });
+  mkdirSync(path.join(dbDir, "output", "chat_solutions"), { recursive: true });
+  writeFileSync(path.join(dbDir, "output", "study_notes", "自产讲解.md"), "# 自产讲解\n" + "这是AI自己生成的讲解内容不应进入提炼循环。".repeat(10), "utf8");
+  writeFileSync(path.join(dbDir, "output", "chat_solutions", "对话回答.md"), "# 对话回答\n" + "这是对话回答内容不应进入提炼循环。".repeat(10), "utf8");
+  setLlmResponses('{"items":[]}');
+  await generateStudyPlan();
+  const joined = getLastMessages().map((m) => String(m.content || "")).join("\n");
+  assert.ok(!joined.includes("[object Object]"), "产出内容真实注入（不出现 [object Object]）");
+  assert.ok(joined.includes("事件循环面经"), "产出内容在 prompt 中");
+  assert.ok(joined.includes("<untrusted_data>"), "产出被不可信包裹");
+  assert.ok(!joined.includes("自产讲解"), "study_notes 讲解不计入产出");
+  assert.ok(!joined.includes("对话回答"), "chat_solutions 回答不计入产出");
 });
 
 test("answerReview：判分 + 回流薄弱点 + 标记已复盘", async () => {

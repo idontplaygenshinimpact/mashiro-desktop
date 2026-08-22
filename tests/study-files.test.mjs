@@ -61,3 +61,23 @@ test("findStudyFile：产出目录按 source 模糊匹配", () => {
   const hit = findStudyFile({ source: "React 面经.md" });
   assert.ok(hit && hit.endsWith("React 面经.md"));
 });
+
+test("findStudyFile：长 topic（清理后 >60 字符）截断存档也能命中（回归：截断失配→重复生成覆盖旧讲解）", () => {
+  const notesDir = studyNotesDir();
+  mkdirSync(notesDir, { recursive: true });
+  const longTopic = "超长知识点名称：" + "很长的具体内容描述".repeat(10);
+  assert.ok(sanitizeFilename(longTopic).length >= 60, "前置：存档名确实被截断");
+  const archiveName = sanitizeFilename(longTopic) + ".md";
+  writeFileSync(path.join(notesDir, archiveName), "# 长讲解 + 追问", "utf8");
+  const hit = findStudyFile({ topic: longTopic });
+  assert.ok(hit, "长 topic 必须命中截断存档");
+  assert.ok(hit.endsWith(archiveName), "命中截断存档文件");
+});
+
+test("findStudyFile：source 为空 → 不误命中任意产出文件（回归：key.includes('') 恒真）", () => {
+  mkdirSync(path.join(tmpOut, "2026-08-16_discover"), { recursive: true });
+  writeFileSync(path.join(tmpOut, "2026-08-16_discover", "React 面经.md"), "# 内容", "utf8");
+  writeFileSync(path.join(tmpOut, "2026-08-16_discover", "Vue 面经.md"), "# 内容", "utf8");
+  assert.equal(findStudyFile({ topic: "库中无此讲解", source: "" }), null, "空 source 不匹配任何文件");
+  assert.equal(findStudyFile({ topic: "库中无此讲解" }), null, "缺 source 同理");
+});
