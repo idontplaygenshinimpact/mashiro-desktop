@@ -136,6 +136,42 @@ test("suggestFocusGoal：到期复习卡/薄弱点/清单未完成 → top N", a
   resetMemoryState(memory);
 });
 
+test("suggestFocusGoal：同 topic 跨源去重 + 薄弱点按 failCount 排序（修复：推荐永远不变）", async () => {
+  const { suggestFocusGoal } = await import("../lib/loop.mjs");
+  const { memory } = await import("../lib/memory.mjs");
+  const { review } = await import("../lib/review.mjs");
+  const { db } = await import("../lib/db.mjs");
+  resetMemoryState(memory);
+  // 同一 topic 同时是复习卡 + 薄弱点 → 只出现一次（复习优先）
+  memory.addWeakPoint("去重主题", "复盘", "agent");
+  review.addCard({ topic: "去重主题", question: "q", source: "薄弱点" });
+  db.prepare("UPDATE review_cards SET created_at = ?").run(Date.now() - 2 * 24 * 3600 * 1000);
+  // failCount 高的薄弱点必须排在前面（此前依赖内存插入序，可能截断丢最弱的）
+  memory.addWeakPoint("弱项A", "模拟面试", "agent");
+  memory.addWeakPoint("弱项A", "模拟面试", "agent");
+  memory.addWeakPoint("弱项B", "模拟面试", "agent");
+  const goals = suggestFocusGoal(6);
+  const topics = goals.map((g) => g.topic);
+  assert.equal(topics.filter((t) => t === "去重主题").length, 1, "同 topic 跨源去重");
+  assert.ok(topics.indexOf("弱项A") < topics.indexOf("弱项B"), "failCount 高的弱项排前面");
+  resetMemoryState(memory);
+});
+
+test("getDueCards：到期卡按到期时间排序（复习掉一张下一张顶上，推荐会轮换）", async () => {
+  const { review } = await import("../lib/review.mjs");
+  const { db } = await import("../lib/db.mjs");
+  // 两张新卡：一张 10 天前创建、一张 2 天前创建 → 都到期，老的先
+  review.addCard({ topic: "老卡", question: "q1", source: "测试" });
+  review.addCard({ topic: "新卡", question: "q2", source: "测试" });
+  db.prepare("UPDATE review_cards SET created_at = ? WHERE topic = ?").run(Date.now() - 10 * 24 * 3600 * 1000, "老卡");
+  db.prepare("UPDATE review_cards SET created_at = ? WHERE topic = ?").run(Date.now() - 2 * 24 * 3600 * 1000, "新卡");
+  const due = review.getDueCards();
+  const idxOld = due.findIndex((c) => c.topic === "老卡");
+  const idxNew = due.findIndex((c) => c.topic === "新卡");
+  assert.ok(idxOld >= 0 && idxNew >= 0, "两张都到期");
+  assert.ok(idxOld < idxNew, "更早创建（更久没复习）的卡排前面");
+});
+
 // ---------- 建议引擎消费数据（复习到期/专注/刷题/备战/日程） ----------
 test("loopSuggest：复习到期/刷题/专注状态进入建议", async () => {
   const { loopSuggest } = await import("../lib/loop.mjs");
