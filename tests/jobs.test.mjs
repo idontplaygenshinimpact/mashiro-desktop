@@ -238,3 +238,33 @@ test("collectJobsDaily 24h 门控（幂等：短间隔内跳过）", async () =>
   assert.equal(r2.ok, true);
   assert.equal(r2.skipped, true, "24h 内跳过");
 });
+
+// ---------- 时区回归：纯日期按本地解析（修复 UTC +8h 漂移影响截止/笔试窗口） ----------
+test("getUpcomingJobDeadlines：纯日期不因 UTC 解析漂移（+8h 边界）", () => {
+  // 固定 now：本地某天 20:00，截止是"明天"纯日期 → 应在 3 天窗口内
+  const now = new Date(2026, 7, 20, 20, 0, 0).getTime(); // 2026-08-20 20:00 本地
+  const tomorrow = `2026-08-21`; // 纯日期（UTC 解析会变成 08-21 08:00，仍< 3 天，但边界测试）
+  const jobsList = [
+    { id: "j1", company: "A", title: "岗", status: "new", deadline: tomorrow, bishiDate: null },
+    { id: "j2", company: "B", title: "岗", status: "new", deadline: null, bishiDate: tomorrow },
+  ];
+  const up = jobs.getUpcomingJobDeadlines(jobsList, now);
+  assert.equal(up.length, 2, "截止与笔试都在 3 天窗口内");
+  assert.ok(up.some((x) => x.kind === "截止"), "截止提醒");
+  assert.ok(up.some((x) => x.kind === "笔试"), "笔试提醒");
+});
+
+test("syncJobBishiToSchedule：纯日期笔试 → 本地 00:00（非 UTC 08:00），带时间精确", async () => {
+  const { db } = await import("../lib/db.mjs");
+  jobs.syncJobBishiToSchedule("t1", "美团", "后端笔试", "2026-09-15");
+  jobs.syncJobBishiToSchedule("t2", "字节", "前端笔试", "2026-09-16 14:00");
+  const r1 = db.prepare("SELECT interview_at FROM schedule_events WHERE email_id='job_t1'").get();
+  const r2 = db.prepare("SELECT interview_at FROM schedule_events WHERE email_id='job_t2'").get();
+  assert.ok(r1, "纯日期笔试已入日程");
+  const d1 = new Date(Number(r1.interview_at));
+  assert.equal(d1.getHours(), 0, `纯日期应为本地 00:00（实际 ${d1.getHours()}:${d1.getMinutes()}，UTC 解析会漂移到 08:00）`);
+  assert.equal(d1.getDate(), 15, "日期正确");
+  const d2 = new Date(Number(r2.interview_at));
+  assert.equal(d2.getHours(), 14, "带时间笔试精确到 14:00");
+  assert.equal(d2.getMinutes(), 0);
+});

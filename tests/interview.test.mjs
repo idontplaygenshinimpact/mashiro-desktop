@@ -271,15 +271,15 @@ test("追问链连续 6 次后 LLM 仍返回 followup → 服务端安全阀强�
   assert.equal(memory.getInterview().roundIndex, 1, "轮次推进（不卡死在追问链）");
 });
 
-test("next_kind=new → 本轮内换新题，深度归 0，轮次推进", async () => {
+test("next_kind=new → 本轮内换新题，深度归 0，不推进轮次（与 prompt 语义一致）", async () => {
   setLlmResponses(FIRST_Q);
   await startInterview({ position: "前端" });
   setLlmResponses('{"scores":{"tech":80,"expr":80,"depth":80,"edge":80,"reflect":80},"comment":"可以","finish":false,"next_kind":"new","next_question":"项目里另一个难点是什么","next_basis":"换题","next_dimension":"项目","next_criteria":"c","next_boundary":"b","weak_topic":"","weak_hit":""}');
   const r = await submitAnswer("回答");
   assert.equal(r.depth, 0, "新题深度归 0");
   assert.equal(r.round, 1, "返回的 round 是当前轮（本轮编号）");
-  assert.equal(memory.getInterview().current.round, 2, "会话内下一问轮数 +1");
-  assert.equal(memory.getInterview().roundIndex, 1, "轮次推进");
+  assert.equal(memory.getInterview().current.round, 1, "会话内下一问仍是本轮（new=本轮内换题，不 +1）");
+  assert.equal(memory.getInterview().roundIndex, 0, "轮次不推进（new 与 prompt 语义一致，仅 stage 推进）");
 });
 
 test("轮次推进到底 → 八股轮必然到达（ROUND_SEQ[3] 是八股穿插）", async () => {
