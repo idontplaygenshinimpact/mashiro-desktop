@@ -90,8 +90,28 @@ test("searchKnowledge 命中相关条目（FTS 通道按 id 关联）", async ()
 test("searchKnowledge 空查询返回空 + 2 字词不崩", async () => {
   assert.deepEqual(await searchKnowledge(""), []);
   assert.deepEqual(await searchKnowledge("  "), []);
-  const r = await searchKnowledge("防抖", 2); // trigram 对 2 字词无效，走向量通道或空
+  const r = await searchKnowledge("防抖", 2); // trigram 对 2 字词无效，走 LIKE 兜底
   assert.ok(Array.isArray(r), "2 字词查询不崩");
+});
+
+test("searchKnowledge：2 字中文词 LIKE 兜底命中（缓存/闭包类考点不静默失效）", async () => {
+  seed([{ id: "kb_db", source: "study", kind: "note", title: "学习·防抖与节流", content: "防抖：事件停止触发后延迟执行；节流：固定时间间隔执行", text: "防抖 节流" }]);
+  const hits = await searchKnowledge("防抖", 3);
+  assert.ok(hits.some((h) => h.title.includes("防抖")), "2 字中文词可命中");
+  const hit = hits.find((h) => h.title.includes("防抖"));
+  assert.ok(hit && String(hit.content).includes("防抖"), "命中内容正确");
+});
+
+test("searchKnowledge：拉丁缩写不被 https URL 噪声淹没（标题提权）", async () => {
+  // 文档卡片正文含"官网：https://…"（htt/ttp trigram 命中 19 条文档的噪声源）
+  seed([
+    { id: "kb_doc1", source: "doc", kind: "doc", title: "文档·Vue", content: "Vue（前端框架）\n官网：https://vuejs.org/guide/introduction.html 教程与 API 参考", text: "Vue 官网" },
+    { id: "kb_doc2", source: "doc", kind: "doc", title: "文档·React", content: "React（前端框架）\n官网：https://react.dev/learn 快速上手", text: "React 官网" },
+    { id: "kb_http", source: "study", kind: "note", title: "学习·HTTP 缓存详解", content: "HTTP 缓存：Cache-Control 与 ETag 的协商流程详解，强缓存命中直接走本地", text: "HTTP 缓存" },
+  ]);
+  const hits = await searchKnowledge("HTTP", 5);
+  assert.ok(hits.length > 0, "有命中");
+  assert.equal(hits[0].title, "学习·HTTP 缓存详解", "标题含 HTTP 的真教程排第一（压过 URL 噪声）");
 });
 
 test("getKnowledgeStats 统计按 kind 分组", () => {
