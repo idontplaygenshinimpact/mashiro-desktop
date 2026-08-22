@@ -38,6 +38,23 @@ test("findStudyFile：study_notes 按 topic 精确匹配", () => {
   assert.equal(findStudyFile({ topic: "不存在的主题" }), null);
 });
 
+test("findStudyFile：topic 含冒号/斜杠等非法字符 → 仍能命中已存档文件（回归：存档名与查找名不一致导致讲解/追问被覆盖丢失）", () => {
+  const notesDir = studyNotesDir();
+  mkdirSync(notesDir, { recursive: true });
+  // 与 routes/study.mjs 存档路径一致：sanitizeFilename(topic).md
+  const topic = "项目·CareerPilot / AI Career Studio";
+  const archiveName = sanitizeFilename(topic) + ".md";
+  writeFileSync(path.join(notesDir, archiveName), "# 讲解 + 追问内容", "utf8");
+  const hit = findStudyFile({ topic, source: "简历拷打" });
+  assert.ok(hit, "含 / 的 topic 必须命中 study_notes 存档");
+  assert.ok(hit.endsWith(archiveName), `命中文件应为 ${archiveName}，实际 ${hit}`);
+  // 冒号、反斜杠同理
+  const t2 = "React: 组件生命周期";
+  writeFileSync(path.join(notesDir, sanitizeFilename(t2) + ".md"), "# 讲解2", "utf8");
+  const hit2 = findStudyFile({ topic: t2 });
+  assert.ok(hit2 && hit2.endsWith(sanitizeFilename(t2) + ".md"), "含冒号的 topic 命中");
+});
+
 test("findStudyFile：产出目录按 source 模糊匹配", () => {
   mkdirSync(path.join(tmpOut, "2026-08-16_discover"), { recursive: true });
   writeFileSync(path.join(tmpOut, "2026-08-16_discover", "React 面经.md"), "# 内容", "utf8");
