@@ -5,7 +5,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -216,6 +216,10 @@ test("POST /api/challenges/mark-done + mark-wrong 闭环回流", async () => {
 });
 
 test("POST /api/self-check 立即自检 + GET 报告", async () => {
+  // 造一个"刚刚备份"（数据备份健康检查需要——无备份时自检 ok=false 属预期风险提示）
+  const bkDir = path.join(path.dirname(process.env.MIANSHI_DB_PATH), "backups", "2026-08-22T00-00-00_manual");
+  mkdirSync(bkDir, { recursive: true });
+  writeFileSync(path.join(bkDir, "manifest.json"), JSON.stringify({ createdAt: Date.now(), reason: "manual", files: ["mianshi.db"] }, null, 2), "utf8");
   const r = await json(await post("/api/self-check", {}));
   assert.equal(r.status, 200);
   assert.equal(r.j.ok, true);

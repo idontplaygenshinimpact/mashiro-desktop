@@ -3,6 +3,8 @@
 > 目标：桌宠「真白」作为**开源宿主应用**，秋招助手是第一个插件，第三方开发者可以写插件。
 > 参考：DeepSeek Harness（DSH）的分层 patch 模式 + Koishi/Cordis 的插件生态模式。
 
+> **落地状态（2026-08）**：阶段 1（协议+加载器）✅ 阶段 2（模板插件+settings 命名空间/init/health/panel 声明）✅ 阶段 3（插件管理页/启停/市场安装/面板动态渲染）✅——本文档保留完整路线图供后续阶段（面板 section 化、插件级迁移）参考；已落地的实现以 `plugins/plugin-template/`（协议即文档）与 `lib/plugin-admin.mjs` 为准。
+
 ---
 
 ## 0. 开源定位（新维度）
@@ -12,7 +14,7 @@
 | 许可证 | **MIT**（核心代码） | 宽松，插件生态友好；第三方资产（Live2D 模型 ISC）可再分发 |
 | 仓库 | 单仓库（根即宿主 + `plugins/` 目录） | 个人项目规模，pnpm workspace 过重；插件增多后再拆 |
 | 语言 | 代码/注释中文为主，README 中英双语（DSH 式 `English \| 中文`） | 面向中文桌宠社区，同时不挡海外贡献者 |
-| CI | GitHub Actions：单测全量 + Windows 构建验证 | 639 测试作为门禁，开源后贡献者代码必须过 CI |
+| CI | GitHub Actions：单测全量 + Windows 构建验证 | 730+ 测试作为门禁，开源后贡献者代码必须过 CI |
 | 敏感资产 | `data/`、`models/`、`.env`、自训声音资产**不进仓库** | 隐私 + 体积；README 说明首次运行自动生成/需自备 |
 | 示例插件 | `plugins/plugin-template/`（hello 插件，协议即文档） | 新贡献者照抄即可写插件 |
 

@@ -81,7 +81,22 @@ test("LLM 失败率：>30% 报告；正常态不报告", () => {
   assert.ok(!r.issues.some((i) => i.name === "LLM 调用失败率高"), "2/42 失败 → 正常");
 });
 
+test("数据备份健康：从未备份 → 报告；48h 内有备份 → 正常", () => {
+  const r1 = sc.runSelfCheck({ outputDir: outDir });
+  assert.ok(r1.issues.some((i) => i.name === "数据备份"), "从未备份 → 报告风险");
+  // 造一个 1 小时前的备份
+  const bkDir = path.join(path.dirname(process.env.MIANSHI_DB_PATH), "backups", "2026-08-22T00-00-00_manual");
+  mkdirSync(bkDir, { recursive: true });
+  writeFileSync(path.join(bkDir, "manifest.json"), JSON.stringify({ createdAt: Date.now() - 3600 * 1000, reason: "manual", files: [] }, null, 2), "utf8");
+  const r2 = sc.runSelfCheck({ outputDir: outDir });
+  assert.ok(!r2.issues.some((i) => i.name === "数据备份"), "1 小时前备份 → 正常");
+});
+
 test("全绿时 ok=true、无 issues", () => {
+  // 造一个"刚刚备份"（数据备份健康检查需要）
+  const bkDir = path.join(path.dirname(process.env.MIANSHI_DB_PATH), "backups", "2026-08-22T01-00-00_manual");
+  mkdirSync(bkDir, { recursive: true });
+  writeFileSync(path.join(bkDir, "manifest.json"), JSON.stringify({ createdAt: Date.now(), reason: "manual", files: ["mianshi.db"] }, null, 2), "utf8");
   const r = sc.runSelfCheck({ outputDir: outDir });
   assert.equal(r.ok, true);
   assert.equal(r.issues.length, 0);
