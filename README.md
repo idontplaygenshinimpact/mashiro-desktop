@@ -2,7 +2,7 @@
 
 > 🎀 桌面 AI **宿主「真白」+ 第一个插件「秋招助手」**。真白是 Electron 桌宠宿主（Live2D / 语音 / 面板框架 / 设置中心），秋招助手是跑在宿主上的能力插件（面经采集 / 模拟面试 / 学习清单 / 复习卡 / 知识库 / 对话 agent）。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml) ![Node](https://img.shields.io/badge/Node-%3E%3D22-5fa04e) ![Tests](https://img.shields.io/badge/tests-725%2B-8a5adc) ![Platform](https://img.shields.io/badge/Windows-10%2F11-0078d6)
 
 ---
 
