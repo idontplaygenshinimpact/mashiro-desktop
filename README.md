@@ -19,8 +19,9 @@
 |---|---|
 | **爬取引擎** | 自动逛牛客/掘金/CSDN，抓取前端 & AI Agent 面经/笔试题，AI 筛选出**具体题目**并完整讲解（结论/原理/JS实现/边界），归档 Markdown |
 | **学习闭环** | 从产出提炼"优先学习清单" → 勾选完成 → 复盘出题 → 判分 → 错题自动进入**薄弱点**，下次优先学；FSRS 间隔复习 + 选择题自测 + 到期提醒 |
-| **专项练习** | 牛客 TOP101 算法题（免登录随时刷）+ **手写/算法题库 448 道**（92 道手写 + CodeTop 高频 400 去重合并；本地沙箱判题：写完直接跑测试，通过自动记进度，答错回流薄弱点与复习卡） |
-| **模拟面试** | 面试官按 STaR 五维评分、追问深挖、复盘报告 + 薄弱点回流；**设置中心上传简历自动接面试官项目拷打**（个人项目源码档案注入） |
+| **专项练习** | 牛客 TOP101 算法题（免登录随时刷）+ **手写/算法题库 448 道**（92 道手写 + CodeTop 高频 400 去重合并；**337 道可自动判题**——高频题示例自动生成测试用例；写完直接跑测试，通过自动记进度，答错回流薄弱点与复习卡） |
+| **模拟面试** | 面试官按 STaR 五维评分、追问深挖、复盘报告 + 薄弱点回流；**优先考察清单自动聚合练习数据**（题库错题/复习错题/今日复习/到期卡/清单未完成，无需手动选重点）；设置中心上传简历自动接面试官项目拷打 |
+| **对话闭环** | 对话不只是问答——可**反哺学习清单**（add_study_items）、**建复习卡**（create_review_card）、**挂学习任务**（todo，面板可见进度）；提问语义相似的历史追问**自动命中缓存**（零 LLM 请求，省成本） |
 | **求职闭环** | 简历 → 方向画像 → 岗位匹配/投递 → 笔试日程 → 面试邀约（邮箱自动识别）→ 全节点回流（LORF 规则引擎给"现在最该做什么"） |
 | **本地知识库** | 面经/清单/复习卡/岗位/真题/个人项目源码 → 纯关键词检索（FTS5），对话与复习可引用 |
 
@@ -33,9 +34,9 @@
 真白按"宿主 + 插件"设计演进（参考 DeepSeek Harness 的分层 patch 模式：manifest 声明 + 层栈合并 + 按 id 增量 patch）：
 
 - **阶段 0**：注册中心收敛（路由/定时任务集中声明，零行为变化）——规划中
-- **阶段 1**：插件协议落地（`manifest.json` + 加载器），秋招助手迁入 `plugins/job-hunter/`
-- **阶段 2**：面板扩展点（Tab/设置表单动态化）+ 示例插件模板（新插件照抄即写）
-- **阶段 3**：插件管理（启用/禁用）+ 插件市场（`plugins.json` 索引一键安装）
+- **阶段 1**：✅ 插件协议落地（`manifest.json` + 加载器），秋招助手迁入 `plugins/job-hunter/`
+- **阶段 2**：✅ 示例插件模板 `plugins/plugin-template/`（协议即文档）+ 加载器扩展（settings 命名空间 `plg_<id>_` 前缀 / init 钩子 / health 检查 / panel 声明校验）
+- **阶段 3**：插件管理（启用/禁用）+ 面板扩展点动态渲染 + 插件市场（`plugins.json` 索引一键安装）——规划中
 
 完整方案见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)。未来插件方向：日语陪练、桌宠养成、番茄钟独立版……
 
@@ -184,20 +185,23 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 │   ├── preload.js                  # IPC 桥接
 │   └── renderer/                   # 面板渲染层（Tab 拆 5 文件 + vad.js + pcm-worklet.js）
 ├── plugins/                        # ── 插件目录 ──
-│   └── job-hunter/                 # 插件①：秋招助手（聚合 12 业务域，一个整体插件）
-│       ├── manifest.json           # 插件声明（id/name/version/server）
-│       ├── server.mjs              # 插件入口：register(api) 聚合注册
-│       └── routes/                 # 12 业务路由域：review/kb/practice/misc/study/
-│                                   #   interview/jobs/zhenti/oj/focus/mail/rss
+│   ├── job-hunter/                 # 插件①：秋招助手（聚合 12 业务域，一个整体插件）
+│   │   ├── manifest.json           # 插件声明（id/name/version/server）
+│   │   ├── server.mjs              # 插件入口：register(api) 聚合注册
+│   │   └── routes/                 # 12 业务路由域：review/kb/practice/misc/study/
+│   │                               #   interview/jobs/zhenti/oj/focus/mail/rss
+│   └── plugin-template/            # 示例插件模板（协议即文档，新插件照抄即写）：
+│                                   #   manifest panel 声明 + server 演示 路由/设置/init/health
 ├── lib/                            # ── 共享业务库（宿主与插件共用，单一数据源）──
-│   ├── plugin-loader.mjs           # 插件加载器（发现/校验/register/失败隔离）
-│   ├── agent.mjs                   # 对话 agent 核心：工具循环 + 权限 + 规划
+│   ├── plugin-loader.mjs           # 插件加载器（发现/校验/register/init/health/失败隔离 + settings 命名空间）
+│   ├── agent.mjs                   # 对话 agent 核心：工具循环 + 权限 + 规划（可反哺清单/复习卡/todo）
 │   ├── tools/                      # agent 工具层（schemas/impl/exec-utils/mcp）
 │   ├── routes/core.mjs             # 核心基础设施域（health/patrol/run-discover…）
 │   ├── career.mjs                  # 方向画像中心（简历 → 方向 → 知识树联动）
 │   ├── knowledge.mjs               # 知识树模板（frontend/backend/algorithm 可配置）
 │   ├── patrol.mjs                  # 主动巡检（定时搜帖→讲解→存档→通知；避开 DS 峰时）
 │   ├── rag.mjs                     # 本地知识库（FTS5 关键词检索 + 开关）
+│   ├── followup-cache.mjs          # 追问语义缓存（历史追问去重命中，零 LLM 请求）
 │   ├── mail.mjs                    # 邮箱邀约识别日程（IMAP → LLM → schedule_events）
 │   ├── study.mjs / review.mjs / interview.mjs / quiz.mjs / recommend.mjs
 │   ├── personal-projects.mjs       # 个人项目源码档案（面试/讲解/对话全模块注入）
