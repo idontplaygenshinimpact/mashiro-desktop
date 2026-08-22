@@ -1,6 +1,6 @@
 // 学习清单域路由（纵向拆分：/api/study-* 从 widget.mjs 迁出）
 // 依赖注入：corsOrigin（SSE 跨域）、laneSubmit（串行锁）
-import { readFileSync, mkdirSync, writeFileSync, appendFileSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import path from "node:path";
 import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
@@ -150,13 +150,15 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         push({ type: "delta", delta });
       });
       // 追加写回讲解文件（持久化：下次打开能看到补充内容）
+      // 写回路径固定 study_notes（findStudyFile 可能命中产出目录文件——把追问追加进面经会污染产出）
       try {
         const notesDir = studyNotesDir();
         mkdirSync(notesDir, { recursive: true });
-        const savePath = filePath || path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
+        const inNotes = filePath && filePath.startsWith(notesDir);
+        const savePath = inNotes ? filePath : path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
         const appendBlock = `\n\n---\n\n## 💬 追问：${question}\n\n${full.slice(0, 8000)}\n`;
-        // 追加（文件存在则 append，否则新建带头部）
-        if (filePath) {
+        // 追加（存档存在则 append，否则新建带头部）
+        if (existsSync(savePath)) {
           appendFileSync(savePath, appendBlock, "utf8");
         } else {
           const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
@@ -196,13 +198,14 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         full += delta;
         push({ type: "delta", delta });
       });
-      // 写回：原文件改名 .orig 备份，写整合版
+      // 写回：原文件改名 .orig 备份，写整合版（写回路径固定 study_notes，防覆盖产出目录文件）
       let savedPath = null;
       try {
         const notesDir = studyNotesDir();
         mkdirSync(notesDir, { recursive: true });
-        const savePath = filePath || path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
-        if (filePath) {
+        const inNotes = filePath && filePath.startsWith(notesDir);
+        const savePath = inNotes ? filePath : path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
+        if (existsSync(savePath)) {
           try { writeFileSync(savePath + ".orig", readFileSync(savePath, "utf8"), "utf8"); } catch { /* ignore */ }
         }
         const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档（已整理） | 整理于 ${new Date().toLocaleString("zh-CN")}\n\n`;
