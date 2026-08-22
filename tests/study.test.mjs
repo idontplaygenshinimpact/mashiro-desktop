@@ -51,7 +51,7 @@ test("checkItem 勾选完成：doneAt + 自动建复习卡", async () => {
   addPlanItems(sampleItems);
   const plan = getPlan();
   const item = plan.items[0];
-  const r = checkItem(item.id, true);
+  const r = await checkItem(item.id, true);
   assert.equal(r.ok, true);
   assert.equal(r.item.done, true);
   assert.ok(r.item.doneAt);
@@ -64,16 +64,22 @@ test("checkItem 勾选完成：doneAt + 自动建复习卡", async () => {
   assert.ok(card.answer && card.answer.length > 0, "复习卡有参考答案");
 });
 
-test("checkItem 取消勾选", () => {
+test("checkItem 取消勾选", async () => {
   addPlanItems(sampleItems);
   const item = getPlan().items[0];
-  checkItem(item.id, true);
-  const r = checkItem(item.id, false);
+  await checkItem(item.id, true);
+  const r = await checkItem(item.id, false);
   assert.equal(r.item.done, false);
+  // 取消勾选：doneAt 清空（修复 LOW-4）+ 自动建的复习卡删除（修复 LOW-10）
+  assert.equal(r.item.doneAt, null, "取消勾选清空完成时间");
+  const { review } = await import("../lib/review.mjs");
+  await new Promise((r) => setTimeout(r, 30));
+  const card = review.loadCards().cards.find((c) => c.topic === item.topic);
+  assert.equal(card, undefined, "取消勾选删除自动建的复习卡");
 });
 
-test("checkItem 不存在的 id 返回错误", () => {
-  const r = checkItem("不存在", true);
+test("checkItem 不存在的 id 返回错误", async () => {
+  const r = await checkItem("不存在", true);
   assert.equal(r.ok, false);
 });
 
@@ -123,7 +129,7 @@ test("addPlanItems 支持 group 分组（简历项目固定组，不再散落未
   assert.equal(item.grp, "简历项目", "group 落库到 grp 字段");
 });
 
-test("syncResumeProjectItems：简历更新删除过时未完成项目、保留当前项目与已完成条目", () => {
+test("syncResumeProjectItems：简历更新删除过时未完成项目、保留当前项目与已完成条目", async () => {
   // 旧简历：网易云音乐 + 低代码平台
   addPlanItems([
     { topic: "项目·网易云音乐", why: "简历项目", source: "简历拷打", group: "简历项目", level: "必会" },
@@ -132,7 +138,7 @@ test("syncResumeProjectItems：简历更新删除过时未完成项目、保留�
   ]);
   // 完成"低代码平台"（保留学习记录）
   const lowcode = getPlan().items.find((i) => i.topic === "项目·低代码平台");
-  checkItem(lowcode.id, true);
+  await checkItem(lowcode.id, true);
   // 新简历：只保留低代码平台（网易云音乐已移除）
   const r = syncResumeProjectItems(["低代码平台"]);
   assert.equal(r.removed, 1, "删除过时未完成项目（网易云音乐）");
@@ -158,7 +164,7 @@ test("regenerateStudyPlan keeps old items' done/reviewed state", async () => {
   assert.equal(r1.items.length, 2);
   // 勾选完成 + 复盘第一条（模拟用户学习进度）
   const item = getPlan().items.find((i) => i.topic === "事件循环");
-  checkItem(item.id, true);
+  await checkItem(item.id, true);
   const { db } = await import("../lib/db.mjs");
   db.prepare("UPDATE study_plan_items SET reviewed=1, reviewed_at=? WHERE topic=?").run(new Date().toISOString(), "事件循环");
   // 二次生成：新条目 topic 不同（旧版会生成与旧条目同 id 的 `s1`，INSERT OR REPLACE 抹掉旧行）
