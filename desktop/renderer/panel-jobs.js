@@ -720,7 +720,73 @@ async function loadSettings() {
   // 插件管理 + 插件市场（阶段 3）
   loadPluginsAdmin();
   loadPluginMarket();
+  // 数据备份（自动/手动备份 + 列表 + 恢复）
+  loadBackups();
 }
+
+// ============ 💾 数据备份（数据安全：自动/手动备份 + 列表 + 恢复，重启生效） ============
+async function loadBackups() {
+  const box = $("backup-list");
+  if (!box) return;
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/backups");
+    const j = await r.json();
+    const list = (j?.ok && Array.isArray(j.backups)) ? j.backups : [];
+    const last = list[0];
+    const statusEl = $("set-maintain-status");
+    if (statusEl) {
+      statusEl.textContent = last
+        ? `✅ 最近备份：${new Date(last.createdAt).toLocaleString("zh-CN", { hour12: false })}（${last.reason === "auto" ? "自动" : last.reason === "pre-restore" ? "恢复前快照" : "手动"} · ${last.files.length} 项）`
+        : "未备份——建议点「💾 立即备份」（之后每天自动备份一次）";
+    }
+    box.innerHTML = list.slice(0, 8).map((b) => `
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:1px solid rgba(138,90,220,.15);border-radius:8px;padding:6px 8px;background:rgba(20,18,36,.4);font-size:11px;">
+        <span style="color:#8a87a8;">${b.reason === "auto" ? "🤖 自动" : b.reason === "pre-restore" ? "🛟 恢复前快照" : "👆 手动"}</span>
+        <span>${esc(new Date(b.createdAt).toLocaleString("zh-CN", { hour12: false }))}</span>
+        <span style="color:#8a87a8;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc((b.files || []).join("、"))}</span>
+        <button class="secondary" style="margin-left:auto;padding:3px 10px;font-size:10px;" data-restore="${esc(b.name)}">↩️ 恢复</button>
+      </div>`).join("") || '<div style="color:#8a87a8;font-size:11px;">暂无备份</div>';
+    box.querySelectorAll("[data-restore]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const name = btn.dataset.restore;
+        if (!confirm("恢复会把数据替换为该备份的版本（替换前自动备份当前状态作安全网），重启桌宠后生效。确认恢复？")) return;
+        try {
+          const rr = await fetch("http://127.0.0.1:8899/api/backups/restore", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+          });
+          const jj = await rr.json();
+          window.kanban?.notify?.("💾 数据恢复", jj?.ok ? "已标记恢复——重启桌宠后自动生效" : String(jj?.error || "恢复失败"));
+        } catch (e) {
+          window.kanban?.notify?.("💾 数据恢复", "恢复失败：" + String(e.message));
+        }
+        loadBackups();
+      });
+    });
+  } catch { /* 旧版后台服务无备份接口 */ }
+}
+
+// 立即备份按钮（面板加载时绑定一次）
+document.getElementById("set-backup-now")?.addEventListener("click", async () => {
+  const btn = $("set-backup-now");
+  const statusEl = $("set-maintain-status");
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = "⏳ 备份中…";
+  if (statusEl) statusEl.textContent = "备份中（WAL checkpoint + 复制存档）…";
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/backup", { method: "POST" });
+    const j = await r.json();
+    if (statusEl) statusEl.textContent = j?.ok ? `✅ ${j.note}（${j.name}）` : `⚠️ ${j?.error || "备份失败"}`;
+    window.kanban?.notify?.("💾 数据备份", j?.ok ? "备份完成" : String(j?.error || "备份失败"));
+  } catch (e) {
+    if (statusEl) statusEl.textContent = "⚠️ 备份失败：" + String(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "💾 立即备份";
+    loadBackups();
+  }
+});
 
 // ============ 🧩 插件管理（阶段 3：已装插件列表/启停/健康） ============
 let __installedPluginIds = new Set();

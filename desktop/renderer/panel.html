@@ -803,12 +803,14 @@
       <!-- 🛠 数据维护 -->
       <div class="jobs-setup" style="margin-top:8px;">
         <div class="form-row">
-          <label>🛠 数据维护（知识库 / 系统自检）</label>
+          <label>🛠 数据维护（知识库 / 系统自检 / 数据备份）<span style="font-weight:normal;color:#8a87a8;font-size:11px;">——备份含全部数据（清单/复习卡/题库/岗位/简历）+ AI 讲解存档，自动每天一次，保留最近 10 份；恢复前自动快照当前状态</span></label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button id="set-kb-rebuild" class="secondary" style="padding:6px 12px;font-size:11px;">🔄 重建知识库索引</button>
             <button id="set-self-check" class="secondary" style="padding:6px 12px;font-size:11px;">🔍 立即系统自检</button>
+            <button id="set-backup-now" class="secondary" style="padding:6px 12px;font-size:11px;">💾 立即备份</button>
           </div>
           <div class="resume-status" id="set-maintain-status"></div>
+          <div id="backup-list" style="margin-top:6px;display:flex;flex-direction:column;gap:6px;"></div>
         </div>
       </div>
     </section>
