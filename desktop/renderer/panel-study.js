@@ -636,20 +636,20 @@ function clearIvRecordings() {
   if (ivMicRecording) stopIvMic();
 }
 
-// 🎯 已知薄弱点 chips（面试设置页）：点击填入重点方向 → 面试优先考察
-// 数据源与面试薄弱点队列一致（memory 可信薄弱点：topic + 答错次数）
+// 🎯 面试优先考察 chips（面试设置页）：多源自动聚合（薄弱点/题库错题/复习错题/今日复习/
+// 到期卡/清单未完成）——点击填入重点方向（手动选配；不选则面试自动全量优先考察）
 async function loadIvWeakChips() {
   const row = $("iv-weak-row"), chips = $("iv-weak-chips");
   if (!row || !chips) return;
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/weak-points");
+    const r = await fetch("http://127.0.0.1:8899/api/iv-focus-sources");
     const j = await r.json();
-    const weak = (j.weak || []).slice(0, 6);
-    if (!weak.length) { row.classList.add("hidden"); chips.innerHTML = ""; return; }
+    const items = (j.items || []).slice(0, 12);
+    if (!items.length) { row.classList.add("hidden"); chips.innerHTML = ""; return; }
     row.classList.remove("hidden");
-    chips.innerHTML = weak.map((w) => `
-      <button class="job-chip iv-weak-chip" data-topic="${esc(w.topic)}" title="答错 ${w.failCount ?? 1} 次（${esc(w.source || "模拟面试")}），面试将优先考察">
-        ${esc(w.topic)} <i>×${w.failCount ?? 1}</i></button>`).join("");
+    chips.innerHTML = items.map((w) => `
+      <button class="job-chip iv-weak-chip" data-topic="${esc(w.topic)}" title="${esc(w.reason || "待考察")}——点击加入本次面试重点">
+        ${esc(w.topic)} <i>${esc(w.reason || "")}</i></button>`).join("");
     chips.querySelectorAll(".iv-weak-chip").forEach((b) => {
       b.addEventListener("click", () => {
         const f = $("iv-focus");
@@ -658,7 +658,7 @@ async function loadIvWeakChips() {
         if (!parts.includes(t)) parts.push(t);
         f.value = parts.join("、");
         b.classList.add("picked");
-        window.kanban.notify("🎯 薄弱点", `已加入重点方向：${t}`);
+        window.kanban.notify("🎯 优先考察", `已加入重点方向：${t}（也可不选——面试自动聚合全部练习数据）`);
       });
     });
   } catch { /* ignore */ }

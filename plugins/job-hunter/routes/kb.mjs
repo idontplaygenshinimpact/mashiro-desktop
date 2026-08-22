@@ -87,6 +87,20 @@ export function registerKbRoutes(router) {
     }
   });
 
+  router.route("/api/iv-focus-sources", async (req, res) => {
+    // 面试优先考察可选项（手动选配用）：复用 startInterview 的多源聚合——
+    // 薄弱点/题库错题/复习错题/今日复习/到期卡/清单未完成，带来源原因
+    try {
+      const { buildInterviewFocus } = await import("#lib/interview.mjs");
+      const items = await buildInterviewFocus();
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, items }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+
   router.route("/api/mastery", (req, res) => {
     try {
       const mastery = knowledgeApi.getMastery();
