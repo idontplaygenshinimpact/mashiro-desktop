@@ -116,7 +116,7 @@ export function assertConfig() {
   if (!config.apiKey) {
     console.error(
       "\n❌ 未找到 DeepSeek API Key！\n" +
-        "  请在 D:\\mianshi-agent\\.env 中配置：\n" +
+        "  请在项目根目录的 .env 中配置：\n" +
         "    DEEPSEEK_API_KEY=sk-xxx\n" +
         "  或设置环境变量 DEEPSEEK_API_KEY\n" +
         "  （也可复用 opencode 的 key：~/.local/share/opencode/auth.json）\n"
