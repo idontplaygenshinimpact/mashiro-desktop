@@ -5,7 +5,7 @@ import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses } 
 
 const dbDir = setupTempDb("study");
 mockLLM(); // F1 回归测试需要 generateStudyPlan（mock 必须在 import study 之前）
-const { getPlan, addPlanItems, checkItem, startReview, generateStudyPlan } = await import("../lib/study.mjs");
+const { getPlan, addPlanItems, checkItem, startReview, generateStudyPlan, syncResumeProjectItems } = await import("../lib/study.mjs");
 
 beforeEach(async () => { await clearAllTables(); });
 after(() => { cleanupTempDb(dbDir); });
@@ -47,8 +47,9 @@ test("checkItem 勾选完成：doneAt + 自动建复习卡", async () => {
   assert.equal(r.ok, true);
   assert.equal(r.item.done, true);
   assert.ok(r.item.doneAt);
-  // 学习闭环：自动建 FSRS 复习卡（新卡有 1 天首复习缓冲，不进到期队列，直接查卡片表）
+  // 学习闭环：自动建 FSRS 复习卡（checkItem 内部异步 import().then 建卡——等待微任务落定）
   const { review } = await import("../lib/review.mjs");
+  await new Promise((r) => setTimeout(r, 30));
   const card = review.loadCards().cards.find((c) => c.topic === item.topic);
   assert.ok(card, "勾选完成自动建复习卡");
   // 参考答案：verify_question 兜底 或 讲解存档（study_notes/{topic}.md，真实环境存在时优先——测试不假设文件系统）
@@ -105,6 +106,39 @@ test("normalizeTopic/isSimilarTopic 相似去重（防表述漂移重复 + 层�
   assert.ok(!isSimilarTopic(normalizeTopic("深拷贝"), normalizeTopic("浅拷贝")), "深拷贝≠浅拷贝");
   assert.ok(!isSimilarTopic(normalizeTopic("防抖"), normalizeTopic("节流")), "防抖≠节流");
   assert.ok(!isSimilarTopic("", ""), "空串不相似");
+});
+
+// F1 回归：重新生成清单时新条目 id 不能与旧条目碰撞（旧版 `s${i+1}` 会覆盖旧行 → 抹掉完成/复盘进度）
+test("addPlanItems 支持 group 分组（简历项目固定组，不再散落未分类）", () => {
+  addPlanItems([{ topic: "项目·网易云音乐", why: "简历项目", source: "简历拷打", group: "简历项目", level: "必会" }]);
+  const item = getPlan().items.find((i) => i.topic === "项目·网易云音乐");
+  assert.equal(item.grp, "简历项目", "group 落库到 grp 字段");
+});
+
+test("syncResumeProjectItems：简历更新删除过时未完成项目、保留当前项目与已完成条目", () => {
+  // 旧简历：网易云音乐 + 低代码平台
+  addPlanItems([
+    { topic: "项目·网易云音乐", why: "简历项目", source: "简历拷打", group: "简历项目", level: "必会" },
+    { topic: "项目·低代码平台", why: "简历项目", source: "简历拷打", group: "简历项目", level: "必会" },
+    { topic: "事件循环", why: "知识点", source: "产出" }, // 非项目条目不受影响
+  ]);
+  // 完成"低代码平台"（保留学习记录）
+  const lowcode = getPlan().items.find((i) => i.topic === "项目·低代码平台");
+  checkItem(lowcode.id, true);
+  // 新简历：只保留低代码平台（网易云音乐已移除）
+  const r = syncResumeProjectItems(["低代码平台"]);
+  assert.equal(r.removed, 1, "删除过时未完成项目（网易云音乐）");
+  const plan = getPlan();
+  assert.ok(!plan.items.some((i) => i.topic === "项目·网易云音乐"), "网易云音乐条目已清除");
+  assert.ok(plan.items.some((i) => i.topic === "项目·低代码平台" && i.done), "当前项目保留（已完成状态保留）");
+  assert.ok(plan.items.some((i) => i.topic === "事件循环"), "非项目条目不受影响");
+});
+
+test("syncResumeProjectItems：无过时项目 → removed 0", () => {
+  addPlanItems([{ topic: "项目·A", source: "简历拷打", level: "必会" }]);
+  const r = syncResumeProjectItems(["A"]);
+  assert.equal(r.removed, 0);
+  assert.equal(getPlan().items.length, 1);
 });
 
 // F1 回归：重新生成清单时新条目 id 不能与旧条目碰撞（旧版 `s${i+1}` 会覆盖旧行 → 抹掉完成/复盘进度）
