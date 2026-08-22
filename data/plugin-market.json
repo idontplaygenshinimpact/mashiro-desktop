@@ -1,0 +1,20 @@
+{
+  "plugins": [
+    {
+      "id": "plugin-template",
+      "name": "🧩 插件模板（示例）",
+      "version": "0.1.0",
+      "description": "插件协议示例：面板 tab + 设置表单 + 两个演示路由 + init 默认设置 + health 健康检查。学习插件开发从这里开始：复制 plugins/plugin-template 目录，改 manifest 的 id/name 即可。",
+      "files": [
+        {
+          "path": "manifest.json",
+          "url": "https://raw.githubusercontent.com/idontplaygenshinimpact/mashiro-desktop/main/plugins/plugin-template/manifest.json"
+        },
+        {
+          "path": "server.mjs",
+          "url": "https://raw.githubusercontent.com/idontplaygenshinimpact/mashiro-desktop/main/plugins/plugin-template/server.mjs"
+        }
+      ]
+    }
+  ]
+}
