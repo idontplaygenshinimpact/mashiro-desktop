@@ -164,12 +164,21 @@ test("startInterview 初始化：轮次编排 + 六态字段", async () => {
 test("submitAnswer 推进轮次：返回下一轮类型", async () => {
   setLlmResponses(FIRST_Q);
   await startInterview({ position: "前端", resume: "做过 AI 助手项目" });
-  setLlmResponses('{"scores":{"tech":70,"expr":70,"depth":70,"edge":70,"reflect":70},"comment":"可以","finish":false,"next_question":"讲讲项目架构","next_basis":"项目追问","next_dimension":"架构","next_criteria":"c","next_boundary":"b","weak_topic":""}');
+  setLlmResponses('{"scores":{"tech":70,"expr":70,"depth":70,"edge":70,"reflect":70},"comment":"可以","finish":false,"next_kind":"stage","next_question":"讲讲项目架构","next_basis":"项目追问","next_dimension":"架构","next_criteria":"c","next_boundary":"b","weak_topic":""}');
   const r = await submitAnswer("项目是我设计的");
   assert.equal(r.ok, true);
   assert.equal(r.roundType, "开场与自我介绍", "本轮类型正确");
   assert.equal(r.stage, "项目拷打", "下一轮进入项目拷打");
-  assert.equal(memory.getInterview().roundIndex, 1, "轮次索引推进");
+  assert.equal(memory.getInterview().roundIndex, 1, "轮次索引推进（stage）");
+});
+
+test("submitAnswer 未知 next_kind → 保守按 new（本轮内换题，不吞轮次）", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses('{"scores":{"tech":70,"expr":70,"depth":70,"edge":70,"reflect":70},"comment":"可以","finish":false,"next_kind":"乱写的值","next_question":"换个问题","weak_topic":""}');
+  const r = await submitAnswer("回答");
+  assert.equal(r.ok, true);
+  assert.equal(memory.getInterview().roundIndex, 0, "未知 next_kind 不推进轮次（保守 new）");
 });
 
 test("全部轮次结束 → finished", async () => {
@@ -347,4 +356,19 @@ test("startInterview 优先考察多源聚合：题库错题/复习错题/今日
   assert.ok(idx("薄弱点E") < idx("复习错题B"), "薄弱点优先");
   assert.ok(idx("复习错题B") < idx("算法错题A"), "复习错题优先于题库错题");
   assert.ok(idx("算法错题A") < idx("清单未完成D"), "题库错题优先于清单");
+});
+
+test("质量服务端兜底：低分+stage → 强制追问；高分+followup → 放行不纠缠（Bug#5）", async () => {
+  // 低分（30）+ LLM 说 stage → 服务端强制 followup（tech 轮）
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses('{"scores":{"tech":30,"expr":30,"depth":30,"edge":30,"reflect":30},"comment":"差","finish":false,"next_kind":"stage","next_question":"下一问","next_basis":"b","next_dimension":"d","next_criteria":"c","next_boundary":"b","weak_topic":""}');
+  const r1 = await submitAnswer("不太会");
+  assert.equal(r1.depth, 1, "低分强制追问（depth=1）");
+  assert.equal(memory.getInterview().roundIndex, 0, "低分强制追问不推进轮次");
+  // 高分（80）+ LLM 说 followup → 服务端放行（改 new 本轮换题，不追问）
+  setLlmResponses('{"scores":{"tech":80,"expr":80,"depth":80,"edge":80,"reflect":80},"comment":"很好","finish":false,"next_kind":"followup","next_question":"下一题","next_basis":"b","next_dimension":"d","next_criteria":"c","next_boundary":"b","weak_topic":""}');
+  const r2 = await submitAnswer("我很懂");
+  assert.equal(r2.depth, 0, "高分不追问（depth=0）");
+  assert.equal(memory.getInterview().roundIndex, 0, "高分放行本轮换题（不推进不纠缠）");
 });
