@@ -5,6 +5,10 @@
   "author": "wyyai",
   "license": "MIT",
   "type": "module",
+  "imports": {
+    "#lib/*": "./lib/*",
+    "#root/*": "./*"
+  },
   "main": "desktop/main.mjs",
   "scripts": {
     "run": "node run.mjs",

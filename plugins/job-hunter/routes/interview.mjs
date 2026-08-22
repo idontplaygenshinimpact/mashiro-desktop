@@ -1,9 +1,9 @@
 // 模拟面试域路由（纵向拆分：/api/interview/* 从 widget.mjs 迁出）
-import * as interviewApi from "../interview.mjs";
-import * as studyApi from "../study.mjs";
-import * as reviewApi from "../review.mjs";
-import { memory } from "../memory.mjs";
-import { readBody } from "../widget-core.mjs";
+import * as interviewApi from "#lib/interview.mjs";
+import * as studyApi from "#lib/study.mjs";
+import * as reviewApi from "#lib/review.mjs";
+import { memory } from "#lib/memory.mjs";
+import { readBody } from "#lib/widget-core.mjs";
 
 export function registerInterviewRoutes(router, { laneSubmit = (fn) => fn() } = {}) {
   router.route("/api/interview/start", (req, res) => {

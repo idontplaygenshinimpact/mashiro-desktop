@@ -1,27 +1,43 @@
 # 真白 · Mashiro Desktop（mashiro-desktop）
 
-> 🎀 一个会爬面经、讲题目、陪你复盘的前端秋招 AI 桌宠。椎名真白（樱花庄的宠物女孩）等你投喂面经链接，也等你跟她对话。
+> 🎀 桌面 AI **宿主「真白」+ 第一个插件「秋招助手」**。真白是 Electron 桌宠宿主（Live2D / 语音 / 面板框架 / 设置中心），秋招助手是跑在宿主上的能力插件（面经采集 / 模拟面试 / 学习清单 / 复习卡 / 知识库 / 对话 agent）。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml)
 
 ---
 
-## 这是什么
+## 架构：宿主 + 插件
 
-一套完整的前端秋招学习系统，三合一：
+| 层 | 内容 | 状态 |
+|---|---|---|
+| **真白（宿主）** | Electron 透明窗口 + Live2D 椎名真白、点击对话（短句语音反馈）、气泡提醒、全屏自动隐藏、开机自启、设置中心框架、语音播放/输入 | ✅ 核心 |
+| **秋招助手（插件①）** | 面经爬取 / 学习闭环 / 专项练习 / 模拟面试 / 求职闭环 / 知识库 / 对话 agent | ✅ 内置（当前为内置模块，正按插件协议拆分） |
+
+**秋招助手（插件①）能力一览**：
 
 | 模块 | 作用 |
 |---|---|
 | **爬取引擎** | 自动逛牛客/掘金/CSDN，抓取前端 & AI Agent 面经/笔试题，AI 筛选出**具体题目**并完整讲解（结论/原理/JS实现/边界），归档 Markdown |
 | **学习闭环** | 从产出提炼"优先学习清单" → 勾选完成 → 复盘出题 → 判分 → 错题自动进入**薄弱点**，下次优先学；FSRS 间隔复习 + 选择题自测 + 到期提醒 |
 | **专项练习** | 牛客 TOP101 算法题（免登录随时刷）+ **手写/算法题库 91 道**（本地沙箱判题：写完直接跑测试，通过自动记进度，答错回流薄弱点） |
-| **模拟面试** | 面试官按 STaR 五维评分、追问深挖、复盘报告 + 薄弱点回流；**设置中心上传简历自动接面试官项目拷打** |
-| **桌宠** | Electron 透明窗口 + Live2D 椎名真白，桌面悬浮、点击对话（短句语音反馈）、气泡提醒、全屏自动隐藏、开机自启 |
+| **模拟面试** | 面试官按 STaR 五维评分、追问深挖、复盘报告 + 薄弱点回流；**设置中心上传简历自动接面试官项目拷打**（个人项目源码档案注入） |
 | **求职闭环** | 简历 → 方向画像 → 岗位匹配/投递 → 笔试日程 → 面试邀约（邮箱自动识别）→ 全节点回流（LORF 规则引擎给"现在最该做什么"） |
+| **本地知识库** | 面经/清单/复习卡/岗位/真题/个人项目源码 → 纯关键词检索（FTS5），对话与复习可引用 |
 
 对话式 agent：在桌宠输入框直接说"帮我搜 React 面经并讲讲事件循环"，它自己规划任务、调工具、给答案。
 
 > **个人数据闭环**：简历/岗位/日程/学习进度 全链路互通，自动识别邮箱面试邀约（含"时间待定"条目）、投递状态实时同步、笔试进入统一日程表——不用手动搬数据。
+
+### 插件化（路线图）
+
+真白按"宿主 + 插件"设计演进（参考 DeepSeek Harness 的分层 patch 模式：manifest 声明 + 层栈合并 + 按 id 增量 patch）：
+
+- **阶段 0**：注册中心收敛（路由/定时任务集中声明，零行为变化）——规划中
+- **阶段 1**：插件协议落地（`manifest.json` + 加载器），秋招助手迁入 `plugins/job-hunter/`
+- **阶段 2**：面板扩展点（Tab/设置表单动态化）+ 示例插件模板（新插件照抄即写）
+- **阶段 3**：插件管理（启用/禁用）+ 插件市场（`plugins.json` 索引一键安装）
+
+完整方案见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)。未来插件方向：日语陪练、桌宠养成、番茄钟独立版……
 
 ---
 
@@ -157,41 +173,52 @@ node discover.mjs "https://juejin.cn/search?query=React面经" 5
 ## 项目结构
 
 ```
-mashiro-desktop/
-├── desktop/                  # 桌宠（Electron）
-│   ├── main.mjs              # 主进程薄壳：窗口/托盘/生命周期
-│   ├── lib/                  # 主进程拆出模块（无 electron 依赖可单测）
-│   │   ├── widget-server.mjs # widget 服务守护（探测拉起/退出清理）
-│   │   ├── window-state.mjs  # 窗口位置持久化（防抖保存）
-│   │   └── restart.mjs       # 一键重启（bundle 防呆 + 杀进程）
-│   ├── voice-pack.mjs        # 语音包播放（短句/长句/场景，防抖+互斥+长句保护）
-│   ├── preload.js            # IPC 桥接
-│   └── renderer/             # 渲染层（按 Tab 拆 5 文件：panel-core/study/chat/jobs/rest）
-├── lib/
-│   ├── agent.mjs             # 对话 agent 核心：工具循环 + 权限 + 规划
-│   ├── tools/                # agent 工具层（拆分）：schemas/impl/exec-utils/mcp
-│   ├── routes/               # widget 全部 HTTP 路由（纵向拆分 13 域：core/review/kb/practice/misc/study/interview/jobs/zhenti/oj/focus/mail/rss）
-│   ├── career.mjs            # 方向画像中心（简历 → 方向 → 知识树联动）
-│   ├── knowledge.mjs         # 知识树模板（frontend/backend/algorithm 可配置）
-│   ├── patrol.mjs            # 主动巡检（关注点定时搜帖→讲解→存档→通知）
-│   ├── rag.mjs               # 本地知识库（FTS5 关键词检索 + 开关）
-│   ├── mail.mjs              # 邮箱邀约识别日程（IMAP → LLM → schedule_events）
-│   ├── study.mjs / review.mjs / interview.mjs / quiz.mjs
+mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 docs/plugin-architecture.md）
+├── desktop/                        # ── 真白宿主：桌宠（Electron）──
+│   ├── main.mjs                    # 主进程薄壳：窗口/托盘/生命周期/插件无关
+│   ├── lib/                        # 主进程拆出模块（无 electron 依赖可单测）
+│   │   ├── widget-server.mjs       # widget 服务守护（探测拉起/退出清理）
+│   │   ├── window-state.mjs        # 窗口位置持久化（防抖保存）
+│   │   └── restart.mjs             # 一键重启（bundle 防呆 + 杀进程）
+│   ├── voice-pack.mjs              # 语音包播放（短句/长句/场景，防抖+互斥+长句保护）
+│   ├── preload.js                  # IPC 桥接
+│   └── renderer/                   # 面板渲染层（Tab 拆 5 文件 + vad.js + pcm-worklet.js）
+├── plugins/                        # ── 插件目录 ──
+│   └── job-hunter/                 # 插件①：秋招助手（聚合 12 业务域，一个整体插件）
+│       ├── manifest.json           # 插件声明（id/name/version/server）
+│       ├── server.mjs              # 插件入口：register(api) 聚合注册
+│       └── routes/                 # 12 业务路由域：review/kb/practice/misc/study/
+│                                   #   interview/jobs/zhenti/oj/focus/mail/rss
+├── lib/                            # ── 共享业务库（宿主与插件共用，单一数据源）──
+│   ├── plugin-loader.mjs           # 插件加载器（发现/校验/register/失败隔离）
+│   ├── agent.mjs                   # 对话 agent 核心：工具循环 + 权限 + 规划
+│   ├── tools/                      # agent 工具层（schemas/impl/exec-utils/mcp）
+│   ├── routes/core.mjs             # 核心基础设施域（health/patrol/run-discover…）
+│   ├── career.mjs                  # 方向画像中心（简历 → 方向 → 知识树联动）
+│   ├── knowledge.mjs               # 知识树模板（frontend/backend/algorithm 可配置）
+│   ├── patrol.mjs                  # 主动巡检（定时搜帖→讲解→存档→通知；避开 DS 峰时）
+│   ├── rag.mjs                     # 本地知识库（FTS5 关键词检索 + 开关）
+│   ├── mail.mjs                    # 邮箱邀约识别日程（IMAP → LLM → schedule_events）
+│   ├── study.mjs / review.mjs / interview.mjs / quiz.mjs / recommend.mjs
+│   ├── personal-projects.mjs       # 个人项目源码档案（面试/讲解/对话全模块注入）
 │   ├── job-platforms.mjs / platform-accounts.mjs / platforms/
-│   ├── context-providers.mjs # 个人数据注册表（MCP 单数据源）
+│   ├── speech.mjs / speech-worker.mjs  # 本地 ASR（sherpa-onnx + worker 线程）
+│   ├── context-providers.mjs       # 个人数据注册表（MCP 单数据源）
 │   ├── skills.mjs / hooks.mjs / subagent.mjs / llm.mjs / ai.mjs
-│   └── db.mjs                # node:sqlite 主存储（WAL）
-├── discover.mjs / run.mjs    # 爬取入口（核心逻辑在 lib/）
-├── widget.mjs                # 后台数据服务（HTTP :8899）——已无内联路由，纯服务生命周期
-├── mcp-server.mjs            # MCP Server（暴露个人数据/工具给外部 agent）
-├── scripts/
-│   ├── voice-train/          # 语音训练完整流程（README.md 内置）
-│   ├── synth-mashiro-long.py / score-voices.py / audit-voices.py  # 合成长句/评测/审计
-│   └── test-module.mjs       # 按模块跑测试（升级单模块不用全量）
-├── skills/                   # Skills 插件（即插即用）
-├── config.mjs                # 配置（API Key/模型/多 Provider）；面板设置>环境变量
-├── data/                     # mianshi.db + 配置 + 语音评分缓存
-└── output/                   # 产出：日期目录 + Markdown 题库
+│   └── db.mjs                      # node:sqlite 主存储（WAL）
+├── widget.mjs                      # 后台数据服务（HTTP :8899）：鉴权 + 核心路由 + 插件加载 + 定时任务
+├── mcp-server.mjs                  # MCP Server（个人数据/项目档案/工具 → 外部 agent）
+├── desktop/ 之外还有：
+├── assets/voice/                   # 自训练声线（GPT-SoVITS，随仓库发布）
+├── docs/                           # 插件化架构方案 / 语音训练流程
+├── scripts/                        # 语音合成评测 / 模型下载 / 按模块测试等工具
+├── skills/                         # Skills 插件（即插即用）
+├── tests/                          # 680 用例（单元 + jsdom 面板交互 + 集成）
+├── .github/workflows/ci.yml        # CI：全量测试门禁
+├── config.mjs                      # 配置（API Key/模型）；面板设置 > 环境变量
+├── data/                           # 运行数据（不入库：db/token/日志）
+├── models/                         # 本地 ASR 模型（npm run voice:model 下载）
+└── output/                         # 产出：日期目录 + Markdown 题库（含手动导入）
 ```
 
 ---
@@ -408,7 +435,7 @@ npm run dist                # 生成 release/ 下 NSIS 安装包 + 便携版（�
 - [x] 可观测性：LLM 调用/token/耗时监控（面板实时可见）
 - [x] 系统自检：启动 + 每 6h 自动扫隐患（表堆积自动清理 / 产出污染 / 巡检停摆 / LLM 失败率 / 错误日志 / DB 体积），问题自动修复或弹通知（面板「爬取产出」Tab 可手动检查）
 - [x] 产品化基础：多 Provider 路由 / Hooks 事件系统 / Skills 插件机制 / Subagent 编排 / 对话历史恢复 / 面板 CSP + 渲染沙箱 / CI 修复 / 安装包配置
-- [x] 纵向拆分（工程质量）：widget → lib/routes 13 域、agent → lib/tools、main → desktop/lib、panel → 5 文件，全部可独立测试；`test:module` 按模块跑
+- [x] 纵向拆分（工程质量）：widget → 核心域 + 插件加载器、agent → tools 分层、面板 5 文件、13 域路由 → 12 业务域迁入 plugins/job-hunter + core 基础设施域lib/tools、main → desktop/lib、panel → 5 文件，全部可独立测试；`test:module` 按模块跑
 - [x] 多轮回环审计（workflow 并行 + 修复 50+ 断裂点）：简历→面试官、岗位投递状态、邮箱自动检查+待定邀约、笔试进日程、复习答错回流、LLM 配置互清等
 - [x] 语音系统：GPT-SoVITS 长句合成（防"话没说完"分块优化）+ 评测/审计（score/audit）+ 训练流程内置（voice-train）+ 交互重设计（单击短句/空闲长句/长句播放保护）
 - [x] 设置中心可配：API Key/Base URL/模型、方向画像/知识树模板、邮箱自动检查、巡检 token 预算、本地知识库开关、招聘平台账号——全部免改代码

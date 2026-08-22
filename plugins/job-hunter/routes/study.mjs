@@ -2,12 +2,12 @@
 // 依赖注入：corsOrigin（SSE 跨域）、laneSubmit（串行锁）
 import { readFileSync, mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import path from "node:path";
-import * as studyApi from "../study.mjs";
-import * as reviewApi from "../review.mjs";
-import { pick as pickEmotion, EMOTIONS } from "../emotions.mjs";
-import { findStudyFile, studyNotesDir, sanitizeFilename } from "../study-files.mjs";
-import { readBody } from "../widget-core.mjs";
-import { getProjectArchiveContext } from "../personal-projects.mjs";
+import * as studyApi from "#lib/study.mjs";
+import * as reviewApi from "#lib/review.mjs";
+import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
+import { findStudyFile, studyNotesDir, sanitizeFilename } from "#lib/study-files.mjs";
+import { readBody } from "#lib/widget-core.mjs";
+import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
 
 // 项目条目特化：topic 剥离"项目·"前缀；讲解引导改为"项目剖析"（面试拷打准备），
 // 而非把项目当知识点讲（此前"请完整讲解：项目·网易云音乐" → LLM 凭空编，逻辑奇怪）
@@ -78,8 +78,8 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     const push = send(res);
     push({ type: "start", topic: item.topic });
     let full = "";
-    import("../ai.mjs").then(async ({ solveQuestionStream }) => {
-      const { getCareerProfile } = await import("../career.mjs");
+    import("#lib/ai.mjs").then(async ({ solveQuestionStream }) => {
+      const { getCareerProfile } = await import("#lib/career.mjs");
       const prof = getCareerProfile();
       const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案
       const ep = explainPromptFor(item, prof); // 项目条目 → 项目剖析引导
@@ -139,7 +139,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     const push = send(res);
     push({ type: "start", topic: item.topic });
     let full = "";
-    import("../ai.mjs").then(async ({ solveAppendStream }) => {
+    import("#lib/ai.mjs").then(async ({ solveAppendStream }) => {
       const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（追问也基于真实代码）
       full = await solveAppendStream({
         topic: item.topic,
@@ -191,7 +191,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     const push = send(res);
     push({ type: "start", topic: item.topic });
     let full = "";
-    import("../ai.mjs").then(async ({ consolidateStudyStream }) => {
+    import("#lib/ai.mjs").then(async ({ consolidateStudyStream }) => {
       full = await consolidateStudyStream({ topic: item.topic, content }, (delta) => {
         full += delta;
         push({ type: "delta", delta });
@@ -246,7 +246,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         const push = send(res);
         push({ type: "start", topic: topics.map((t) => t.topic).join(" + ") });
         let full = "";
-        import("../ai.mjs").then(async ({ clusterStudyStream }) => {
+        import("#lib/ai.mjs").then(async ({ clusterStudyStream }) => {
           full = await clusterStudyStream({
             topics,
             onChunk: (delta) => {
@@ -301,8 +301,8 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
       }
     }
     // 无文件：现场生成讲解（格式：结论/原理/实现/边界），并写入 study_notes 存档
-    import("../ai.mjs").then(async ({ solveQuestion }) => {
-      const { getCareerProfile } = await import("../career.mjs");
+    import("#lib/ai.mjs").then(async ({ solveQuestion }) => {
+      const { getCareerProfile } = await import("#lib/career.mjs");
       const prof = getCareerProfile();
       const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案
       const ep = explainPromptFor(item, prof); // 项目条目 → 项目剖析引导

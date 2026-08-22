@@ -1,7 +1,7 @@
 // jobs 域路由（纵向拆分：/api/jobs* 从 widget.mjs 迁出）
-import { readBody } from "../widget-core.mjs";
-import * as jobsApi from "../jobs.mjs";
-import * as studyApi from "../study.mjs";
+import { readBody } from "#lib/widget-core.mjs";
+import * as jobsApi from "#lib/jobs.mjs";
+import * as studyApi from "#lib/study.mjs";
 
 export function registerJobsRoutes(router, { getCorsOrigin = () => "*" } = {}) {
   const PORT = Number(process.env.MIANSHI_PORT) || 8899;
@@ -44,7 +44,7 @@ router.route("/api/jobs/direction", (req, res) => {  // 设置意向方向 + 简
       const { direction } = JSON.parse(body || "{}");
       const set = jobsApi.setTargetDirection(direction);
       if (!set.ok) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify(set)); return; }
-      const { applyDirectionAuto } = await import("../career.mjs");
+      const { applyDirectionAuto } = await import("#lib/career.mjs");
       const auto = applyDirectionAuto(String(direction || ""));
       const advice = await jobsApi.generateDirectionAdvice();
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -175,7 +175,7 @@ router.route("/api/resume-plan", (req, res) => {  // 简历项目 → 学习清�
         try { resume = String(jobsApi.getResumeRaw?.()?.text || "").trim(); } catch { /* ignore */ }
       }
       if (!resume) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "resume required（或先在设置中心上传简历）" })); return; }
-      const { extractResumeProjects } = await import("../ai.mjs");
+      const { extractResumeProjects } = await import("#lib/ai.mjs");
       const projects = await extractResumeProjects(resume);
       if (!projects.length) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, added: 0, projects: [], message: "未从简历中识别到项目" })); return; }
       // 同步：简历更新 → 删除过时的未完成项目条目（如简历移除了网易云音乐项目，清单不再残留）

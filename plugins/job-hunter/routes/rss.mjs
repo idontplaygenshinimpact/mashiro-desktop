@@ -1,6 +1,6 @@
 // rss 域路由（纵向拆分：/api/rss* 从 widget.mjs 迁出）
-import { readBody } from "../widget-core.mjs";
-import * as rssApi from "../rss.mjs";
+import { readBody } from "#lib/widget-core.mjs";
+import * as rssApi from "#lib/rss.mjs";
 
 export function registerRssRoutes(router, { getCorsOrigin = () => "*" } = {}) {
 router.route("/api/rss/digest", (req, res) => {  // 今日技术资讯摘要（读取，不触发抓取）
