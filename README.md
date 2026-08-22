@@ -2,6 +2,8 @@
 
 > 🎀 一个会爬面经、讲题目、陪你复盘的前端秋招 AI 桌宠。椎名真白（樱花庄的宠物女孩）等你投喂面经链接，也等你跟她对话。
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/wyyai/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/wyyai/mashiro-desktop/actions/workflows/ci.yml)
+
 ---
 
 ## 这是什么
@@ -34,7 +36,7 @@
 ### 安装
 
 ```bash
-cd D:\mianshi-agent
+cd mashiro-desktop
 npm install
 # 国内网络需指定镜像下载 Chromium：
 $env:PLAYWRIGHT_DOWNLOAD_HOST = "https://npmmirror.com/mirrors/playwright"
@@ -61,10 +63,10 @@ npx playwright install chromium
 ```bash
 # 方式一：桌面快捷方式（首次运行 start-kanban.bat 会自动创建「真白桌宠」图标）
 # 方式二：一键启动脚本（无黑窗，重复双击会被单实例锁拦截并聚焦已运行窗口）
-D:\mianshi-agent\start-kanban.bat
+start-kanban.bat
 
 # 方式三：直接命令（桌宠会自动拉起后台数据服务）
-node D:\mianshi-agent\node_modules\electron\dist\electron.exe D:\mianshi-agent\desktop\main.mjs
+node node_modules\electron\dist\electron.exe desktop\main.mjs
 ```
 
 **改代码后一键重启**：面板右上角「♻️」按钮（确认后桌宠 + 后台服务一并重启，约 3-5 秒）；或托盘退出后重新运行启动脚本。开机自启：注册表 Run 键 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `mashiro-desktop` 项（指向启动脚本），如需取消删除该注册表项。
@@ -140,6 +142,8 @@ node discover.mjs "https://juejin.cn/search?query=React面经" 5
 - **引擎**：默认 sherpa-onnx paraformer-zh（中文 SOTA 级、CPU 实时率 5x+）；首次使用先下载模型：`npm run voice:model`（~230MB，国内镜像；直连失败时设 `HTTPS_PROXY` 重跑）
 - **不卡 UI**：识别在 worker 线程（`lib/speech-worker.mjs`）——推理是同步计算，放主进程会冻结整个桌宠（历史卡顿根因）
 - **识别质量**：录音端 VAD 自动裁头尾静音（防噪声被脑补成汉字）+ 16k 采样率兜底重采样；whisper fallback（`SPEECH_ENGINE=whisper` 可切，慢但免下载）
+
+> 🔊 **声音资产**：本仓库不含语音文件（自训练声线，~94MB 已从 git 移出）。需要语音播放功能时，按 [`scripts/voice-train/README.md`](scripts/voice-train/README.md) 用 GPT-SoVITS 训练你自己的声线，或放入自备 wav（目录结构参考 `assets/voice/` 的 `lines.json` 约定）。
 
 ### 7. 本地知识库（RAG，可选）
 
@@ -363,7 +367,7 @@ COMPACT_KEEP_RECENT=4000   # 保留最近 N token 的完整消息
 ## 常见问题
 
 **Q：每次怎么启动？**
-双击 `D:\mianshi-agent\start-kanban.bat`（最小化启动 Electron 桌宠）。桌宠主进程会自动拉起后台数据服务（widget，端口 8899）并守护它，**不需要单独启动 widget**。若设置了开机自启（注册表 Run 键 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `mashiro-desktop` 项），平时开机即自动运行，无需手动操作；重复双击启动会被单实例锁拦截，聚焦到已运行窗口。
+双击 `start-kanban.bat`（最小化启动 Electron 桌宠）。桌宠主进程会自动拉起后台数据服务（widget，端口 8899）并守护它，**不需要单独启动 widget**。若设置了开机自启（注册表 Run 键 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `mashiro-desktop` 项），平时开机即自动运行，无需手动操作；重复双击启动会被单实例锁拦截，聚焦到已运行窗口。
 
 **Q：改完代码后功能没生效 / 面板报 "Not Found" / "is not valid JSON"？**
 运行中的 widget 是旧代码进程（桌宠一直没重启）。**每次代码改动后请重启桌宠**：托盘退出或 `Get-Process electron | Stop-Process -Force`，再双击 `start-kanban.bat`。验证是否新版：浏览器打开 `http://127.0.0.1:8899/api/learning`——返回 JSON 文档清单 = 新版；返回 `Not Found` = 旧进程，重启桌宠即可。
@@ -409,6 +413,15 @@ npm run dist                # 生成 release/ 下 NSIS 安装包 + 便携版（�
 - [x] 语音系统：GPT-SoVITS 长句合成（防"话没说完"分块优化）+ 评测/审计（score/audit）+ 训练流程内置（voice-train）+ 交互重设计（单击短句/空闲长句/长句播放保护）
 - [x] 设置中心可配：API Key/Base URL/模型、方向画像/知识树模板、邮箱自动检查、巡检 token 预算、本地知识库开关、招聘平台账号——全部免改代码
 - [ ] 进化闭环：内置评测集（LLM-as-Judge）+ 自动改进 prompt（bench 评分与 must_cover 已解耦，下一步：在线评测进 CI + 自动改进）
+
+---
+
+## 📦 开源说明
+
+- **许可证**：MIT（见 [LICENSE](LICENSE)）
+- **仓库不含**：本地数据（`data/`）、ASR 模型（`models/`，`npm run voice:model` 下载）、自训练声线（`assets/voice/`）、`.env`（密钥）——clone 后按上文配置即可运行
+- **插件化路线**：宿主（真白）+ 插件（秋招助手）架构方案见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)
+- **测试**：`npm test`（全量，含 jsdom 面板交互与集成测试）；CI 在 GitHub Actions 全量执行
 
 ---
 

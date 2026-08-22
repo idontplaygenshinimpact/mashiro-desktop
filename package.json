@@ -1,10 +1,10 @@
 {
   "name": "mashiro-desktop",
   "version": "0.1.0",
-  "description": "面经/招聘采集 + AI 完整讲解工具：Playwright 抓页 → 通用正文提取 → DeepSeek 判断与解答 → Markdown 归档",
-  "author": "mashiro-desktop",
+  "description": "真白 · Mashiro Desktop——Live2D 桌宠 + 秋招助手（面经采集/模拟面试/学习清单/复习卡/知识库/语音）",
+  "author": "wyyai",
+  "license": "MIT",
   "type": "module",
-  "private": true,
   "main": "desktop/main.mjs",
   "scripts": {
     "run": "node run.mjs",
