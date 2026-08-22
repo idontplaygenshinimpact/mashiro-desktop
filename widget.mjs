@@ -721,8 +721,12 @@ function shutdown() {
   for (const c of crawlChildren) {
     try { c.kill(); } catch { /* ignore */ }
   }
+  // 回收 MCP 子进程（自环 server 持有 DB 连接——不回收会堆积孤儿进程占住 WAL）
+  try {
+    import("./lib/mcp-client.mjs").then((m) => m.closeMcpClients()).catch(() => {});
+  } catch { /* ignore */ }
   try { db.close(); } catch { /* ignore */ } // WAL checkpoint + 释放连接
-  setTimeout(() => process.exit(0), 200);
+  setTimeout(() => process.exit(0), 300);
   setTimeout(() => process.exit(1), 3000).unref(); // 兜底：3s 后强制退出
 }
 
