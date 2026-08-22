@@ -143,7 +143,7 @@ node discover.mjs "https://juejin.cn/search?query=React面经" 5
 - **不卡 UI**：识别在 worker 线程（`lib/speech-worker.mjs`）——推理是同步计算，放主进程会冻结整个桌宠（历史卡顿根因）
 - **识别质量**：录音端 VAD 自动裁头尾静音（防噪声被脑补成汉字）+ 16k 采样率兜底重采样；whisper fallback（`SPEECH_ENGINE=whisper` 可切，慢但免下载）
 
-> 🔊 **声音资产**：本仓库不含语音文件（自训练声线，~94MB 已从 git 移出）。需要语音播放功能时，按 [`scripts/voice-train/README.md`](scripts/voice-train/README.md) 用 GPT-SoVITS 训练你自己的声线，或放入自备 wav（目录结构参考 `assets/voice/` 的 `lines.json` 约定）。
+> 🔊 **声音资产**：仓库包含自训练声线（GPT-SoVITS 合成，`assets/voice/`）。想换自己的声音，按 [`scripts/voice-train/README.md`](scripts/voice-train/README.md) 训练后替换对应 wav（目录结构见 `assets/voice/lines.json` 约定）。
 
 ### 7. 本地知识库（RAG，可选）
 
@@ -419,7 +419,7 @@ npm run dist                # 生成 release/ 下 NSIS 安装包 + 便携版（�
 ## 📦 开源说明
 
 - **许可证**：MIT（见 [LICENSE](LICENSE)）
-- **仓库不含**：本地数据（`data/`）、ASR 模型（`models/`，`npm run voice:model` 下载）、自训练声线（`assets/voice/`）、`.env`（密钥）——clone 后按上文配置即可运行
+- **仓库不含**：本地数据（`data/`）、ASR 模型（`models/`，`npm run voice:model` 下载）、`.env`（密钥）——clone 后按上文配置即可运行；**含**自训练声线（`assets/voice/`，随仓库发布开箱即用）
 - **插件化路线**：宿主（真白）+ 插件（秋招助手）架构方案见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)
 - **测试**：`npm test`（全量，含 jsdom 面板交互与集成测试）；CI 在 GitHub Actions 全量执行
 
