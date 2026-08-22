@@ -1,0 +1,11 @@
+{
+  "id": "job-hunter",
+  "name": "秋招助手",
+  "version": "0.1.0",
+  "description": "秋招全流程聚合插件：面经采集 / 模拟面试 / 学习清单 / 复习卡 / 题库 / 真题 / 校招投递 / 邮件日程 / 知识库 / 专注。业务域互相依赖构成闭环，作为一个整体插件启停",
+  "author": "wyyai",
+  "license": "MIT",
+  "api": { "min": "0.1.0" },
+  "server": "server.mjs",
+  "enabled": true
+}

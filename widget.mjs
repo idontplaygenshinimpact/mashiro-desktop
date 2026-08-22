@@ -24,37 +24,21 @@ import * as mailApi from "./lib/mail.mjs";
 import { scanNewestFiles, loadOrCreateToken, checkBearerAuth, createCrawlMutex } from "./lib/widget-core.mjs";
 import { classifyStudyFiles, pickDistinct } from "./lib/recommend.mjs";
 import { createRouter } from "./lib/routes/router.mjs";
-import { registerReviewRoutes } from "./lib/routes/review.mjs";
-import { registerKbRoutes } from "./lib/routes/kb.mjs";
-import { registerPracticeRoutes } from "./lib/routes/practice.mjs";
-import { registerMiscRoutes } from "./lib/routes/misc.mjs";
-import { registerStudyRoutes } from "./lib/routes/study.mjs";
-import { registerInterviewRoutes } from "./lib/routes/interview.mjs";
-import { registerJobsRoutes } from "./lib/routes/jobs.mjs";
-import { registerZhentiRoutes } from "./lib/routes/zhenti.mjs";
-import { registerOjRoutes } from "./lib/routes/oj.mjs";
-import { registerFocusRoutes } from "./lib/routes/focus.mjs";
-import { registerMailRoutes } from "./lib/routes/mail.mjs";
-import { registerRssRoutes } from "./lib/routes/rss.mjs";
 import { registerCoreRoutes } from "./lib/routes/core.mjs";
+import { loadAllPlugins } from "./lib/plugin-loader.mjs";
 import { db } from "./lib/db.mjs";
 import { createPatrol } from "./lib/patrol.mjs";
 
-// 纵向拆分路由注册：全部路由已按业务域拆到 lib/routes/*.mjs（widget.mjs 只保留
-// 鉴权/CORS/服务生命周期/后台任务调度）
+// 纵向拆分路由注册：核心基础设施域直注册；业务域（秋招助手）经插件加载器
 const router = createRouter();
-registerReviewRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
-registerKbRoutes(router);
-registerPracticeRoutes(router);
-registerMiscRoutes(router);
-registerStudyRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*", laneSubmit });
-registerInterviewRoutes(router, { laneSubmit });
-registerJobsRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
-registerZhentiRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
-registerOjRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
-registerFocusRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
-registerMailRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
-registerRssRoutes(router, { getCorsOrigin: (req) => req.headers.origin || "*" });
+const getCorsOrigin = (req) => req.headers.origin || "*";
+// 插件加载：秋招助手（plugins/job-hunter，聚合 12 个业务路由域）。
+// 单插件失败隔离不拖垮宿主；加载结果打日志（面板 /api/health 可查）
+await loadAllPlugins({ router, db, getCorsOrigin, laneSubmit }).then((results) => {
+  for (const r of results) {
+    console.log(r.ok ? `[plugin] ${r.name} v${r.version} 已加载（${r.id}）` : `[plugin] ${r.error}`);
+  }
+});
 // 核心基础设施域（health/widget-data/chat/stats/observability/refresh/notify/approval/
 // run-discover/patrol/progress/schedule/首页）：runtime 全部用取数函数注入，
 // 因为 patrolState/crawlMutex/DISABLE_PATROL/PATROL_MIN/MAX 声明在此之后（TDZ），
@@ -574,7 +558,7 @@ const scheduler = createScheduler({
     patrol: async () => {
       try {
         if (DISABLE_PATROL) return { ok: false, error: "MIANSHI_DISABLE_PATROL=1 强制关闭巡检" };
-        await patrolInterests();
+        await patrol.run(); // 调度器 patrol job → 真实巡检（patrolInterests 从未定义，历史死调用）
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e && e.message ? e.message : String(e) };
@@ -604,10 +588,10 @@ function seedDefaultJobs() {
   try {
     const row = db.prepare("SELECT COUNT(*) AS n FROM scheduled_jobs").get();
     if (Number(row && row.n) > 0) return;
-    const patrol = scheduler.registerJob({
+    scheduler.registerJob({
       name: "自动巡检",
       job_type: "patrol",
-      schedule_spec: `interval:${patrolState.intervalMin}`, // 沿用现有巡检间隔设置
+      schedule_spec: `interval:${patrol.state.intervalMin}`, // 沿用现有巡检间隔设置
       enabled: false,
       config: { seeded: true, source: "widget-defaults" },
     });

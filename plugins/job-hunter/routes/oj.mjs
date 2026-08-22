@@ -1,6 +1,6 @@
 // oj 域路由（纵向拆分：/api/oj* 从 widget.mjs 迁出）
-import { readBody } from "../widget-core.mjs";
-import * as ojApi from "../oj.mjs";
+import { readBody } from "#lib/widget-core.mjs";
+import * as ojApi from "#lib/oj.mjs";
 
 export function registerOjRoutes(router, { getCorsOrigin = () => "*" } = {}) {
 router.route("/api/oj/problems", (req, res) => {  // 牛客专项练习 TOP101 题目清单（GET；?category=&difficulty= 过滤）

@@ -39,35 +39,13 @@ const METHOD_GATED = [
   ["/api/patrol-run", "POST"],
 ];
 
-test("全部域路由注册齐全（原版 55 条内联路径一个不少）", async () => {
+test("全部域路由注册齐全（原版 55 条内联路径一个不少；业务域经插件入口）", async () => {
   const { createRouter } = await import("../lib/routes/router.mjs");
   const router = createRouter();
-  const { registerReviewRoutes } = await import("../lib/routes/review.mjs");
-  const { registerKbRoutes } = await import("../lib/routes/kb.mjs");
-  const { registerPracticeRoutes } = await import("../lib/routes/practice.mjs");
-  const { registerMiscRoutes } = await import("../lib/routes/misc.mjs");
-  const { registerStudyRoutes } = await import("../lib/routes/study.mjs");
-  const { registerInterviewRoutes } = await import("../lib/routes/interview.mjs");
-  const { registerJobsRoutes } = await import("../lib/routes/jobs.mjs");
-  const { registerZhentiRoutes } = await import("../lib/routes/zhenti.mjs");
-  const { registerOjRoutes } = await import("../lib/routes/oj.mjs");
-  const { registerFocusRoutes } = await import("../lib/routes/focus.mjs");
-  const { registerMailRoutes } = await import("../lib/routes/mail.mjs");
-  const { registerRssRoutes } = await import("../lib/routes/rss.mjs");
+  // 秋招助手插件入口：聚合 12 个业务域（与 widget.mjs 的插件加载同协议）
+  const { register } = await import("../plugins/job-hunter/server.mjs");
   const { registerCoreRoutes } = await import("../lib/routes/core.mjs");
-  const cors = { getCorsOrigin: () => "*" };
-  registerReviewRoutes(router, cors);
-  registerKbRoutes(router);
-  registerPracticeRoutes(router);
-  registerMiscRoutes(router);
-  registerStudyRoutes(router, { getCorsOrigin: () => "*", laneSubmit: (fn) => fn() });
-  registerInterviewRoutes(router, { laneSubmit: (fn) => fn() });
-  registerJobsRoutes(router, cors);
-  registerZhentiRoutes(router, cors);
-  registerOjRoutes(router, cors);
-  registerFocusRoutes(router, cors);
-  registerMailRoutes(router, cors);
-  registerRssRoutes(router, cors);
+  register({ router, db: null, getCorsOrigin: () => "*", laneSubmit: (fn) => fn() });
   registerCoreRoutes(router); // runtime 全用默认空实现，注册本身不依赖 widget 运行时
 
   // 原版路径：任意方法命中即可（method 拆分后 GET/POST 分开注册也算命中）

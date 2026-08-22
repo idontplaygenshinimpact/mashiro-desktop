@@ -1,10 +1,10 @@
 // 复习域路由（纵向拆分：原 widget.mjs /api/review/*）
 // 依赖：lib/review.mjs（FSRS 调度）/ lib/quiz.mjs（选择题）/ lib/emotions.mjs（真白情感反馈）
-import * as reviewApi from "../review.mjs";
-import { generateQuiz, ensureQuiz, drawQuiz, submitQuiz, getQuizStats } from "../quiz.mjs";
-import { pick as pickEmotion, EMOTIONS } from "../emotions.mjs";
-import { memory } from "../memory.mjs";
-import { readBody } from "../widget-core.mjs";
+import * as reviewApi from "#lib/review.mjs";
+import { generateQuiz, ensureQuiz, drawQuiz, submitQuiz, getQuizStats } from "#lib/quiz.mjs";
+import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
+import { memory } from "#lib/memory.mjs";
+import { readBody } from "#lib/widget-core.mjs";
 
 /**
  * 注册复习域路由
@@ -130,7 +130,7 @@ export function registerReviewRoutes(router, ctx) {
       .then(async () => {
         let kbContext = "";
         try {
-          const { searchKnowledge } = await import("../rag.mjs");
+          const { searchKnowledge } = await import("#lib/rag.mjs");
           const hits = await searchKnowledge(card.topic, 2);
           if (hits?.length) {
             kbContext = hits.map((h) => `【${h.title}】\n${String(h.content || "").slice(0, 900)}`).join("\n\n");
@@ -139,8 +139,8 @@ export function registerReviewRoutes(router, ctx) {
         return kbContext;
       })
       .then(async (kbContext) => {
-        const { solveQuestionStream } = await import("../ai.mjs");
-        const { getCareerProfile } = await import("../career.mjs");
+        const { solveQuestionStream } = await import("#lib/ai.mjs");
+        const { getCareerProfile } = await import("#lib/career.mjs");
         const prof = getCareerProfile();
         const text = `这是一道面试题「${card.topic}」，你在复习时答错了/答得困难，需要彻底讲透。
 复习卡问题：${card.question || card.topic}

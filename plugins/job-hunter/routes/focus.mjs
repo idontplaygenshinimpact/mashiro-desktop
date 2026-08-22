@@ -1,6 +1,6 @@
 // focus 域路由（纵向拆分：/api/focus* 从 widget.mjs 迁出）
-import { readBody } from "../widget-core.mjs";
-import * as focusApi from "../focus.mjs";
+import { readBody } from "#lib/widget-core.mjs";
+import * as focusApi from "#lib/focus.mjs";
 
 export function registerFocusRoutes(router, { getCorsOrigin = () => "*" } = {}) {
 

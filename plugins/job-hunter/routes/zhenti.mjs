@@ -1,6 +1,6 @@
 // zhenti 域路由（纵向拆分：/api/zhenti* 从 widget.mjs 迁出）
-import { readBody } from "../widget-core.mjs";
-import * as zhentiApi from "../zhenti.mjs";
+import { readBody } from "#lib/widget-core.mjs";
+import * as zhentiApi from "#lib/zhenti.mjs";
 
 export function registerZhentiRoutes(router, { getCorsOrigin = () => "*" } = {}) {
 router.route("/api/zhenti", (req, res) => {  // 牛客大厂官方真题清单（GET；?company= 过滤）

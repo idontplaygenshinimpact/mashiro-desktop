@@ -1,6 +1,6 @@
 // mail 域路由（纵向拆分：/api/mail* 从 widget.mjs 迁出）
-import { readBody } from "../widget-core.mjs";
-import * as mailApi from "../mail.mjs";
+import { readBody } from "#lib/widget-core.mjs";
+import * as mailApi from "#lib/mail.mjs";
 
 export function registerMailRoutes(router, { getCorsOrigin = () => "*" } = {}) {
 router.route("/api/mail/config", (req, res) => {  // 邮箱配置：GET 读取（脱敏，不返回授权码），POST 保存（持久化到 settings mail_config）

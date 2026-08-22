@@ -1,9 +1,9 @@
 // 题库域路由（纵向拆分：原 widget.mjs /api/challenges/*、/api/oj/mark-done、/api/oj/progress）
 // 手写/算法题库（ai-career.mjs 沙箱判题）+ 牛客刷题进度（oj.mjs）
-import * as challengeApi from "../ai-career.mjs";
-import * as ojApi from "../oj.mjs";
-import * as reviewApi from "../review.mjs";
-import { readBody } from "../widget-core.mjs";
+import * as challengeApi from "#lib/ai-career.mjs";
+import * as ojApi from "#lib/oj.mjs";
+import * as reviewApi from "#lib/review.mjs";
+import { readBody } from "#lib/widget-core.mjs";
 
 export function registerPracticeRoutes(router) {
   // ---------- 手写/算法题库 ----------

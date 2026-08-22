@@ -1,22 +1,22 @@
 // 杂项域路由（纵向拆分：对话历史/上下文计量/待办/闭环建议/问候语/自检/招聘平台/技能/专注目标/驾驶舱/提问）
-import { memory } from "../memory.mjs";
-import { getContextUsage } from "../context-meter.mjs";
-import { getTodo } from "../todo.mjs";
-import { loopSuggest, suggestFocusGoal } from "../loop.mjs";
-import { getPendingAsks, answerAsk } from "../ask-user.mjs";
-import * as studyApi from "../study.mjs";
-import * as reviewApi from "../review.mjs";
-import * as challengeApi from "../ai-career.mjs";
-import { getFocusStats } from "../focus.mjs";
-import * as jobsApi from "../jobs.mjs";
-import { db } from "../db.mjs";
-import { buildGreeting as buildGreetingText, polishGreeting as polishGreetingText } from "../greeting.mjs";
-import { getResumeProfile } from "../jobs.mjs";
-import { listPlatforms as listPlatformsApi, searchAndStoreJobs as searchAndStoreJobsApi, applyJobOnPlatform as applyJobOnPlatformApi } from "../job-platforms.mjs";
-import { saveAccount as savePlatformAccount } from "../platform-accounts.mjs";
-import * as personalProjectsApi from "../personal-projects.mjs";
-import { runSelfCheck, getLastSelfCheck, saveSelfCheck } from "../self-check.mjs";
-import { readBody } from "../widget-core.mjs";
+import { memory } from "#lib/memory.mjs";
+import { getContextUsage } from "#lib/context-meter.mjs";
+import { getTodo } from "#lib/todo.mjs";
+import { loopSuggest, suggestFocusGoal } from "#lib/loop.mjs";
+import { getPendingAsks, answerAsk } from "#lib/ask-user.mjs";
+import * as studyApi from "#lib/study.mjs";
+import * as reviewApi from "#lib/review.mjs";
+import * as challengeApi from "#lib/ai-career.mjs";
+import { getFocusStats } from "#lib/focus.mjs";
+import * as jobsApi from "#lib/jobs.mjs";
+import { db } from "#lib/db.mjs";
+import { buildGreeting as buildGreetingText, polishGreeting as polishGreetingText } from "#lib/greeting.mjs";
+import { getResumeProfile } from "#lib/jobs.mjs";
+import { listPlatforms as listPlatformsApi, searchAndStoreJobs as searchAndStoreJobsApi, applyJobOnPlatform as applyJobOnPlatformApi } from "#lib/job-platforms.mjs";
+import { saveAccount as savePlatformAccount } from "#lib/platform-accounts.mjs";
+import * as personalProjectsApi from "#lib/personal-projects.mjs";
+import { runSelfCheck, getLastSelfCheck, saveSelfCheck } from "#lib/self-check.mjs";
+import { readBody } from "#lib/widget-core.mjs";
 
 export function registerMiscRoutes(router) {
   // ---------- LLM API Key / Base URL / 模型配置（设置中心；settings > .env/环境变量，面板可改） ----------
@@ -509,6 +509,6 @@ export function registerMiscRoutes(router) {
 // 平台惰性加载（与旧 widget 行为一致：首访时 ensure）
 let platformsReady = null;
 function ensurePlatformsSafe() {
-  if (!platformsReady) platformsReady = import("../job-platforms.mjs").then(({ ensurePlatforms }) => ensurePlatforms());
+  if (!platformsReady) platformsReady = import("#lib/job-platforms.mjs").then(({ ensurePlatforms }) => ensurePlatforms());
   return platformsReady;
 }
