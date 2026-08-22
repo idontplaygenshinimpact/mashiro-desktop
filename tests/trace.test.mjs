@@ -107,3 +107,20 @@ test("recordDecision 非法 decision 被 CHECK 约束拦截（不写库、不抛
   recordDecision({ decision: "not_a_valid_decision", toolName: "t" }); // 应被 try/catch 吞掉
   assert.equal(db.prepare("SELECT COUNT(*) n FROM decision_ledger").get().n, 0, "非法 decision 不落库");
 });
+
+test("getLLMStats byRole：按角色汇总 token/调用数（成本观察）", async () => {
+  await clearAllTables();
+  traceLLM({ role: "agent", inputTokens: 100, outputTokens: 50, durationMs: 100, ok: true });
+  traceLLM({ role: "agent", inputTokens: 200, outputTokens: 80, durationMs: 150, ok: true });
+  traceLLM({ role: "explain", inputTokens: 1000, outputTokens: 400, durationMs: 500, ok: true });
+  const s = getLLMStats();
+  assert.equal(s.total, 3);
+  const agent = s.byRole.find((r) => r.role === "agent");
+  const explain = s.byRole.find((r) => r.role === "explain");
+  assert.ok(agent, "agent 角色汇总存在");
+  assert.equal(agent.calls, 2);
+  assert.equal(agent.inputTokens, 300, "agent 输入 token 汇总");
+  assert.equal(explain.inputTokens, 1000, "explain 角色独立汇总");
+  // 按 token 总量降序（explain 应排前）
+  assert.equal(s.byRole[0].role, "explain", "按 token 总量降序");
+});
