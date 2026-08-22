@@ -112,6 +112,17 @@ test("solveQuestion 空响应不崩溃", async () => {
   assert.equal(typeof md, "string");
 });
 
+// ---------- 代码按需（概念题不硬凑代码） ----------
+test("solveQuestion prompt：概念类知识点不强制代码（代码按需指令）", async () => {
+  setLlmResponses("## 结论\nok");
+  await ai.solveQuestion({ title: "HTTP 缓存原理", text: "强缓存协商缓存", company: "c", position: "前端", sourceUrl: "" });
+  const { getLastMessages } = await import("./helpers.mjs");
+  const userPrompt = getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(userPrompt.includes("不要硬凑代码"), "概念题不硬凑代码");
+  assert.ok(userPrompt.includes("纯概念/机制/流程/协议类知识点"), "明确概念类场景");
+  assert.ok(!userPrompt.includes("**必须用"), "不再强制必须写代码");
+});
+
 // ---------- 方向画像驱动（默认前端；转方向/开源可配置） ----------
 test("solveQuestion prompt 跟随方向画像（改画像后角色/语言/范围变化）", async () => {
   const { saveCareerProfile, resetCareerProfile } = await import("../lib/career.mjs");
