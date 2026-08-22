@@ -2,7 +2,7 @@
 
 > 🎀 一个会爬面经、讲题目、陪你复盘的前端秋招 AI 桌宠。椎名真白（樱花庄的宠物女孩）等你投喂面经链接，也等你跟她对话。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/wyyai/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/wyyai/mashiro-desktop/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml)
 
 ---
 
