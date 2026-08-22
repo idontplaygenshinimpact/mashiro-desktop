@@ -36,7 +36,7 @@
 - **阶段 0**：注册中心收敛（路由/定时任务集中声明，零行为变化）——规划中
 - **阶段 1**：✅ 插件协议落地（`manifest.json` + 加载器），秋招助手迁入 `plugins/job-hunter/`
 - **阶段 2**：✅ 示例插件模板 `plugins/plugin-template/`（协议即文档）+ 加载器扩展（settings 命名空间 `plg_<id>_` 前缀 / init 钩子 / health 检查 / panel 声明校验）
-- **阶段 3**：插件管理（启用/禁用）+ 面板扩展点动态渲染 + 插件市场（`plugins.json` 索引一键安装）——规划中
+- **阶段 3**：✅ 插件管理（`lib/plugin-admin.mjs` + 面板设置→插件管理：已装插件列表 / 加载状态 / 健康检查 / 启停开关，重启生效）+ 面板扩展点动态渲染（manifest.panel.tabs/settings → 真实 tab + 设置表单）+ 插件市场（`data/plugin-market.json` 索引一键安装，`POST /api/plugins/install` 路径安全校验）
 
 完整方案见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)。未来插件方向：日语陪练、桌宠养成、番茄钟独立版……
 
@@ -194,6 +194,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 │                                   #   manifest panel 声明 + server 演示 路由/设置/init/health
 ├── lib/                            # ── 共享业务库（宿主与插件共用，单一数据源）──
 │   ├── plugin-loader.mjs           # 插件加载器（发现/校验/register/init/health/失败隔离 + settings 命名空间）
+│   ├── plugin-admin.mjs            # 插件管理（启停标记/列表/设置读写/市场安装，阶段 3）
 │   ├── agent.mjs                   # 对话 agent 核心：工具循环 + 权限 + 规划（可反哺清单/复习卡/todo）
 │   ├── tools/                      # agent 工具层（schemas/impl/exec-utils/mcp）
 │   ├── routes/core.mjs             # 核心基础设施域（health/patrol/run-discover…）
@@ -211,6 +212,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 │   ├── skills.mjs / hooks.mjs / subagent.mjs / llm.mjs / ai.mjs
 │   └── db.mjs                      # node:sqlite 主存储（WAL）
 ├── widget.mjs                      # 后台数据服务（HTTP :8899）：鉴权 + 核心路由 + 插件加载 + 定时任务
+├── data/plugin-market.json         # 插件市场注册表（一键安装索引，阶段 3）
 ├── mcp-server.mjs                  # MCP Server（个人数据/项目档案/工具 → 外部 agent）
 ├── desktop/ 之外还有：
 ├── assets/voice/                   # 自训练声线（GPT-SoVITS，随仓库发布）
