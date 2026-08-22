@@ -1,23 +1,16 @@
-fix: 今日推荐三问题（分类错乱/重复堆叠/无作用）+ 清单讲解注入项目档案 + voice-pack flaky 根治
+fix: 复习选择题解析语焉不详——解析要求 35 字限制是根因
 
-【1. 推荐分类错乱】实测 bishi=30/30、mianshi=0——旧条件 dir.includes('discover')
-把巡检产出的面经全归为笔试。修复：classifyStudyFiles 纯函数——
-笔试=文件名含 笔试/bishi/机试（真实笔试）；面经=其余（含 discover 面经）
-实测：1 笔试 + 29 面经 ✓
+【用户反馈】复习选择题完全没解析或解析语焉不详
+【根因】
+1. 出题 prompt 第 5 条要求"解析 ≤ 35 字"——LLM 被迫写一句话敷衍
+2. 服务端 explain 截断 60 字——再砍一刀
+3. 存量题库（旧版生成）解析普遍过短，且 ensureQuiz 懒生成一次后缓存不重生成
 
-【2. 推荐重复堆叠】轮转 pick 在目录只有 1 个文件时 (dayNum+i)%n 同一文件取两次。
-修复：pickDistinct 按 path 去重轮转（n=1 时只推 1 项）
+【修复】
+- prompt：解析 40-80 字，必须讲清"为什么对/为什么错"：
+  正确选项依据 + 常见误区（明确禁止一句话敷衍）
+- 服务端 explain 截断 60 → 200 字（完整保留）
+- 存量短解析自愈：判分后解析最长的 <25 字 → 自动换一批新题
+  （新解析 40-80 字）+ 面板提示"旧题库已换批"
 
-【3. 推荐无作用】纯展示不可点。修复：点击推荐项 → 系统默认程序打开
-（openFile 白名单限 output/data）
-
-【4. 清单项目条目只传名称给 LLM】讲解/追问 prompt 只有 topic。
-修复：getProjectArchiveContext（personal-projects.mjs，可单测）——
-topic/来源匹配项目名 → 注入真实代码档案（技术栈/目录/核心实现，6KB 上限）；
-study-detail-stream / study-detail / study-append-stream 三处注入
-
-【5. voice-pack flaky 根治】全量并行下 2600ms 真实 sleep 受 CPU 竞争影响。
-修复：VOICE_DEBOUNCE_MS 支持 MIANSHI_TEST_DEBOUNCE_MS（测试 150ms），
-sleep 2600→500ms，测试快 5 倍且稳定
-
-测试 +9（recommend 5 + personal-projects 4），全量 668/668。
+【测试 +1】长解析完整入库（>60 字含误区说明不被截断），全量 669/669。
