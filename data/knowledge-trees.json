@@ -1,0 +1,884 @@
+{
+  "current": "frontend",
+  "templates": {
+    "frontend": [
+      {
+        "id": "js",
+        "title": "JavaScript 核心",
+        "difficulty": 2,
+        "points": [
+          {
+            "id": "js-closure",
+            "title": "闭包与作用域",
+            "difficulty": 2,
+            "kws": [
+              "闭包",
+              "作用域",
+              "closure"
+            ]
+          },
+          {
+            "id": "js-prototype",
+            "title": "原型链与继承",
+            "difficulty": 2,
+            "kws": [
+              "原型",
+              "继承",
+              "prototype"
+            ]
+          },
+          {
+            "id": "js-this",
+            "title": "this 指向",
+            "difficulty": 2,
+            "kws": [
+              "this",
+              "指向"
+            ]
+          },
+          {
+            "id": "js-event-loop",
+            "title": "事件循环与微任务",
+            "difficulty": 3,
+            "kws": [
+              "事件循环",
+              "微任务",
+              "宏任务",
+              "event loop",
+              "setTimeout"
+            ]
+          },
+          {
+            "id": "js-promise",
+            "title": "Promise 与异步",
+            "difficulty": 3,
+            "kws": [
+              "promise",
+              "异步",
+              "async",
+              "await"
+            ]
+          },
+          {
+            "id": "js-module",
+            "title": "模块化 (ESM/CJS)",
+            "difficulty": 2,
+            "kws": [
+              "模块",
+              "esm",
+              "cjs",
+              "import",
+              "export"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "browser",
+        "title": "浏览器原理",
+        "difficulty": 3,
+        "points": [
+          {
+            "id": "br-render",
+            "title": "渲染管线与回流重绘",
+            "difficulty": 3,
+            "kws": [
+              "渲染",
+              "回流",
+              "重绘",
+              "dom",
+              "url",
+              "页面展示",
+              "dns 解析"
+            ]
+          },
+          {
+            "id": "br-cache",
+            "title": "缓存策略",
+            "difficulty": 2,
+            "kws": [
+              "缓存",
+              "cache",
+              "http"
+            ]
+          },
+          {
+            "id": "br-security",
+            "title": "XSS/CSRF/CORS",
+            "difficulty": 3,
+            "kws": [
+              "xss",
+              "csrf",
+              "cors",
+              "安全",
+              "跨域",
+              "攻击",
+              "防护"
+            ]
+          },
+          {
+            "id": "br-perf",
+            "title": "性能指标与优化",
+            "difficulty": 3,
+            "kws": [
+              "性能",
+              "优化",
+              "首屏"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "react",
+        "title": "React",
+        "difficulty": 3,
+        "points": [
+          {
+            "id": "rc-hooks",
+            "title": "Hooks 原理",
+            "difficulty": 3,
+            "kws": [
+              "hooks",
+              "usestate",
+              "useeffect"
+            ]
+          },
+          {
+            "id": "rc-render",
+            "title": "渲染机制与 Fiber",
+            "difficulty": 4,
+            "kws": [
+              "fiber",
+              "渲染机制",
+              "并发"
+            ]
+          },
+          {
+            "id": "rc-diff",
+            "title": "虚拟 DOM 与 diff",
+            "difficulty": 3,
+            "kws": [
+              "diff",
+              "虚拟dom",
+              "key"
+            ]
+          },
+          {
+            "id": "rc-state",
+            "title": "状态管理选型",
+            "difficulty": 3,
+            "kws": [
+              "状态管理",
+              "redux",
+              "zustand"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "vue",
+        "title": "Vue",
+        "difficulty": 2,
+        "points": [
+          {
+            "id": "vu-reactivity",
+            "title": "响应式原理 (Vue2/3)",
+            "difficulty": 3,
+            "kws": [
+              "vue",
+              "响应式",
+              "proxy",
+              "defineproperty",
+              "依赖收集"
+            ]
+          },
+          {
+            "id": "vu-template",
+            "title": "模板编译与指令",
+            "difficulty": 2,
+            "kws": [
+              "模板",
+              "指令",
+              "v-model",
+              "v-for",
+              "插槽"
+            ]
+          },
+          {
+            "id": "vu-computed",
+            "title": "computed/watch 与更新",
+            "difficulty": 3,
+            "kws": [
+              "computed",
+              "watch",
+              "nexttick",
+              "更新机制"
+            ]
+          },
+          {
+            "id": "vu-ecosystem",
+            "title": "Vue 生态选型",
+            "difficulty": 2,
+            "kws": [
+              "pinia",
+              "vuex",
+              "vue-router",
+              "nuxt"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "css",
+        "title": "CSS/HTML",
+        "difficulty": 2,
+        "points": [
+          {
+            "id": "css-layout",
+            "title": "布局 (Flex/Grid)",
+            "difficulty": 2,
+            "kws": [
+              "flex",
+              "grid",
+              "布局",
+              "居中",
+              "垂直居中",
+              "水平居中"
+            ]
+          },
+          {
+            "id": "css-bfc",
+            "title": "BFC 与层叠上下文",
+            "difficulty": 3,
+            "kws": [
+              "bfc",
+              "层叠",
+              "定位"
+            ]
+          },
+          {
+            "id": "css-anim",
+            "title": "动画与性能",
+            "difficulty": 2,
+            "kws": [
+              "动画",
+              "transition",
+              "transform"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "engineer",
+        "title": "工程化",
+        "difficulty": 3,
+        "points": [
+          {
+            "id": "eng-build",
+            "title": "Webpack/Vite",
+            "difficulty": 3,
+            "kws": [
+              "webpack",
+              "vite",
+              "打包"
+            ]
+          },
+          {
+            "id": "eng-babel",
+            "title": "Babel 与编译",
+            "difficulty": 3,
+            "kws": [
+              "babel",
+              "编译",
+              "ast"
+            ]
+          },
+          {
+            "id": "eng-ts",
+            "title": "TypeScript",
+            "difficulty": 2,
+            "kws": [
+              "typescript",
+              "类型",
+              "泛型"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "network",
+        "title": "网络",
+        "difficulty": 2,
+        "points": [
+          {
+            "id": "net-http",
+            "title": "HTTP/1.1-3",
+            "difficulty": 2,
+            "kws": [
+              "http",
+              "http1",
+              "http2",
+              "http3"
+            ]
+          },
+          {
+            "id": "net-ws",
+            "title": "WebSocket/SSE",
+            "difficulty": 2,
+            "kws": [
+              "websocket",
+              "sse",
+              "长连接"
+            ]
+          },
+          {
+            "id": "net-cdn",
+            "title": "CDN 与部署",
+            "difficulty": 2,
+            "kws": [
+              "cdn",
+              "部署",
+              "静态资源"
+            ]
+          }
+        ]
+      }
+    ],
+    "backend": [
+      {
+        "id": "java",
+        "title": "Java 基础",
+        "difficulty": 2,
+        "points": [
+          {
+            "id": "jv-core",
+            "title": "集合与泛型",
+            "difficulty": 2,
+            "kws": [
+              "集合",
+              "arraylist",
+              "hashmap",
+              "泛型",
+              "stream"
+            ]
+          },
+          {
+            "id": "jv-reflect",
+            "title": "反射与注解",
+            "difficulty": 3,
+            "kws": [
+              "反射",
+              "注解",
+              "动态代理"
+            ]
+          },
+          {
+            "id": "jv-jvm",
+            "title": "JVM 内存与 GC",
+            "difficulty": 3,
+            "kws": [
+              "jvm",
+              "gc",
+              "垃圾回收",
+              "类加载",
+              "内存模型"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concurrent",
+        "title": "并发编程",
+        "difficulty": 3,
+        "points": [
+          {
+            "id": "cc-thread",
+            "title": "线程与锁",
+            "difficulty": 3,
+            "kws": [
+              "线程",
+              "锁",
+              "synchronized",
+              "volatile",
+              "死锁"
+            ]
+          },
+          {
+            "id": "cc-jmm",
+            "title": "JMM 与可见性",
+            "difficulty": 4,
+            "kws": [
+              "jmm",
+              "可见性",
+              "happens-before",
+              "原子性"
+            ]
+          },
+          {
+            "id": "cc-pool",
+            "title": "线程池",
+            "difficulty": 3,
+            "kws": [
+              "线程池",
+              "executor",
+              "拒绝策略"
+            ]
+          },
+          {
+            "id": "cc-aqs",
+            "title": "AQS 与并发工具",
+            "difficulty": 4,
+            "kws": [
+              "aqs",
+              "concurrenthashmap",
+              "countdownlatch",
+              "semaphore"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "spring",
+        "title": "Spring 生态",
+        "difficulty": 3,
+        "points": [
+          {
+            "id": "sp-ioc",
+            "title": "IOC 与 AOP",
+            "difficulty": 3,
+            "kws": [
+              "ioc",
+              "aop",
+              "spring",
+              "bean",
+              "依赖注入"
+            ]
+          },
+          {
+            "id": "sp-tx",
+            "title": "事务与传播",
+            "difficulty": 3,
+            "kws": [
+              "事务",
+              "传播行为",
+              "隔离级别",
+              "mybatis"
+            ]
+          },
+          {
+            "id": "sp-boot",
+            "title": "Spring Boot 原理",
+            "difficulty": 3,
+            "kws": [
+              "springboot",
+              "自动配置",
+              "starter"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "db",
+        "title": "数据库",
+        "difficulty": 3,
+        "points": [
+          {
+            "id": "db-mysql",
+            "title": "MySQL 索引与存储",
+            "difficulty": 3,
+            "kws": [
+              "mysql",
+              "索引",
+              "b+树",
+              "存储引擎",
+              "回表"
+            ]
+          },
+          {
+            "id": "db-tx",
+            "title": "事务与锁",
+            "difficulty": 3,
+            "kws": [
+              "事务",
+              "锁",
+              "隔离级别",
+              "mvcc",
+              "间隙锁"
+            ]
+          },
+          {
+            "id": "db-opt",
+            "title": "SQL 优化与分库分表",
+            "difficulty": 4,
+            "kws": [
+              "sql优化",
+              "慢查询",
+              "分库分表",
+              "读写分离"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cache",
+        "title": "缓存",
+        "difficulty": 3,
+        "points": [
+          {
+            "id": "cache-redis",
+            "title": "Redis 数据结构与持久化",
+            "difficulty": 3,
+            "kws": [
+              "redis",
+              "缓存",
+              "持久化",
+              "rdb",
+              "aof"
+            ]
+          },
+          {
+            "id": "cache-consistent",
+            "title": "缓存一致性",
+            "difficulty": 4,
+            "kws": [
+              "缓存一致性",
+              "双写",
+              "延迟双删",
+              "雪崩",
+              "穿透"
+            ]
+          },
+          {
+            "id": "cache-lock",
+            "title": "分布式锁",
+            "difficulty": 4,
+            "kws": [
+              "分布式锁",
+              "setnx",
+              "redisson"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mq",
+        "title": "消息队列",
+        "difficulty": 3,
+        "points": [
+          {
+            "id": "mq-kafka",
+            "title": "Kafka 原理",
+            "difficulty": 3,
+            "kws": [
+              "kafka",
+              "消息队列",
+              "分区",
+              "offset"
+            ]
+          },
+          {
+            "id": "mq-reliable",
+            "title": "消息可靠性",
+            "difficulty": 4,
+            "kws": [
+              "消息可靠性",
+              "重复消费",
+              "顺序消息",
+              "死信"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "distributed",
+        "title": "分布式与微服务",
+        "difficulty": 4,
+        "points": [
+          {
+            "id": "ds-consistent",
+            "title": "分布式一致性",
+            "difficulty": 4,
+            "kws": [
+              "一致性",
+              "cap",
+              "base",
+              "raft",
+              "paxos"
+            ]
+          },
+          {
+            "id": "ds-tx",
+            "title": "分布式事务",
+            "difficulty": 4,
+            "kws": [
+              "分布式事务",
+              "seata",
+              "tcc",
+              "本地消息表"
+            ]
+          },
+          {
+            "id": "ds-ms",
+            "title": "微服务治理",
+            "difficulty": 3,
+            "kws": [
+              "微服务",
+              "注册中心",
+              "网关",
+              "限流",
+              "熔断",
+              "降级"
+            ]
+          },
+          {
+            "id": "ds-id",
+            "title": "分布式 ID 与幂等",
+            "difficulty": 3,
+            "kws": [
+              "分布式id",
+              "雪花",
+              "幂等"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "net-os",
+        "title": "网络与操作系统",
+        "difficulty": 3,
+        "points": [
+          {
+            "id": "no-tcp",
+            "title": "TCP/UDP",
+            "difficulty": 3,
+            "kws": [
+              "tcp",
+              "udp",
+              "三次握手",
+              "滑动窗口",
+              "拥塞控制"
+            ]
+          },
+          {
+            "id": "no-http",
+            "title": "HTTP/HTTPS",
+            "difficulty": 2,
+            "kws": [
+              "http",
+              "https",
+              "tls",
+              "websocket"
+            ]
+          },
+          {
+            "id": "no-os",
+            "title": "进程线程与内存",
+            "difficulty": 3,
+            "kws": [
+              "进程",
+              "线程",
+              "协程",
+              "内存管理",
+              "io多路复用",
+              "零拷贝"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "design",
+        "title": "系统设计与模式",
+        "difficulty": 4,
+        "points": [
+          {
+            "id": "ds-pattern",
+            "title": "设计模式",
+            "difficulty": 3,
+            "kws": [
+              "设计模式",
+              "单例",
+              "工厂",
+              "代理",
+              "观察者"
+            ]
+          },
+          {
+            "id": "ds-hla",
+            "title": "高可用高并发设计",
+            "difficulty": 4,
+            "kws": [
+              "高可用",
+              "高并发",
+              "负载均衡",
+              "秒杀"
+            ]
+          }
+        ]
+      }
+    ],
+    "algorithm": [
+      {
+        "id": "ds",
+        "title": "数据结构",
+        "difficulty": 2,
+        "points": [
+          {
+            "id": "ds-array",
+            "title": "数组与链表",
+            "difficulty": 2,
+            "kws": [
+              "数组",
+              "链表",
+              "反转链表",
+              "双指针"
+            ]
+          },
+          {
+            "id": "ds-stack",
+            "title": "栈与队列",
+            "difficulty": 2,
+            "kws": [
+              "栈",
+              "队列",
+              "单调栈",
+              "优先队列"
+            ]
+          },
+          {
+            "id": "ds-hash",
+            "title": "哈希表",
+            "difficulty": 2,
+            "kws": [
+              "哈希",
+              "hashmap",
+              "两数之和",
+              "去重"
+            ]
+          },
+          {
+            "id": "ds-tree",
+            "title": "树与二叉树",
+            "difficulty": 3,
+            "kws": [
+              "二叉树",
+              "bst",
+              "遍历",
+              "层序",
+              "红黑树"
+            ]
+          },
+          {
+            "id": "ds-graph",
+            "title": "图",
+            "difficulty": 3,
+            "kws": [
+              "图",
+              "dfs",
+              "bfs",
+              "拓扑",
+              "最短路径"
+            ]
+          },
+          {
+            "id": "ds-heap",
+            "title": "堆",
+            "difficulty": 3,
+            "kws": [
+              "堆",
+              "大顶堆",
+              "小顶堆",
+              "topk",
+              "堆排序"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "alg",
+        "title": "算法思想",
+        "difficulty": 3,
+        "points": [
+          {
+            "id": "alg-sort",
+            "title": "排序",
+            "difficulty": 3,
+            "kws": [
+              "排序",
+              "快排",
+              "归并",
+              "堆排序",
+              "稳定"
+            ]
+          },
+          {
+            "id": "alg-search",
+            "title": "查找",
+            "difficulty": 2,
+            "kws": [
+              "二分",
+              "查找",
+              "旋转数组"
+            ]
+          },
+          {
+            "id": "alg-two",
+            "title": "双指针与滑动窗口",
+            "difficulty": 3,
+            "kws": [
+              "双指针",
+              "滑动窗口",
+              "快慢指针"
+            ]
+          },
+          {
+            "id": "alg-back",
+            "title": "回溯与搜索",
+            "difficulty": 3,
+            "kws": [
+              "回溯",
+              "全排列",
+              "组合",
+              "岛屿",
+              "剪枝"
+            ]
+          },
+          {
+            "id": "alg-dp",
+            "title": "动态规划",
+            "difficulty": 4,
+            "kws": [
+              "动态规划",
+              "dp",
+              "背包",
+              "子序列",
+              "状态转移"
+            ]
+          },
+          {
+            "id": "alg-greedy",
+            "title": "贪心与分治",
+            "difficulty": 3,
+            "kws": [
+              "贪心",
+              "分治",
+              "区间",
+              "合并"
+            ]
+          },
+          {
+            "id": "alg-string",
+            "title": "字符串与位运算",
+            "difficulty": 2,
+            "kws": [
+              "字符串",
+              "回文",
+              "位运算",
+              "异或",
+              "大数"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -13,7 +13,7 @@ export function registerInterviewRoutes(router, { laneSubmit = (fn) => fn() } = 
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(r));
       } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
+        res.writeHead(e?.statusCode || 500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
       }
     });

@@ -51,7 +51,9 @@ test("标题含非法字符 → 文件名安全化（不崩不落非法文件）
   const out = tempOutput();
   const r = saveImportedPost({ title: 'A/B:C*D?E"F<G>H|I', content: "内容内容内容内容内容内容内容内容内容内容内容内容内容内容内容内容" }, out);
   assert.equal(r.ok, true);
-  assert.ok(!r.file.includes("/"), "文件名无非法字符");
-  assert.ok(!r.file.includes("*"), "文件名无 *");
+  // file 是 path.relative 结果：Windows 用 \ 分隔、Linux 用 /——按 path.sep 取 basename 后断言文件名无非法字符
+  const base = path.basename(r.file);
+  assert.ok(!/[\\/:*?"<>|]/.test(base), "文件名无非法字符");
+  assert.ok(!base.includes("A/B:C*D?E\"F<G>H|I"), "原始非法标题未直接用作文件名");
   rmSync(out, { recursive: true, force: true });
 });

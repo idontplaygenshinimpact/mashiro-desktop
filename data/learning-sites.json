@@ -1,0 +1,38 @@
+{
+  "categories": [
+    {
+      "category": "前端",
+      "sites": [
+        { "name": "React", "official": "https://react.dev", "versionPage": "https://react.dev/versions", "desc": "React 官方文档（含新版 React 19 API 文档）", "registry": { "type": "npm", "pkg": "react" } },
+        { "name": "Vue", "official": "https://vuejs.org", "versionPage": "https://blog.vuejs.org", "desc": "Vue 3 官方文档（中文）", "registry": { "type": "npm", "pkg": "vue" } },
+        { "name": "TypeScript", "official": "https://www.typescriptlang.org", "versionPage": "https://www.typescriptlang.org/docs/", "desc": "TypeScript 官方文档与 Handbook", "registry": { "type": "npm", "pkg": "typescript" } },
+        { "name": "Node.js", "official": "https://nodejs.org/zh-cn", "versionPage": "https://nodejs.org/zh-cn", "desc": "Node.js 官方文档（LTS/Current 版本）" },
+        { "name": "Vite", "official": "https://vitejs.dev", "versionPage": "https://vitejs.dev", "desc": "Vite 官方文档（构建工具）", "registry": { "type": "npm", "pkg": "vite" } },
+        { "name": "Next.js", "official": "https://nextjs.org", "versionPage": "https://nextjs.org/blog", "desc": "Next.js 官方文档（App Router）", "registry": { "type": "npm", "pkg": "next" } },
+        { "name": "MDN Web Docs", "official": "https://developer.mozilla.org/zh-CN", "versionPage": "", "desc": "MDN Web 技术文档（持续更新，权威参考）" }
+      ]
+    },
+    {
+      "category": "AI",
+      "sites": [
+        { "name": "OpenAI API", "official": "https://platform.openai.com/docs", "versionPage": "https://platform.openai.com/docs/changelog", "desc": "OpenAI 官方 API 文档 + Changelog", "registry": { "type": "npm", "pkg": "openai" } },
+        { "name": "DeepSeek", "official": "https://api-docs.deepseek.com", "versionPage": "https://api-docs.deepseek.com", "desc": "DeepSeek 官方 API 文档（中文）" },
+        { "name": "Anthropic Claude", "official": "https://docs.claude.com", "versionPage": "https://docs.claude.com/en/changelog", "desc": "Claude 官方文档 + Changelog", "registry": { "type": "npm", "pkg": "@anthropic-ai/sdk" } },
+        { "name": "Hugging Face", "official": "https://huggingface.co/docs", "versionPage": "https://huggingface.co/docs", "desc": "Hugging Face 模型/Transformers 文档", "registry": { "type": "npm", "pkg": "@huggingface/inference" } },
+        { "name": "PyTorch", "official": "https://pytorch.org", "versionPage": "https://pytorch.org/blog/", "desc": "PyTorch 官方文档", "registry": { "type": "pypi", "pkg": "torch" } },
+        { "name": "Google AI (Gemini)", "official": "https://ai.google.dev/gemini-api/docs", "versionPage": "https://ai.google.dev/gemini-api/docs", "desc": "Gemini API 官方文档", "registry": { "type": "npm", "pkg": "@google/genai" } }
+      ]
+    },
+    {
+      "category": "Agent",
+      "sites": [
+        { "name": "MCP", "official": "https://modelcontextprotocol.io", "versionPage": "https://modelcontextprotocol.io/changelog", "desc": "Model Context Protocol 官方规范（Agent 互操作标准）" },
+        { "name": "OpenAI Agents SDK", "official": "https://openai.github.io/openai-agents-python/", "versionPage": "https://openai.github.io/openai-agents-python/", "desc": "OpenAI 官方 Agent 开发 SDK 文档", "registry": { "type": "pypi", "pkg": "openai-agents-python" } },
+        { "name": "LangChain", "official": "https://docs.langchain.com", "versionPage": "https://docs.langchain.com", "desc": "LangChain 官方文档", "registry": { "type": "pypi", "pkg": "langchain" } },
+        { "name": "LangGraph", "official": "https://langchain-ai.github.io/langgraph/", "versionPage": "https://langchain-ai.github.io/langgraph/", "desc": "LangGraph 状态机编排框架文档", "registry": { "type": "pypi", "pkg": "langgraph" } },
+        { "name": "CrewAI", "official": "https://docs.crewai.com", "versionPage": "https://docs.crewai.com", "desc": "CrewAI 多智能体协作框架文档", "registry": { "type": "pypi", "pkg": "crewai" } },
+        { "name": "Claude Code", "official": "https://docs.claude.com/zh-CN/docs/claude-code/overview", "versionPage": "https://docs.claude.com/en/changelog", "desc": "Claude Code 官方文档（编码 Agent）" }
+      ]
+    }
+  ]
+}

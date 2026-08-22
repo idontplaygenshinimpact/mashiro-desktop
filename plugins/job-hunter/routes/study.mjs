@@ -348,7 +348,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         res.end(JSON.stringify({ ok: true, plan }));
       })
       .catch((e) => {
-        res.writeHead(500, { "Content-Type": "application/json" });
+        res.writeHead(e?.statusCode || 500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
       });
   });

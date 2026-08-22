@@ -1,9 +1,17 @@
 // study.mjs 单测（无 LLM 部分）：清单 CRUD / 勾选 / 复习出题（临时 DB 隔离）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses } from "./helpers.mjs";
 
 const dbDir = setupTempDb("study");
+// generateStudyPlan 需要 outputDir 下有产出文件（CI 无真实 output/）——建临时输出目录
+process.env.MIANSHI_OUTPUT_DIR = path.join(dbDir, "output");
+try {
+  mkdirSync(path.join(dbDir, "output", "2026-08-05_discover"), { recursive: true });
+  writeFileSync(path.join(dbDir, "output", "2026-08-05_discover", "面经.md"), "# 事件循环面经\n\n".repeat(30) + "详细内容".repeat(30), "utf8");
+} catch { /* ignore */ }
 mockLLM(); // F1 回归测试需要 generateStudyPlan（mock 必须在 import study 之前）
 const { getPlan, addPlanItems, checkItem, startReview, generateStudyPlan, syncResumeProjectItems } = await import("../lib/study.mjs");
 
