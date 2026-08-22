@@ -19,7 +19,7 @@ export const SETTINGS = [
  */
 export function register(api) {
   const { router, settings, log } = api;
-  log("[plugin-template] 注册成功（协议演示：路由/设置/健康检查）");
+  log?.("[plugin-template] 注册成功（协议演示：路由/设置/健康检查）");
 
   // 1) API 路由：模板接口（演示读设置项）
   router.route("/api/plg/template/hello", (req, res) => {

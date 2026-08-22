@@ -78,3 +78,104 @@ function safeUrl(u) {
   return /^(https?:|mailto:)/i.test(String(u || "")) ? u : "#";
 }
 
+// ============ 🧩 插件面板动态渲染（阶段 3：manifest.panel.tabs/settings → 真实 tab） ============
+// panel-core 先于 panel-chat 加载，esc() 此时未定义——用本地转义助手
+function escHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function initPluginTabs() {
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/plugins");
+    const j = await r.json();
+    if (!j?.ok || !Array.isArray(j.plugins)) return;
+    const nav = document.querySelector("nav.tabs");
+    const main = document.querySelector("main");
+    if (!nav || !main) return;
+    for (const p of j.plugins) {
+      if (p.disabled || !p.load?.ok) continue;
+      const tabs = p.panel?.tabs || [];
+      if (!tabs.length) continue;
+      for (const t of tabs) {
+        const tabName = `plg-${p.id}-${t.id}`;
+        if (document.getElementById("tab-" + tabName)) continue; // 幂等
+        const btn = document.createElement("button");
+        btn.className = "tab";
+        btn.dataset.tab = tabName;
+        btn.textContent = t.label || t.id;
+        btn.title = `插件：${p.name}`;
+        btn.addEventListener("click", () => switchTab(tabName));
+        nav.appendChild(btn);
+        const sec = document.createElement("section");
+        sec.id = "tab-" + tabName;
+        sec.className = "tab-panel";
+        sec.innerHTML = `<div class="jobs-setup">
+          <div class="form-row">
+            <label>${escHtml(t.label)} <span style="font-weight:normal;color:#8a87a8;font-size:11px;">—— 来自插件 ${escHtml(p.name)} v${escHtml(p.version || "")}</span></label>
+          </div>
+          <div class="plg-tab-body" data-plg="${escHtml(p.id)}" data-tab="${escHtml(t.id)}" style="margin-top:8px;"></div>
+        </div>`;
+        main.appendChild(sec);
+      }
+      // 插件设置表单（panel.settings 声明）渲染到第一个 tab
+      const decls = p.panel?.settings || [];
+      const firstBody = document.querySelector(`#tab-plg-${p.id}-${tabs[0].id} .plg-tab-body`);
+      if (!firstBody) continue;
+      if (!decls.length) {
+        firstBody.innerHTML = '<div style="color:#8a87a8;font-size:12px;">该插件未声明面板设置</div>';
+        continue;
+      }
+      try {
+        const sr = await fetch(`http://127.0.0.1:8899/api/plugins/settings?plugin=${p.id}`);
+        const sj = await sr.json();
+        const vals = (sj && sj.settings) || {};
+        const rows = decls.map((s) => {
+          const v = vals[s.key];
+          const label = escHtml(s.label || s.key);
+          if (s.type === "toggle") {
+            return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+              <input type="checkbox" id="plg-set-${p.id}-${s.key}" ${v ? "checked" : ""} style="width:15px;height:15px;accent-color:#6d4fd8;">
+              <span style="font-size:12px;color:#4a3a9d;">${label}</span></div>`;
+          }
+          const type = s.type === "password" ? "password" : "text";
+          return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+            <span style="font-size:12px;color:#4a3a9d;min-width:90px;">${label}</span>
+            <input type="${type}" id="plg-set-${p.id}-${s.key}" value="${escHtml(v ?? "")}"
+              style="flex:1;min-width:140px;padding:5px 8px;font-size:11px;border-radius:6px;border:1px solid rgba(138,90,220,.25);background:rgba(20,18,36,.6);color:#e8e6f2;"></div>`;
+        }).join("");
+        firstBody.innerHTML = `<div style="font-size:11px;color:#8a87a8;">插件设置（存于本机，命名空间 plg_${escHtml(p.id)}_*）</div>
+          ${rows}
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+            <button class="secondary" style="padding:6px 12px;font-size:11px;" data-plg-save="${escHtml(p.id)}">💾 保存插件设置</button>
+            <span class="resume-status" id="plg-save-status-${escHtml(p.id)}"></span>
+          </div>`;
+        const saveBtn = firstBody.querySelector(`[data-plg-save="${p.id}"]`);
+        if (saveBtn) {
+          saveBtn.addEventListener("click", async () => {
+            const out = {};
+            for (const s of decls) {
+              const el = document.getElementById(`plg-set-${p.id}-${s.key}`);
+              if (!el) continue;
+              out[s.key] = s.type === "toggle" ? el.checked : el.value;
+            }
+            let allOk = true;
+            for (const [k, v] of Object.entries(out)) {
+              try {
+                const rr = await fetch("http://127.0.0.1:8899/api/plugins/settings", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id: p.id, key: k, value: v }),
+                });
+                const jj = await rr.json();
+                if (!jj?.ok) allOk = false;
+              } catch { allOk = false; }
+            }
+            const st = document.getElementById(`plg-save-status-${p.id}`);
+            if (st) st.textContent = allOk ? "✅ 已保存" : "⚠️ 部分保存失败";
+          });
+        }
+      } catch { firstBody.innerHTML = '<div style="color:#8a87a8;font-size:12px;">设置加载失败（旧版后台服务）</div>'; }
+    }
+  } catch { /* 后台服务未启动 → 插件 tab 不渲染（不打扰面板） */ }
+}
+initPluginTabs();
+

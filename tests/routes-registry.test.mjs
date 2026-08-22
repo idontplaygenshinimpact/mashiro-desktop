@@ -72,6 +72,11 @@ test("全部域路由注册齐全（原版 55 条内联路径一个不少；业�
     "/api/iv-focus-sources", // 面试优先考察多源聚合（手动选配）
     "/api/plg/template/hello", // 示例插件模板路由
     "/api/plg/template/data",
+    "/api/plugins", // 插件管理（阶段 3）
+    "/api/plugins/toggle",
+    "/api/plugins/settings",
+    "/api/plugins/install",
+    "/api/plugins/market",
   ];
   const missingNew = NEW_PATHS.filter((p) => !router.resolve(p, "GET") && !router.resolve(p, "POST"));
   assert.deepEqual(missingNew, [], `新增路由缺失：\n${missingNew.join("\n")}`);

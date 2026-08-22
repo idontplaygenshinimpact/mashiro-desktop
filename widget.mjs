@@ -22,7 +22,7 @@ import { scanNewestFiles, loadOrCreateToken, checkBearerAuth, createCrawlMutex }
 import { classifyStudyFiles, pickDistinct } from "./lib/recommend.mjs";
 import { createRouter } from "./lib/routes/router.mjs";
 import { registerCoreRoutes } from "./lib/routes/core.mjs";
-import { loadAllPlugins } from "./lib/plugin-loader.mjs";
+import { loadEnabledPlugins, listPlugins, setPluginEnabled, readPluginSettings, writePluginSetting, installPlugin, getPluginMarket } from "./lib/plugin-admin.mjs";
 import { db } from "./lib/db.mjs";
 import { createPatrol } from "./lib/patrol.mjs";
 
@@ -30,10 +30,11 @@ import { createPatrol } from "./lib/patrol.mjs";
 const router = createRouter();
 const getCorsOrigin = (req) => req.headers.origin || "*";
 // 插件加载：秋招助手（plugins/job-hunter，聚合 12 个业务路由域）。
-// 单插件失败隔离不拖垮宿主；加载结果打日志（面板 /api/health 可查）
-await loadAllPlugins({ router, db, getCorsOrigin, laneSubmit }).then((results) => {
+// 单插件失败隔离不拖垮宿主；加载结果打日志（面板设置→插件管理可查）；停用的插件跳过
+// api.log 必须注入——插件协议里 register 会用它打日志（缺了模板插件直接加载失败）
+await loadEnabledPlugins({ router, db, getCorsOrigin, laneSubmit, log: (...a) => console.log(...a) }).then((results) => {
   for (const r of results) {
-    console.log(r.ok ? `[plugin] ${r.name} v${r.version} 已加载（${r.id}）` : `[plugin] ${r.error}`);
+    console.log(r.ok ? `[plugin] ${r.name} v${r.version} 已加载（${r.id}）` : `[plugin] ${r.id}: ${r.error}`);
   }
 });
 // 核心基础设施域（health/widget-data/chat/stats/observability/refresh/notify/approval/
@@ -62,6 +63,12 @@ registerCoreRoutes(router, {
     patrolRun: () => patrol.run(),
     patrolMinMinutes: () => patrol.minMinutes,
     patrolMaxMinutes: () => patrol.maxMinutes,
+    pluginList: () => listPlugins(),
+    pluginToggle: (id, enabled) => setPluginEnabled(id, enabled),
+    pluginReadSettings: (id) => readPluginSettings(id),
+    pluginWriteSetting: (id, key, value) => writePluginSetting(id, key, value),
+    pluginInstall: (id) => installPlugin(id),
+    pluginMarket: () => getPluginMarket(),
   },
 });
 

@@ -717,6 +717,117 @@ async function loadSettings() {
     const j = await r.json();
     if (j?.ok && j.path) $("set-docs-project").value = j.path;
   } catch { /* ignore */ }
+  // 插件管理 + 插件市场（阶段 3）
+  loadPluginsAdmin();
+  loadPluginMarket();
+}
+
+// ============ 🧩 插件管理（阶段 3：已装插件列表/启停/健康） ============
+let __installedPluginIds = new Set();
+async function loadPluginsAdmin() {
+  const box = $("plugin-admin-list");
+  if (!box) return;
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/plugins");
+    const j = await r.json();
+    if (!j?.ok || !Array.isArray(j.plugins)) {
+      box.innerHTML = '<div style="color:#8a87a8;font-size:12px;">后台服务未返回插件列表（旧版服务，重启桌宠后可用）</div>';
+      return;
+    }
+    __installedPluginIds = new Set(j.plugins.map((p) => p.id));
+    box.innerHTML = j.plugins.map((p) => {
+      const load = p.load || {};
+      const status = load.ok
+        ? '<span style="color:#5fd85f;">✅ 已加载</span>'
+        : `<span style="color:#e07a5f;">⚠️ ${esc(load.error || "加载失败")}</span>`;
+      const health = load.health?.ok === false
+        ? `<div style="margin-top:2px;"><span style="color:#e0a95f;font-size:11px;">健康检查异常：${esc(load.health.detail || "")}</span></div>`
+        : (load.health?.detail ? `<div style="margin-top:2px;font-size:11px;color:#8a87a8;">健康：${esc(load.health.detail)}</div>` : "");
+      const tabs = (p.panel?.tabs || []).map((t) => t.label).join("、");
+      return `<div style="border:1px solid rgba(138,90,220,.18);border-radius:10px;padding:8px 10px;background:rgba(20,18,36,.5);">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-weight:600;font-size:12px;">${esc(p.name)}</span>
+          <span style="font-size:10px;color:#8a87a8;">v${esc(p.version || "?")} · ${esc(p.id)}</span>
+          ${status}
+          <label style="margin-left:auto;display:flex;gap:5px;align-items:center;font-size:11px;color:#4a3a9d;cursor:pointer;" title="停用/启用后重启桌宠生效">
+            <input type="checkbox" data-plg-toggle="${esc(p.id)}" ${p.disabled ? "" : "checked"} style="width:14px;height:14px;accent-color:#6d4fd8;"> 启用
+          </label>
+        </div>
+        ${p.description ? `<div style="font-size:11px;color:#8a87a8;margin-top:4px;">${esc(p.description)}</div>` : ""}
+        <div style="font-size:11px;color:#8a87a8;margin-top:4px;">${tabs ? `面板 tab：${esc(tabs)}` : "无面板声明"}${p.schedules?.length ? ` · 定时任务 ${p.schedules.length} 个` : ""}</div>
+        ${health}
+      </div>`;
+    }).join("");
+    box.querySelectorAll("[data-plg-toggle]").forEach((cb) => {
+      cb.addEventListener("change", async () => {
+        const id = cb.dataset.plgToggle;
+        const enabled = cb.checked;
+        try {
+          const r = await fetch("http://127.0.0.1:8899/api/plugins/toggle", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, enabled }),
+          });
+          const j = await r.json();
+          window.kanban?.notify?.("🧩 插件管理", `${enabled ? "已启用" : "已停用"}「${id}」——重启桌宠后生效`);
+        } catch { /* ignore */ }
+        loadPluginsAdmin();
+      });
+    });
+  } catch (e) {
+    box.innerHTML = `<div style="color:#e07a5f;font-size:12px;">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+// ============ 🛒 插件市场（阶段 3：一键安装） ============
+async function loadPluginMarket() {
+  const box = $("plugin-market-list");
+  if (!box) return;
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/plugins/market");
+    const j = await r.json();
+    const list = (j?.ok && Array.isArray(j.plugins)) ? j.plugins : [];
+    if (!list.length) {
+      box.innerHTML = '<div style="color:#8a87a8;font-size:12px;">市场暂无可安装插件（data/plugin-market.json）</div>';
+      return;
+    }
+    box.innerHTML = list.map((p) => {
+      const installed = __installedPluginIds.has(p.id);
+      return `<div style="border:1px solid rgba(138,90,220,.18);border-radius:10px;padding:8px 10px;background:rgba(20,18,36,.5);">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-weight:600;font-size:12px;">${esc(p.name)}</span>
+          <span style="font-size:10px;color:#8a87a8;">v${esc(p.version || "?")}</span>
+          <button class="secondary" style="margin-left:auto;padding:5px 12px;font-size:11px;" data-plg-install="${esc(p.id)}" ${installed ? "disabled" : ""}>${installed ? "✅ 已安装" : "📥 安装"}</button>
+        </div>
+        <div style="font-size:11px;color:#8a87a8;margin-top:4px;">${esc(p.description || "")}</div>
+      </div>`;
+    }).join("");
+    box.querySelectorAll("[data-plg-install]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.plgInstall;
+        btn.disabled = true;
+        btn.textContent = "⏳ 安装中…";
+        try {
+          const r = await fetch("http://127.0.0.1:8899/api/plugins/install", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+          });
+          const j = await r.json();
+          if (j?.ok) {
+            btn.textContent = "✅ 已安装";
+            window.kanban?.notify?.("🧩 插件市场", `${j.name || id} 已安装——重启桌宠后生效`);
+            loadPluginsAdmin();
+          } else {
+            btn.textContent = "⚠️ 失败";
+            window.kanban?.notify?.("🧩 插件市场", String(j?.error || "安装失败"));
+            setTimeout(() => { if (btn.isConnected) { btn.disabled = false; btn.textContent = "📥 安装"; } }, 3000);
+          }
+        } catch (e) {
+          btn.textContent = "⚠️ 失败";
+          setTimeout(() => { if (btn.isConnected) { btn.disabled = false; btn.textContent = "📥 安装"; } }, 3000);
+        }
+      });
+    });
+  } catch { /* ignore */ }
 }
 
 // 桌宠模型选择（设置中心；与对话 Tab 同一数据源）
