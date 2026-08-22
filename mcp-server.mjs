@@ -172,6 +172,36 @@ server.tool(
   }
 );
 
+// ---------- 工具 9: 本地项目源码档案（模拟面试/清单讲解/对话辅导共用素材） ----------
+// 用户问「我的项目怎么介绍/怎么讲/哪里不足」时，agent 基于真实代码辅导表述（用户不会表述也没关系）
+server.tool(
+  "get_project_archives",
+  "查看用户本地项目源码档案（技术栈/目录结构/核心实现/README——来自设置中心配置的项目名=目录）。用户询问自己项目的介绍/表述/面试准备时，必须先调用本工具基于真实代码辅导",
+  {},
+  async () => {
+    try {
+      const { getPersonalProjects, buildProjectArchive } = await import("./lib/personal-projects.mjs");
+      const projects = getPersonalProjects();
+      if (!projects.length) {
+        return { content: [{ type: "text", text: "未配置个人项目源码。请在设置中心「🎯 简历项目源码」填 项目名=本地目录，配置后模拟面试/清单讲解/对话都能基于真实代码。" }] };
+      }
+      const text = projects
+        .map((p) => {
+          try {
+            const a = buildProjectArchive(p);
+            return `【${p.name}】\n${String(a.content || "").slice(0, 4000)}`;
+          } catch { return `【${p.name}】\n（档案生成失败，目录可能已移动）`; }
+        })
+        .join("\n\n=====\n\n")
+        .slice(0, 14000);
+      return { content: [{ type: "text", text: text || "项目档案为空" }] };
+    } catch (e) {
+      console.error(`[mcp] get_project_archives 失败: ${e && e.message ? e.message : String(e)}`);
+      return { content: [{ type: "text", text: `⚠️ 读取项目档案失败: ${e && e.message ? e.message : String(e)}` }], isError: true };
+    }
+  }
+);
+
 // ---------- 启动（stdio 传输，供 MCP 客户端连接） ----------
 const transport = new StdioServerTransport();
 await server.connect(transport);
