@@ -289,3 +289,22 @@ test("syncJobBishiToSchedule：纯日期笔试 → 本地 00:00（非 UTC 08:00�
   assert.equal(d2.getHours(), 14, "带时间笔试精确到 14:00");
   assert.equal(d2.getMinutes(), 0);
 });
+
+test("target_direction 手动优先：手动设置后简历上传不覆盖（applyDirectionAuto）", async () => {
+  const { db } = await import("../lib/db.mjs");
+  // 场景1：无手动设置 → 简历自动设置生效
+  db.prepare("DELETE FROM settings WHERE key='target_direction'").run();
+  setLlmResponses('{"skills":["React"],"directions":["agent"]}');
+  await jobs.setResumeProfile("简历一");
+  assert.equal(jobs.getTargetDirection(), "agent", "首次简历自动设置 agent");
+  // 场景2：用户手动改 backend → 再传 agent 简历 → 不覆盖
+  jobs.setTargetDirection("backend");
+  setLlmResponses('{"skills":["React"],"directions":["agent"]}');
+  await jobs.setResumeProfile("简历二");
+  assert.equal(jobs.getTargetDirection(), "backend", "手动设置的 backend 不被简历覆盖");
+  // 场景3：手动清除后简历可重新自动设置
+  db.prepare("DELETE FROM settings WHERE key='target_direction'").run();
+  setLlmResponses('{"skills":["React"],"directions":["frontend"]}');
+  await jobs.setResumeProfile("简历三");
+  assert.equal(jobs.getTargetDirection(), "frontend", "清除后简历自动设置生效");
+});
