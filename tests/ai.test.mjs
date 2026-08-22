@@ -22,6 +22,33 @@ test("msgTokens/bodyTokens 计算消息体积", () => {
   assert.equal(ai.bodyTokens([{ role: "user", content: "a" }, { role: "assistant", content: "b" }]), 8 + 2);
 });
 
+// ---------- splitExplain（讲解长文裁剪：主文优先 + 追问段截尾） ----------
+test("splitExplain：主文保留完整，追问段截尾（修复：slice 尾部把主文挤掉）", () => {
+  const main = "讲解核心内容".repeat(500); // ~2500 字主文
+  const tail = "## 💬 追问：问题一\n回答一\n\n---\n\n## 💬 追问：问题二\n回答二\n\n---\n\n## 💬 追问：问题三\n回答三\n";
+  const { main: m, tail: t } = ai.splitExplain(main + tail, 1000);
+  // 主文预算 65%（650 字）：超出时保留头部 + 省略标记
+  assert.ok(m.includes("讲解核心内容"), "主文开头保留");
+  assert.ok(m.includes("省略"), "超长主文有省略标记");
+  assert.ok(t.includes("问题三"), "追问段保留最近一段（尾部）");
+  assert.ok(m.length + t.length <= 1000 + 50, "总预算不超");
+});
+
+test("splitExplain：无追问段 → 整体截尾返回", () => {
+  const text = "只有讲解".repeat(300);
+  const { main, tail } = ai.splitExplain(text, 500);
+  assert.ok(main.length <= 500);
+  assert.equal(tail, "");
+  assert.ok(main.includes("只有讲解"), "保留内容");
+});
+
+test("splitExplain：短文本不截断原样返回", () => {
+  const text = "简短讲解";
+  const { main, tail } = ai.splitExplain(text, 30000);
+  assert.equal(main, "简短讲解");
+  assert.equal(tail, "");
+});
+
 // ---------- classifyPage ----------
 test("classifyPage 解析 LLM 返回", async () => {
   setLlmResponses('{"type":"mianshi","direction":"frontend","company":"字节","position":"前端","worth":8,"reason":"真实面经"}');
