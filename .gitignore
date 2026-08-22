@@ -5,11 +5,12 @@ node_modules/
 .env
 
 # 数据/产出/日志
-# data/ 目录整体忽略，但 3 个静态配置资产随仓库发布（代码运行时读取，缺失则功能/测试失效）
+# data/ 目录整体忽略，但 4 个静态配置资产随仓库发布（代码运行时读取，缺失则功能/测试失效）
 data/*
 !data/learning-sites.json
 !data/career-sites.json
 !data/knowledge-trees.json
+!data/plugin-market.json
 output/
 progress.json
 widget-run.log
