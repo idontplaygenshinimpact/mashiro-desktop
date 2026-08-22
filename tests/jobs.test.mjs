@@ -119,6 +119,27 @@ test("setJobStatus 转 ready 记录 applied_at（重复投递不刷新首次时�
   assert.equal(jobs.getJobs().find((x) => x.id === r2.id).appliedAt, null, "未投递无 applied_at");
 });
 
+test("setJobStatus 跳级 new→done 也补记 applied_at（修复：跳级丢失投递记录）", () => {
+  const r = jobs.addJob({ company: "C", title: "算法", job_type: "校招", direction: "algorithm" });
+  assert.equal(jobs.setJobStatus(r.id, "done").ok, true, "允许跳级（用户手动标记）");
+  const j = jobs.getJobs().find((x) => x.id === r.id);
+  assert.ok(j.appliedAt, "跳级到 done 也记录投递时间");
+  assert.equal(j.status, "done");
+});
+
+test("scoreJob 技能词边界匹配（修复：Java 不误命中 JavaScript）", async () => {
+  const { db } = await import("../lib/db.mjs");
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('resume_skills', ?, ?)")
+    .run(JSON.stringify({ skills: ["Java"], directions: ["backend"], updatedAt: Date.now() }), Date.now());
+  const javaJob = jobs.addJob({ company: "J", title: "Java 后端开发", job_type: "校招", direction: "backend" });
+  const jsJob = jobs.addJob({ company: "JS", title: "JavaScript 前端开发", job_type: "校招", direction: "frontend" });
+  const list = jobs.getJobs();
+  const javaMatch = list.find((x) => x.id === javaJob.id).match;
+  const jsMatch = list.find((x) => x.id === jsJob.id).match;
+  assert.ok(javaMatch > jsMatch, "Java 岗匹配分高于 JavaScript 岗");
+  db.prepare("DELETE FROM settings WHERE key='resume_skills'").run();
+});
+
 test("setJobFavorite 收藏/取消收藏持久化 + 非法 id 拒绝", () => {
   const r = jobs.addJob({ company: "A", title: "前端", job_type: "校招", direction: "frontend" });
   assert.equal(jobs.setJobFavorite(r.id, 1).ok, true);
