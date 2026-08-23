@@ -13,7 +13,7 @@ jobs:
       contents: write # 创建 GitHub Release（action-gh-release 需要）
       packages: write # 发布 @<owner>/mashiro-mcp 到 GitHub Packages
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
