@@ -33,7 +33,8 @@ if (process.argv.includes("--restore")) {
     console.error("❌ 无备份文件（package.json.pubbak）——无需恢复");
     process.exit(1);
   }
-  writeFileSync(PKG, readFileSync(BACKUP, "utf8"));
+  // 原始字节写回（保留原文件行尾风格，避免 git 误判 diff）
+  writeFileSync(PKG, readFileSync(BACKUP));
   rmSync(BACKUP, { force: true });
   console.log("✅ package.json 已恢复");
   process.exit(0);
@@ -46,7 +47,8 @@ if (existsSync(BACKUP)) {
 }
 
 const pkg = JSON.parse(readFileSync(PKG, "utf8"));
-writeFileSync(BACKUP, JSON.stringify(pkg, null, 2), "utf8");
+// 备份保留原始字节（行尾风格不变）
+writeFileSync(BACKUP, readFileSync(PKG));
 
 if (scope) {
   if (!/^[a-zA-Z0-9-]+$/.test(scope)) {
@@ -67,7 +69,7 @@ for (const d of MCP_DEPS) {
 }
 const dropped = Object.keys(all).filter((d) => !MCP_DEPS.includes(d));
 
-writeFileSync(PKG, JSON.stringify(pkg, null, 2), "utf8");
+writeFileSync(PKG, JSON.stringify(pkg, null, 2) + "\n", "utf8");
 console.log(`✅ 发布版 package.json 已生成：name=${pkg.name}`);
 console.log(`   保留 ${Object.keys(pkg.dependencies).length} 个运行时依赖，移除 ${dropped.length} 个桌面专用：${dropped.slice(0, 8).join(", ")}${dropped.length > 8 ? "…" : ""}`);
 console.log("   发布完成后执行 node scripts/prepare-publish.mjs --restore 恢复");
