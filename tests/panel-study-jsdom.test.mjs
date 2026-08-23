@@ -128,6 +128,27 @@ test("归并不足 2 项 → 不触发（提示）", async () => {
   });
 });
 
+test("复习卡空答案：显示答案回退讲解存档（fetch /api/study/note，不触发 LLM）", async () => {
+  await withPanel(async ({ window }) => {
+    window.document.querySelector('.tab[data-tab="review"]').click();
+    await tick(80);
+    // answer 为空的卡 + mock /api/study/note 返回讲解存档
+    window.fetch = async (url) => ({ ok: true, json: async () => ({ ok: true, found: true, content: "讲解存档：事件循环结论/原理/实现/边界" }) });
+    window.document.getElementById("rc-show").click();
+    await tick(30);
+    const answerBox = window.document.getElementById("rc-answer");
+    assert.ok(!answerBox.classList.contains("hidden"), "答案区显示");
+    assert.ok(answerBox.textContent.includes("讲解存档"), "回退显示讲解存档内容");
+    assert.ok(answerBox.textContent.includes("来自讲解存档"), "标注来源");
+  }, {
+    reviewDue: async () => ({
+      ok: true,
+      due: [{ id: "c2", topic: "事件循环", question: "讲一下事件循环", answer: "", history: [], nextDue: "2026-01-01" }],
+      stats: { total: 5, due: 1, todayDone: 0 }, trend: { trend: [], streak: 0 }, todayReviewed: [],
+    }),
+  });
+});
+
 test("复习卡：到期卡片显示 → 显示答案 → 评级提交", async () => {
   // override 在 eval 前生效；loadReview 只在切到「复习」Tab 时触发（switchTab 按需加载）
   await withPanel(async ({ window, kanban }) => {

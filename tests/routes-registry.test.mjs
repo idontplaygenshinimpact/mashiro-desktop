@@ -80,6 +80,7 @@ test("全部域路由注册齐全（原版 55 条内联路径一个不少；业�
     "/api/backup", // 数据备份与恢复
     "/api/backups",
     "/api/backups/restore",
+    "/api/study/note", // 复习"显示答案"空答案回退（纯读讲解存档）
   ];
   const missingNew = NEW_PATHS.filter((p) => !router.resolve(p, "GET") && !router.resolve(p, "POST"));
   assert.deepEqual(missingNew, [], `新增路由缺失：\n${missingNew.join("\n")}`);

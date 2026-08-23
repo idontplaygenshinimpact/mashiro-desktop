@@ -870,8 +870,25 @@ function showReviewFeedback(rating, nextDue, nextCard) {
   fb.classList.remove("hidden");
 }
 
-$("rc-show").addEventListener("click", () => {
-  $("rc-answer").classList.remove("hidden");
+$("rc-show").addEventListener("click", async () => {
+  const card = reviewQueue[reviewIdx];
+  let answerText = card.answer || "";
+  let answerNote = "";
+  if (!answerText && card?.topic) {
+    // 空答案回退：纯读该主题的讲解存档（study_notes）——不触发 LLM 生成（复习场景要快）
+    try {
+      const r = await fetch(`http://127.0.0.1:8899/api/study/note?topic=${encodeURIComponent(card.topic)}`).then((x) => x.json());
+      if (r?.ok && r.found && r.content) {
+        answerText = r.content;
+        answerNote = "（来自讲解存档）";
+      }
+    } catch { /* 旧版后台无此接口 → 按无答案处理 */ }
+  }
+  const box = $("rc-answer");
+  box.textContent = answerText
+    ? (answerNote ? answerNote + "\n" : "") + answerText
+    : "本题暂无参考答案——先按自己的理解评级；答错会自动进复习与讲解。";
+  box.classList.remove("hidden");
   $("rc-show").classList.add("hidden");
   $("rc-buttons").classList.remove("hidden");
 });

@@ -299,6 +299,30 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     });
   });
 
+  // 复习"显示答案"空答案回退：按 topic 纯读讲解存档（不调 LLM——复习场景要快；
+  // 与 /api/study-detail 的区别：detail 无文件时会现场生成讲解，这里只读）
+  router.route("/api/study/note", (req, res) => {
+    try {
+      const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
+      const topic = String(u.searchParams.get("topic") || "").trim();
+      if (!topic) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "topic required" })); return; }
+      const filePath = findStudyFile({ topic });
+      if (filePath) {
+        try {
+          const content = readFileSync(filePath, "utf8");
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: true, found: true, content, filePath }));
+          return;
+        } catch { /* 读取失败按未命中处理 */ }
+      }
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, found: false, content: "" }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+
   router.route("/api/study-detail", (req, res) => {
     // 学习详情：返回条目讲解内容（有文件读文件；无文件现场生成并写入 study_notes 存档）
     const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
