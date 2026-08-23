@@ -207,6 +207,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 │   ├── study.mjs / review.mjs / interview.mjs / quiz.mjs / recommend.mjs
 │   ├── personal-projects.mjs       # 个人项目源码档案（面试/讲解/对话全模块注入）
 │   ├── job-platforms.mjs / platform-accounts.mjs / platforms/
+│   ├── jobs.mjs + job-match.mjs + job-reminders.mjs  # 岗位数据层 / 画像匹配推荐 / 截止笔试提醒（职责拆分）
 │   ├── speech.mjs / speech-worker.mjs  # 本地 ASR（sherpa-onnx + worker 线程）
 │   ├── context-providers.mjs       # 个人数据注册表（MCP 单数据源）
 │   ├── skills.mjs / hooks.mjs / subagent.mjs / llm.mjs / ai.mjs

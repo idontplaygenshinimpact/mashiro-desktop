@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### 全量代码审计（11 域并行审计，100+ 项发现全部处理）
+
+- 🛡️ **判题沙箱安全重构**：vm 不是安全边界（宿主对象注入可达宿主进程权限）→ 判题迁移到 `worker_threads` 隔离（`lib/sandbox-runner.mjs` + `sandbox-worker.mjs`）：独立线程 + resourceLimits + 超时 `worker.terminate()` 真正终止（async 挂起/定时器随 worker 回收）；断言闭包 worker 侧定义 + 测试代码独立作用域（防遮蔽）
+- 🔐 **审批链加固**：会话级 auto-approve 按会话边界重置（新对话重置）；拒绝记入会话级 deny（防变参重试无限弹审批）；`job_apply` 禁 session 放行；审计账本区分用户批准 vs 会话延续；skill 权限缓存缺失 fail-closed
+- 📐 **提示注入面清零**：MCP 工具结果/描述、subagent context/结果、简历原文、linkHints、知识库出题素材、示例 skill 外部内容——全部统一 `sanitizeExternal().wrapped` 不可信包裹
+- 🐛 **核心功能修复**：复习 rating=0（忘了）被吞成 Good（薄弱点错误清除）；选择题洗牌判分坐标系错位（75% 答对判错）；死循环检测 80 字符截断误杀合法流水线；回传 history 非法消息序列（多轮对话断链）
+- 🏗️ **模块拆分**：`jobs.mjs`（777 行 God Object）→ 岗位数据层 + `job-match.mjs`（画像/匹配/推荐）+ `job-reminders.mjs`（截止/笔试提醒）——职责分离，引用方全部直连新模块
+- 🔁 **健壮性**：MCP 子进程生命周期（失败回收/优雅关闭/重试）；IMAP 连接超时销毁 + 互斥；RSS 摘要失败不再锁死当天；恢复链路清理 WAL 残留；薄弱点计数不再被镜像裁剪丢失；`/api/output/import` JSON 解析修复；插件路由宿主优先；VAD 实际采样率 + 噪声裁剪；语音开关全覆盖；面板 XSS 注入面转义
+
 ### 数据安全（新增）
 
 - 💾 **自动备份**：`lib/backup.mjs`——SQLite 主库（WAL checkpoint 后复制，保证完整）+ AI 讲解存档（`output/study_notes/`）+ 爬取进度，每天自动备份一次，保留最近 10 份（`MIANSHI_BACKUP_KEEP` 可配）
