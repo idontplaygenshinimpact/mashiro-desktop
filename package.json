@@ -53,6 +53,9 @@
       "links.txt",
       "package.json"
     ],
+    "asarUnpack": [
+      "plugins/**"
+    ],
     "directories": {
       "output": "release"
     },

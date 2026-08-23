@@ -22,11 +22,23 @@ import { rendererBundleStale as bundleStale, rebuildRendererBundle as rebuildBun
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
+// ---------- 打包环境（asar 只读：数据/产出/插件全部重定向到可写目录） ----------
+// 必须在任何模块读取数据路径之前设置（mascot-models 等模块顶层求值）；
+// widget 子进程继承这些 env（desktop/lib/widget-server.mjs 再补 ELECTRON_RUN_AS_NODE）
+if (app.isPackaged) {
+  const userData = app.getPath("userData");
+  process.env.MIANSHI_DATA_DIR ||= path.join(userData, "data");
+  process.env.MIANSHI_OUTPUT_DIR ||= path.join(userData, "output");
+  process.env.MIANSHI_PLUGINS_DIR ||= path.join(process.resourcesPath, "app.asar.unpacked", "plugins");
+  process.env.MIANSHI_MCP_CONFIG ||= path.join(userData, "mcp-servers.json");
+  console.log(`[kanban] 打包模式：数据=${process.env.MIANSHI_DATA_DIR}`);
+}
+
 // ---------- 主进程日志持久化（追加模式） ----------
 // 无论手动启动/双击/一键重启（app.relaunch），日志都累积到 data/desktop-main.log。
 // 教训：Start-Process 重定向是覆盖写，relaunch 的新进程会截断日志 → 诊断数据丢失。
 try {
-  const logStream = createWriteStream(path.join(ROOT, "data", "desktop-main.log"), { flags: "a" });
+  const logStream = createWriteStream(path.join(process.env.MIANSHI_DATA_DIR || path.join(ROOT, "data"), "desktop-main.log"), { flags: "a" });
   const ts = () => new Date().toISOString().slice(11, 23);
   const origLog = console.log.bind(console);
   const origErr = console.error.bind(console);
@@ -64,7 +76,8 @@ if (!gotSingleInstanceLock) {
 const widgetServer = createWidgetServer({
   widgetFetch: (url, opts) => widgetFetch(url, opts),
   healthUrlValue: healthUrl(),
-  root: ROOT,
+  root: app.isPackaged ? app.getAppPath() : ROOT,
+  isPackaged: app.isPackaged,
 });
 // 持续守护：每 30 秒探测，挂了自动重启
 if (gotSingleInstanceLock) setInterval(() => widgetServer.ensure(), 30000);
@@ -1168,7 +1181,7 @@ function startFocusSupervision() {
 // 主进程这里只保留 Electron 相关的 session API 绑定与 token 变量。
 let widgetToken = "";
 async function loadWidgetToken() {
-  const tokenFile = path.join(ROOT, "data", "widget-token.json");
+  const tokenFile = path.join(process.env.MIANSHI_DATA_DIR || path.join(ROOT, "data"), "widget-token.json");
   // widget 冷启动要 15-30s 才写 token 文件 → 持续轮询直到读到（不能 10s 放弃，
   // 否则面板所有请求永远 401，学习清单/复习/对话全部加载不出来）
   widgetToken = await loadTokenFromFile(tokenFile);

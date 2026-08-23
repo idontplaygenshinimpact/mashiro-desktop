@@ -1,5 +1,7 @@
 // desktop/lib/widget-server.mjs —— 后端 widget 服务守护（纵向拆分：从 desktop/main.mjs 迁出）
 // 启动/复用 widget.mjs + 持续探测守护（挂了自动拉起）+ 退出清理（只杀本实例拉起的进程）
+// 打包模式：asar 内代码普通 node 读不了 → 用 ELECTRON_RUN_AS_NODE 模式（process.execPath 即
+// Electron 的 node，可读 asar）；数据/产出/插件目录由主进程 env 重定向到可写位置
 // 依赖注入：widgetFetch（带 token 的 fetch，来自 widget-auth.mjs）+ healthUrl；无 electron 依赖
 import { spawn, spawnSync } from "node:child_process";
 
@@ -21,9 +23,10 @@ export function safeSpawn(cmd, args, opts = {}) {
  * @param {object} deps
  * @param {Function} deps.widgetFetch 带 Bearer token 的 fetch（widgetFetchFactory 产物）
  * @param {string} deps.healthUrl 认证豁免健康检查端点
- * @param {string} deps.root 项目根目录（spawn widget.mjs 的 cwd）
+ * @param {string} deps.root 项目根目录（spawn widget.mjs 的 cwd；打包时为 app.asar 路径）
+ * @param {boolean} [deps.isPackaged] 打包模式：ELECTRON_RUN_AS_NODE 运行（可读 asar）
  */
-export function createWidgetServer({ widgetFetch, healthUrl: healthUrlValue, root }) {
+export function createWidgetServer({ widgetFetch, healthUrl: healthUrlValue, root, isPackaged = false }) {
   // 本实例拉起的 widget 子进程 pid 集合（退出清理只杀自己拉起的，避免误杀其他 node 实例/开发进程）
   const spawnedPids = new Set();
   let widgetProc = null;
@@ -34,7 +37,17 @@ export function createWidgetServer({ widgetFetch, healthUrl: healthUrlValue, roo
       .then((r) => { if (!r.ok) throw new Error("bad status"); })
       .catch(() => {
         if (widgetProc && widgetProc.exitCode === null) return; // 已在运行，不重复启动
-        const child = safeSpawn("node", ["widget.mjs"], { cwd: root });
+        let child;
+        if (isPackaged) {
+          // 打包版：Electron 的 node 模式（ELECTRON_RUN_AS_NODE=1）能读 asar 内的
+          // widget.mjs/lib/plugins；数据 env 已由主进程设置并被继承
+          child = safeSpawn(process.execPath, ["widget.mjs"], {
+            cwd: root,
+            env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+          });
+        } else {
+          child = safeSpawn("node", ["widget.mjs"], { cwd: root });
+        }
         widgetProc = child;
         if (child) {
           spawnedPids.add(child.pid);
@@ -46,7 +59,7 @@ export function createWidgetServer({ widgetFetch, healthUrl: healthUrlValue, roo
             spawnedPids.delete(child.pid);
             if (widgetProc === child) widgetProc = null;
           });
-          console.log("[kanban] widget.mjs 已后台拉起");
+          console.log(isPackaged ? "[kanban] widget.mjs 已后台拉起（ELECTRON_RUN_AS_NODE）" : "[kanban] widget.mjs 已后台拉起");
         }
       });
   }
