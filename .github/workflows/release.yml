@@ -11,6 +11,7 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write # 创建 GitHub Release（action-gh-release 需要）
+      packages: write # 发布 @<owner>/mashiro-mcp 到 GitHub Packages
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +52,18 @@ jobs:
             release/*.yml
             release/*.blockmap
           retention-days: 30
+
+      - name: Publish to GitHub Packages (npm.pkg.github.com)
+        # GitHub Packages 要求包名带 scope：临时改 name → npm publish → 不改回也不影响
+        # （该步骤在独立 job 环境，package.json 改动不落仓库）。GITHUB_TOKEN 自带 packages:write。
+        # 与 npmjs 的 mashiro-mcp（无 scope）并存，安装方按 registry 选用。
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.name='@'+process.env.REPO_OWNER+'/'+p.name;fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
+          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
+          npm publish --registry=https://npm.pkg.github.com/
+        env:
+          REPO_OWNER: ${{ github.repository_owner }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
