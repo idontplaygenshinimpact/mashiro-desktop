@@ -305,3 +305,44 @@ test("injectCuratedIntoPrompt 追加长期记忆章节 + 空记忆不追加", ()
   assert.ok(injected.includes("来源:weak:事件循环"), "带来源引用");
   assert.ok(injected.includes("事件循环"), "含记忆内容");
 });
+
+// ---------- 表述漂移合并（模拟面试提问措辞每次不同 → 同一知识点不应分裂成多条） ----------
+test("addWeakPoint 相似表述合并：状态机族不同措辞 → 归并为一条并累计 fail_count", () => {
+  memory.addWeakPoint("状态机与异步并发", "模拟面试");
+  memory.addWeakPoint("异步状态机与并发提交控制", "模拟面试");
+  memory.addWeakPoint("状态机状态转移表、异步并发控制", "模拟面试");
+  memory.addWeakPoint("状态机设计、异步状态流转与竞态控制", "模拟面试");
+  const rows = db.prepare("SELECT topic, fail_count FROM weak_points").all();
+  assert.equal(rows.length, 1, "5 种措辞归并为 1 条");
+  assert.equal(Number(rows[0].fail_count), 4, "fail_count 累计 4 次");
+  assert.equal(rows[0].topic, "状态机与异步并发", "保留首个（fail_count 最高）条目");
+  // 镜像同步
+  assert.equal(memory.getWeakPoints().length, 1);
+});
+
+test("addWeakPoint 不同知识点不误合并", () => {
+  memory.addWeakPoint("事件循环与微任务", "模拟面试");
+  memory.addWeakPoint("CSS 布局与 Flexbox", "模拟面试");
+  memory.addWeakPoint("闭包与作用域", "模拟面试");
+  const rows = db.prepare("SELECT topic FROM weak_points").all();
+  assert.equal(rows.length, 3, "互不相似 → 各自成条");
+});
+
+test("mergeSimilarWeakPoints：历史漂移数据一次性归并（幂等）", () => {
+  // 直接造历史分裂数据（绕过 addWeakPoint 合并——模拟修复前的存量）
+  const ins = db.prepare("INSERT INTO weak_points (id, topic, fail_count, last_failed_at, source, origin, updated_at) VALUES (?,?,?,?,?,?,?)");
+  ins.run("w1", "状态机与异步并发", 2, "2026-01-01", "模拟面试", "agent", 1);
+  ins.run("w2", "异步状态机与并发提交控制", 2, "2026-01-01", "模拟面试", "agent", 1);
+  ins.run("w3", "状态机状态定义与重复提交拦截机制", 2, "2026-01-01", "模拟面试", "agent", 1);
+  ins.run("w4", "事件循环与微任务", 3, "2026-01-01", "模拟面试", "agent", 1);
+  const r = memory.mergeSimilarWeakPoints();
+  assert.equal(r.merged, 2, "2 条漂移条目被并入");
+  assert.equal(r.removed, 2);
+  const rows = db.prepare("SELECT topic, fail_count FROM weak_points ORDER BY fail_count DESC").all();
+  assert.equal(rows.length, 2, "归并后剩 2 条");
+  assert.equal(Number(rows[0].fail_count), 6, "状态机簇 fail_count 累加（2+2+2）");
+  assert.equal(Number(rows[1].fail_count), 3, "事件循环条目不误并");
+  // 幂等：再跑一次不再合并
+  const r2 = memory.mergeSimilarWeakPoints();
+  assert.equal(r2.removed, 0, "二次运行无变化");
+});
