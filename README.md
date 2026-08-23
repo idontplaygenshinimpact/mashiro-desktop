@@ -122,6 +122,26 @@ Claude Code 配置（`claude mcp add` 或 `.mcp.json`）：
 - **数据目录**：默认 `~/.mashiro/`（data + output），可用 `MIANSHI_DATA_DIR`/`MIANSHI_OUTPUT_DIR` 覆盖
 - **隔离**：每个使用者独立数据目录，互不干扰；与桌宠版可共享同一份数据（指向同一目录即可）
 
+### 接入 DeepSeek Harness（DSH）
+
+本项目插件架构借鉴了 DSH（宿主 + 插件 / manifest 声明 + 加载器），反过来也可以把秋招能力接入 DSH：
+
+在 profile 的 `cordis.patch.yml` 加一个 `dsh-mcp-client` 实例：
+
+```yaml
+- insert:
+    - id: mcp-mashiro
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: mashiro
+        transport: stdio
+        command: cmd            # Linux/macOS 用 mashiro-mcp
+        args: ['/c', 'mashiro-mcp']
+        toolCallTimeoutMs: 120000
+```
+
+重启 DSH 后，agent 获得 `mcp__mashiro__*` 工具（search_posts / solve_question / get_study_plan / start_interview / 个人数据 5 件套），可让 DSH 直接"搜面经 → 讲解 → 建清单 → 模拟面试"。
+
 ---
 
 ## 使用方式
