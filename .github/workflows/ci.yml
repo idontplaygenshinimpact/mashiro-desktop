@@ -22,7 +22,9 @@ jobs:
       - name: Unit + integration tests
         run: npm test
       - name: Coverage report (lcov → artifact)
-        run: node --experimental-test-module-mocks --experimental-test-coverage --test "tests/*.test.mjs" --test-reporter=lcov --test-reporter-destination=coverage/lcov.info || true
+        run: |
+          mkdir -p coverage
+          node --experimental-test-module-mocks --experimental-test-coverage --test "tests/*.test.mjs" --test-reporter=lcov --test-reporter-destination=coverage/lcov.info || true
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
