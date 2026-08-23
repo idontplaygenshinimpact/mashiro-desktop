@@ -43,7 +43,7 @@ jobs:
         run: |
           Get-ChildItem release -Recurse -File | Where-Object { $_.Extension -in ".exe",".yml",".blockmap" } | ForEach-Object { $_.FullName }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mashiro-installer
           path: |

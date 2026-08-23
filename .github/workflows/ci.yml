@@ -28,7 +28,7 @@ jobs:
           mkdir -p coverage
           node --experimental-test-module-mocks --experimental-test-coverage --test "tests/*.test.mjs" --test-reporter=lcov > coverage/lcov.info 2>/dev/null || true
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-lcov
           path: coverage/lcov.info
