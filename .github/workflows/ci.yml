@@ -24,7 +24,7 @@ jobs:
       - name: Coverage report (lcov → artifact)
         run: |
           mkdir -p coverage
-          node --experimental-test-module-mocks --experimental-test-coverage --test "tests/*.test.mjs" --test-reporter=lcov --test-reporter-destination=coverage/lcov.info || true
+          node --experimental-test-module-mocks --experimental-test-coverage --test "tests/*.test.mjs" --test-reporter=lcov > coverage/lcov.info 2>/dev/null || true
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
