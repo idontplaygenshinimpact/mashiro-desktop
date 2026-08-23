@@ -54,15 +54,16 @@ jobs:
           retention-days: 30
 
       - name: Publish to GitHub Packages (npm.pkg.github.com)
-        # GitHub Packages 要求包名带 scope：临时改 name → npm publish → 不改回也不影响
-        # （该步骤在独立 job 环境，package.json 改动不落仓库）。GITHUB_TOKEN 自带 packages:write。
-        # 与 npmjs 的 mashiro-mcp（无 scope）并存，安装方按 registry 选用。
+        # 1) prepare-publish 生成发布版 package.json（scope 名 + 依赖瘦身白名单）
+        # 2) npm publish 到 GitHub Packages（GITHUB_TOKEN 自带 packages:write）
+        # 3) 无论成败 --restore 恢复原 package.json
         # shell 必须 bash：Windows runner 默认 pwsh 中 ${NODE_AUTH_TOKEN} 是空（应 $env:）
         shell: bash
         run: |
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.name='@'+process.env.REPO_OWNER+'/'+p.name;fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
+          node scripts/prepare-publish.mjs --scope="${REPO_OWNER}"
           npm config set "//npm.pkg.github.com/:_authToken" "${NODE_AUTH_TOKEN}"
-          npm publish --registry=https://npm.pkg.github.com/
+          npm publish --registry=https://npm.pkg.github.com/ || { node scripts/prepare-publish.mjs --restore; exit 1; }
+          node scripts/prepare-publish.mjs --restore
         env:
           REPO_OWNER: ${{ github.repository_owner }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
