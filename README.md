@@ -95,7 +95,13 @@ node node_modules\electron\dist\electron.exe desktop\main.mjs
 秋招助手的能力是标准 **MCP Server**（`npm i -g mashiro-mcp`），可以接入**任何支持 MCP 的 AI 工具**（Claude Code / Cline / 其他 agent）——不需要桌宠、不需要本项目代码：
 
 ```bash
-npm install -g mashiro-mcp   # Node >= 22
+npm install -g mashiro-mcp   # Node >= 22（npmjs 官方源）
+```
+
+GitHub Packages 镜像（`@idontplaygenshinimpact/mashiro-mcp`，随 Release 自动发布；国内网络优先选它）：
+
+```bash
+npm install -g @idontplaygenshinimpact/mashiro-mcp --registry=https://npm.pkg.github.com/
 ```
 
 Claude Code 配置（`claude mcp add` 或 `.mcp.json`）：
