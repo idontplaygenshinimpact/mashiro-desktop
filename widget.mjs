@@ -545,6 +545,19 @@ if (!DISABLE_BACKGROUND) {
   registerTimer(runSelfCheckAndSave, 60 * 1000);          // 启动 60s 后首检（面板承诺）
   registerInterval(runSelfCheckAndSave, 6 * 3600 * 1000); // 每 6 小时
 }
+// 薄弱点表述漂移整理（幂等自愈：面试提问措辞每次不同 → 同一知识点分裂多条的
+// 历史/累积数据归并；mergeSimilarWeakPoints 幂等，重复跑无副作用）
+const runWeakMerge = async () => {
+  try {
+    const { memory } = await import("./lib/memory.mjs");
+    const r = memory.mergeSimilarWeakPoints();
+    if (r.removed > 0) console.log(`[memory] 薄弱点表述漂移整理：归并 ${r.merged} 条，删除 ${r.removed} 条`);
+  } catch (e) { console.log(`[memory] 薄弱点整理失败: ${String(e?.message || e).slice(0, 80)}`); }
+};
+if (!DISABLE_BACKGROUND) {
+  registerTimer(runWeakMerge, 15 * 1000);           // 启动 15s 后整理一次
+  registerInterval(runWeakMerge, 12 * 3600 * 1000); // 每 12 小时（防累积）
+}
 // 数据自动备份（数据安全：距上次备份超过最小间隔自动备份；失败静默记日志不打扰）
 const runAutoBackup = async () => {
   try {
