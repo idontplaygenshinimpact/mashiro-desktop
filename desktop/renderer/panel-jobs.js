@@ -833,7 +833,7 @@ async function loadPluginsAdmin() {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id, enabled }),
           });
-          const j = await r.json();
+          await r.json();
           window.kanban?.notify?.("🧩 插件管理", `${enabled ? "已启用" : "已停用"}「${id}」——重启桌宠后生效`);
         } catch { /* ignore */ }
         loadPluginsAdmin();
@@ -887,7 +887,7 @@ async function loadPluginMarket() {
             window.kanban?.notify?.("🧩 插件市场", String(j?.error || "安装失败"));
             setTimeout(() => { if (btn.isConnected) { btn.disabled = false; btn.textContent = "📥 安装"; } }, 3000);
           }
-        } catch (e) {
+        } catch {
           btn.textContent = "⚠️ 失败";
           setTimeout(() => { if (btn.isConnected) { btn.disabled = false; btn.textContent = "📥 安装"; } }, 3000);
         }
