@@ -21,6 +21,8 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       - name: Unit + integration tests
         run: npm test
+      - name: Dependency audit (npm audit, high+ 即失败)
+        run: npm audit --audit-level=high
       - name: Coverage report (lcov → artifact)
         run: |
           mkdir -p coverage
