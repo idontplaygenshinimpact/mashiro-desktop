@@ -346,3 +346,20 @@ test("mergeSimilarWeakPoints：历史漂移数据一次性归并（幂等）", (
   const r2 = memory.mergeSimilarWeakPoints();
   assert.equal(r2.removed, 0, "二次运行无变化");
 });
+
+test("表述漂移合并后的复习卡用合并键（答对复习可清薄弱点——闭环）", async () => {
+  // 等待异步复习卡创建（addWeakPoint 动态 import review）
+  memory.addWeakPoint("状态机与异步并发", "模拟面试", "agent", { question: "讲讲状态机" });
+  memory.addWeakPoint("异步状态机与并发提交控制", "模拟面试", "agent", { question: "讲讲状态机" });
+  await new Promise((r) => setTimeout(r, 80));
+  const { review } = await import("../lib/review.mjs");
+  const cards = review.loadCards().cards.filter((c) => c.source === "薄弱点");
+  // 合并后只有一张卡，topic 必须是合并键（旧表述），而非新表述
+  assert.equal(cards.length, 1, "两张表述漂移卡只回流一张复习卡");
+  assert.equal(cards[0].topic, "状态机与异步并发", "复习卡 topic 用合并键");
+  // 答对复习（Good）→ 薄弱点被清除（闭环：卡 topic 与薄弱点键一致才能清掉）
+  review.reviewCard(cards[0].id, 2);
+  await new Promise((r) => setTimeout(r, 30));
+  const weak = db.prepare("SELECT topic FROM weak_points").all();
+  assert.equal(weak.length, 0, "答对复习后薄弱点已清除");
+});
