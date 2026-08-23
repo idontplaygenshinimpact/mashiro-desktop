@@ -7,9 +7,10 @@ import { getPendingAsks, answerAsk } from "#lib/ask-user.mjs";
 import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
 import * as jobsApi from "#lib/jobs.mjs";
+import * as jobMatchApi from "#lib/job-match.mjs";
 import { db } from "#lib/db.mjs";
 import { buildGreeting as buildGreetingText, polishGreeting as polishGreetingText } from "#lib/greeting.mjs";
-import { getResumeProfile } from "#lib/jobs.mjs";
+import { getResumeProfile } from "#lib/job-match.mjs";
 import { listPlatforms as listPlatformsApi, searchAndStoreJobs as searchAndStoreJobsApi, applyJobOnPlatform as applyJobOnPlatformApi } from "#lib/job-platforms.mjs";
 import { saveAccount as savePlatformAccount } from "#lib/platform-accounts.mjs";
 import * as personalProjectsApi from "#lib/personal-projects.mjs";
@@ -447,7 +448,7 @@ export function registerMiscRoutes(router) {
       else if (planDone < planTotal) suggestions.push(`📚 学习清单还有 ${planTotal - planDone} 项未完成`);
       else if (chTotal - chDone > 0) suggestions.push(`✍️ 手写/算法题库还剩 ${chTotal - chDone} 道`);
       if (openJobs > 0) suggestions.push(`💼 ${openJobs} 个岗位未投——先按岗面试演练再投`);
-      suggestions.push(`🎯 方向：${jobsApi.getTargetDirection() || "未设置"} · 累计掌握 ${reviewStats.mastered} 张卡`);
+      suggestions.push(`🎯 方向：${jobMatchApi.getTargetDirection() || "未设置"} · 累计掌握 ${reviewStats.mastered} 张卡`);
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({
         ok: true,
@@ -459,7 +460,7 @@ export function registerMiscRoutes(router) {
           review: reviewStats,
           weak: weakCount,
           jobs: { open: openJobs, applied: applyCount },
-          direction: jobsApi.getTargetDirection() || "",
+          direction: jobMatchApi.getTargetDirection() || "",
         },
         report: { highlights: highlights.slice(0, 4), gaps: gaps.slice(0, 4), suggestions: suggestions.slice(0, 4) },
       }));

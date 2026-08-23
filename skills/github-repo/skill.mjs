@@ -1,6 +1,8 @@
 // 示例 Skill：GitHub 仓库信息查询（公开 API，无需 token）
 // 演示 skills 插件机制：目录 skills/<name>/skill.mjs → 自动注入 agent 工具
 // 工具命名空间：skill__github-repo__get_repo_info
+import { sanitizeExternal } from "../../lib/prompt-guard.mjs";
+
 export const name = "github-repo";
 export const description = "查询 GitHub 公开仓库基本信息（星标/语言/描述/更新时间），了解开源项目与框架动态";
 
@@ -35,7 +37,8 @@ export const tools = [
         openIssues: j.open_issues_count ?? 0,
         language: j.language || "未知",
         license: j.license?.spdx_id || "未知",
-        description: String(j.description || "").slice(0, 200),
+        // 外部文本（GitHub API 返回）以不可信数据包裹，防注入进 LLM 上下文
+        description: sanitizeExternal(String(j.description || "").slice(0, 200)).wrapped,
         updatedAt: j.updated_at || "",
       };
     },

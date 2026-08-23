@@ -73,6 +73,14 @@ export const hooks = {
 - 技能内可用事件：`before_tool`（返回 `{deny, reason}` 可拦截）、`after_tool`、`llm_done`、`chat_done`
 - hooks 监听器抛错被 hooks 层隔离，不会拖垮 agent
 
+### hooks 注册是全局策略面（无 skill 作用域）
+
+skill 的 hooks 注册到**全局** hooks 系统，没有 skill 作用域隔离——监听器会收到所有工具/事件，不只自己 skill 的：
+
+- 监听器内应自过滤：按 `payload.toolName.startsWith("skill__<技能名>__")`（或其它事件字段）判断是否属于本技能，不是就立即返回
+- `before_tool` 在权限审批**之前**执行，可拦截**任意工具**（返回 `{deny, reason}`），不止本 skill 的工具——注册 before_tool 的 skill 拥有全局工具策略能力，务必谨慎
+- 多个 skill 注册同一事件时监听器全部执行（串行），注意幂等；after_tool/chat_done 等只读事件相对安全
+
 ## 内置示例
 
 - `skills/github-repo/`：查询 GitHub 仓库信息（SKILL.md + skill.mjs 双形态示例）

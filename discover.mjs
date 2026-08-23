@@ -169,9 +169,19 @@ export async function collectPostsStage(ctx) {
         listOpts.apiPattern = "api.juejin.cn/search_api";
       }
 
-      const list = await fetchPage(startUrl, listOpts);
-      if (!list || (!list.text && list.length === 0)) {
-        console.error("列表页抓取失败:", list?.error || "无正文内容");
+      // 修复：单起始页 fetchPage 抛错不再杀整个 collect_posts 阶段——
+      // 包 try/catch，失败 console.error 后 continue 处理下一个起始页
+      let list;
+      try {
+        list = await fetchPage(startUrl, listOpts);
+      } catch (e) {
+        console.error("列表页抓取失败:", String(e?.message || e).slice(0, 120));
+        continue;
+      }
+      // fetchPage 返回结构确认：单页路径无 ok 字段，失败态用 invalid:true 标记
+      // （安全验证页/404）；空正文也视为失败
+      if (!list || list.invalid || (!list.text && list.length === 0)) {
+        console.error("列表页抓取失败:", list?.invalid ? "无效页面（安全验证/404）" : "无正文内容");
         continue;
       }
 

@@ -30,18 +30,12 @@ import { createPatrol } from "./lib/patrol.mjs";
 // 纵向拆分路由注册：核心基础设施域直注册；业务域（秋招助手）经插件加载器
 const router = createRouter();
 const getCorsOrigin = (req) => req.headers.origin || "*";
-// 插件加载：秋招助手（plugins/job-hunter，聚合 12 个业务路由域）。
-// 单插件失败隔离不拖垮宿主；加载结果打日志（面板设置→插件管理可查）；停用的插件跳过
-// api.log 必须注入——插件协议里 register 会用它打日志（缺了模板插件直接加载失败）
-await loadEnabledPlugins({ router, db, getCorsOrigin, laneSubmit, log: (...a) => console.log(...a) }).then((results) => {
-  for (const r of results) {
-    console.log(r.ok ? `[plugin] ${r.name} v${r.version} 已加载（${r.id}）` : `[plugin] ${r.id}: ${r.error}`);
-  }
-});
 // 核心基础设施域（health/widget-data/chat/stats/observability/refresh/notify/approval/
-// run-discover/patrol/progress/schedule/首页）：runtime 全部用取数函数注入，
-// 因为 patrolState/crawlMutex/DISABLE_PATROL/PATROL_MIN/MAX 声明在此之后（TDZ），
-// actualPort 端口回退后会变（闭包快照会取旧值）
+// run-discover/patrol/progress/schedule/首页）先于插件注册——router.resolve 取首个匹配，
+// 插件路由后注册无法遮蔽宿主路由（修复：插件路由先于宿主注册可遮蔽宿主路由的历史问题）。
+// runtime 全部用取数函数注入：patrolState/crawlMutex/DISABLE_PATROL/PATROL_MIN/MAX 声明在
+// 此之后（TDZ），但取数函数在请求时才求值（注册时不触碰），可安全前置；
+// actualPort 端口回退后会变（闭包快照会取旧值），同样由取数函数在请求时取值
 registerCoreRoutes(router, {
   laneSubmit,
   runtime: {
@@ -74,6 +68,14 @@ registerCoreRoutes(router, {
     backupList: () => listBackups(),
     backupRestore: (name) => markRestore(name),
   },
+});
+// 插件加载：秋招助手（plugins/job-hunter，聚合 12 个业务路由域）。
+// 单插件失败隔离不拖垮宿主；加载结果打日志（面板设置→插件管理可查）；停用的插件跳过
+// api.log 必须注入——插件协议里 register 会用它打日志（缺了模板插件直接加载失败）
+await loadEnabledPlugins({ router, db, getCorsOrigin, laneSubmit, log: (...a) => console.log(...a) }).then((results) => {
+  for (const r of results) {
+    console.log(r.ok ? `[plugin] ${r.name} v${r.version} 已加载（${r.id}）` : `[plugin] ${r.id}: ${r.error}`);
+  }
 });
 
 const PORT = Number(process.env.MIANSHI_PORT) || 8899;
@@ -164,7 +166,7 @@ async function runDiscoverHidden() {
   return crawlMutex.begin(async () => {
     try {
       const { spawn } = await import("node:child_process");
-      const { openSync } = await import("node:fs");
+      const { openSync, closeSync } = await import("node:fs");
       const logFd = openSync(path.join(config.outputDir, "..", "widget-run.log"), "a");
       const child = spawn("node", ["discover.mjs"], {
         cwd: import.meta.dirname,
@@ -172,6 +174,8 @@ async function runDiscoverHidden() {
         detached: true,
         stdio: ["ignore", logFd, logFd],
       });
+      // 子进程已继承句柄，父进程立即关闭自身 fd（否则每次全量爬取泄漏一个 fd）
+      closeSync(logFd);
       crawlChildren.push(child);
       const cleanup = () => {
         const i = crawlChildren.indexOf(child);
@@ -206,14 +210,15 @@ const state = { lastScan: null, seenFiles: new Set() };
 
 async function checkTrends() {
   const files = scanNewestFiles(15, config.outputDir);
-  if (files.length === 0) return;
-  // 首次运行：只记录不通知（避免启动就轰炸）
+  // 首次运行：只记录不通知（避免启动就轰炸）——空目录也必须置位 lastScan，
+  // 否则空目录期 lastScan 永不置位，之后每次扫描都当"首次"处理（新产出会静默跳过通知）
   if (state.lastScan === null) {
     for (const f of files) state.seenFiles.add(f.path);
     state.lastScan = new Date();
     console.log(`[widget] 初始扫描完成，已记录 ${files.length} 个产出文件`);
     return;
   }
+  if (files.length === 0) return;
   const fresh = files.filter((f) => !state.seenFiles.has(f.path));
   if (fresh.length > 0) {
     for (const f of fresh) state.seenFiles.add(f.path);

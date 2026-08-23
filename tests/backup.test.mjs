@@ -139,9 +139,63 @@ test("applyPendingRestore：无 pending → false 且不动主库", async () => 
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("applyPendingRestore：替换后清除旧会话残留的 -wal/-shm（防旧 WAL 回放损坏新库）", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "backup-wal-"));
+  const dbFile = path.join(dir, "test.db");
+  const backupRoot = path.join(dir, "backups");
+
+  // 造当前库 + 上一会话崩溃残留的 -wal/-shm 侧车文件（delete 模式下 SQLite 忽略 -wal，
+  // 纯测 applyPendingRestore 的 rmSync 清理逻辑；生产主库为 WAL 模式，残留 WAL 会被回放）
+  const makeDb = async (file, marker) => {
+    const { DatabaseSync } = await import("node:sqlite");
+    const d = new DatabaseSync(file);
+    d.exec("DROP TABLE IF EXISTS t; CREATE TABLE t (k TEXT PRIMARY KEY, v TEXT)");
+    d.prepare("INSERT INTO t VALUES (?,?)").run("marker", marker);
+    d.close();
+  };
+  await makeDb(dbFile, "old-data");
+  const walPath = dbFile + "-wal";
+  const shmPath = dbFile + "-shm";
+  writeFileSync(walPath, "stale-wal", "utf8");
+  writeFileSync(shmPath, "stale-shm", "utf8");
+  assert.ok(existsSync(walPath) && existsSync(shmPath), "残留文件就位");
+
+  // 备份 v1（独立库文件）
+  const bkName = "2026-09-16T00-00-00_manual";
+  const bkDir = path.join(backupRoot, bkName);
+  mkdirSync(bkDir, { recursive: true });
+  await makeDb(path.join(bkDir, "mianshi.db"), "restored-data");
+  writeFileSync(path.join(bkDir, "manifest.json"), JSON.stringify({ createdAt: 1, reason: "manual", files: ["mianshi.db"] }, null, 2), "utf8");
+
+  markRestore(bkName, dbFile);
+  const applied = applyPendingRestore(dbFile);
+  assert.equal(applied, true);
+  assert.equal(existsSync(walPath), false, "-wal 已清除（否则旧 WAL 帧会回放到新库）");
+  assert.equal(existsSync(shmPath), false, "-shm 已清除");
+  // 新库内容 = 备份内容（未被旧 WAL 污染）
+  const { DatabaseSync } = await import("node:sqlite");
+  const d2 = new DatabaseSync(dbFile, { readOnly: true });
+  const row = d2.prepare("SELECT v FROM t WHERE k='marker'").get();
+  assert.equal(String(row.v), "restored-data", "新库内容来自备份");
+  d2.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("hoursSinceLastBackup：无备份 → Infinity；有备份 → 小时数", async () => {
   assert.equal(hoursSinceLastBackup(), Infinity, "无备份返回 Infinity（触发自动备份）");
   await createBackup("manual");
   const h = hoursSinceLastBackup();
   assert.ok(h >= 0 && h < 1, `刚备份完间隔应接近 0，实际 ${h}`);
+});
+
+test("hoursSinceLastBackup：pre-restore 快照不算备份（否则自动备份被永久满足）", async () => {
+  // 只造一个 pre-restore 快照（时间戳恒最新）：它只是恢复前安全网，不是"备份"
+  const dir = path.join(backupsDir(), "2026-09-17T00-00-00_pre-restore");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ createdAt: Date.now(), reason: "pre-restore", files: [] }, null, 2), "utf8");
+  assert.equal(hoursSinceLastBackup(), Infinity, "仅 pre-restore 快照 → 仍视为无真实备份（触发自动备份）");
+  // 有真实备份后恢复正常
+  await createBackup("manual");
+  const h = hoursSinceLastBackup();
+  assert.ok(h >= 0 && h < 1, `有真实备份后间隔正常，实际 ${h}`);
 });

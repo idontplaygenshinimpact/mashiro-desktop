@@ -1,6 +1,7 @@
 // jobs 域路由（纵向拆分：/api/jobs* 从 widget.mjs 迁出）
 import { readBody } from "#lib/widget-core.mjs";
 import * as jobsApi from "#lib/jobs.mjs";
+import * as jobMatchApi from "#lib/job-match.mjs";
 import * as studyApi from "#lib/study.mjs";
 
 export function registerJobsRoutes(router) {
@@ -8,8 +9,8 @@ export function registerJobsRoutes(router) {
 
 router.route("/api/jobs/profile", "GET", (req, res) => {  // 查询简历状态（画像 + 原文是否已保存）
   try {
-    const profile = jobsApi.getResumeProfile();
-    const raw = jobsApi.getResumeRaw();
+    const profile = jobMatchApi.getResumeProfile();
+    const raw = jobMatchApi.getResumeRaw();
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify({
       ok: true,
@@ -29,7 +30,7 @@ router.route("/api/jobs/profile", "POST", (req, res) => {  // 简历技能画像
     try {
       const { resume } = JSON.parse(body || "{}");
       if (!resume || !String(resume).trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "resume required" })); return; }
-      const r = await jobsApi.setResumeProfile(resume);
+      const r = await jobMatchApi.setResumeProfile(resume);
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(r));
     } catch (e) {
@@ -42,11 +43,11 @@ router.route("/api/jobs/direction", (req, res) => {  // 设置意向方向 + 简
   readBody(req, res, async (body) => {
     try {
       const { direction } = JSON.parse(body || "{}");
-      const set = jobsApi.setTargetDirection(direction);
+      const set = jobMatchApi.setTargetDirection(direction);
       if (!set.ok) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify(set)); return; }
       const { applyDirectionAuto } = await import("#lib/career.mjs");
       const auto = applyDirectionAuto(String(direction || ""));
-      const advice = await jobsApi.generateDirectionAdvice();
+      const advice = await jobMatchApi.generateDirectionAdvice();
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ ok: true, ...advice, auto }));
     } catch (e) {
@@ -69,7 +70,7 @@ router.route("/api/jobs", (req, res) => {  // 校招岗位列表（可过滤 sta
 router.route("/api/jobs/recommended", (req, res) => {  // 推荐岗位（匹配度排序）
   try {
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ ok: true, recommended: jobsApi.getRecommendedJobs(), stats: jobsApi.getJobStats() }));
+    res.end(JSON.stringify({ ok: true, recommended: jobMatchApi.getRecommendedJobs(), stats: jobsApi.getJobStats() }));
   } catch (e) {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: e.message }));
@@ -172,7 +173,7 @@ router.route("/api/resume-plan", (req, res) => {  // 简历项目 → 学习清�
       // 闭环：未传简历时自动读设置中心已上传的简历（与 interview startInterview 同一策略）
       let resume = String(bodyResume || "").trim();
       if (!resume) {
-        try { resume = String(jobsApi.getResumeRaw?.()?.text || "").trim(); } catch { /* ignore */ }
+        try { resume = String(jobMatchApi.getResumeRaw?.()?.text || "").trim(); } catch { /* ignore */ }
       }
       if (!resume) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "resume required（或先在设置中心上传简历）" })); return; }
       const { extractResumeProjects } = await import("#lib/ai.mjs");

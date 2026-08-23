@@ -98,6 +98,10 @@ const seedWeak = () => {
 
 test("runDreaming 成功：写 curated_memory + 日志 + 汇总计数", async () => {
   seedWeak();
+  // 预置"过时主题"到 curated_memory：drop 白名单只允许删"本次 entries ∪ 现有 curated_memory"，
+  // 该主题在现有记忆里 → drop 合法（行为变化：无候选校验的任意主题删除已被白名单拦截）
+  db.prepare("INSERT INTO curated_memory (id, topic, content, source_ref, importance, origin, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)")
+    .run("cm_old", "过时主题", "旧内容", "weak:过时主题", 2, "agent", now - 86400000, now - 86400000);
   const fakeLlm = async () => JSON.stringify({
     entries: [
       { topic: "事件循环", content: "宏任务先于微任务执行", sourceRef: "weak:事件循环", importance: 4, keep: "高频考点" },
@@ -118,6 +122,7 @@ test("runDreaming 成功：写 curated_memory + 日志 + 汇总计数", async ()
   assert.equal(ev.source_ref, "weak:事件循环");
   assert.equal(ev.importance, 4);
   assert.equal(ev.origin, "agent", "来源 weak → origin 沿用候选的 agent");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM curated_memory WHERE topic='过时主题'").get().n, 0, "白名单内主题被删除");
 
   assert.ok(r.logFile && existsSync(r.logFile), "日志文件写盘");
   const log = readFileSync(r.logFile, "utf8");
@@ -133,6 +138,22 @@ test("runDreaming 重复运行：同主题记 updated 不重复堆叠", async ()
   assert.equal(r2.added, 0);
   assert.equal(r2.updated, 1);
   assert.equal(db.prepare("SELECT COUNT(*) n FROM curated_memory").get().n, 1, "同主题不重复堆叠");
+});
+
+test("runDreaming drop 白名单：非候选主题不删除（防 LLM 幻觉误删真实记忆）", async () => {
+  seedWeak();
+  db.prepare("INSERT INTO curated_memory (id, topic, content, source_ref, importance, origin, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)")
+    .run("cm_keep", "重要记忆", "内容", "weak:重要记忆", 4, "agent", now, now);
+  const fakeLlm = async () => JSON.stringify({
+    entries: [{ topic: "事件循环", content: "宏任务先于微任务执行", sourceRef: "weak:事件循环", importance: 4, keep: "x" }],
+    // "重要记忆"在现有 curated_memory 中（合法可删）；"幻觉主题"不在任何候选集合（必须跳过）
+    drop: ["重要记忆", "幻觉主题"],
+  });
+  const r = await runDreaming({ llm: fakeLlm, now, logDir });
+  assert.equal(r.ok, true);
+  assert.equal(r.dropped, 1, "只删除候选集合内的主题（幻觉主题跳过不计）");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM curated_memory WHERE topic='重要记忆'").get().n, 0, "白名单内主题被删除");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM curated_memory WHERE topic='事件循环'").get().n, 1, "entry 主题保留");
 });
 
 test("runDreaming LLM 抛错 → ok:false（不向上抛）", async () => {

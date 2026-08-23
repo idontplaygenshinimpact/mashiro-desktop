@@ -110,7 +110,9 @@ describe("buildDigest", () => {
   });
 
   test("默认 llm 走 ai.mjs chat（mockLLM 成功路径）", async () => {
-    setLlmResponses(JSON.stringify([{ title: "标题X", link: "https://example.com/x", reason: "理由X" }]));
+    // 注：mock 返回的 link 必须是候选集内存在的（问题4修复：LLM picks 需与候选集交叉校验，
+    // 候选里不存在的链接会被过滤，不再以 {feed:"",...} 构造入库）→ 改用 makeItems 里的真实 link
+    setLlmResponses(JSON.stringify([{ title: "标题X", link: "https://example.com/item/0", reason: "理由X" }]));
     const digest = await buildDigest(makeItems(3)); // 不注入 llm → chat() → 被 mock 的 llm.mjs
     assert.equal(digest.length, 1);
     assert.equal(digest[0].reason, "理由X");

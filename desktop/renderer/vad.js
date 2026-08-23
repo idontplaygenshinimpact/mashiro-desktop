@@ -16,25 +16,30 @@
     const win = Math.max(1, Math.floor(sr * 0.05)); // 50ms 窗
     const step = Math.floor(win / 2); // 25ms 步进
     const n = pcm.length;
-    // 每窗均方能量
+    // 每窗均方能量（顺带记录峰值能量，供"全程语音/全程静音"判定）
     const energies = [];
+    let maxE = 0;
     for (let i = 0; i < n; i += step) {
       let sum = 0, cnt = 0;
       const end = Math.min(i + win, n);
       for (let j = i; j < end; j++) { sum += pcm[j] * pcm[j]; cnt++; }
-      energies.push(sum / cnt);
+      const e = sum / cnt;
+      energies.push(e);
+      if (e > maxE) maxE = e;
     }
     // 底噪 = 最低 20% 分位；真正的静音窗能量 < 1e-4（约 -40dBFS 能量）
     const sorted = energies.slice().sort((a, b) => a - b);
     const floor = sorted[Math.floor(sorted.length * 0.2)] || 0;
-    // 全程语音（无静音段）：最低 20% 分位都已达语音能量量级 → 无需裁剪
-    if (floor >= 1e-4) return pcm;
     // 阈值：底噪 4 倍，但不低于绝对下限（1e-5 ≈ -50dBFS 能量，防极静环境误判）
+    // 注意：不因 floor>=1e-4 提前返回——噪声环境（底噪超语音判定线）头尾静音也必须裁剪
     const thr = Math.max(floor * 4, 1e-5);
     let s = 0, e = energies.length - 1;
     while (s <= e && energies[s] < thr) s++;
     while (e >= s && energies[e] < thr) e--;
-    if (e < s) return null; // 全程静音
+    if (e < s) {
+      // 全程低于阈值：全程静音（峰值未达语音量级）→ null；全程语音（无静音段）→ 原样返回
+      return maxE < 1e-4 ? null : pcm;
+    }
     const start = Math.max(0, s * step - win); // 前留一个窗，防切词头
     const end = Math.min(n, (e + 1) * step + win); // 后留一个窗
     return pcm.subarray(start, end);
