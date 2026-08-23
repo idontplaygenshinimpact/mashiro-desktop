@@ -133,7 +133,7 @@ test("复习卡空答案：显示答案回退讲解存档（fetch /api/study/not
     window.document.querySelector('.tab[data-tab="review"]').click();
     await tick(80);
     // answer 为空的卡 + mock /api/study/note 返回讲解存档
-    window.fetch = async (url) => ({ ok: true, json: async () => ({ ok: true, found: true, content: "讲解存档：事件循环结论/原理/实现/边界" }) });
+    window.fetch = async () => ({ ok: true, json: async () => ({ ok: true, found: true, content: "讲解存档：事件循环结论/原理/实现/边界" }) });
     window.document.getElementById("rc-show").click();
     await tick(30);
     const answerBox = window.document.getElementById("rc-answer");
