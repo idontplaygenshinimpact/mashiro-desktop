@@ -57,6 +57,8 @@ jobs:
         # GitHub Packages 要求包名带 scope：临时改 name → npm publish → 不改回也不影响
         # （该步骤在独立 job 环境，package.json 改动不落仓库）。GITHUB_TOKEN 自带 packages:write。
         # 与 npmjs 的 mashiro-mcp（无 scope）并存，安装方按 registry 选用。
+        # shell 必须 bash：Windows runner 默认 pwsh 中 ${NODE_AUTH_TOKEN} 是空（应 $env:）
+        shell: bash
         run: |
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.name='@'+process.env.REPO_OWNER+'/'+p.name;fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
           npm config set "//npm.pkg.github.com/:_authToken" "${NODE_AUTH_TOKEN}"
