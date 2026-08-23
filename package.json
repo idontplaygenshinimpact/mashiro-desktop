@@ -1,6 +1,6 @@
 {
   "name": "mashiro-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "真白 · Mashiro 秋招助手 MCP Server——把秋招能力（面经搜索/讲解/学习清单/模拟面试/个人数据）接入任意支持 MCP 的 AI 工具（Claude Code/Cline 等）。桌面完整版（Live2D 桌宠+面板）见 GitHub: idontplaygenshinimpact/mashiro-desktop",
   "author": "wyyai",
   "license": "MIT",
