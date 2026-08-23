@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 分发与接入（v0.1.0 之后）
+
+- 📦 **npm 发布**：`mashiro-mcp@0.1.0`（npmjs）——秋招助手能力层打包为独立 MCP Server，`npm i -g` 一行配置接入 Claude Code/Cline 等任意 MCP 客户端；数据默认 `~/.mashiro`
+- 🔌 **DSH 接入**：`cordis.patch.yml` 注册 `dsh-mcp-client` 实例 → DSH agent 获得 `mcp__mashiro__*` 9 工具（借鉴 DSH 思路的项目反过来接入 DSH）
+- 📦 **打包版可用性修复**（发布阻塞级）：asar 只读环境 → 数据/产出/插件/MCP 配置全部重定向可写目录（`MIANSHI_DATA_DIR`/`ELECTRON_RUN_AS_NODE`/`asarUnpack plugins`），打包产物实测：服务启动/插件加载/MCP 自环 9 工具连接全通过
+- 🎯 **v0.1.0 Release**：CI/Release 双流水线全绿，NSIS + portable 安装包自动发布
+
+### 复习与薄弱点完善
+
+- 💡 **「显示答案」空答案回退**：手写题库/薄弱点/清单来源的卡 answer 为空 → 回退纯读 `study_notes` 讲解存档（`/api/study/note`，不调 LLM），无存档给出引导文案
+- 🧹 **薄弱点表述漂移合并**：面试提问措辞每次不同导致同一知识点分裂多条（实测状态机族 5 条）→ `isSimilarWeakTopic`（中文 3-gram 共享）+ 写入时合并 + `mergeSimilarWeakPoints()` 历史整理（widget 启动自愈，13 条 → 7 条）
+
 ### 全量代码审计（11 域并行审计，100+ 项发现全部处理）
 
 - 🛡️ **判题沙箱安全重构**：vm 不是安全边界（宿主对象注入可达宿主进程权限）→ 判题迁移到 `worker_threads` 隔离（`lib/sandbox-runner.mjs` + `sandbox-worker.mjs`）：独立线程 + resourceLimits + 超时 `worker.terminate()` 真正终止（async 挂起/定时器随 worker 回收）；断言闭包 worker 侧定义 + 测试代码独立作用域（防遮蔽）
