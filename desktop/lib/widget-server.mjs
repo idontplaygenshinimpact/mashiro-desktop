@@ -39,6 +39,13 @@ export function createWidgetServer({ widgetFetch, healthUrl: healthUrlValue, roo
         if (child) {
           spawnedPids.add(child.pid);
           child.on("exit", () => { spawnedPids.delete(child.pid); if (widgetProc === child) widgetProc = null; });
+          // spawn 失败（如 ENOENT）是异步 'error' 事件，exit 永不触发 → 不清引用会永久卡死守卫；
+          // 这里清掉引用并记录失败原因，允许下一轮探测重试
+          child.on("error", (err) => {
+            console.log(`[kanban] widget.mjs 启动失败: ${err?.message || err}`);
+            spawnedPids.delete(child.pid);
+            if (widgetProc === child) widgetProc = null;
+          });
           console.log("[kanban] widget.mjs 已后台拉起");
         }
       });

@@ -1,6 +1,7 @@
 // 公司面经情报技能：搜目标公司面经 → 抓 2 篇 → LLM 汇总高频考点与真题线索
 // 只读；复用 agent 的搜索工具与抓页能力（动态 import，无循环依赖）
 import { llmChat, getReplyText, extractJson } from "../../lib/llm.mjs";
+import { sanitizeExternal } from "../../lib/prompt-guard.mjs";
 
 export const name = "company-intel";
 export const description = "目标公司面经情报（高频考点+真题线索）";
@@ -48,8 +49,9 @@ export const tools = [
       if (!pages.length) {
         return { ok: false, error: `找到帖子但正文抓取失败（可能需登录），可手动打开：\n${posts.slice(0, 3).map((p) => `- ${p.title}\n  ${p.url}`).join("\n")}` };
       }
-      // 3) LLM 汇总高频考点
-      const material = pages.map((p) => `【${p.title}】\n${p.text}`).join("\n\n---\n\n").slice(0, 9000);
+      // 3) LLM 汇总高频考点（抓到的页面文本是外部数据——包裹为不可信内容再喂 LLM，防提示注入）
+      const raw = pages.map((p) => `【${p.title}】\n${p.text}`).join("\n\n---\n\n").slice(0, 9000);
+      const material = sanitizeExternal(raw).wrapped;
       try {
         const data = await llmChat(
           [

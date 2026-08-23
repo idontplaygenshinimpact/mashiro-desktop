@@ -310,7 +310,6 @@ async function submitAnswer() {
       return;
     }
     showQuestion(r);
-    showQuestion(r);
   } finally {
     $("iv-send").disabled = false;
     $("iv-send").textContent = "提交回答";
@@ -600,8 +599,8 @@ async function transcribeIvPcm() {
   ivMicPcm = [];
   try {
     // VAD 裁头尾静音（防噪声被脑补成汉字；长段思考停顿也能裁掉）
-    const voiced = window.trimSilenceToVoice ? window.trimSilenceToVoice(pcm, 16000) : pcm;
-    if (!voiced || voiced.length < 16000 * 0.5) {
+    const voiced = window.trimSilenceToVoice ? window.trimSilenceToVoice(pcm, ivMicRecordSr) : pcm;
+    if (!voiced || voiced.length < ivMicRecordSr * 0.5) {
       window.kanban.notify("面试录音", "未检测到语音，录音已保存可回听");
       return;
     }
@@ -609,6 +608,10 @@ async function transcribeIvPcm() {
     let input = voiced;
     if (ivMicRecordSr !== 16000 && typeof resampleTo16k === "function") {
       input = await resampleTo16k(voiced, ivMicRecordSr);
+      if (!input) {
+        window.kanban.notify("面试录音", "采样率异常，请重试");
+        return;
+      }
     }
     const r = await window.kanban.speechToText(input);
     if (r?.ok && r.text) {

@@ -139,19 +139,6 @@ export function playClickLong() {
   return playVoicePack(file);
 }
 
-/** 长句文案查询（气泡显示中文翻译用）：{zh, files} 或 null */
-export function pickLongLine(scene) {
-  const lines = loadLongLines();
-  const entry = lines[scene] || {};
-  const files = Array.isArray(entry.files) ? entry.files : [];
-  if (!files.length) return null;
-  const idx = Math.floor(Math.random() * files.length);
-  return {
-    file: files[idx],
-    zh: Array.isArray(entry.zh) ? entry.zh[idx] || "" : "",
-  };
-}
-
 // ---------- ffplay 路径解析（可配置 + 自动探测 + 硬编码兜底，找不到则不崩溃） ----------
 const HARDCODED_FFPLAY = "D:\\hfut\\file\\Videopro\\exp01\\exp01_ffmpeg\\ffmpeg\\ffmpeg\\bin\\ffplay.exe";
 let ffplayPath = null; // null=未探测；string=路径；false=不可用
@@ -212,8 +199,10 @@ export function playVoicePack(file) {
   }
   lastVoicePlayAt = now;
   const isLong = isLongFile(file);
-  // 互斥：杀掉上一个语音进程（避免多个 ffplay 同时出声叠加）
+  // 互斥：杀掉上一个语音进程（避免多个 ffplay 同时出声叠加）；
+  // 被杀进程打 killedByUs 标记 → 其 exit 不再记 ⚠️ 异常日志（"被掐断"≠"自身中断"）
   if (activeVoicePlayer) {
+    activeVoicePlayer.killedByUs = true;
     try { activeVoicePlayer.kill(); } catch { /* ignore */ }
     activeVoicePlayer = null;
   }
@@ -231,6 +220,7 @@ export function playVoicePack(file) {
       // 退出日志：code=0 正常播完；非 0 = 播放中途异常（解码/设备），便于区分"被掐断"与"自身中断"
       child.on("exit", (code) => {
         clearActive(child);
+        if (child.killedByUs) return; // 被新播放主动掐断，不算播放异常
         if (code !== 0) console.log(`[voice] ⚠ ffplay 播放异常退出 code=${code}（${file.split(/[\\/]/).pop()}）`);
       });
       child.unref();
@@ -255,6 +245,7 @@ function soundPlayerFallback(file, isLong = false) {
     child.on("error", (err) => { console.log(`[voice] SoundPlayer 播放失败: ${err.message}`); clearActive(child); });
     child.on("exit", (code) => {
       clearActive(child);
+      if (child.killedByUs) return; // 被新播放主动掐断，不算播放异常
       if (code !== 0) console.log(`[voice] ⚠ SoundPlayer 播放异常退出 code=${code}`);
     });
     child.unref();

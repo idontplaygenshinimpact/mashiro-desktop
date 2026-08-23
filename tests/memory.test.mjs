@@ -30,6 +30,25 @@ test("addInterests 空值忽略/超长截断到 30 字符", () => {
   assert.deepEqual(memory.getInterests(), ["x".repeat(30)]);
 });
 
+test("addWeakPoint 被挤出镜像后 DB 仍累计 fail_count（不因裁剪丢累计）", () => {
+  // 塞满镜像（20 条 failCount=1），再反复记录"点0"——它会被挤出 top20 镜像
+  for (let i = 0; i < 20; i++) memory.addWeakPoint(`点${i}`, "s");
+  for (let i = 0; i < 5; i++) memory.addWeakPoint("点0", "s");
+  // DB 侧必须累计（修复前：find 在裁剪后的镜像里找不到 → upsert 跳过 → fail_count 停在 1）
+  const row = db.prepare("SELECT fail_count FROM weak_points WHERE topic='点0'").get();
+  assert.equal(Number(row.fail_count), 6, "DB 累计 6 次（1 初始 + 5 重入）");
+});
+
+test("clearWeakPoint 归一化匹配：调用方传未截断/未 trim 的原始 topic 也能删", () => {
+  const long = "这是一个超过三十个字符的知识点名字用来测试过滤逻辑是否正常工作的例子"; // >30 字
+  memory.addWeakPoint(long, "x");
+  assert.equal(memory.getWeakPoints().length, 1, "长 topic 截断 30 字入库");
+  // 传原始（未截断）topic：内部经 _cleanTopic 归一化后匹配删除（修复前精确匹配删不到）
+  memory.clearWeakPoint(long);
+  assert.equal(memory.getWeakPoints().length, 0, "归一化后删除成功");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM weak_points").get().n, 0, "DB 同步删除");
+});
+
 // ---------- 已看帖子 ----------
 test("markSeen/isSeen 持久化(DB)", () => {
   assert.equal(memory.isSeen("http://a"), false);
@@ -43,6 +62,23 @@ test("markSeen 空值忽略", () => {
   memory.markSeen("");
   memory.markSeen(null);
   assert.equal(memory.get().seenUrls.length, 0);
+});
+
+// 修复：seen_urls/interests DB 侧永不修剪 → 重启后镜像=DB 全量（镜像 slice 上限失效）
+test("markSeen DB 侧同步裁剪到 500（重启后镜像不会被全量 DB 撑爆）", () => {
+  for (let i = 0; i < 520; i++) memory.markSeen(`https://x.com/${i}`);
+  const n = db.prepare("SELECT COUNT(*) n FROM seen_urls").get().n;
+  assert.equal(n, 500, "DB 只保留最近 500 条");
+  assert.equal(memory.get().seenUrls.length, 500, "镜像一致");
+});
+
+test("addInterests DB 侧同步裁剪到 20", () => {
+  const topics = [];
+  for (let i = 0; i < 30; i++) topics.push(`兴趣${i}`);
+  memory.addInterests(topics);
+  const n = db.prepare("SELECT COUNT(*) n FROM interests").get().n;
+  assert.equal(n, 20, "DB 只保留最近 20 条");
+  assert.equal(memory.getInterests().length, 20);
 });
 
 // ---------- 对话历史 ----------

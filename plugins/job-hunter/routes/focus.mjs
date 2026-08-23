@@ -7,8 +7,8 @@ export function registerFocusRoutes(router) {
 router.route("/api/focus/start", "POST", (req, res) => {  // 开始专注（番茄钟 25/45 分钟）
   readBody(req, res, (body) => {
     try {
-      const { mode } = JSON.parse(body || "{}");
-      const r = focusApi.startFocus(String(mode || ""));
+      const { mode, goal, restMinutes } = JSON.parse(body || "{}");
+      const r = focusApi.startFocus(String(mode || ""), { goal, restMinutes });
       res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(r));
     } catch (e) {

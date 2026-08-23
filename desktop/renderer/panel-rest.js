@@ -831,10 +831,10 @@ async function stopRecording() {
       if (a > 1e-6) nonZero++;
     }
     console.log(`[panel] 音频能量: rms=${Math.sqrt(sumSq / pcm.length).toFixed(7)} maxAmp=${maxAmp.toFixed(6)} 非零采样=${nonZero}/${pcm.length}（${(nonZero / pcm.length * 100).toFixed(1)}%）`);
-    const voiced = window.trimSilenceToVoice ? window.trimSilenceToVoice(pcm, 16000) : pcm;
+    const voiced = window.trimSilenceToVoice ? window.trimSilenceToVoice(pcm, recordSr) : pcm;
     console.log(`[panel] VAD 结果: ${voiced ? voiced.length + " 采样" : "null（判定全程静音）"}`);
     const voiceStatus = $("chat-voice-status");
-    if (!voiced || voiced.length < 16000 * 0.5) {
+    if (!voiced || voiced.length < recordSr * 0.5) {
       const msg = voiced ? "语音太短（不足半秒），请再说一次" : "没有检测到语音，请靠近麦克风再说一次";
       console.log("[panel] VAD 拦截:", msg);
       if (voiceStatus) { voiceStatus.textContent = "⚠️ " + msg; voiceStatus.style.display = ""; }
@@ -845,7 +845,17 @@ async function stopRecording() {
     // ② 采样率兜底：AudioContext({sampleRate:16000}) 个别平台会静默退回默认值
     //    （实际是 48k）→ 用 OfflineAudioContext 标准重采样，保证喂给 ASR 的是真 16k
     let input = voiced;
-    if (recordSr !== 16000) input = await resampleTo16k(voiced, recordSr);
+    if (recordSr !== 16000) {
+      input = await resampleTo16k(voiced, recordSr);
+      if (!input) {
+        // 重采样失败 → 拦截，不送 ASR（避免 48k 数据被当 16k 识别出乱码）
+        const msg = "采样率异常，请重试";
+        console.log("[panel] 重采样失败拦截:", msg);
+        if (voiceStatus) { voiceStatus.textContent = "⚠️ " + msg; voiceStatus.style.display = ""; }
+        window.kanban.notify("语音输入", msg);
+        return;
+      }
+    }
     console.log(`[panel] 发送识别: ${input.length} 采样（recordSr=${recordSr}）`);
     const r = await window.kanban.speechToText(input);
     console.log("[panel] 识别返回:", JSON.stringify(r));
@@ -866,7 +876,7 @@ async function stopRecording() {
   }
 }
 
-/** OfflineAudioContext 标准重采样（48k→16k，浏览器高质量 sinc；失败则原样返回兜底） */
+/** OfflineAudioContext 标准重采样（48k→16k，浏览器高质量 sinc；失败返回 null，调用方拦截不送识别） */
 async function resampleTo16k(pcm, fromRate) {
   try {
     const len = Math.ceil(pcm.length * 16000 / fromRate);
@@ -880,8 +890,8 @@ async function resampleTo16k(pcm, fromRate) {
     const rendered = await oc.startRendering();
     return rendered.getChannelData(0);
   } catch (e) {
-    console.warn("[voice-input] 重采样失败，原样送识别:", e?.message || e);
-    return pcm;
+    console.warn("[voice-input] 重采样失败（返回 null，不送识别）:", e?.message || e);
+    return null;
   }
 }
 
@@ -1089,7 +1099,9 @@ async function loadFocusGoalSuggest() {
     if (!j?.ok || !Array.isArray(j.goals) || !j.goals.length) return;
     const input = $("focus-goal");
     if (!input) return;
+    document.getElementById("focus-goal-suggest")?.remove(); // 每分钟刷新：先移除旧推荐，避免重复追加 DOM
     const box = document.createElement("div");
+    box.id = "focus-goal-suggest";
     box.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;";
     box.innerHTML = '<span style="font-size:11px;color:#8a87a8;align-self:center;">🎯 推荐：</span>' + j.goals.map((g) => `
       <button class="job-btn" data-topic="${esc(g.topic)}" title="点击填入目标">${esc(g.text)}</button>`).join("");

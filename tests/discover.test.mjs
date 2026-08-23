@@ -53,6 +53,21 @@ test("collectPostsStage：提取帖子链接 + 去重 + 历史过滤 + AI 挑帖
   assert.ok(!hrefs.some((h) => h.includes("?searchId")), "链接清洗去跟踪参数");
 });
 
+test("collectPostsStage：单起始页无效/空页不影响其他起始页（invalid:true 语义化跳过）", async () => {
+  // 第一个起始页返回安全验证页（invalid:true），第二个正常 → 阶段继续，AI 挑帖只处理正常页
+  setMockPages([
+    { text: "", links: [], invalid: true, title: "安全验证" },
+    {
+      text: "mock正文".repeat(30),
+      links: [{ text: "字节前端一面面经", href: "https://www.nowcoder.com/discuss/999" }],
+    },
+  ]);
+  const ctx = { startUrls: ["https://x.com/bad", "https://www.nowcoder.com/discuss?type=2&query=前端"], want: 3, history: new Set() };
+  await discover.collectPostsStage(ctx);
+  assert.equal(calls.pick.length, 1, "无效页跳过后仍正常处理后续起始页");
+  assert.ok(ctx.allPicked.some((p) => p.href.includes("discuss/999")), "正常页的帖子被收集");
+});
+
 test("classifyStage：前端方向保留 + 后端丢弃 + zhaopin 分流情报", async () => {
   const ctx = {
     okPages: [

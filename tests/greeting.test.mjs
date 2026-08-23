@@ -50,6 +50,17 @@ test("buildGreeting：无简历 → 简洁兜底", () => {
   assert.ok(text.length < 80, "兜底文案简短");
 });
 
+test("buildGreeting：有简历但无任何亮点 → 回退方向兜底（修复：原输出'您好！我是。'残缺招呼语）", () => {
+  // 只有 resume_raw 且不含学校/实习/项目/量化/技能 → identity 为空
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('resume_raw', ?, ?)")
+    .run(JSON.stringify({ text: "无学校无实习无项目" }), Date.now());
+  const text = g.buildGreeting({ title: "前端" });
+  assert.ok(text.startsWith("您好！我是"), "以身份句开头");
+  assert.ok(!text.includes("您好！我是。"), "不输出残缺招呼语");
+  assert.ok(text.includes("方向"), `回退到方向兜底（含'方向'）: ${text}`);
+  assert.ok(text.length >= 20, "文案完整可读");
+});
+
 test("polishGreeting：无简历/LLM 失败时退回规则版", async () => {
   // 无简历：精修退回兜底文案
   const t1 = await g.polishGreeting({ title: "前端" });

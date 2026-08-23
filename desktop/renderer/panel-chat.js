@@ -286,7 +286,7 @@ function renderPatrolStatus(cfg) {
     `上次巡检：${fmt(cfg.lastRun)}`,
     `下次巡检：${cfg.enabled && cfg.nextRun ? fmt(cfg.nextRun) : "—"}`,
   ];
-  if (cfg.note) parts.push(`（${cfg.note}）`);
+  if (cfg.note) parts.push(`（${esc(cfg.note)}）`);
   $("patrol-status").innerHTML = parts.join("　");
 }
 async function savePatrolConfig(patch, tip) {

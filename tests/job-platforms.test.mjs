@@ -4,15 +4,19 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
 
 let tmpDir;
-before(() => {
+const dbDir = setupTempDb("job-platforms"); // 隔离 DB：searchAndStoreJobs 入库测试不污染真实 mianshi.db（须在任何动态 import 之前）
+before(async () => {
   tmpDir = mkdtempSync(path.join(tmpdir(), "mianshi-jp-"));
   process.env.MIANSHI_PLATFORM_ACCOUNTS = path.join(tmpDir, "accounts.json");
+  await clearAllTables();
 });
 after(() => {
   delete process.env.MIANSHI_PLATFORM_ACCOUNTS;
   rmSync(tmpDir, { recursive: true, force: true });
+  cleanupTempDb(dbDir);
 });
 
 const FAKE = {
@@ -95,4 +99,37 @@ test("applyJobOnPlatform：未启用 / 未知平台被拦", async () => {
   assert.ok(r1.error, "未知平台被拦");
   const r2 = await applyJobOnPlatform("applyplat2", "https://x"); // 未启用
   assert.ok(r2.error, "未启用被拦");
+});
+
+test("searchAndStoreJobs：direction/job_type 从 title 推断（修复：原硬编码 frontend/校招）", async () => {
+  const { registerPlatform, searchAndStoreJobs } = await import("../lib/job-platforms.mjs");
+  const { saveAccount } = await import("../lib/platform-accounts.mjs");
+  const { db } = await import("../lib/db.mjs");
+  registerPlatform({
+    name: "inferplat",
+    label: "Infer",
+    searchJobs: async () => ({
+      ok: true,
+      jobs: [
+        { title: "前端开发工程师", company: "A", url: "https://x/1.html", salary: "20K", location: "北京" },
+        { title: "AI Agent 研发实习生", company: "B", url: "https://x/2.html", salary: "", location: "" },
+        { title: "Java 后端开发", company: "C", url: "https://x/3.html" },
+        { title: "算法工程师", company: "D", url: "https://x/4.html" },
+        { title: "产品经理", company: "E", url: "https://x/5.html" },
+      ],
+    }),
+  });
+  saveAccount("inferplat", { enabled: true });
+  const r = await searchAndStoreJobs("inferplat", "岗位");
+  assert.equal(r.ok, true);
+  assert.equal(r.addedCount, 5);
+  const rows = db.prepare("SELECT company, direction, job_type FROM job_posts ORDER BY company").all();
+  const by = Object.fromEntries(rows.map((x) => [x.company, x]));
+  assert.equal(by["A"].direction, "frontend", "前端关键词 → frontend");
+  assert.equal(by["A"].job_type, "校招");
+  assert.equal(by["B"].direction, "agent", "AI Agent → agent");
+  assert.equal(by["B"].job_type, "实习", "标题含实习 → 实习");
+  assert.equal(by["C"].direction, "backend", "Java 后端 → backend");
+  assert.equal(by["D"].direction, "algorithm", "算法 → algorithm");
+  assert.equal(by["E"].direction, "other", "无关键词 → other");
 });

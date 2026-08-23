@@ -169,7 +169,8 @@ window.kanban?.onVoiceChanged?.((enabled) => { voiceOn = !!enabled; });
 // 订阅专注监督事件（主进程 pet-say 广播）：气泡 + 场景语音（focus-start/focus-done/focus-nudge）
 window.kanban?.onPetSay?.(({ text, scene }) => {
   if (text) showBubble(text, 6000);
-  if (scene) { try { window.kanban.playScene(scene); } catch { /* ignore */ } }
+  // 语音开关关闭时只显示气泡，不播场景语音（与其他语音点同一 voiceOn 判断模式）
+  if (scene && voiceOn) { try { window.kanban.playScene(scene); } catch { /* ignore */ } }
 });
 
 async function handleClick(e) {

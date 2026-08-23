@@ -540,8 +540,9 @@ ipcMain.handle("app:restart", async () => {
 ipcMain.handle("window:open-file", (e, { filePath }) => {
   if (!filePath) return { ok: false, error: "no path" };
   // 白名单：仅允许打开 ROOT/output 与 ROOT/data 内的文件（防任意路径打开/执行）
-  const target = path.resolve(String(filePath));
-  const allowed = [path.join(ROOT, "output"), path.join(ROOT, "data")];
+  // Windows 路径大小写不敏感 → 比较前统一 toLowerCase（分隔符处理保持）
+  const target = path.resolve(String(filePath)).toLowerCase();
+  const allowed = [path.join(ROOT, "output"), path.join(ROOT, "data")].map((d) => d.toLowerCase());
   const inAllowed = allowed.some((dir) => target === dir || target.startsWith(dir + path.sep));
   if (!inAllowed) return { ok: false, error: "路径不在允许范围" };
   try {
@@ -721,7 +722,13 @@ ipcMain.handle("speech:transcribe", async (e, { audio }) => {
     const result = await new Promise((resolve, reject) => {
       asrPending.set(id, { resolve, reject });
       // transfer 零拷贝；audio.buffer 是结构化克隆后的独立副本，转移安全
-      worker.postMessage({ id, audio: audio.buffer }, [audio.buffer]);
+      try {
+        worker.postMessage({ id, audio: audio.buffer }, [audio.buffer]);
+      } catch (err) {
+        // postMessage 失败（如 worker 已退出）→ 清 pending，避免 promise 永久悬挂
+        asrPending.delete(id);
+        reject(err);
+      }
     });
     if (!result?.ok) throw new Error(result?.error || "识别失败");
     console.log(`[speech] 转写成功: ${String(result.text || "").slice(0, 60)}`);
@@ -1122,7 +1129,7 @@ async function checkFocusSupervision() {
   const now = Date.now();
   if (status.sessionId !== focusEncourageSession) {
     focusEncourageSession = status.sessionId;
-    focusLastEncourage = 0;
+    focusLastEncourage = now; // 新会话从此刻起算：首次鼓励在专注满 10 分钟后才触发
   }
   if (now - focusLastEncourage >= 10 * 60 * 1000) {
     focusLastEncourage = now;

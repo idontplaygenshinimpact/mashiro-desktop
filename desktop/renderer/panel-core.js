@@ -129,18 +129,20 @@ async function initPluginTabs() {
         const sr = await fetch(`http://127.0.0.1:8899/api/plugins/settings?plugin=${p.id}`);
         const sj = await sr.json();
         const vals = (sj && sj.settings) || {};
+        // 设置项输入框 id：p.id/s.key 均转义（原样拼 HTML 属性是 XSS 注入面），写入/读取必须用同一转义值
+        const plgSetId = (pid, key) => "plg-set-" + escHtml(pid) + "-" + escHtml(key);
         const rows = decls.map((s) => {
           const v = vals[s.key];
           const label = escHtml(s.label || s.key);
           if (s.type === "toggle") {
             return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
-              <input type="checkbox" id="plg-set-${p.id}-${s.key}" ${v ? "checked" : ""} style="width:15px;height:15px;accent-color:#6d4fd8;">
+              <input type="checkbox" id="${plgSetId(p.id, s.key)}" ${v ? "checked" : ""} style="width:15px;height:15px;accent-color:#6d4fd8;">
               <span style="font-size:12px;color:#4a3a9d;">${label}</span></div>`;
           }
           const type = s.type === "password" ? "password" : "text";
           return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
             <span style="font-size:12px;color:#4a3a9d;min-width:90px;">${label}</span>
-            <input type="${type}" id="plg-set-${p.id}-${s.key}" value="${escHtml(v ?? "")}"
+            <input type="${type}" id="${plgSetId(p.id, s.key)}" value="${escHtml(v ?? "")}"
               style="flex:1;min-width:140px;padding:5px 8px;font-size:11px;border-radius:6px;border:1px solid rgba(138,90,220,.25);background:rgba(20,18,36,.6);color:#e8e6f2;"></div>`;
         }).join("");
         firstBody.innerHTML = `<div style="font-size:11px;color:#8a87a8;">插件设置（存于本机，命名空间 plg_${escHtml(p.id)}_*）</div>
@@ -154,7 +156,7 @@ async function initPluginTabs() {
           saveBtn.addEventListener("click", async () => {
             const out = {};
             for (const s of decls) {
-              const el = document.getElementById(`plg-set-${p.id}-${s.key}`);
+              const el = document.getElementById(plgSetId(p.id, s.key));
               if (!el) continue;
               out[s.key] = s.type === "toggle" ? el.checked : el.value;
             }

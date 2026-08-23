@@ -36,6 +36,25 @@ test("traceTool 记录 + getRecentTools 返回最近", async () => {
   assert.equal(recent[0].tool_name, "tool_4"); // 最新在前（id DESC）
 });
 
+test("traceTool 敏感工具不落盘 args 值（只记参数键名）", async () => {
+  await clearAllTables();
+  traceTool({ toolName: "submit_answer", args: { answer: "我的真实回答内容" }, ok: true });
+  traceTool({ toolName: "job_apply", args: { platform: "boss", url: "https://secret.example/apply", greeting: "你好" }, ok: true });
+  traceTool({ toolName: "search_posts", args: { query: "普通工具正常记录" }, ok: true }); // 非敏感不受影响
+  const rows = db.prepare("SELECT tool_name, args FROM trace_tools ORDER BY id").all();
+  assert.equal(rows.length, 3);
+  const submit = rows.find((r) => r.tool_name === "submit_answer");
+  const job = rows.find((r) => r.tool_name === "job_apply");
+  const normal = rows.find((r) => r.tool_name === "search_posts");
+  // 敏感工具：只记键名，值不落盘
+  assert.deepEqual(JSON.parse(String(submit.args)).argKeys, ["answer"], "只记参数键名");
+  assert.deepEqual([...JSON.parse(String(job.args)).argKeys].sort(), ["platform", "url", "greeting"].sort(), "只记参数键名");
+  assert.ok(!String(submit.args).includes("我的真实回答内容"), "回答内容不落盘");
+  assert.ok(!String(job.args).includes("https://secret.example"), "投递 URL 不落盘");
+  // 非敏感工具：完整记录（可观测性不受影响）
+  assert.ok(String(normal.args).includes("普通工具正常记录"), "非敏感工具完整记录");
+});
+
 test("getLLMStats 汇总计数/token", async () => {
   await clearAllTables();
   traceLLM({ role: "agent", model: "m", inputTokens: 10, outputTokens: 5, ok: true });

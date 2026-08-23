@@ -92,6 +92,24 @@ test("chatWithAgent 参数缺失 → 工具报错回填 → LLM 修正后回答"
   assert.ok(bad && !bad.ok, "参数错误记录为失败调用");
 });
 
+test("chatWithAgent enum/items 参数校验：非法枚举与数组元素类型被拦截", async () => {
+  setLlmResponses(
+    // search_posts.site 枚举非法 → validateArgs 报错（修复：原实现不校验 enum）
+    'TOOLCALL:{"name":"search_posts","arguments":"{\\"query\\":\\"前端面经\\",\\"site\\":\\"baidu\\"}"}',
+    // remember.topics 元素非字符串 → validateArgs 报错（修复：原实现不校验 items 元素类型）
+    'TOOLCALL:{"name":"remember","arguments":"{\\"topics\\":[123]}"}',
+    "已修正参数，重新回答。"
+  );
+  const r = await chatWithAgent("查一下面经并记关注点");
+  assert.ok(r.reply.length > 0, "LLM 修正后正常回答");
+  const { getRecentTools } = await import("../lib/trace.mjs");
+  const tools = getRecentTools(8);
+  const badSite = tools.find((t) => t.tool_name === "search_posts");
+  const badItems = tools.find((t) => t.tool_name === "remember");
+  assert.ok(badSite && !badSite.ok && /取值必须/.test(String(badSite.error || "")), "非法枚举被拦截并回填错误");
+  assert.ok(badItems && !badItems.ok && /topics\[0\]/.test(String(badItems.error || "")), "数组元素类型被拦截并回填错误");
+});
+
 test("chatWithAgent 记忆类工具：remember 写入关注点", async () => {
   setLlmResponses(
     'TOOLCALL:{"name":"remember","arguments":"{\\"topics\\":[\\"React\\",\\"字节\\"]}"}',
