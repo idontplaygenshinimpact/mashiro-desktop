@@ -90,6 +90,40 @@ node node_modules\electron\dist\electron.exe desktop\main.mjs
 
 ---
 
+## MCP 接入其他 AI 工具（npm 安装）
+
+秋招助手的能力是标准 **MCP Server**（`npm i -g mashiro-mcp`），可以接入**任何支持 MCP 的 AI 工具**（Claude Code / Cline / 其他 agent）——不需要桌宠、不需要本项目代码：
+
+```bash
+npm install -g mashiro-mcp   # Node >= 22
+```
+
+Claude Code 配置（`claude mcp add` 或 `.mcp.json`）：
+
+```json
+{
+  "mcpServers": {
+    "mashiro": { "command": "mashiro-mcp" }
+  }
+}
+```
+
+接入后你的 AI 助手获得 9 个秋招能力：
+
+| 工具 | 能力 |
+|---|---|
+| `search_posts` | 搜索牛客/掘金/CSDN 前端 & AI Agent 面经帖 |
+| `solve_question` | 抓取题目并完整讲解（结论/原理/JS 实现/边界），存档到本地 |
+| `get_study_plan` / `get_study_progress` | 学习清单与进度 |
+| `start_interview` | 模拟面试官（项目拷打/八股穿插/手写收尾） |
+| `get_personal_profile` / `get_jobs_status` / `get_schedule_events` / `get_project_archives` | 个人数据环境（简历/岗位/日程/项目源码档案） |
+
+- **LLM Key**：`DEEPSEEK_API_KEY` 环境变量（或 opencode auth.json，与桌面版同源）
+- **数据目录**：默认 `~/.mashiro/`（data + output），可用 `MIANSHI_DATA_DIR`/`MIANSHI_OUTPUT_DIR` 覆盖
+- **隔离**：每个使用者独立数据目录，互不干扰；与桌宠版可共享同一份数据（指向同一目录即可）
+
+---
+
 ## 使用方式
 
 ### 1. 桌宠（推荐日常使用）
