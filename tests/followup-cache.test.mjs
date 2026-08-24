@@ -31,6 +31,20 @@ test("bigramJaccard + editSimilarity：相似短文本高分、无关文本低�
   assert.ok(levenshtein("缓存", "缓存失效") === 2);
 });
 
+test("editSimilarity：长度悬殊不产生假高分（修复 1-13/65=0.8 恒命中 bug）", async () => {
+  const { editSimilarity, findSimilarFollowup } = await import("../lib/followup-cache.mjs");
+  const longQ = "你的迭代代码里dummy的next始终不是都指向一开始的head吗，这样反转后的头不是不就不对了吗，什么时候更新的dummy.next的";
+  // 无关短问题：长度差 > cap 时编辑距离恒返回假 0.8 → 应退化为 bigram（≈0）
+  assert.ok(editSimilarity(longQ, "这怎么命中的") < 0.72, "短问题不得因长度差假命中");
+  assert.ok(editSimilarity(longQ, "今天天气怎么样") < 0.72, "天气也不得命中");
+  assert.ok(editSimilarity(longQ, "what is the weather") < 0.72, "英文也不得命中");
+  // 长度相近仍正常（回归护栏）
+  assert.ok(editSimilarity("为什么需要缓存", "为什么要用缓存") > 0.7);
+  // findSimilarFollowup 端到端：无关短问题不命中长历史问题
+  const hit = findSimilarFollowup("今天天气怎么样", [{ question: longQ, answer: "A" }]);
+  assert.equal(hit, null, "无关短问题不得命中长历史问题");
+});
+
 test("normalizeQuestion：去空白标点语气", () => {
   assert.equal(normalizeQuestion(" 为什么需要缓存？ "), "为什么需要缓存");
   assert.equal(normalizeQuestion("再讲讲：宏任务 和 微任务！"), "再讲讲宏任务和微任务");

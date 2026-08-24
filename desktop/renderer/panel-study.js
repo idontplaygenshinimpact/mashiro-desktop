@@ -395,12 +395,12 @@ function drawIvRadar(canvas, dims) {
 
 $("iv-end").addEventListener("click", async () => {
   stopIvTimer();
-  // 反馈：复盘报告由 LLM 生成（30-60s），无反馈会看起来像卡死
+  // 反馈：复盘报告由 LLM 生成（最长 2 分钟超时），无反馈会看起来像卡死
   const endBtn = $("iv-end");
   const statusEl = $("iv-status");
   endBtn.disabled = true;
   endBtn.textContent = "⏳ 生成复盘报告…";
-  if (statusEl) statusEl.textContent = "面试已结束，正在生成复盘报告（约 30-60 秒，请稍候）…";
+  if (statusEl) statusEl.textContent = "面试已结束，正在生成复盘报告（约 1-2 分钟，请耐心等待，勿重复点击）…";
   try {
     const end = await window.kanban.invEnd();
     if (end?.ok && end.report) {

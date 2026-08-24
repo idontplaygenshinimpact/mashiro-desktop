@@ -4,11 +4,24 @@ import assert from "node:assert/strict";
 import { setupTempDb, cleanupTempDb } from "./helpers.mjs";
 
 setupTempDb("llm-retry"); // llmChat 内部写 trace 表，用临时库隔离
-const { llmChat, llmChatStream, getReplyText } = await import("../lib/llm.mjs");
+const { llmChat, llmChatStream, getReplyText, pickTimeoutMs } = await import("../lib/llm.mjs");
 
 after(() => {
   mock.restoreAll();
   cleanupTempDb(process.env.MIANSHI_DB_PATH ? process.env.MIANSHI_DB_PATH.split("test.db")[0] : undefined);
+});
+
+// ---------- 超时选择（复盘报告 20s 被掐死事故的回归护栏） ----------
+test("pickTimeoutMs：长文生成（maxTokens>=4000）非流式给足 120s", () => {
+  assert.equal(pickTimeoutMs({ stream: false, maxTokens: 4000 }), 120000, "复盘报告 4000 tokens 必须 120s（曾 20s 被 abort）");
+  assert.equal(pickTimeoutMs({ stream: false, maxTokens: 24000 }), 120000);
+  assert.equal(pickTimeoutMs({ stream: true, maxTokens: 0 }), 120000, "流式恒 120s");
+});
+
+test("pickTimeoutMs：短任务保持 20s 快速 failover，显式 timeout 优先", () => {
+  assert.equal(pickTimeoutMs({ stream: false, maxTokens: 1500 }), 20000);
+  assert.equal(pickTimeoutMs({ stream: false, maxTokens: 3999 }), 20000);
+  assert.equal(pickTimeoutMs({ stream: false, maxTokens: 4000, timeout: 45000 }), 45000, "显式 timeout 优先");
 });
 
 test("llmChat：空 content 响应自动重试成功", async () => {
