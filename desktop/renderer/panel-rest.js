@@ -488,7 +488,7 @@ async function loadChallenges() {
     const statusEl = $("challenge-status");
     const cats = $("challenge-cats");
     const list = $("challenge-list");
-    if (!j.challenges?.length) {
+    if (!j.list?.length) {
       statusEl.textContent = "题库为空——运行 scripts/import-ai-career.mjs（手写题）或 scripts/import-codetop-top400.mjs（CodeTop 高频 400）导入";
       cats.innerHTML = "";
       list.innerHTML = "";
@@ -516,7 +516,7 @@ async function loadChallenges() {
       });
     });
     // 题目列表（未做的在前，按频率/难度排序）
-    const sorted = [...j.challenges].sort((a, b) =>
+    const sorted = [...j.list].sort((a, b) =>
       (a.done - b.done) || (b.frequency - a.frequency) || (a.difficulty - b.difficulty));
     list.innerHTML = sorted.map((p) => {
       const [dl, dc] = DIFF_LABEL[p.difficulty] || ["难度" + p.difficulty, "#8a87a8"];
@@ -550,7 +550,7 @@ async function loadChallenges() {
           const res = await fetch("http://127.0.0.1:8899/api/challenges/detail?id=" + encodeURIComponent(btn.dataset.id));
           const j = await res.json();
           if (!j.ok) { alert("⚠️ " + (j.error || "加载失败")); return; }
-          const c = j.challenge;
+          const c = j.detail;
           const div = document.createElement("div");
           div.className = "ch-editor";
           div.style.cssText = "padding:10px;margin:8px 0;background:rgba(109,79,216,.05);border:1px solid rgba(109,79,216,.2);border-radius:8px;font-size:12px;line-height:1.6;";
