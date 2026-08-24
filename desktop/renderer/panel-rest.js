@@ -388,7 +388,7 @@ async function loadOj() {
     });
     // 题目列表
     list.innerHTML = j.problems.map((p) => `
-      <div class="job-item" id="oj-${esc(p.bm_no)}">
+      <div class="job-item" id="oj-${esc(p.bm_no)}" title="点击展开/收起题干" style="cursor:pointer;">
         <div class="job-head">
           <span class="job-badge" style="background:rgba(109,79,216,.12);color:#5d48b8;">${esc(p.bm_no)}</span>
           <b style="font-size:12px;">${esc(p.category)}</b>
@@ -430,45 +430,64 @@ async function loadOj() {
         }
       });
     });
-    // 看题：懒加载题目内容 → 内联展开（本地缓存）
+    // 看题：懒加载题目内容 → 内联展开（本地缓存）——按钮与条目点击共用
     document.querySelectorAll(".oj-view").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const item = btn.closest(".job-item");
-        const body = item.querySelector(".oj-body");
-        if (body) { body.remove(); return; } // 再点收起
-        btn.disabled = true;
-        btn.textContent = "⏳ 加载中…";
-        try {
-          const res = await fetch("http://127.0.0.1:8899/api/oj/detail?url=" + encodeURIComponent(btn.dataset.url));
-          const j = await res.json();
-          if (!j.ok) { alert("⚠️ " + (j.error || "抓取失败")); return; }
-          const samples = (() => { try { return JSON.parse(j.samples || "[]"); } catch { return []; } })();
-          const div = document.createElement("div");
-          div.className = "oj-body";
-          div.style.cssText = "padding:10px;margin:8px 0;background:rgba(109,79,216,.06);border:1px solid rgba(109,79,216,.18);border-radius:8px;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-all;";
-          let html = `<div style="color:#5d48b8;font-weight:bold;margin-bottom:4px;">📖 ${esc(btn.dataset.title)}${j.cached ? ' <span style="color:#8a87a8;font-weight:normal;">(本地缓存)</span>' : ""}</div>`;
-          if (j.meta) html += `<div style="color:#8a87a8;margin-bottom:6px;">${esc(j.meta)}</div>`;
-          html += `<div>${esc(j.content || "")}</div>`;
-          if (samples.length) {
-            html += `<div style="margin-top:8px;font-weight:bold;color:#5d48b8;">示例</div>`;
-            for (const s of samples) {
-              html += `<div style="margin:4px 0;">【${esc(s.title)}】`;
-              if (s.input) html += `<div style="color:#3a8d5a;">输入：${esc(s.input)}</div>`;
-              if (s.output) html += `<div style="color:#b07020;">输出：${esc(s.output)}</div>`;
-              if (s.note) html += `<div style="color:#8a87a8;">说明：${esc(s.note)}</div>`;
-              html += `</div>`;
-            }
-          }
-          html += `<div style="margin-top:8px;color:#8a87a8;font-size:11px;">看题不消耗牛客额度；去牛客在线答题可自测运行。</div>`;
-          div.innerHTML = html;
-          item.appendChild(div);
-        } catch (e) { alert("⚠️ " + e.message); }
-        finally { btn.disabled = false; btn.textContent = "📖 看题"; }
+      btn.addEventListener("click", () => toggleOjDetail(btn.closest(".job-item"), btn));
+    });
+    // 条目点击展开（手风琴）：点条目任意处（按钮/链接除外）展开题干
+    document.querySelectorAll("#oj-list .job-item").forEach((item) => {
+      item.addEventListener("click", (e) => {
+        if (e.target.closest("button, a")) return;
+        // 自己的 body 已展开 → 留给 toggleOjDetail 收起；否则先收起其他条目（手风琴）
+        if (!item.querySelector(".oj-body")) {
+          document.querySelectorAll("#oj-list .oj-body").forEach((b) => {
+            const it = b.closest(".job-item");
+            if (it === item) return;
+            b.remove();
+            const v = it?.querySelector(".oj-view");
+            if (v) v.textContent = "📖 看题";
+          });
+        }
+        toggleOjDetail(item, item.querySelector(".oj-view"));
       });
     });
   } catch (e) {
     $("oj-status").textContent = "⚠️ " + e.message;
   }
+}
+
+// 牛客题目展开：抓取题干（本地缓存）→ 内联展示；再点收起
+async function toggleOjDetail(item, btn) {
+  const body = item.querySelector(".oj-body");
+  if (body) { body.remove(); return; } // 再点收起
+  btn.disabled = true;
+  btn.textContent = "⏳ 加载中…";
+  try {
+    const res = await fetch("http://127.0.0.1:8899/api/oj/detail?url=" + encodeURIComponent(btn.dataset.url));
+    const j = await res.json();
+    if (!j.ok) { alert("⚠️ " + (j.error || "抓取失败")); return; }
+    const samples = (() => { try { return JSON.parse(j.samples || "[]"); } catch { return []; } })();
+    const div = document.createElement("div");
+    div.className = "oj-body";
+    div.style.cssText = "padding:10px;margin:8px 0;background:rgba(109,79,216,.06);border:1px solid rgba(109,79,216,.18);border-radius:8px;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-all;";
+    let html = `<div style="color:#5d48b8;font-weight:bold;margin-bottom:4px;">📖 ${esc(btn.dataset.title)}${j.cached ? ' <span style="color:#8a87a8;font-weight:normal;">(本地缓存)</span>' : ""}</div>`;
+    if (j.meta) html += `<div style="color:#8a87a8;margin-bottom:6px;">${esc(j.meta)}</div>`;
+    html += `<div>${esc(j.content || "")}</div>`;
+    if (samples.length) {
+      html += `<div style="margin-top:8px;font-weight:bold;color:#5d48b8;">示例</div>`;
+      for (const s of samples) {
+        html += `<div style="margin:4px 0;">【${esc(s.title)}】`;
+        if (s.input) html += `<div style="color:#3a8d5a;">输入：${esc(s.input)}</div>`;
+        if (s.output) html += `<div style="color:#b07020;">输出：${esc(s.output)}</div>`;
+        if (s.note) html += `<div style="color:#8a87a8;">说明：${esc(s.note)}</div>`;
+        html += `</div>`;
+      }
+    }
+    html += `<div style="margin-top:8px;color:#8a87a8;font-size:11px;">看题不消耗牛客额度；去牛客在线答题可自测运行。</div>`;
+    div.innerHTML = html;
+    item.appendChild(div);
+  } catch (e) { alert("⚠️ " + e.message); }
+  finally { btn.disabled = false; btn.textContent = "📖 看题"; }
 }
 
 // ============ 手写/算法题库（ai-career 本地判题闭环） ============
@@ -551,7 +570,7 @@ function renderChallenges() {
     const wrong = p.wrongCount > 0 ? `<span style="color:#c93a3f;">答错 ${p.wrongCount} 次</span>` : "";
     const desc = String(p.description || "").trim();
     return `
-    <div class="job-item" id="ch-${esc(p.id)}">
+    <div class="job-item" id="ch-${esc(p.id)}" title="点击展开/收起题干" style="cursor:pointer;">
       <div class="job-head">
         <span class="job-badge" style="background:${p.category === "handwrite" ? "rgba(58,141,90,.12)" : "rgba(109,79,216,.12)"};color:${p.category === "handwrite" ? "#2f7d4e" : "#5d48b8"};">${p.category === "handwrite" ? "✍️手写" : "🧮算法"}</span>
         <span style="color:${dc};font-size:11px;">${dl}</span>
@@ -573,6 +592,42 @@ function renderChallenges() {
   document.querySelector(".ch-more")?.addEventListener("click", () => { chVisible += 60; renderChallenges(); });
   bindChPractice();
   bindChallengeMarks();
+  bindChallengeExpand();
+}
+
+// 条目点击展开题干（手风琴：同一列表同时只展开一个；再点收起）
+function toggleChallengeBody(item) {
+  const body = item.querySelector(".ch-body");
+  if (body) {
+    body.remove();
+    item.querySelector(".job-summary")?.style.removeProperty("display");
+    return;
+  }
+  document.querySelectorAll("#challenge-list .ch-body").forEach((b) => {
+    const it = b.closest(".job-item");
+    b.remove();
+    it?.querySelector(".job-summary")?.style.removeProperty("display");
+  });
+  const btn = item.querySelector(".ch-practice");
+  const p = chAll.find((x) => x.id === btn?.dataset.id);
+  if (!p) return;
+  item.querySelector(".job-summary")?.style.setProperty("display", "none"); // 摘要被完整题干取代
+  const div = document.createElement("div");
+  div.className = "ch-body";
+  div.style.cssText = "padding:10px;margin:8px 0;background:rgba(109,79,216,.06);border:1px solid rgba(109,79,216,.18);border-radius:8px;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-all;";
+  div.innerHTML = `<div style="color:#5d48b8;font-weight:bold;margin-bottom:4px;">📖 ${esc(p.title)}</div>
+    <div>${esc(p.description || "（本题暂无题干说明）")}</div>
+    <div style="margin-top:6px;color:#8a87a8;font-size:11px;">建议 ${p.timeLimit || 10} 分钟内完成 · 点「✍️ 做题」展开编辑器（本地沙箱判题）</div>`;
+  item.appendChild(div);
+}
+
+function bindChallengeExpand() {
+  document.querySelectorAll("#challenge-list .job-item").forEach((item) => {
+    item.addEventListener("click", (e) => {
+      if (e.target.closest("button, a")) return; // 按钮/链接不触发展开
+      toggleChallengeBody(item);
+    });
+  });
 }
 
 // 搜索框：输入即过滤（前端，标题/描述/ID 关键词）

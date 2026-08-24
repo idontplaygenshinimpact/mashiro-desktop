@@ -108,3 +108,72 @@ test("编辑器：行号 + 语法高亮 + 随输入更新", async () => {
     assert.equal(lines.textContent.trim(), "1", "行号应为 1");
   });
 });
+
+test("条目点击展开题干（手风琴）：展开显示完整描述、再点收起、按钮不触发展开", async () => {
+  await withChallenges(async (ctx) => {
+    const first = items(ctx)[0];
+    const second = items(ctx)[1];
+    // 点第一条 → 展开题干
+    first.dispatchEvent(new ctx.window.MouseEvent("click", { bubbles: true }));
+    await tick(20);
+    let body = first.querySelector(".ch-body");
+    assert.ok(body, "点击条目应展开题干");
+    assert.ok(body.textContent.includes("手写实现第 0 号函数") || body.textContent.includes("给定数组"), "展开区应含完整描述");
+    // 手风琴：点第二条 → 第一条收起
+    second.dispatchEvent(new ctx.window.MouseEvent("click", { bubbles: true }));
+    await tick(20);
+    assert.ok(!first.querySelector(".ch-body"), "展开另一条时第一条应收起");
+    assert.ok(second.querySelector(".ch-body"), "第二条应展开");
+    // 再点第二条 → 收起
+    second.dispatchEvent(new ctx.window.MouseEvent("click", { bubbles: true }));
+    await tick(20);
+    assert.ok(!second.querySelector(".ch-body"), "再点应收起");
+    // 点「做题」按钮 → 不触发展开，只开编辑器
+    first.querySelector(".ch-practice").click();
+    await tick(60);
+    assert.ok(!first.querySelector(".ch-body"), "点做题按钮不应展开题干");
+    assert.ok(first.querySelector(".ch-editor"), "点做题按钮应展开编辑器");
+  });
+});
+
+test("牛客 TOP101：条目点击展开题干（detail mock）+ 再点收起", async () => {
+  const ctx = bootChallenges();
+  try {
+    await tick(50);
+    const { window } = ctx;
+    window.fetch = async (url) => {
+      const u = String(url);
+      let j;
+      if (u.includes("/api/oj/problems")) j = { ok: true, total: 2, problems: [
+        { bm_no: "BM1", category: "链表", title: "反转链表", difficulty: "简单", people: "1.2万", url: "https://www.nowcoder.com/practice/BM1", done: false },
+        { bm_no: "BM2", category: "链表", title: "合并有序链表", difficulty: "中等", people: "8千", url: "https://www.nowcoder.com/practice/BM2", done: false },
+      ], byCategory: [{ category: "链表", count: 2 }] };
+      else if (u.includes("/api/oj/detail")) j = { ok: true, title: "反转链表", cached: true, meta: "时间限制 1s", content: "给定单链表的头节点，反转链表并返回新头。", samples: JSON.stringify([{ title: "示例1", input: "1,2,3", output: "3,2,1" }]) };
+      else j = { ok: true, items: [], list: [], plan: { items: [] } };
+      return { ok: true, json: async () => j };
+    };
+    window.loadOj();
+    await tick(50);
+    const ojList = window.document.getElementById("oj-list");
+    const first = ojList.querySelector(".job-item");
+    // 点条目 → 展开题干
+    first.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    await tick(50);
+    const body = first.querySelector(".oj-body");
+    assert.ok(body, "点击牛客条目应展开题干");
+    assert.ok(body.textContent.includes("反转链表"), "展开区应含题干内容");
+    assert.ok(body.textContent.includes("示例"), "展开区应含示例");
+    // 再点 → 收起
+    first.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    await tick(20);
+    assert.ok(!first.querySelector(".oj-body"), "再点应收起");
+    // 点「去刷题」链接 → 不触发展开
+    const link = first.querySelector("a");
+    link.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await tick(20);
+    assert.ok(!first.querySelector(".oj-body"), "点链接不应触发展开");
+  } finally {
+    ctx.window.clearAllTimers();
+    ctx.dom.window.close();
+  }
+});
