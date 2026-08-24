@@ -374,14 +374,16 @@ ipcMain.handle("widget:settings-rag", (e, cfg) => (cfg && Object.keys(cfg).lengt
 ipcMain.handle("widget:interview-notes", (e, { topics }) => widgetPost("/api/interview-notes", { topics }));
 ipcMain.handle("widget:study-detail", (e, { id }) => widgetGet(`/api/study-detail?id=${encodeURIComponent(id)}`));
 // 流式讲解：main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）
-ipcMain.handle("widget:study-detail-stream", async (e, { id }) => {
+// 并发隔离：preload 每次调用带 __streamToken，chunk 定向发送到 `channel:token`（曾广播串流）
+ipcMain.handle("widget:study-detail-stream", async (e, { id, __streamToken: token }) => {
+  const chan = token ? `study-detail-chunk:${token}` : "study-detail-chunk";
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/study-detail-stream?id=${encodeURIComponent(id)}`);
     const ctype = res.headers.get("content-type") || "";
     // 有文件：一次性 JSON
     if (!ctype.includes("text/event-stream")) {
       const j = await res.json();
-      e.sender.send("study-detail-chunk", JSON.stringify(j));
+      e.sender.send(chan, JSON.stringify(j));
       return { ok: true, mode: "json" };
     }
     // 无文件：SSE 流，逐块转发
@@ -396,7 +398,7 @@ ipcMain.handle("widget:study-detail-stream", async (e, { id }) => {
       while ((idx = buf.indexOf("\n\n")) >= 0) {
         const event = buf.slice(0, idx);
         buf = buf.slice(idx + 2);
-        e.sender.send("study-detail-chunk", event); // 原样转发 data: {...}
+        e.sender.send(chan, event); // 原样转发 data: {...}
       }
     }
     return { ok: true, mode: "sse" };
@@ -405,13 +407,14 @@ ipcMain.handle("widget:study-detail-stream", async (e, { id }) => {
   }
 });
 // 讲解追问补充：main 转发 widget append-stream SSE → 渲染层（独立事件通道）
-ipcMain.handle("widget:study-append-stream", async (e, { id, question }) => {
+ipcMain.handle("widget:study-append-stream", async (e, { id, question, __streamToken: token }) => {
+  const chan = token ? `study-append-chunk:${token}` : "study-append-chunk";
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/study-append-stream?id=${encodeURIComponent(id)}&question=${encodeURIComponent(question)}`);
     const ctype = res.headers.get("content-type") || "";
     if (!ctype.includes("text/event-stream")) {
       const j = await res.json();
-      e.sender.send("study-append-chunk", JSON.stringify(j));
+      e.sender.send(chan, JSON.stringify(j));
       return { ok: true, mode: "json" };
     }
     const reader = res.body.getReader();
@@ -425,7 +428,7 @@ ipcMain.handle("widget:study-append-stream", async (e, { id, question }) => {
       while ((idx = buf.indexOf("\n\n")) >= 0) {
         const event = buf.slice(0, idx);
         buf = buf.slice(idx + 2);
-        e.sender.send("study-append-chunk", event);
+        e.sender.send(chan, event);
       }
     }
     return { ok: true, mode: "sse" };
@@ -434,13 +437,14 @@ ipcMain.handle("widget:study-append-stream", async (e, { id, question }) => {
   }
 });
 // 整理讲解全文：main 转发 widget consolidate-stream SSE → 渲染层（独立事件通道）
-ipcMain.handle("widget:study-consolidate-stream", async (e, { id }) => {
+ipcMain.handle("widget:study-consolidate-stream", async (e, { id, __streamToken: token }) => {
+  const chan = token ? `study-consolidate-chunk:${token}` : "study-consolidate-chunk";
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/study-consolidate-stream?id=${encodeURIComponent(id)}`);
     const ctype = res.headers.get("content-type") || "";
     if (!ctype.includes("text/event-stream")) {
       const j = await res.json();
-      e.sender.send("study-consolidate-chunk", JSON.stringify(j));
+      e.sender.send(chan, JSON.stringify(j));
       return { ok: true, mode: "json" };
     }
     const reader = res.body.getReader();
@@ -454,7 +458,7 @@ ipcMain.handle("widget:study-consolidate-stream", async (e, { id }) => {
       while ((idx = buf.indexOf("\n\n")) >= 0) {
         const event = buf.slice(0, idx);
         buf = buf.slice(idx + 2);
-        e.sender.send("study-consolidate-chunk", event);
+        e.sender.send(chan, event);
       }
     }
     return { ok: true, mode: "sse" };
@@ -463,7 +467,8 @@ ipcMain.handle("widget:study-consolidate-stream", async (e, { id }) => {
   }
 });
 // 多条目归并：main 转发 widget cluster-stream SSE → 渲染层（独立事件通道）
-ipcMain.handle("widget:study-cluster-stream", async (e, { ids }) => {
+ipcMain.handle("widget:study-cluster-stream", async (e, { ids, __streamToken: token }) => {
+  const chan = token ? `study-cluster-chunk:${token}` : "study-cluster-chunk";
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/study-cluster-stream`, {
       method: "POST",
@@ -473,7 +478,7 @@ ipcMain.handle("widget:study-cluster-stream", async (e, { ids }) => {
     const ctype = res.headers.get("content-type") || "";
     if (!ctype.includes("text/event-stream")) {
       const j = await res.json();
-      e.sender.send("study-cluster-chunk", JSON.stringify(j));
+      e.sender.send(chan, JSON.stringify(j));
       return { ok: true, mode: "json" };
     }
     const reader = res.body.getReader();
@@ -487,7 +492,7 @@ ipcMain.handle("widget:study-cluster-stream", async (e, { ids }) => {
       while ((idx = buf.indexOf("\n\n")) >= 0) {
         const event = buf.slice(0, idx);
         buf = buf.slice(idx + 2);
-        e.sender.send("study-cluster-chunk", event);
+        e.sender.send(chan, event);
       }
     }
     return { ok: true, mode: "sse" };

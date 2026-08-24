@@ -1545,10 +1545,13 @@ async function showClusterResult(ids) {
 // ============ 学习详情：全屏弹层展开讲解 + 追问补充 ============
 let studyDetailCache = {}; // id -> { content, topic }
 let sdCurrentId = null;    // 当前弹层打开的条目 id
+let sdGen = 0;             // 讲解请求代际：切换条目/关闭弹层时递增，过期流式回调直接丢弃
+                           //（竞态修复：快速点击不同讲解时旧流仍持续到达，曾把 A 内容渲染进 B 弹窗）
 const sdOverlay = () => $("study-detail-overlay");
 const sdBody = () => $("sd-modal-body");
 
 async function showStudyDetail(id) {
+  const gen = ++sdGen;
   sdCurrentId = id;
   // 显示弹层 + 加载态
   sdOverlay().classList.remove("hidden");
@@ -1564,14 +1567,17 @@ async function showStudyDetail(id) {
     }
     // 流式获取（SSE）：逐段渲染，无文件条目也能边生成边看
     const topic = await streamStudyDetail(id, (content) => {
+      if (gen !== sdGen) return; // 已切到别的条目/已关闭：丢弃过期流内容
       sdBody().innerHTML = renderMd(content) + '<div class="sd-streaming">⏳ 生成中...</div>';
       sdBody().scrollTop = sdBody().scrollHeight; // 生成中跟随最新内容
     });
+    if (gen !== sdGen) return; // 生成期间被切换：结果属于旧条目，不渲染
     $("sd-modal-title").textContent = "📖 " + topic;
     buildToc(); // 锚点目录（流式生成完成）
     // 生成完成：回到顶部（从头阅读，不留在末尾）
     sdBody().scrollTop = 0;
   } catch (e) {
+    if (gen !== sdGen) return;
     sdBody().innerHTML = `<div style="color:#c05050;font-size:13px;padding:12px">⚠️ ${esc(e.message)}</div>`;
   }
 }
@@ -1581,6 +1587,8 @@ let sdAsking = false;
 async function askStudyDetail() {
   const question = $("sd-ask-input").value.trim();
   if (!question || !sdCurrentId || sdAsking) return;
+  const id = sdCurrentId;     // 捕获：切换条目后旧追问不得污染新条目缓存（曾用全局 sdCurrentId 写错条目）
+  const gen = sdGen;          // 捕获代际：切换/关闭后过期流回调直接丢弃
   sdAsking = true;
   const btn = $("sd-ask-btn");
   btn.disabled = true;
@@ -1588,14 +1596,16 @@ async function askStudyDetail() {
   $("sd-ask-input").value = "";
   try {
     // 初始内容（未生成时先生成）
-    if (!studyDetailCache[sdCurrentId]?.content) {
-      const topic = await streamStudyDetail(sdCurrentId, (c) => {
+    if (!studyDetailCache[id]?.content) {
+      const topic = await streamStudyDetail(id, (c) => {
+        if (gen !== sdGen) return;
         sdBody().innerHTML = renderMd(c) + '<div class="sd-streaming">⏳ 生成中...</div>';
         sdBody().scrollTop = sdBody().scrollHeight;
       });
+      if (gen !== sdGen) return;
       $("sd-modal-title").textContent = "📖 " + topic;
     }
-    const base = studyDetailCache[sdCurrentId]?.content || "";
+    const base = studyDetailCache[id]?.content || "";
     // 追加分隔 + 追问标题
     sdBody().innerHTML = renderMd(base) + `<div class="sd-ask-q">💬 追问：${esc(question)}</div><div class="sd-streaming">⏳ 补充中...</div>`;
     sdBody().scrollTop = sdBody().scrollHeight;
@@ -1611,19 +1621,21 @@ async function askStudyDetail() {
         sdBody().appendChild(tip);
       }
     };
-    await window.kanban.studyDetailAppend(sdCurrentId, question, (delta) => {
+    await window.kanban.studyDetailAppend(id, question, (delta) => {
+      if (gen !== sdGen) return; // 已切换/关闭：丢弃过期追问流
       extra += delta;
       sdBody().innerHTML = renderMd(base) + `<div class="sd-ask-q">💬 追问：${esc(question)}</div>` + renderMd(extra) + '<div class="sd-streaming">⏳ 补充中...</div>';
       sdBody().scrollTop = sdBody().scrollHeight;
     }, onEvent);
+    if (gen !== sdGen) return; // 生成期间被切换：不写缓存不渲染
     // 完成：更新缓存（下次打开能看到补充内容）
-    const topic = studyDetailCache[sdCurrentId]?.topic || "讲解";
+    const topic = studyDetailCache[id]?.topic || "讲解";
     if (cacheHit) {
       // 命中缓存：不重复追加追问章节（回答已在存档中），只保留提示
       $("sd-modal-title").textContent = "📖 " + topic + "（命中历史回答）";
     } else {
-      studyDetailCache[sdCurrentId] = { content: base + `\n\n## 💬 追问：${question}\n\n` + extra, topic };
-      sdBody().innerHTML = renderMd(studyDetailCache[sdCurrentId].content);
+      studyDetailCache[id] = { content: base + `\n\n## 💬 追问：${question}\n\n` + extra, topic };
+      sdBody().innerHTML = renderMd(studyDetailCache[id].content);
     }
     buildToc(); // 锚点目录（含新追问章节）
     sdBody().scrollTop = sdBody().scrollHeight; // 停留在补充处
@@ -1646,35 +1658,42 @@ $("sd-ask-input").addEventListener("keydown", (e) => { if (e.key === "Enter") as
 let sdConsolidating = false;
 async function consolidateStudyDetail() {
   if (!sdCurrentId || sdConsolidating) return;
+  const id = sdCurrentId;
+  const gen = sdGen; // 捕获代际：切换/关闭后过期流丢弃
   sdConsolidating = true;
   const btn = $("sd-consolidate-btn");
   btn.disabled = true;
   btn.textContent = "整理中...";
   try {
     // 初始内容（未生成时先生成）
-    if (!studyDetailCache[sdCurrentId]?.content) {
-      const topic = await streamStudyDetail(sdCurrentId, (c) => {
+    if (!studyDetailCache[id]?.content) {
+      const topic = await streamStudyDetail(id, (c) => {
+        if (gen !== sdGen) return;
         sdBody().innerHTML = renderMd(c) + '<div class="sd-streaming">⏳ 生成中...</div>';
         sdBody().scrollTop = sdBody().scrollHeight;
       });
+      if (gen !== sdGen) return;
       $("sd-modal-title").textContent = "📖 " + topic;
     }
     sdBody().innerHTML = '<div style="color:#8a87a8;font-size:13px;padding:12px">📚 正在整合全文（去重合并、统一结构）...</div>';
     // 流式整合
     let merged = "";
-    await window.kanban.studyConsolidate(sdCurrentId, (delta) => {
+    await window.kanban.studyConsolidate(id, (delta) => {
+      if (gen !== sdGen) return;
       merged += delta;
       sdBody().innerHTML = renderMd(merged) + '<div class="sd-streaming">⏳ 整合中...</div>';
       sdBody().scrollTop = sdBody().scrollHeight;
     });
+    if (gen !== sdGen) return;
     // 完成：更新缓存（下次打开看到整理版）
-    const topic = studyDetailCache[sdCurrentId]?.topic || "讲解";
-    studyDetailCache[sdCurrentId] = { content: merged, topic };
+    const topic = studyDetailCache[id]?.topic || "讲解";
+    studyDetailCache[id] = { content: merged, topic };
     $("sd-modal-title").textContent = "📖 " + topic + "（已整理）";
     sdBody().innerHTML = renderMd(merged);
     buildToc(); // 锚点目录（整理版）
     sdBody().scrollTop = 0; // 从头阅读整理版
   } catch (e) {
+    if (gen !== sdGen) return;
     const box = document.createElement("div");
     box.style.cssText = "color:#c05050;font-size:12px;padding:8px";
     box.textContent = "⚠️ " + e.message;
@@ -1706,9 +1725,9 @@ async function streamStudyDetail(id, onUpdate) {
   return topic;
 }
 
-$("sd-modal-close").addEventListener("click", () => sdOverlay().classList.add("hidden"));
+$("sd-modal-close").addEventListener("click", () => { sdGen++; sdOverlay().classList.add("hidden"); }); // 关闭 → 过期流丢弃
 sdOverlay().addEventListener("click", (e) => {
-  if (e.target === sdOverlay()) sdOverlay().classList.add("hidden"); // 点遮罩关闭
+  if (e.target === sdOverlay()) { sdGen++; sdOverlay().classList.add("hidden"); } // 点遮罩关闭
 });
 
 // 轻量 Markdown 渲染：标题/代码块/列表/表格/引用/加粗/斜体/行内代码/分隔线

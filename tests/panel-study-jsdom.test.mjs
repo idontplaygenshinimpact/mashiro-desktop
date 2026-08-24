@@ -89,6 +89,42 @@ test("详情弹窗：打开 → 追问 → 整理（闭环交互）", async () =
   });
 });
 
+test("竞态防护：快速切换讲解条目，旧流内容不得渲染进新弹窗/污染新缓存", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    await tick(60);
+    // 手动控制每个流的 onChunk（先不推内容，模拟 LLM 慢生成）
+    const streams = {}; // itemId -> onChunk
+    kanban.studyDetailStream = async (id, onChunk) => {
+      streams[id] = onChunk;
+      return new Promise(() => {}); // 永不 resolve：由测试手动触发
+    };
+    const items = [...window.document.querySelectorAll("#study-list .s-learn")];
+    assert.ok(items.length >= 2, "至少 2 个可讲解条目");
+    const idA = items[0].closest(".study-item").dataset.id;
+    const idB = items[1].closest(".study-item").dataset.id;
+    // 打开 A → 立刻切到 B（模拟快速点击两个讲解）
+    items[0].click();
+    await tick(30);
+    items[1].click();
+    await tick(30);
+    // 旧流 A 此刻才到达内容 → 必须被代际丢弃
+    streams[idA]("【A 的讲解内容：比较版本号】");
+    await tick(30);
+    const body = window.document.getElementById("sd-modal-body");
+    assert.ok(!body.textContent.includes("A 的讲解内容"), "过期流 A 不得渲染进当前弹窗（曾串成'比较版本号'内容）");
+    // 新流 B 到达 → 正常渲染
+    streams[idB]("【B 的讲解内容：第K大元素】");
+    await tick(30);
+    assert.ok(body.textContent.includes("B 的讲解内容"), "当前流 B 正常渲染");
+    assert.ok(!body.textContent.includes("A 的讲解内容"), "弹窗不得混入 A 内容");
+    // 关闭弹窗后，残留流也不得渲染（代际再次推进）
+    window.document.getElementById("sd-modal-close").click();
+    streams[idB]("【B 的迟到内容】");
+    await tick(30);
+    assert.ok(!body.textContent.includes("B 的迟到内容"), "关闭后到达的流内容不得上屏");
+  });
+});
+
 test("归并模式：进入批量 → 勾选 2 项 → 确认归并（≥2 才触发）", async () => {
   await withPanel(async ({ window }) => {
     await tick(60);

@@ -9,12 +9,17 @@ const modelPath = modelArg ? modelArg.split("=").slice(1).join("=") : "";
 
 // SSE 流封装：订阅 chunk 事件 + 120s 安全超时（防止 invoke 永不 settle 时监听器泄漏）
 // onEvent 可选：透传非 delta 的自定义事件（如缓存命中 cache）
+// 并发隔离：每次调用分配自增 token，channel 动态化为 `channel:token`（主进程按 token 定向转发）——
+// 曾共享 channel 广播：快速切换讲解时两个流的 chunk 互相串线，A 流内容渲染进 B 流弹窗
+let streamSeq = 0;
 function streamPromise({ channel, invokeName, args, onChunk, jsonMode = false, extraDone = null, onEvent = null }) {
   return new Promise((resolve, reject) => {
+    const token = ++streamSeq;
+    const chan = `${channel}:${token}`;
     let settled = false;
     let timer = null;
     const cleanup = () => {
-      ipcRenderer.removeListener(channel, listener);
+      ipcRenderer.removeListener(chan, listener);
       if (timer) clearTimeout(timer);
     };
     const finish = (fn, val) => { if (settled) return; settled = true; cleanup(); fn(val); };
@@ -35,8 +40,8 @@ function streamPromise({ channel, invokeName, args, onChunk, jsonMode = false, e
       }
     };
     timer = setTimeout(() => finish(reject, new Error("流式响应超时（120 秒无最终事件）")), 120000);
-    ipcRenderer.on(channel, listener);
-    ipcRenderer.invoke(invokeName, args)
+    ipcRenderer.on(chan, listener);
+    ipcRenderer.invoke(invokeName, Object.assign({}, args, { __streamToken: token }))
       .then((r) => { if (!r?.ok) finish(reject, new Error(r?.error || "流式启动失败")); })
       .catch((err) => finish(reject, err));
   });
