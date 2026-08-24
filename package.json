@@ -103,7 +103,7 @@
     "node-notifier": "^10.0.1",
     "pdfjs-dist": "^6.2.108",
     "pixi-live2d-display": "^0.4.0",
-    "pixi.js": "^6.5.10",
+    "pixi.js": "^8.20.0",
     "playwright": "^1.62.1",
     "pngjs": "^7.0.0",
     "rss-parser": "^3.13.0",
