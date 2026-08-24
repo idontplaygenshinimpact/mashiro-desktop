@@ -421,8 +421,18 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
   scrollbar-width: thin; scrollbar-color: rgba(109,79,216,0.35) transparent;
 }
 .sd-modal-head .sd-font-ctrl {
-  display: flex; gap: 4px; margin-left: auto; margin-right: 10px;
+  display: flex; gap: 4px; margin-left: 8px; margin-right: 10px;
 }
+/* 重新生成按钮（独立样式：不用 sd-font-btn 的 24px 固定宽，避免文字溢出挤压） */
+.sd-modal-head .sd-regenerate-btn {
+  margin-left: auto; /* 推到右侧（字号控件前） */
+  padding: 3px 10px; font-size: 11px; line-height: 1.4;
+  color: #8a87a8; background: transparent;
+  border: 1px solid rgba(138,90,220,.25); border-radius: 6px;
+  cursor: pointer; white-space: nowrap;
+}
+.sd-modal-head .sd-regenerate-btn:hover { background: rgba(138,90,220,.08); color: #5d48b8; }
+.sd-modal-head .sd-regenerate-btn:disabled { opacity: .5; cursor: default; }
 .sd-modal-head .sd-font-btn {
   border: 1px solid rgba(109,79,216,0.25); background: rgba(255,255,255,0.7);
   color: #5d48b8; border-radius: 5px; cursor: pointer;
