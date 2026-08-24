@@ -36,7 +36,7 @@ function streamPromise({ channel, invokeName, args, onChunk, jsonMode = false, e
       else if (onEvent) onEvent(j); // 自定义事件（cache 命中提示等）
       else if (jsonMode && j.ok) { // JSON 模式（有文件）：直接完成
         onChunk(j.content);
-        finish(resolve, { done: true, fromFile: true, topic: j.topic, content: j.content });
+        finish(resolve, { done: true, fromFile: true, topic: j.topic, content: j.content, similarFrom: j.similarFrom, earlierArchive: j.earlierArchive });
       }
     };
     timer = setTimeout(() => finish(reject, new Error("流式响应超时（120 秒无最终事件）")), 120000);

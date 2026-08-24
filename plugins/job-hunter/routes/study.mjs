@@ -1,14 +1,58 @@
 // 学习清单域路由（纵向拆分：/api/study-* 从 widget.mjs 迁出）
 // 依赖注入：corsOrigin（SSE 跨域）、laneSubmit（串行锁）
-import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync, rmSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
 import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
 import { findStudyFile, studyNotesDir, sanitizeFilename } from "#lib/study-files.mjs";
 import { queryFollowupCache } from "#lib/followup-cache.mjs";
+import { isSimilarWeakTopic } from "#lib/memory.mjs";
 import { readBody } from "#lib/widget-core.mjs";
 import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
+
+// 同知识点讲解复用：清单里语义相似的另一条目已有讲解存档 → 直接复用（内容一致 + 省 LLM）
+// 背景：同一知识点可能因来源不同（面经产出/面试实录/复习卡恢复）存在多条近似条目
+//       （如「版本号比较」「比较版本号」「版本号数组排序」），各自生成讲解质量参差。
+// 选择策略：取相似存档中【创建最早】的一份（birthtime）——用户反馈最初生成的
+//       （如简单 split 方案）通常最扎实，后续生成的容易跑偏/冗余。追加追问只改 mtime 不改 birthtime。
+function findSimilarArchive(topic, { excludeId, items } = {}) {
+  const list = items || (studyApi.getPlan().items || []);
+  let best = null;
+  for (const other of list) {
+    if (!other || other.id === excludeId) continue;
+    if (String(other.topic || "").startsWith("项目·")) continue; // 项目条目不参与知识点相似
+    if (!isSimilarWeakTopic(String(topic), String(other.topic))) continue;
+    const f = findStudyFile(other);
+    if (!f) continue;
+    try {
+      const content = readFileSync(f, "utf8");
+      if (!content || !content.trim()) continue;
+      const birth = statSync(f).birthtimeMs || 0;
+      if (!best || birth < best.birth) best = { topic: other.topic, id: other.id, filePath: f, content, birth };
+    } catch { /* ignore */ }
+  }
+  return best ? { topic: best.topic, id: best.id, filePath: best.filePath, content: best.content } : null;
+}
+
+/** 找相似条目中创建更早的存档（供"有自身存档但相似更早"时提示），返回 null 表示没有更早的 */
+function findEarlierArchive(topic, ownBirth, { excludeId, items } = {}) {
+  const list = items || (studyApi.getPlan().items || []);
+  let best = null;
+  for (const other of list) {
+    if (!other || other.id === excludeId) continue;
+    if (String(other.topic || "").startsWith("项目·")) continue;
+    if (!isSimilarWeakTopic(String(topic), String(other.topic))) continue;
+    const f = findStudyFile(other);
+    if (!f) continue;
+    try {
+      const birth = statSync(f).birthtimeMs || 0;
+      if (ownBirth > 0 && birth >= ownBirth) continue; // 只找更早的
+      if (!best || birth < best.birth) best = { topic: other.topic, id: other.id, birth };
+    } catch { /* ignore */ }
+  }
+  return best ? { topic: best.topic, id: best.id, birth: best.birth } : null;
+}
 
 // 项目条目特化：topic 剥离"项目·"前缀；讲解引导改为"项目剖析"（面试拷打准备），
 // 而非把项目当知识点讲（此前"请完整讲解：项目·网易云音乐" → LLM 凭空编，逻辑奇怪）
@@ -85,14 +129,30 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
       // 有文件：一次性返回（快，无需流式）——不截断，讲解可无限追问累积
       try {
         const content = readFileSync(filePath, "utf8");
+        // 同知识点有更早生成的存档（如简单 split 方案的初始讲解）→ 附带提示，前端展示"查看最早版"
+        let earlierArchive = null;
+        try {
+          const ownBirth = statSync(filePath).birthtimeMs || 0;
+          earlierArchive = findEarlierArchive(item.topic, ownBirth, { excludeId: item.id });
+        } catch { /* ignore */ }
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: true, content, filePath }));
+        res.end(JSON.stringify({ ok: true, topic: item.topic, fromFile: true, content, filePath, earlierArchive }));
         return;
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "读取讲解失败: " + e.message }));
         return;
       }
+    }
+    // 无自身存档 → 复用语义相似条目的已有讲解（同知识点不重复生成，内容一致）
+    const similar = findSimilarArchive(item.topic, { excludeId: item.id });
+    if (similar) {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({
+        ok: true, topic: item.topic, fromFile: true, content: similar.content,
+        filePath: similar.filePath, similarFrom: { topic: similar.topic },
+      }));
+      return;
     }
     // 无文件：SSE 流式生成
     res.writeHead(200, sseHeaders(req));

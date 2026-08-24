@@ -1566,12 +1566,53 @@ async function showStudyDetail(id) {
       return;
     }
     // 流式获取（SSE）：逐段渲染，无文件条目也能边生成边看
-    const topic = await streamStudyDetail(id, (content) => {
+    const result = await streamStudyDetail(id, (content) => {
       if (gen !== sdGen) return; // 已切到别的条目/已关闭：丢弃过期流内容
       sdBody().innerHTML = renderMd(content) + '<div class="sd-streaming">⏳ 生成中...</div>';
       sdBody().scrollTop = sdBody().scrollHeight; // 生成中跟随最新内容
     });
     if (gen !== sdGen) return; // 生成期间被切换：结果属于旧条目，不渲染
+    const topic = typeof result === "string" ? result : (result?.topic || "讲解");
+    // 同知识点复用提示（如「版本号数组排序」复用了「版本号比较」的讲解）
+    if (result?.similarFrom?.topic && result.similarFrom.topic !== topic) {
+      const tip = document.createElement("div");
+      tip.style.cssText = "color:#3a8d5a;font-size:12px;padding:6px 8px;background:rgba(58,141,90,.08);border-radius:6px;margin:0 0 6px;";
+      tip.textContent = `📎 本条目与「${result.similarFrom.topic}」为同一知识点，已复用其讲解（内容一致，避免重复生成）`;
+      sdBody().insertBefore(tip, sdBody().firstChild);
+    }
+    // 同知识点更早存档提示：当前展示的讲解不是最早那版 → 给"查看最早版"入口
+    // （用户反馈：最初生成的讲解（如简单 split 方案）通常质量最好）
+    if (result?.earlierArchive?.topic) {
+      const box = document.createElement("div");
+      box.style.cssText = "color:#8a87a8;font-size:12px;padding:6px 8px;background:rgba(138,90,220,.06);border:1px solid rgba(138,90,220,.15);border-radius:6px;margin:0 0 6px;display:flex;gap:8px;align-items:center;";
+      box.innerHTML = `<span>📎 同知识点「${esc(result.earlierArchive.topic)}」有更早生成的讲解</span>`;
+      const btn = document.createElement("button");
+      btn.className = "job-btn";
+      btn.style.cssText = "padding:2px 10px;font-size:11px;";
+      btn.textContent = "查看最早版";
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "⏳ 加载…";
+        try {
+          const r = await fetch(`http://127.0.0.1:8899/api/study-detail-stream?id=${encodeURIComponent(result.earlierArchive.id)}`);
+          const j = await r.json();
+          if (!j.ok || !j.content) throw new Error(j.error || "加载失败");
+          // 用最早版替换当前弹窗内容（缓存按当前条目 id 记录，重新打开仍展示最早版）
+          studyDetailCache[id] = { content: j.content, topic: j.topic };
+          sdBody().innerHTML = renderMd(j.content);
+          $("sd-modal-title").textContent = "📖 " + (j.topic || topic) + "（最早版）";
+          buildToc();
+          sdBody().scrollTop = 0;
+        } catch (e) {
+          window.kanban.notify("📖 讲解", "加载最早版失败: " + String(e.message || e).slice(0, 60));
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "查看最早版";
+        }
+      });
+      box.appendChild(btn);
+      sdBody().insertBefore(box, sdBody().firstChild);
+    }
     $("sd-modal-title").textContent = "📖 " + topic;
     buildToc(); // 锚点目录（流式生成完成）
     // 生成完成：回到顶部（从头阅读，不留在末尾）
@@ -1736,6 +1777,7 @@ async function consolidateStudyDetail() {
 $("sd-consolidate-btn").addEventListener("click", consolidateStudyDetail);
 
 // 流式获取讲解（走 IPC 通道，避开渲染层 fetch 的 webSecurity 限制）
+// 返回 { topic, similarFrom }（similarFrom：同知识点复用来源，无则 null）
 async function streamStudyDetail(id, onUpdate) {
   let content = "";
   let topic = "讲解";
@@ -1751,7 +1793,7 @@ async function streamStudyDetail(id, onUpdate) {
   }
   if (!content) throw new Error("没有获取到内容");
   studyDetailCache[id] = { content, topic };
-  return topic;
+  return { topic, similarFrom: result?.similarFrom || null };
 }
 
 $("sd-modal-close").addEventListener("click", () => { sdGen++; sdOverlay().classList.add("hidden"); }); // 关闭 → 过期流丢弃
