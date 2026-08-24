@@ -48,9 +48,37 @@ export function registerPracticeRoutes(router) {
           testCode: detail.testCode,
           skeleton: detail.skeleton,
         });
+        // 学习事件埋点（长期学习计划引擎的唯一事实源）+ 即时反馈 tip
+        let tip = null;
+        try {
+          const { recordLearningEvent, getLearningPlanStatus } = await import("#lib/learning-plan.mjs");
+          const ev = recordLearningEvent({
+            topic: detail.title,
+            kind: "challenge_done",
+            result: r.success ? "pass" : "fail",
+            quality: r.success ? 1 : 0,
+            durationMs: r.durationMs,
+          });
+          // 即时节奏反馈：同类题（同 category）历史平均耗时对比
+          const db = (await import("#lib/db.mjs")).db;
+          const row = db.prepare(
+            "SELECT AVG(duration_ms) avg_ms FROM learning_events WHERE kind='challenge_done' AND topic IN (SELECT title FROM challenges WHERE category=?) AND duration_ms IS NOT NULL"
+          ).get(detail.category);
+          const avg = Number(row?.avg_ms) || 0;
+          const mine = Number(r.durationMs) || 0;
+          if (ev.planId && avg > 0 && mine > 0) {
+            const ratio = Math.round(mine / avg * 100);
+            if (ratio >= 150) tip = `⏱ 本题 ${Math.round(mine / 1000)}s，同类平均 ${Math.round(avg / 1000)}s——慢了 ${ratio - 100}%，先想思路再动手（慢在试错）`;
+            else if (ratio <= 60) tip = `⏱ 本题 ${Math.round(mine / 1000)}s，远快于同类平均（${ratio}%）——思路清晰，可挑战更高难度`;
+          }
+          // 错过的题：重做通过提示
+          if (r.success && detail.wrongCount > 0) {
+            tip = (tip ? tip + "；" : "") + `✅ 这题你之前错过 ${detail.wrongCount} 次，这次一次过——薄弱点已转正`;
+          }
+        } catch { /* 埋点/tip 失败不影响判题 */ }
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        // 契约：tests/logs/durationMs 必须回传（前端逐条展示断言结果与 console 输出定位失败）
-        res.end(JSON.stringify({ ok: true, success: r.success, error: r.error || null, tests: r.tests || [], logs: r.logs || [], durationMs: r.durationMs || 0 }));
+        // 契约：tests/logs/durationMs 必须回传（前端逐条展示断言结果与 console 输出定位失败）；tip 为节奏反馈
+        res.end(JSON.stringify({ ok: true, success: r.success, error: r.error || null, tests: r.tests || [], logs: r.logs || [], durationMs: r.durationMs || 0, tip }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));

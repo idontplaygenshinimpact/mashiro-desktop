@@ -737,6 +737,8 @@ function bindChPractice() {
               for (const t of (j.tests || [])) lines.push(`${t.passed ? "✅" : "❌"} ${t.label}`);
               if (j.error) lines.push("⚠️ " + j.error);
               if ((j.logs || []).length) { lines.push("— console —"); for (const l of j.logs) lines.push(l); }
+              // 即时反馈 tip（长期学习计划：节奏对比/错题转正提示）
+              if (j.tip) lines.push("💡 " + j.tip);
               resultEl.textContent = lines.join("\n");
               resultEl.style.display = "block";
               if (pass) {
