@@ -474,6 +474,10 @@ async function loadOj() {
 // ============ 手写/算法题库（ai-career 本地判题闭环） ============
 let challengeCat = "";
 let challengeDiff = 0;
+let chSearch = "";   // 搜索关键词（前端过滤：标题/描述/ID）
+let chDone = 0;      // 0 全部 / 1 未做 / 2 已做（前端过滤）
+let chVisible = 60;  // 懒加载：每批条数（448 道全渲染太卡且难找）
+let chAll = [];      // 当前完整排序列表（过滤前）
 
 const DIFF_LABEL = { 1: ["简单", "#3a8d5a"], 2: ["中等", "#b07020"], 3: ["困难", "#c93a3f"] };
 const freqStars = (n) => "🔥".repeat(Math.max(0, Math.min(3, Number(n) || 0)));
@@ -486,12 +490,11 @@ async function loadChallenges() {
     const res = await fetch("http://127.0.0.1:8899/api/challenges?" + qs.toString());
     const j = await res.json();
     const statusEl = $("challenge-status");
-    const cats = $("challenge-cats");
-    const list = $("challenge-list");
     if (!j.list?.length) {
       statusEl.textContent = "题库为空——运行 scripts/import-ai-career.mjs（手写题）或 scripts/import-codetop-top400.mjs（CodeTop 高频 400）导入";
-      cats.innerHTML = "";
-      list.innerHTML = "";
+      $("challenge-cats").innerHTML = "";
+      $("challenge-list").innerHTML = "";
+      $("challenge-count").textContent = "";
       return;
     }
     const done = j.done || 0;
@@ -501,45 +504,87 @@ async function loadChallenges() {
         <span class="track"><i style="width:${pct}%"></i></span>
         <b>${done}/${j.total}</b>
       </span>`;
-    // 筛选 chips：分类 + 难度
-    cats.innerHTML = `<button class="oj-cat-chip" data-cat="" data-diff="0" style="${!challengeCat && !challengeDiff ? activeChip : ""}">全部</button>` +
-      `<button class="oj-cat-chip" data-cat="handwrite" data-diff="0" style="${challengeCat === "handwrite" && !challengeDiff ? activeChip : ""}">✍️ 手写</button>` +
-      `<button class="oj-cat-chip" data-cat="algorithm" data-diff="0" style="${challengeCat === "algorithm" && !challengeDiff ? activeChip : ""}">🧮 算法</button>` +
-      `<button class="oj-cat-chip" data-cat="${esc(challengeCat)}" data-diff="1" style="${challengeDiff === 1 ? activeChip : ""}">简单</button>` +
-      `<button class="oj-cat-chip" data-cat="${esc(challengeCat)}" data-diff="2" style="${challengeDiff === 2 ? activeChip : ""}">中等</button>` +
-      `<button class="oj-cat-chip" data-cat="${esc(challengeCat)}" data-diff="3" style="${challengeDiff === 3 ? activeChip : ""}">困难</button>`;
-    document.querySelectorAll("#challenge-cats .oj-cat-chip").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        challengeCat = btn.dataset.cat;
-        challengeDiff = Number(btn.dataset.diff || 0);
-        loadChallenges();
-      });
-    });
     // 题目列表（未做的在前，按频率/难度排序）
-    const sorted = [...j.list].sort((a, b) =>
+    chAll = [...j.list].sort((a, b) =>
       (a.done - b.done) || (b.frequency - a.frequency) || (a.difficulty - b.difficulty));
-    list.innerHTML = sorted.map((p) => {
-      const [dl, dc] = DIFF_LABEL[p.difficulty] || ["难度" + p.difficulty, "#8a87a8"];
-      const wrong = p.wrongCount > 0 ? `<span style="color:#c93a3f;">答错 ${p.wrongCount} 次</span>` : "";
-      return `
-      <div class="job-item" id="ch-${esc(p.id)}">
-        <div class="job-head">
-          <span class="job-badge" style="background:${p.category === "handwrite" ? "rgba(58,141,90,.12)" : "rgba(109,79,216,.12)"};color:${p.category === "handwrite" ? "#2f7d4e" : "#5d48b8"};">${p.category === "handwrite" ? "✍️手写" : "🧮算法"}</span>
-          <span style="color:${dc};font-size:11px;">${dl}</span>
-          <span style="font-size:11px;" title="面试出现频率">${freqStars(p.frequency)}</span>
-          <span class="job-title">${esc(p.title)}</span>
-          ${p.done ? '<span style="color:#3a8d5a;font-size:11px;">✅ 已做</span>' : ""}
-          ${wrong}
-        </div>
-        <div class="job-actions">
-          <button class="job-btn ch-practice" data-id="${esc(p.id)}" title="内联编辑器写代码，本地沙箱跑测试">✍️ 做题</button>
-          ${p.done ? "" : `<button class="job-btn ch-done" data-id="${esc(p.id)}" title="已掌握（本地直接标记，计入学习进度）">✅ 已会</button>`}
-          ${p.done ? "" : `<button class="job-btn ch-wrong" data-id="${esc(p.id)}" title="做错了（记入薄弱点，复习阶段优先补）">❌ 不会</button>`}
-        </div>
-      </div>`;
-    }).join("");
-    // ✍️ 做题：内联展开编辑器（骨架预填，本地判题）
-    document.querySelectorAll(".ch-practice").forEach((btn) => {
+    renderChallenges();
+  } catch (e) {
+    $("challenge-status").textContent = "⚠️ " + e.message;
+  }
+}
+
+// 前端过滤渲染：搜索关键词 + 完成状态 + 懒加载（chAll 已按未做优先/频率排序）
+function renderChallenges() {
+  const cats = $("challenge-cats");
+  const list = $("challenge-list");
+  const q = chSearch.trim().toLowerCase();
+  const filtered = chAll.filter((p) =>
+    (!chDone || (chDone === 1 ? !p.done : p.done)) &&
+    (!q || `${p.title}\n${p.description || ""}\n${p.id}`.toLowerCase().includes(q))
+  );
+  $("challenge-count").textContent = (q || chDone) ? `命中 ${filtered.length} / ${chAll.length}` : "";
+  // 筛选 chips：完成状态 + 分类 + 难度（搜索/状态前端过滤，分类/难度走后端）
+  cats.innerHTML =
+    `<button class="oj-cat-chip" data-done="0" style="${!chDone ? activeChip : ""}">📋 全部</button>` +
+    `<button class="oj-cat-chip" data-done="1" style="${chDone === 1 ? activeChip : ""}">🆕 未做</button>` +
+    `<button class="oj-cat-chip" data-done="2" style="${chDone === 2 ? activeChip : ""}">✅ 已做</button>` +
+    `<span style="width:1px;height:14px;background:rgba(109,79,216,.18);margin:0 2px;align-self:center;"></span>` +
+    `<button class="oj-cat-chip" data-cat="" data-diff="0" style="${!challengeCat && !challengeDiff ? activeChip : ""}">全部</button>` +
+    `<button class="oj-cat-chip" data-cat="handwrite" data-diff="0" style="${challengeCat === "handwrite" && !challengeDiff ? activeChip : ""}">✍️ 手写</button>` +
+    `<button class="oj-cat-chip" data-cat="algorithm" data-diff="0" style="${challengeCat === "algorithm" && !challengeDiff ? activeChip : ""}">🧮 算法</button>` +
+    `<button class="oj-cat-chip" data-cat="${esc(challengeCat)}" data-diff="1" style="${challengeDiff === 1 ? activeChip : ""}">简单</button>` +
+    `<button class="oj-cat-chip" data-cat="${esc(challengeCat)}" data-diff="2" style="${challengeDiff === 2 ? activeChip : ""}">中等</button>` +
+    `<button class="oj-cat-chip" data-cat="${esc(challengeCat)}" data-diff="3" style="${challengeDiff === 3 ? activeChip : ""}">困难</button>`;
+  document.querySelectorAll("#challenge-cats .oj-cat-chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.done !== undefined) { chDone = Number(btn.dataset.done); chVisible = 60; renderChallenges(); return; }
+      challengeCat = btn.dataset.cat;
+      challengeDiff = Number(btn.dataset.diff || 0);
+      chVisible = 60;
+      loadChallenges();
+    });
+  });
+  // 懒加载：每批 60 条 + 「加载更多」（448 道全量渲染滚动太长）
+  const show = filtered.slice(0, chVisible);
+  list.innerHTML = show.map((p) => {
+    const [dl, dc] = DIFF_LABEL[p.difficulty] || ["难度" + p.difficulty, "#8a87a8"];
+    const wrong = p.wrongCount > 0 ? `<span style="color:#c93a3f;">答错 ${p.wrongCount} 次</span>` : "";
+    const desc = String(p.description || "").trim();
+    return `
+    <div class="job-item" id="ch-${esc(p.id)}">
+      <div class="job-head">
+        <span class="job-badge" style="background:${p.category === "handwrite" ? "rgba(58,141,90,.12)" : "rgba(109,79,216,.12)"};color:${p.category === "handwrite" ? "#2f7d4e" : "#5d48b8"};">${p.category === "handwrite" ? "✍️手写" : "🧮算法"}</span>
+        <span style="color:${dc};font-size:11px;">${dl}</span>
+        <span style="font-size:11px;" title="面试出现频率">${freqStars(p.frequency)}</span>
+        <span class="job-title">${esc(p.title)}</span>
+        ${p.done ? '<span style="color:#3a8d5a;font-size:11px;">✅ 已做</span>' : ""}
+        ${wrong}
+      </div>
+      ${desc ? `<div class="job-summary" style="margin-top:3px;">${esc(desc.slice(0, 90))}${desc.length > 90 ? "…" : ""}</div>` : ""}
+      <div class="job-actions">
+        <button class="job-btn ch-practice" data-id="${esc(p.id)}" title="内联编辑器写代码，本地沙箱跑测试">✍️ 做题</button>
+        ${p.done ? "" : `<button class="job-btn ch-done" data-id="${esc(p.id)}" title="已掌握（本地直接标记，计入学习进度）">✅ 已会</button>`}
+        ${p.done ? "" : `<button class="job-btn ch-wrong" data-id="${esc(p.id)}" title="做错了（记入薄弱点，复习阶段优先补）">❌ 不会</button>`}
+      </div>
+    </div>`;
+  }).join("") + (filtered.length > show.length
+    ? `<div style="text-align:center;margin:10px 0;"><button class="job-btn ch-more" style="padding:5px 18px;">加载更多（还有 ${filtered.length - show.length} 道）</button></div>`
+    : "");
+  document.querySelector(".ch-more")?.addEventListener("click", () => { chVisible += 60; renderChallenges(); });
+  bindChPractice();
+  bindChallengeMarks();
+}
+
+// 搜索框：输入即过滤（前端，标题/描述/ID 关键词）
+$("challenge-search")?.addEventListener("input", (e) => {
+  chSearch = e.target.value;
+  chVisible = 60;
+  renderChallenges();
+});
+
+// ✍️ 做题：内联展开编辑器（骨架预填，本地判题）
+function bindChPractice() {
+  document.querySelectorAll(".ch-practice").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const item = btn.closest(".job-item");
         const box = item.querySelector(".ch-editor");
@@ -562,7 +607,11 @@ async function loadChallenges() {
               <button class="job-btn ch-editor-close" style="padding:3px 8px;">✖</button>
             </div>
             <div style="color:#444;white-space:pre-wrap;margin-bottom:8px;max-height:140px;overflow:auto;">${esc(c.description)}</div>
-            <textarea spellcheck="false" style="width:100%;min-height:160px;font-family:Consolas,Menlo,monospace;font-size:12px;padding:8px;border:1px solid rgba(109,79,216,.3);border-radius:6px;background:#faf9ff;color:#333;resize:vertical;box-sizing:border-box;">${esc(c.skeleton)}</textarea>
+            <div class="ch-code" style="position:relative;border:1px solid rgba(109,79,216,.3);border-radius:6px;background:#faf9ff;">
+              <div class="ch-lines" style="position:absolute;left:0;top:0;bottom:0;width:34px;overflow:hidden;background:#f0edff;color:#8a87a8;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;padding:7px 0;text-align:right;user-select:none;pointer-events:none;border-right:1px solid rgba(109,79,216,.15);z-index:3;"></div>
+              <textarea class="ch-ta" spellcheck="false" style="position:relative;z-index:2;display:block;width:100%;min-height:160px;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;padding:7px 8px 7px 42px;border:none;background:transparent;color:transparent;caret-color:#5d48b8;resize:vertical;box-sizing:border-box;white-space:pre;overflow:auto;outline:none;tab-size:2;">${esc(c.skeleton)}</textarea>
+              <pre class="ch-hl" aria-hidden="true" style="position:absolute;inset:0;margin:0;padding:7px 8px 7px 42px;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;white-space:pre;overflow:hidden;pointer-events:none;color:#333;z-index:1;"></pre>
+            </div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
               <button class="job-btn ch-editor-run" style="background:linear-gradient(135deg,#8a5adc,#6d4fd8);color:#fff;">▶ 运行判题</button>
               <button class="job-btn ch-editor-mark" data-id="${esc(c.id)}" style="display:none;background:linear-gradient(135deg,#3a8d5a,#2f7d4e);color:#fff;">✅ 全部通过，标记完成</button>
@@ -571,7 +620,45 @@ async function loadChallenges() {
             <pre class="ch-editor-result" style="display:none;margin-top:8px;padding:8px;background:#1e1e2e;color:#cdd6f4;border-radius:6px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;"></pre>`;
           item.appendChild(div);
           btn.textContent = "✍️ 做题";
-          const ta = div.querySelector("textarea");
+          const ta = div.querySelector(".ch-ta");
+          const hlEl = div.querySelector(".ch-hl");
+          const lineEl = div.querySelector(".ch-lines");
+          const escHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          // 轻量 JS 语法高亮：单次交替正则（字符串/注释→关键字→数字→函数名），
+          // replace 不回扫自己的输出，不会出现"高亮 HTML 被二次着色"（如 font-weight:600 的 600）
+          const HL_RE = /("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/)|\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|super|this|async|await|try|catch|finally|throw|typeof|instanceof|in|of|delete|void|yield|static|get|set|import|export|default|from|true|false|null|undefined|NaN|Infinity)\b|\b(\d+(?:\.\d+)?)\b|\b([A-Za-z_$][\w$]*)(?=\s*\()/g;
+          const hlJS = (code) => escHtml(String(code)).replace(HL_RE, (m, str, kw, num, fn) => {
+            if (str !== undefined) {
+              const cmt = /^\/\//.test(str) || /^\/\*/.test(str);
+              return `<span style="color:${cmt ? "#8a87a8;font-style:italic" : "#b07020"};">${str}</span>`;
+            }
+            if (kw !== undefined) return `<span style="color:#8a5adc;font-weight:600;">${kw}</span>`;
+            if (num !== undefined) return `<span style="color:#b07020;">${num}</span>`;
+            return `<span style="color:#2f7d4e;">${fn}</span>`;
+          });
+          const syncEditor = () => {
+            lineEl.textContent = Array.from({ length: ta.value.split("\n").length }, (_, i) => i + 1).join("\n");
+            hlEl.innerHTML = hlJS(ta.value) + "\n";
+            hlEl.scrollTop = ta.scrollTop;
+            hlEl.scrollLeft = ta.scrollLeft;
+            lineEl.scrollTop = ta.scrollTop;
+          };
+          ta.addEventListener("input", syncEditor);
+          ta.addEventListener("scroll", () => {
+            hlEl.scrollTop = ta.scrollTop;
+            hlEl.scrollLeft = ta.scrollLeft;
+            lineEl.scrollTop = ta.scrollTop;
+          });
+          // Tab → 两个空格（默认会跳焦点）
+          ta.addEventListener("keydown", (e) => {
+            if (e.key !== "Tab") return;
+            e.preventDefault();
+            const s = ta.selectionStart, en = ta.selectionEnd;
+            ta.value = ta.value.slice(0, s) + "  " + ta.value.slice(en);
+            ta.selectionStart = ta.selectionEnd = s + 2;
+            syncEditor();
+          });
+          syncEditor();
           const stateEl = div.querySelector(".ch-editor-state");
           const resultEl = div.querySelector(".ch-editor-result");
           const runBtn = div.querySelector(".ch-editor-run");
@@ -630,31 +717,31 @@ async function loadChallenges() {
         finally { btn.disabled = false; btn.textContent = "✍️ 做题"; }
       });
     });
-    // ✅ 已会 / ❌ 不会：闭环回流
-    const bindMark = (sel, api, okText) => {
-      document.querySelectorAll(sel).forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          btn.disabled = true;
-          try {
-            const r = await fetch("http://127.0.0.1:8899/api/challenges/" + api, {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: btn.dataset.id }),
-            });
-            const j = await r.json();
-            window.kanban.notify("✍️ 手写题", j.ok ? `「${j.title}」${okText}` : String(j.error || "操作失败").slice(0, 60));
-            loadChallenges();
-          } catch (e) {
-            window.kanban.notify("✍️ 手写题", String(e.message || e).slice(0, 60));
-            btn.disabled = false;
-          }
-        });
+}
+
+// ✅ 已会 / ❌ 不会：闭环回流
+function bindChallengeMarks() {
+  const bindMark = (sel, api, okText) => {
+    document.querySelectorAll(sel).forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          const r = await fetch("http://127.0.0.1:8899/api/challenges/" + api, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: btn.dataset.id }),
+          });
+          const j = await r.json();
+          window.kanban.notify("✍️ 手写题", j.ok ? `「${j.title}」${okText}` : String(j.error || "操作失败").slice(0, 60));
+          loadChallenges();
+        } catch (e) {
+          window.kanban.notify("✍️ 手写题", String(e.message || e).slice(0, 60));
+          btn.disabled = false;
+        }
       });
-    };
-    bindMark(".ch-done", "mark-done", "已记录，计入学习进度");
-    bindMark(".ch-wrong", "mark-wrong", "已记入薄弱点，复习阶段优先补");
-  } catch (e) {
-    $("challenge-status").textContent = "⚠️ " + e.message;
-  }
+    });
+  };
+  bindMark(".ch-done", "mark-done", "已记录，计入学习进度");
+  bindMark(".ch-wrong", "mark-wrong", "已记入薄弱点，复习阶段优先补");
 }
 
 $("challenge-refresh-btn")?.addEventListener("click", () => {
