@@ -1,6 +1,6 @@
 // 学习清单域路由（纵向拆分：/api/study-* 从 widget.mjs 迁出）
 // 依赖注入：corsOrigin（SSE 跨域）、laneSubmit（串行锁）
-import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
@@ -51,6 +51,27 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
     }
+  });
+
+  router.route("/api/study-note/reset", "POST", (req, res) => {
+    // 讲解重置：删除该条目的本地讲解存档（study_notes/{topic}.md）
+    // 用户诉求：生成错误/内容不满意时无法处理 → 提供"重新生成"入口（删除后前端重新流式生成）
+    readBody(req, res, (body) => {
+      try {
+        const { id } = JSON.parse(body || "{}");
+        if (!id) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "id required" })); return; }
+        const item = (studyApi.getPlan().items || []).find((i) => i.id === String(id));
+        if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
+        const f = path.join(studyNotesDir(), `${sanitizeFilename(item.topic)}.md`);
+        let deleted = false;
+        if (existsSync(f)) { rmSync(f, { force: true }); deleted = true; }
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, deleted, topic: item.topic }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
   });
 
   router.route("/api/study-detail-stream", (req, res) => {

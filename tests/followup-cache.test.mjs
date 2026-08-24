@@ -38,11 +38,17 @@ test("editSimilarity：长度悬殊不产生假高分（修复 1-13/65=0.8 恒�
   assert.ok(editSimilarity(longQ, "这怎么命中的") < 0.72, "短问题不得因长度差假命中");
   assert.ok(editSimilarity(longQ, "今天天气怎么样") < 0.72, "天气也不得命中");
   assert.ok(editSimilarity(longQ, "what is the weather") < 0.72, "英文也不得命中");
+  // 中等长度（40 字 vs 65 字，长度比 61% 但差 25 > cap 12）：上一版 0.4 长度比阈值漏掉的场景
+  const midQ = "迭代法中间反转链表的操作和普通的反转链表有什么异同，这个循环的终止条件是怎么得到的";
+  assert.ok(editSimilarity(longQ, midQ) < 0.72, "40字 vs 65字（差25>cap12）不得假命中");
   // 长度相近仍正常（回归护栏）
   assert.ok(editSimilarity("为什么需要缓存", "为什么要用缓存") > 0.7);
-  // findSimilarFollowup 端到端：无关短问题不命中长历史问题
+  // findSimilarFollowup 端到端：无关问题不命中长历史问题
   const hit = findSimilarFollowup("今天天气怎么样", [{ question: longQ, answer: "A" }]);
   assert.equal(hit, null, "无关短问题不得命中长历史问题");
+  // 完全相同的问题仍应 100% 命中（缓存正主场景）
+  const same = findSimilarFollowup(longQ, [{ question: longQ, answer: "A" }]);
+  assert.ok(same && same.similarity === 1, "完全相同的重复问题应 100% 命中（这才是缓存该做的）");
 });
 
 test("normalizeQuestion：去空白标点语气", () => {

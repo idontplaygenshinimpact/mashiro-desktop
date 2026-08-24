@@ -1654,6 +1654,35 @@ async function askStudyDetail() {
 $("sd-ask-btn").addEventListener("click", askStudyDetail);
 $("sd-ask-input").addEventListener("keydown", (e) => { if (e.key === "Enter") askStudyDetail(); });
 
+// 重新生成：删除本地讲解存档 → 清缓存 → 重新流式生成
+// 用户诉求：生成内容错误/不满意时要有处理手段（此前只能干看着错误内容）
+$("sd-regenerate-btn").addEventListener("click", async () => {
+  const id = sdCurrentId;
+  if (!id) return;
+  const topic = studyDetailCache[id]?.topic || "该条目";
+  if (!confirm(`删除「${topic}」的本地讲解存档并重新生成？\n原讲解与全部追问记录删除后不可恢复。`)) return;
+  const btn = $("sd-regenerate-btn");
+  btn.disabled = true;
+  btn.textContent = "⏳ 重置中…";
+  try {
+    const r = await fetch("http://127.0.0.1:8899/api/study-note/reset", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "重置失败");
+    delete studyDetailCache[id];
+    sdGen++; // 中断可能还在跑的旧流（若有）
+    await showStudyDetail(id); // 重新流式生成
+    window.kanban.notify("📖 讲解", j.deleted ? "已删除旧存档，重新生成中…" : "无存档，直接重新生成…");
+  } catch (e) {
+    window.kanban.notify("📖 讲解", "重新生成失败: " + String(e.message || e).slice(0, 60));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔄 重新生成";
+  }
+});
+
 // 整理全文：把原始讲解 + 多轮追问整合成结构统一的完整讲解（流式显示 + 写回文件）
 let sdConsolidating = false;
 async function consolidateStudyDetail() {
