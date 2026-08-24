@@ -1078,7 +1078,11 @@ $("rc-explain")?.addEventListener("click", () => {
   openReviewExplain(btn.dataset.cardId, btn.dataset.topic);
 });
 
+// 复习讲解代际：关闭弹窗/重新打开时递增，过期流回调丢弃（与学习讲解 sdGen 同模式——
+// 曾存在同类竞态：关闭讲解后旧流继续写 rex-body，20-60s 内再开另一张卡讲解会被旧流覆盖）
+let rexGen = 0;
 async function openReviewExplain(cardId, topic) {
+  const gen = ++rexGen;
   const overlay = $("review-explain-overlay");
   const body = $("rex-body");
   const planBtn = $("rex-plan-btn");
@@ -1100,6 +1104,7 @@ async function openReviewExplain(cardId, topic) {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
+      if (gen !== rexGen) { reader.cancel().catch(() => {}); return; } // 已切换/关闭：丢弃过期流并断开
       buf += decoder.decode(value, { stream: true });
       let idx;
       while ((idx = buf.indexOf("\n\n")) >= 0) {
@@ -1110,13 +1115,16 @@ async function openReviewExplain(cardId, topic) {
           try {
             const j = JSON.parse(line.slice(5).trim());
             if (j.type === "delta") {
+              if (gen !== rexGen) return;
               full += j.delta;
               body.textContent = full;
               body.scrollTop = body.scrollHeight;
             } else if (j.type === "done") {
+              if (gen !== rexGen) return;
               status.textContent = "✅ 已生成（讲解已存入复习卡答案，下次复习可对照）";
               planBtn.classList.remove("hidden");
             } else if (j.type === "error") {
+              if (gen !== rexGen) return;
               status.textContent = "⚠️ " + (j.error || "生成失败");
               if (!full) body.textContent = "讲解生成失败：" + (j.error || "未知错误");
             }
@@ -1125,16 +1133,18 @@ async function openReviewExplain(cardId, topic) {
       }
     }
   } catch (e) {
+    if (gen !== rexGen) return;
     status.textContent = "⚠️ 失败";
     body.textContent = "讲解生成失败：" + String(e.message || e).slice(0, 120);
   }
 }
 
 $("rex-close")?.addEventListener("click", () => {
+  rexGen++; // 关闭 → 过期流丢弃
   $("review-explain-overlay")?.classList.add("hidden");
 });
 $("review-explain-overlay")?.addEventListener("click", (e) => {
-  if (e.target === $("review-explain-overlay")) $("review-explain-overlay").classList.add("hidden");
+  if (e.target === $("review-explain-overlay")) { rexGen++; $("review-explain-overlay").classList.add("hidden"); }
 });
 
 // 讲解完 → 一键加入学习清单（复用面试实录接口：加清单 + 建复习卡）
