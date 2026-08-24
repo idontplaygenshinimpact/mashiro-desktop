@@ -85,6 +85,46 @@ test("submitAnswer 评分 + 推进下一问", async () => {
   assert.equal(memory.getInterview().rounds.length, 1);
 });
 
+// ---------- 面试官 agent 化：出题前可检索项目资源（题库/档案/知识库/薄弱点） ----------
+const IV_SCORES = '{"scores":{"tech":70,"expr":70,"depth":70,"edge":70,"reflect":70},"comment":"可以","finish":false,"next_kind":"new","next_question":"讲讲 Promise 的实现","next_basis":"换题","next_dimension":"手写","next_criteria":"c","next_boundary":"b","weak_topic":"","weak_hit":""}';
+
+test("面试官 agent：决策轮调用 search_challenge → 工具结果回填 → 出题轮正常", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  // 第一次 llmChat：TOOLCALL search_challenge；第二次：出题 JSON
+  setLlmResponses('TOOLCALL:{"name":"search_challenge","arguments":"{\\"query\\":\\"Promise\\"}"}', IV_SCORES);
+  const r = await submitAnswer("我的回答");
+  assert.equal(r.ok, true);
+  assert.ok(r.question.includes("Promise"), "基于工具检索结果出题");
+  // 出题轮 messages 含 tool 结果回填（role:"tool"）
+  const { getLastMessages } = await import("./helpers.mjs");
+  const msgs = getLastMessages();
+  assert.ok(msgs.some((m) => m.role === "tool"), "工具结果应回填给出题轮");
+  assert.ok(msgs.some((m) => m.role === "assistant" && m.tool_calls), "决策轮 tool_calls 消息在列");
+});
+
+test("面试官 agent：工具失败（题库无匹配）→ 错误注入 → 出题不中断", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses('TOOLCALL:{"name":"search_challenge","arguments":"{\\"query\\":\\"不存在的题目xyz\\"}"}', IV_SCORES);
+  const r = await submitAnswer("我的回答");
+  assert.equal(r.ok, true, "工具失败不阻塞出题");
+  assert.ok(r.question.length > 0, "仍有下一问");
+  const { getLastMessages } = await import("./helpers.mjs");
+  const msgs = getLastMessages();
+  const toolMsg = msgs.find((m) => m.role === "tool");
+  assert.ok(toolMsg && toolMsg.content.includes("error"), "错误信息注入工具消息");
+});
+
+test("面试官 agent：未知工具名 → 错误回填不崩溃", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses('TOOLCALL:{"name":"hack_tool","arguments":"{}"}', IV_SCORES);
+  const r = await submitAnswer("我的回答");
+  assert.equal(r.ok, true, "未知工具不崩溃");
+  assert.ok(r.question.length > 0);
+});
+
 test("submitAnswer 低分 + weak_topic → 薄弱点回流", async () => {
   setLlmResponses(FIRST_Q);
   await startInterview({ position: "前端" });
