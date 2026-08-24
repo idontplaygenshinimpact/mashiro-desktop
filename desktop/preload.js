@@ -29,7 +29,7 @@ function streamPromise({ channel, invokeName, args, onChunk, jsonMode = false, e
       if (!line) return;
       let j;
       try { j = JSON.parse(line); } catch { return; }
-      if (j.type === "done") finish(resolve, Object.assign({ done: true, saved: j.saved, filePath: j.filePath }, extraDone ? extraDone(j) : {}));
+      if (j.type === "done") finish(resolve, Object.assign({}, j, { done: true }, extraDone ? extraDone(j) : {}));
       else if (j.type === "error") finish(reject, new Error(j.error));
       else if (j.type === "delta") onChunk(j.delta);
       else if (j.type === "start") { /* 忽略 start */ }
@@ -53,6 +53,9 @@ contextBridge.exposeInMainWorld("kanban", {
   getProgress: () => ipcRenderer.invoke("widget:progress"),
   notify: (title, message) => ipcRenderer.invoke("widget:notify", { title, message }),
   chat: (message, history) => ipcRenderer.invoke("widget:chat", { message, history }),
+  chatStream: (message, history, onEvent) => streamPromise({
+    channel: "chat-chunk", invokeName: "widget:chat-stream", args: { message, history }, onChunk: () => {}, onEvent,
+  }),
   chatHistory: () => ipcRenderer.invoke("widget:chat-history"),
   studyPlan: () => ipcRenderer.invoke("widget:study-plan"),
   interviewHistory: () => ipcRenderer.invoke("widget:interview-history"),

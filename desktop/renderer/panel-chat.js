@@ -23,10 +23,54 @@ async function sendChat() {
   addChatMsg("user", msg);
   const thinking = addChatMsg("bot", "🤔 真白思考中...");
   thinking.querySelector(".body").className = "body thinking";
+  // agent 过程可视化：工具调用实时 chips（🔧 正在调 xx → ✅ 完成 / ⚠️ 失败）
+  const toolsBox = document.createElement("div");
+  toolsBox.className = "chat-tools";
+  thinking.querySelector(".msg-main").appendChild(toolsBox);
+  const toolChips = new Map(); // name -> {el, count}
+  const addToolChip = (name, label, cls) => {
+    let t = toolChips.get(name);
+    if (!t) {
+      const el = document.createElement("div");
+      el.className = "chat-tool-chip " + (cls || "");
+      el.textContent = label;
+      toolsBox.appendChild(el);
+      t = { el, count: 1 };
+      toolChips.set(name, t);
+    } else {
+      t.count++;
+      t.el.textContent = `${label} ×${t.count}`;
+    }
+    toolsBox.scrollTop = toolsBox.scrollHeight;
+    return t;
+  };
+  // 工具展示名映射（agent 内部名 → 用户友好名）
+  const TOOL_LABEL = {
+    web_search: "🔍 联网搜索", search_posts: "📡 搜面经", search_knowledge: "📚 查知识库",
+    fetch_page: "📄 抓取网页", plan_task: "📋 拆解计划", start_interview: "🎤 模拟面试",
+    get_study_plan: "📖 查学习清单", get_recent_outputs: "🗂️ 查最近产出",
+    search_questions: "❓ 搜题目", solve_question: "✍️ 解题讲解",
+    ask_user: "❔ 问你", confirm: "🔐 权限确认", run_discover: "🤖 运行 agent",
+    submit_answer: "💬 提交回答", end_interview: "🏁 结束面试", get_jobs_recommended: "💼 查岗位",
+    summarize: "📝 提炼总结", classify: "🏷️ 分类", detect_questions: "🔎 识别题目",
+  };
+  const friendly = (name) => TOOL_LABEL[name] || `🔧 ${name.replace(/^mcp__[^_]+__/, "")}`;
   try {
-    const r = await window.kanban.chat(msg, chatHistory);
+    const r = await window.kanban.chatStream(msg, chatHistory, (ev) => {
+      if (!ev || !ev.type) return;
+      if (ev.type === "tool_start") {
+        const label = `${friendly(ev.name)}${ev.args?.query ? `「${ev.args.query}」` : ev.args?.topic ? `「${ev.args.topic}」` : ev.args?.url ? "" : ""}`;
+        addToolChip(ev.name, label + "…", "running");
+      } else if (ev.type === "tool_done") {
+        const t = toolChips.get(ev.name);
+        if (t) { t.el.classList.remove("running"); t.el.classList.add("ok"); t.el.textContent = t.el.textContent.replace(/…$/, " ✅"); }
+      } else if (ev.type === "tool_error") {
+        const t = toolChips.get(ev.name);
+        if (t) { t.el.classList.remove("running"); t.el.classList.add("err"); t.el.textContent = t.el.textContent.replace(/…$/, ` ⚠️${ev.error ? " " + ev.error.slice(0, 30) : ""}`); }
+        else addToolChip(ev.name, `${friendly(ev.name)} ⚠️`, "err");
+      }
+    });
     chatHistory = r.history || [];
-    // 语音：用回复文本匹配日语预设台词（r.voice 已不再由 LLM 生成）
     if (voiceOn) window.kanban.speak(r.voice || r.reply || msg);
     thinking.querySelector(".body").className = "body";
     thinking.querySelector(".body").innerHTML = renderMd(r.reply || "（无回复）");

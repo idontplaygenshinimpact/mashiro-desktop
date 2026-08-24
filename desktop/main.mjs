@@ -361,6 +361,40 @@ async function widgetGet(pathname) {
   }
 }
 ipcMain.handle("widget:chat", (e, { message, history }) => widgetPost("/api/chat", { message, history }));
+// 对话（流式过程版）：agent 工具事件实时转发（token 定向，复用流式隔离模式）
+ipcMain.handle("widget:chat-stream", async (e, { message, history, __streamToken: token }) => {
+  const chan = token ? `chat-chunk:${token}` : "chat-chunk";
+  try {
+    const res = await widgetFetch(`${WIDGET_URL}/api/chat-stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, history }),
+    });
+    const ctype = res.headers.get("content-type") || "";
+    if (!ctype.includes("text/event-stream")) {
+      const j = await res.json();
+      e.sender.send(chan, JSON.stringify(j));
+      return { ok: true, mode: "json" };
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const event = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        e.sender.send(chan, event);
+      }
+    }
+    return { ok: true, mode: "sse" };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
 ipcMain.handle("widget:chat-history", () => widgetGet("/api/chat-history"));
 ipcMain.handle("widget:study-plan", () => widgetGet("/api/study-plan"));
 ipcMain.handle("widget:interview-history", () => widgetGet("/api/interview/history"));
