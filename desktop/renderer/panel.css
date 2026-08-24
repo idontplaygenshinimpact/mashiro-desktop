@@ -442,6 +442,23 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .sd-modal-head .sd-font-btn:hover { background: rgba(109,79,216,0.12); }
 .sd-modal-body::-webkit-scrollbar { width: 6px; }
 .sd-modal-body::-webkit-scrollbar-thumb { background: rgba(109,79,216,0.35); border-radius: 3px; }
+/* 对话多会话栏：新建/切换/删除（测试与真实对话隔离） */
+.chat-session-bar {
+  display: flex; gap: 6px; align-items: center; margin-bottom: 6px; padding: 0 2px;
+}
+.chat-session-list {
+  flex: 1; display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px;
+  scrollbar-width: thin; scrollbar-color: rgba(109,79,216,0.3) transparent;
+}
+.chat-session-chip {
+  flex-shrink: 0; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; padding: 3px 10px; border-radius: 12px; cursor: pointer;
+  border: 1px solid rgba(109,79,216,.2); background: rgba(255,255,255,.7); color: #8a87a8;
+}
+.chat-session-chip.active {
+  background: rgba(109,79,216,.12); border-color: rgba(109,79,216,.45); color: #5d48b8; font-weight: 600;
+}
+
 /* 对话 agent 过程可视化：工具调用 chips（正在调/完成/失败） */
 .chat-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .chat-tool-chip {

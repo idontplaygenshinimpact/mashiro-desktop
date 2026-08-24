@@ -360,15 +360,15 @@ async function widgetGet(pathname) {
     return { error: "widget 服务未启动" };
   }
 }
-ipcMain.handle("widget:chat", (e, { message, history }) => widgetPost("/api/chat", { message, history }));
+ipcMain.handle("widget:chat", (e, { message, history, sessionId }) => widgetPost("/api/chat", { message, history, sessionId }));
 // 对话（流式过程版）：agent 工具事件实时转发（token 定向，复用流式隔离模式）
-ipcMain.handle("widget:chat-stream", async (e, { message, history, __streamToken: token }) => {
+ipcMain.handle("widget:chat-stream", async (e, { message, history, sessionId, __streamToken: token }) => {
   const chan = token ? `chat-chunk:${token}` : "chat-chunk";
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/chat-stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({ message, history, sessionId }),
     });
     const ctype = res.headers.get("content-type") || "";
     if (!ctype.includes("text/event-stream")) {
@@ -396,6 +396,14 @@ ipcMain.handle("widget:chat-stream", async (e, { message, history, __streamToken
   }
 });
 ipcMain.handle("widget:chat-history", () => widgetGet("/api/chat-history"));
+ipcMain.handle("widget:chat-sessions", () => widgetGet("/api/chat/sessions"));
+ipcMain.handle("widget:chat-messages", (_e, { sessionId }) => widgetGet(`/api/chat/messages?session=${encodeURIComponent(sessionId || "default")}`));
+ipcMain.handle("widget:chat-session-delete", (_e, { id }) => {
+  return widgetFetch(`${WIDGET_URL}/api/chat/session`, {
+    method: "DELETE", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  }).then((r) => r.json());
+});
 ipcMain.handle("widget:study-plan", () => widgetGet("/api/study-plan"));
 ipcMain.handle("widget:interview-history", () => widgetGet("/api/interview/history"));
 ipcMain.handle("widget:stats", () => widgetGet("/api/stats"));

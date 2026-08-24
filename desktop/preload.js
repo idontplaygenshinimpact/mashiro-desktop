@@ -52,10 +52,13 @@ contextBridge.exposeInMainWorld("kanban", {
   getData: () => ipcRenderer.invoke("widget:data"),
   getProgress: () => ipcRenderer.invoke("widget:progress"),
   notify: (title, message) => ipcRenderer.invoke("widget:notify", { title, message }),
-  chat: (message, history) => ipcRenderer.invoke("widget:chat", { message, history }),
-  chatStream: (message, history, onEvent) => streamPromise({
-    channel: "chat-chunk", invokeName: "widget:chat-stream", args: { message, history }, onChunk: () => {}, onEvent,
+  chat: (message, history, sessionId) => ipcRenderer.invoke("widget:chat", { message, history, sessionId }),
+  chatStream: (message, history, onEvent, sessionId) => streamPromise({
+    channel: "chat-chunk", invokeName: "widget:chat-stream", args: { message, history, sessionId }, onChunk: () => {}, onEvent,
   }),
+  chatSessions: () => ipcRenderer.invoke("widget:chat-sessions"),
+  chatMessages: (sessionId) => ipcRenderer.invoke("widget:chat-messages", { sessionId }),
+  chatSessionDelete: (id) => ipcRenderer.invoke("widget:chat-session-delete", { id }),
   chatHistory: () => ipcRenderer.invoke("widget:chat-history"),
   studyPlan: () => ipcRenderer.invoke("widget:study-plan"),
   interviewHistory: () => ipcRenderer.invoke("widget:interview-history"),

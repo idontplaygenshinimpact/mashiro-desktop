@@ -319,6 +319,12 @@
         <div style="color:#c9c6dd;font-weight:600;margin-bottom:4px;">📋 真白的任务清单 <span id="todo-progress" style="color:#8a87a8;font-weight:400;"></span></div>
         <div id="todo-items" style="line-height:1.8;"></div>
       </div>
+      <!-- 多会话栏：新建/切换/删除（测试与真实对话互不干扰） -->
+      <div class="chat-session-bar">
+        <button id="chat-new-session" class="sd-close" title="新对话" style="width:auto;padding:2px 10px;flex-shrink:0;">➕ 新对话</button>
+        <div id="chat-session-list" class="chat-session-list"></div>
+        <button id="chat-del-session" class="sd-close" title="删除当前会话" style="width:auto;padding:2px 10px;flex-shrink:0;color:#c93a3f;">🗑</button>
+      </div>
       <div id="chat-log" class="chat-log"></div>
       <div class="chat-input-row">
         <button id="chat-mic" title="语音输入（点击开始录音，再点停止；识别结果回填输入框）">🎤</button>

@@ -2,8 +2,85 @@
 /* exported checkServiceVersion, loadMascotModels, loadTodo */
 // ============ 对话 ============
 let chatHistory = [];
+let curSession = "default";   // 当前会话 id（多会话：测试/真实对话隔离）
+let sessions = [];            // 会话列表 [{id, title, count, updatedAt}]
 $("chat-send").addEventListener("click", sendChat);
 $("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
+
+const newSessionId = () => "s-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+async function loadChatSessions() {
+  try {
+    const r = await window.kanban.chatSessions();
+    sessions = (r.sessions || []);
+    const list = $("chat-session-list");
+    list.innerHTML = sessions.map((s) =>
+      `<div class="chat-session-chip${s.id === curSession ? " active" : ""}" data-sid="${esc(s.id)}" title="${esc(s.title)}">${esc(s.title)}</div>`
+    ).join("");
+    list.querySelectorAll(".chat-session-chip").forEach((el) => {
+      el.addEventListener("click", () => switchChatSession(el.dataset.sid));
+    });
+  } catch { /* 会话列表失败不影响对话 */ }
+}
+
+async function switchChatSession(sid) {
+  if (sid === curSession) return;
+  curSession = sid;
+  try {
+    const r = await window.kanban.chatMessages(sid);
+    chatHistory = (r.messages || []).filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 500) }));
+  } catch { chatHistory = []; }
+  // 重渲染整个会话（不再累积跨会话消息——用户痛点：测试对话一直摆着）
+  const log = $("chat-log");
+  log.innerHTML = "";
+  if (!chatHistory.length) {
+    const empty = document.createElement("div");
+    empty.className = "chat-msg bot";
+    empty.innerHTML = `<div class="avatar">🎀</div><div class="msg-main"><div class="who">真白</div><div class="body">新的对话，说点什么吧～</div></div>`;
+    log.appendChild(empty);
+  } else {
+    for (const m of chatHistory) addChatMsg(m.role, m.content);
+  }
+  loadChatSessions();
+}
+
+$("chat-new-session").addEventListener("click", () => {
+  if ($("chat-input").value.trim()) { // 有输入先保护（新建会丢弃未发送内容）
+    if (!confirm("切换到新对话？当前输入框内容将保留（不会丢失已发送的聊天记录）。")) return;
+  }
+  curSession = newSessionId();
+  chatHistory = [];
+  const log = $("chat-log");
+  log.innerHTML = "";
+  const empty = document.createElement("div");
+  empty.className = "chat-msg bot";
+  empty.innerHTML = `<div class="avatar">🎀</div><div class="msg-main"><div class="who">真白</div><div class="body">新的对话，说点什么吧～</div></div>`;
+  log.appendChild(empty);
+  loadChatSessions();
+});
+
+$("chat-del-session").addEventListener("click", async () => {
+  if (!sessions.some((s) => s.id === curSession)) return;
+  if (!confirm("删除当前会话？该会话的聊天记录将从本地删除（不可恢复）。")) return;
+  try {
+    await window.kanban.chatSessionDelete(curSession);
+    chatHistory = [];
+    const log = $("chat-log");
+    log.innerHTML = "";
+    const empty = document.createElement("div");
+    empty.className = "chat-msg bot";
+    empty.innerHTML = `<div class="avatar">🎀</div><div class="msg-main"><div class="who">真白</div><div class="body">已删除。新的对话，说点什么吧～</div></div>`;
+    log.appendChild(empty);
+    curSession = "default";
+    await loadChatSessions();
+  } catch (e) {
+    window.kanban.notify("💬 对话", "删除失败: " + String(e.message || e).slice(0, 60));
+  }
+});
+
+// 启动：加载会话列表（当前默认会话直接可用）
+loadChatSessions();
 
 function addChatMsg(role, text) {
   const log = $("chat-log");
@@ -69,11 +146,12 @@ async function sendChat() {
         if (t) { t.el.classList.remove("running"); t.el.classList.add("err"); t.el.textContent = t.el.textContent.replace(/…$/, ` ⚠️${ev.error ? " " + ev.error.slice(0, 30) : ""}`); }
         else addToolChip(ev.name, `${friendly(ev.name)} ⚠️`, "err");
       }
-    });
+    }, curSession);
     chatHistory = r.history || [];
     if (voiceOn) window.kanban.speak(r.voice || r.reply || msg);
     thinking.querySelector(".body").className = "body";
     thinking.querySelector(".body").innerHTML = renderMd(r.reply || "（无回复）");
+    loadChatSessions(); // 会话标题/时间刷新（新会话在此落库后出现）
   } catch (e) {
     thinking.querySelector(".body").textContent = "⚠️ " + e.message;
   }
