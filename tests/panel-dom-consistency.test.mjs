@@ -47,3 +47,27 @@ test("面试/邮箱关键元素存在（iv-answer-area 曾是 class 被当 id �
 test("panel-*.js 文件集完整（5 个模块按序加载）", () => {
   assert.deepEqual(jsFiles.sort(), ["panel-chat.js", "panel-core.js", "panel-jobs.js", "panel-rest.js", "panel-study.js"]);
 });
+
+// ---------- 面板 ↔ widget 接口字段契约（防"题库为空"类错位回归） ----------
+// 背景：30d5733 路由拆分后 /api/challenges 响应字段从 challenges 变为 list，
+//       detail 接口字段从 challenge 变为 detail，而面板仍读旧字段 → 专项练习永远显示
+//       "题库为空——运行 scripts/import-ai-career.mjs"，做题展开也抛 undefined。
+// 护栏：面板读取字段必须与路由返回字段一致（静态断言，双侧锚定）。
+const panelRest = readFileSync(path.join(renderer, "panel-rest.js"), "utf8");
+const practiceRoute = readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "plugins", "job-hunter", "routes", "practice.mjs"),
+  "utf8"
+);
+
+test("手写题库列表：面板读 j.list，路由返回 list（回归护栏）", () => {
+  assert.match(panelRest, /!j\.list\?\.length/, "面板空态判断应读 j.list（接口字段）");
+  assert.match(panelRest, /\[\.\.\.j\.list\]/, "面板排序应读 j.list");
+  assert.doesNotMatch(panelRest, /j\.challenges\?\.length/, "不应回退到旧字段 j.challenges");
+  assert.match(practiceRoute, /total: stats\.total, done: stats\.done, left: Math\.max\(0, stats\.total - stats\.done\), list/, "路由应返回 list 字段");
+});
+
+test("手写题库详情：面板读 j.detail，路由返回 detail（回归护栏）", () => {
+  assert.match(panelRest, /const c = j\.detail;/, "面板做题展开应读 j.detail");
+  assert.doesNotMatch(panelRest, /const c = j\.challenge;/, "不应回退到旧字段 j.challenge");
+  assert.match(practiceRoute, /JSON\.stringify\(\{ ok: true, detail \}\)/, "detail 路由应返回 detail 字段");
+});
