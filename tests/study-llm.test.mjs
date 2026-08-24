@@ -104,7 +104,10 @@ test("generateStudyPlan：旧条目状态字段保留", async () => {
   const r = await generateStudyPlan();
   const old = r.items.find((i) => i.topic === "闭包");
   assert.equal(old.reviewed, true, "旧条目复习状态保留");
-  assert.equal(old.grp, "", "旧条目无 group → grp 保持空（归未分类），不被新条目 group 覆盖");
+  // 分类修复：addPlanItems 现自动归类（无显式 group → 知识树/规则）——旧条目不落空组，
+  // 且不被新条目 group 覆盖（保持自己的归类）
+  assert.ok(old.grp, "旧条目自动归类（此前 grp 全空、分类失效）");
+  assert.notEqual(old.grp, "算法与手写", "旧条目 grp 不被新条目 group 覆盖");
   assert.equal(r.items.find((i) => i.topic === "新知识点").grp, "算法与手写", "新条目按 LLM group 入库");
 });
 

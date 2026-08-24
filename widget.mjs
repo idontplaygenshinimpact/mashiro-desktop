@@ -558,6 +558,18 @@ if (!DISABLE_BACKGROUND) {
   registerTimer(runWeakMerge, 15 * 1000);           // 启动 15s 后整理一次
   registerInterval(runWeakMerge, 12 * 3600 * 1000); // 每 12 小时（防累积）
 }
+// 学习清单分组回填（幂等自愈：修复前写入的条目 grp 全空——按知识树/规则自动归类一次）
+const runPlanGroupBackfill = async () => {
+  try {
+    const { backfillPlanGroups } = await import("./lib/study.mjs");
+    const r = backfillPlanGroups();
+    if (r.filled > 0) console.log(`[study] 学习清单分组回填：${r.filled} 条已自动归类`);
+  } catch (e) { console.log(`[study] 分组回填失败: ${String(e?.message || e).slice(0, 80)}`); }
+};
+if (!DISABLE_BACKGROUND) {
+  registerTimer(runPlanGroupBackfill, 20 * 1000);           // 启动 20s 后回填一次（等弱合并先跑）
+  registerInterval(runPlanGroupBackfill, 12 * 3600 * 1000); // 每 12 小时（新回流缺组时兜底）
+}
 // 数据自动备份（数据安全：距上次备份超过最小间隔自动备份；失败静默记日志不打扰）
 const runAutoBackup = async () => {
   try {
