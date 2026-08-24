@@ -71,3 +71,43 @@ test("手写题库详情：面板读 j.detail，路由返回 detail（回归护�
   assert.doesNotMatch(panelRest, /const c = j\.challenge;/, "不应回退到旧字段 j.challenge");
   assert.match(practiceRoute, /JSON\.stringify\(\{ ok: true, detail \}\)/, "detail 路由应返回 detail 字段");
 });
+
+test("标记完成/答错：路由必须回传 title（面板通知依赖；曾丢字段显示 undefined）", () => {
+  assert.match(practiceRoute, /title: r\?\.title, message: r\?\.message/, "mark-done 路由应回传 title");
+  assert.match(practiceRoute, /title: r\?\.title, message: "已记录答错/, "mark-wrong 路由应回传 title");
+  assert.match(panelRest, /\$\{j\.title\}/, "面板通知读 j.title");
+});
+
+// ---------- focus 域契约（白名单断链 + week 日期格式） ----------
+const focusRoute = readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "plugins", "job-hunter", "routes", "focus.mjs"),
+  "utf8"
+);
+const focusLib = readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "focus.mjs"),
+  "utf8"
+);
+
+test("focus 黑/白名单：GET 返回 whitelist，POST 接受 whitelist（曾断链白名单被静默丢弃）", () => {
+  assert.match(focusRoute, /blacklist: focusApi\.getBlacklist\(\), whitelist: focusApi\.getWhitelist\(\)/, "GET 应返回 whitelist");
+  assert.match(focusRoute, /const \{ blacklist, whitelist \} = JSON\.parse/, "POST 应解构 whitelist");
+  assert.match(focusRoute, /Array\.isArray\(whitelist\)\) focusApi\.setWhitelist/, "POST 应保存 whitelist");
+  assert.match(panelRest, /j\.whitelist \|\| \[\]/, "面板白名单框读 j.whitelist");
+});
+
+test("focus week 日期：服务端本地 ISO，面板本地 todayStr（曾 M/D 导致星期空/今日不高亮）", () => {
+  assert.match(focusLib, /week\.push\(\{ date: `\$\{d\.getFullYear\(\)\}-\$\{pad\(d\.getMonth/, "服务端应输出 YYYY-MM-DD");
+  assert.doesNotMatch(focusLib, /date: `\$\{d\.getMonth\(\) \+ 1\}\/\$\{d\.getDate\(\)\}`/, "不应回退到 M/D 格式");
+  assert.doesNotMatch(panelRest, /new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/, "面板 todayStr 不应是 UTC 日期（东八区错位）");
+});
+
+// ---------- self-check 语义契约（ok = "检查全绿"，非"请求成功"） ----------
+const panelChat = readFileSync(path.join(renderer, "panel-chat.js"), "utf8");
+const panelJobs = readFileSync(path.join(renderer, "panel-jobs.js"), "utf8");
+
+test("self-check：面板把 ok 当'检查全绿'而非'请求成功'（曾发现任何问题就误报'检查失败'）", () => {
+  assert.match(panelChat, /renderSelfCheck\(j\);/, "POST 后把 j（报告本体）直接交给渲染");
+  assert.doesNotMatch(panelChat, /j\.ok \? j : j\.report/, "不应按 ok 分支取报告（ok 是全绿标记）");
+  assert.doesNotMatch(panelChat, /j\.error \|\| "检查失败"/, "不应在发现问题时误报检查失败");
+  assert.match(panelJobs, /j\.issues\?\.length/, "panel-jobs 按 issues 判问题（ok 全绿语义）");
+});

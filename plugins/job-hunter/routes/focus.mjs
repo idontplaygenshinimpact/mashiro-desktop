@@ -63,7 +63,8 @@ router.route("/api/focus/blacklist", (req, res) => {  // 分心黑名单：GET �
   if (req.method === "GET") {
     try {
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, blacklist: focusApi.getBlacklist(), defaults: focusApi.DEFAULT_BLACKLIST }));
+      // 契约：blacklist + whitelist 都要返回（面板两个文本框都读；曾漏 whitelist → 白名单框永远空白）
+      res.end(JSON.stringify({ ok: true, blacklist: focusApi.getBlacklist(), whitelist: focusApi.getWhitelist(), defaults: focusApi.DEFAULT_BLACKLIST }));
     } catch (e) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: e.message }));
@@ -73,8 +74,10 @@ router.route("/api/focus/blacklist", (req, res) => {  // 分心黑名单：GET �
   if (req.method === "POST") {
     readBody(req, res, (body) => {
       try {
-        const { blacklist } = JSON.parse(body || "{}");
+        // 契约：面板一次提交 {blacklist, whitelist}；曾只解构 blacklist → 白名单保存被静默丢弃
+        const { blacklist, whitelist } = JSON.parse(body || "{}");
         const r = focusApi.setBlacklist(blacklist);
+        if (r.ok && Array.isArray(whitelist)) focusApi.setWhitelist(whitelist);
         res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(r));
       } catch (e) {

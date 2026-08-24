@@ -363,8 +363,9 @@ $("self-check-btn")?.addEventListener("click", async () => {
   try {
     const r = await fetch("http://127.0.0.1:8899/api/self-check", { method: "POST" });
     const j = await r.json();
-    renderSelfCheck(j.ok ? j : j.report);
-    if (!j.ok) { $("self-check-status").textContent = "⚠️ " + (j.error || "检查失败"); return; }
+    // j 本身就是报告 {ok, at, issues, checks}：ok 是"检查全绿"标记，不是"请求成功"——
+    // 曾按 ok 分支导致发现任何问题都被误报成"⚠️ 检查失败"（请求实际成功，异常走 catch）
+    renderSelfCheck(j);
     if (j.issues?.length) window.kanban.notify("🔍 系统自检", `发现 ${j.issues.length} 个问题（自动修复 ${j.issues.filter((i) => i.fixed).length} 个）`);
     else window.kanban.notify("🔍 系统自检", "全部正常");
   } catch (e) {

@@ -53,7 +53,7 @@ async function renderProfileDrive(profile) {
     ]);
     const jobs = jobsR?.ok ? (jobsR.jobs || jobsR.list || []) : [];
     const open = jobs.filter((j) => j.status === "new").length;
-    const applied = jobs.filter((j) => j.status === "apply" || j.status === "ready").length;
+    const applied = jobs.filter((j) => ["ready", "ready_bishi", "done"].includes(j.status)).length;
     const planItems = planR?.plan?.items || [];
     const todoCount = planItems.filter((i) => !i.done).length;
     const greeting = greetR?.ok ? String(greetR.greeting || "") : "";
@@ -1038,7 +1038,9 @@ function renderFocus(j) {
   const weekBox = $("focus-week");
   if (weekBox && Array.isArray(j.week) && j.week.length) {
     const max = Math.max(...j.week.map((d) => d.minutes), 1);
-    const todayStr = new Date().toISOString().slice(0, 10);
+    // 本地日期（toISOString 是 UTC——东八区 0-8 点会取到前一天，今日高亮错位）
+    const t = new Date();
+    const todayStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
     const dayLabel = (d) => {
       const n = new Date(d.date + "T00:00:00").getDay();
       return ["日", "一", "二", "三", "四", "五", "六"][n] || d.date.slice(5);
