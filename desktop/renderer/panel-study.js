@@ -59,14 +59,14 @@ document.getElementById("resume-plan-btn")?.addEventListener("click", async () =
   btn.textContent = "⏳ 提取项目中…";
   try {
     // 1) 存档简历：画像（岗位匹配）+ 原文（后续复用/拷打）
-    const profileRes = await fetch("http://127.0.0.1:8899/api/jobs/profile", {
+    const profileRes = await fetch(API_BASE + "/api/jobs/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ resume }),
     });
     const profileJ = await profileRes.json();
     // 2) 简历项目 → 学习清单
-    const res = await fetch("http://127.0.0.1:8899/api/resume-plan", {
+    const res = await fetch(API_BASE + "/api/resume-plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ resume }),
@@ -181,7 +181,7 @@ $("iv-start").addEventListener("click", () => {
 // 闭环：面试简历自动联动设置中心已上传的简历（iv-resume 留空时预填，不用重复粘贴）
 async function loadIvResumeAuto() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/jobs/profile");
+    const r = await fetch(API_BASE + "/api/jobs/profile");
     const j = await r.json();
     const statusEl = $("resume-status");
     if (j.rawSaved && j.rawText) {
@@ -733,7 +733,7 @@ async function loadIvWeakChips() {
   const row = $("iv-weak-row"), chips = $("iv-weak-chips");
   if (!row || !chips) return;
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/iv-focus-sources");
+    const r = await fetch(API_BASE + "/api/iv-focus-sources");
     const j = await r.json();
     const items = (j.items || []).slice(0, 12);
     if (!items.length) { row.classList.add("hidden"); chips.innerHTML = ""; return; }
@@ -975,7 +975,7 @@ $("rc-show").addEventListener("click", async () => {
   if (!answerText && card?.topic) {
     // 空答案回退：纯读该主题的讲解存档（study_notes）——不触发 LLM 生成（复习场景要快）
     try {
-      const r = await fetch(`http://127.0.0.1:8899/api/study/note?topic=${encodeURIComponent(card.topic)}`).then((x) => x.json());
+      const r = await fetch(`${API_BASE}/api/study/note?topic=${encodeURIComponent(card.topic)}`).then((x) => x.json());
       if (r?.ok && r.found && r.content) {
         answerText = r.content;
         answerNote = "（来自讲解存档）";
@@ -1053,15 +1053,15 @@ async function loadCardQuiz(cardId) {
   box.classList.remove("hidden");
   box.innerHTML = '<div class="quiz-loading">🧠 复习自测加载中…</div>';
   try {
-    let r = await fetch(`http://127.0.0.1:8899/api/review/quiz?id=${encodeURIComponent(cardId)}`).then((x) => x.json());
+    let r = await fetch(`${API_BASE}/api/review/quiz?id=${encodeURIComponent(cardId)}`).then((x) => x.json());
     if (!r.questions?.length) {
       // 题库空 → 懒生成（首次约 10-20s；失败/无 LLM 降级为纯文本卡，不阻塞复习）
       box.innerHTML = '<div class="quiz-loading">🧠 生成自测题中（首次约 10-20s，可先点「显示答案」）…</div>';
-      const g = await fetch("http://127.0.0.1:8899/api/review/quiz/generate", {
+      const g = await fetch(API_BASE + "/api/review/quiz/generate", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId }),
       }).then((x) => x.json()).catch(() => ({ ok: false }));
       if (g.ok && g.total > 0) {
-        r = await fetch(`http://127.0.0.1:8899/api/review/quiz?id=${encodeURIComponent(cardId)}`).then((x) => x.json());
+        r = await fetch(`${API_BASE}/api/review/quiz?id=${encodeURIComponent(cardId)}`).then((x) => x.json());
         // 知识库素材标记：新生成时透传（面板提示"含知识库真题"；缓存命中无此字段）
         if (g.kbUsed) quizState = { ...(quizState || {}), kbUsed: true };
       } else {
@@ -1116,7 +1116,7 @@ async function submitQuizAnswers() {
   btn.textContent = "判分中…";
   const answers = quizState.questions.map((q, qi) => ({ questionId: q.id, chosen: quizState.chosen[qi] ?? -1, map: q.map }));
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/review/quiz/submit", {
+    const r = await fetch(API_BASE + "/api/review/quiz/submit", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cardId: card.id, answers }),
     }).then((x) => x.json());
@@ -1166,7 +1166,7 @@ async function submitQuizAnswers() {
 // 评分后：答错（0/1）→ 后台换批（下次复习抽新题）
 function quizSwapBatch(cardId) {
   try {
-    fetch("http://127.0.0.1:8899/api/review/quiz/generate", {
+    fetch(API_BASE + "/api/review/quiz/generate", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId }),
     }).catch(() => { /* 换批失败不影响复习 */ });
   } catch { /* ignore */ }
@@ -1195,7 +1195,7 @@ async function openReviewExplain(cardId, topic) {
   planBtn.dataset.topic = topic || "";
   status.textContent = "生成中（首次约 20-60s）…";
   try {
-    const res = await fetch(`http://127.0.0.1:8899/api/review/explain-stream?id=${encodeURIComponent(cardId || "")}`);
+    const res = await fetch(`${API_BASE}/api/review/explain-stream?id=${encodeURIComponent(cardId || "")}`);
     if (!res.ok || !res.body) throw new Error("讲解流启动失败");
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -1294,7 +1294,7 @@ async function loadWrongBook() {
   const listEl = $("wrong-book-list");
   if (!countEl || !listEl) return;
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/review/wrong");
+    const r = await fetch(API_BASE + "/api/review/wrong");
     const j = await r.json();
     const wrong = j.wrong || [];
     countEl.textContent = wrong.length;
@@ -1704,7 +1704,7 @@ async function showStudyDetail(id) {
         btn.disabled = true;
         btn.textContent = "⏳ 加载…";
         try {
-          const r = await fetch(`http://127.0.0.1:8899/api/study-detail-stream?id=${encodeURIComponent(result.earlierArchive.id)}`);
+          const r = await fetch(`${API_BASE}/api/study-detail-stream?id=${encodeURIComponent(result.earlierArchive.id)}`);
           const j = await r.json();
           if (!j.ok || !j.content) throw new Error(j.error || "加载失败");
           // 用最早版替换当前弹窗内容（缓存按当前条目 id 记录，重新打开仍展示最早版）
@@ -1816,7 +1816,7 @@ $("sd-regenerate-btn").addEventListener("click", async () => {
   btn.disabled = true;
   btn.textContent = "⏳ 重置中…";
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/study-note/reset", {
+    const r = await fetch(API_BASE + "/api/study-note/reset", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });

@@ -4,6 +4,10 @@
 // 真白面板逻辑：模拟面试 / 学习清单 / 对话 / 爬取产出
 // 通过 preload 的 window.kanban 访问主进程 IPC（与桌宠共享）
 
+// ============ API 基址单一来源（Phase 2 §3.5：收编 117 处硬编码 8899 直连） ============
+// 与 desktop/renderer/api-client.mjs 的 BASE_URL 保持一致（同值双入口：普通 script 用常量，模块化代码用 client）
+const API_BASE = "http://127.0.0.1:8899";
+
 // ============ 全局错误捕获（任何未捕获 JS 错误 → 主进程日志 + 面板可见，便于定位） ============
 window.addEventListener("error", (e) => {
   const msg = `[panel-error] ${String(e.message || e.error || "未知错误").slice(0, 200)} @ ${String(e.filename || "").split("/").pop()}:${e.lineno || ""}`;
@@ -86,7 +90,7 @@ function escHtml(s) {
 
 async function initPluginTabs() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/plugins");
+    const r = await fetch(API_BASE + "/api/plugins");
     const j = await r.json();
     if (!j?.ok || !Array.isArray(j.plugins)) return;
     const nav = document.querySelector("nav.tabs");
@@ -126,7 +130,7 @@ async function initPluginTabs() {
         continue;
       }
       try {
-        const sr = await fetch(`http://127.0.0.1:8899/api/plugins/settings?plugin=${p.id}`);
+        const sr = await fetch(`${API_BASE}/api/plugins/settings?plugin=${p.id}`);
         const sj = await sr.json();
         const vals = (sj && sj.settings) || {};
         // 设置项输入框 id：p.id/s.key 均转义（原样拼 HTML 属性是 XSS 注入面），写入/读取必须用同一转义值
@@ -163,7 +167,7 @@ async function initPluginTabs() {
             let allOk = true;
             for (const [k, v] of Object.entries(out)) {
               try {
-                const rr = await fetch("http://127.0.0.1:8899/api/plugins/settings", {
+                const rr = await fetch(API_BASE + "/api/plugins/settings", {
                   method: "POST", headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ id: p.id, key: k, value: v }),
                 });

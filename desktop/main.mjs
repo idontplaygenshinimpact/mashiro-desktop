@@ -75,7 +75,9 @@ if (!gotSingleInstanceLock) {
 // widgetFetch 在下方定义（依赖 token 轮询），此处用函数引用；守护在 app ready 后启动
 const widgetServer = createWidgetServer({
   widgetFetch: (url, opts) => widgetFetch(url, opts),
-  healthUrlValue: healthUrl(),
+  // 修复：键名必须与 createWidgetServer 解构/JSDoc 一致（healthUrl）——此前传 healthUrlValue
+  // 键被 TS 捕获，运行时 healthUrl 恒 undefined（守护探测缺豁免端点）
+  healthUrl: healthUrl(),
   root: app.isPackaged ? app.getAppPath() : ROOT,
   isPackaged: app.isPackaged,
 });
@@ -165,7 +167,6 @@ function createWindow() {
 
   win.setAlwaysOnTop(true, "screen-saver");
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  win.on("paint", () => {});
   win.webContents.on("did-finish-load", () => console.log("[kanban] page loaded"));
   win.webContents.on("did-fail-load", (e, code, desc) => console.log(`[kanban] FAIL load: ${code} ${desc}`));
   win.webContents.on("console-message", (e, level, message) => console.log(`[renderer] ${message}`));
@@ -213,7 +214,7 @@ function openPanelChallenges() {
 // 换肤菜单动态构建（含托盘子菜单 + 桌宠右键弹同一菜单）；切换后重建刷新勾选
 async function buildTrayMenu() {
   if (!tray) return;
-  let mascotItems;
+  /** @type {Electron.MenuItemConstructorOptions[]} */ let mascotItems;
   try {
     const { scanMascotModels, getCurrentModel, saveCurrentModel } = await import("../lib/mascot-models.mjs");
     const list = scanMascotModels();
@@ -235,7 +236,7 @@ async function buildTrayMenu() {
   } catch {
     mascotItems = [{ label: "模型扫描失败", enabled: false }];
   }
-  const menu = Menu.buildFromTemplate([
+  const menu = Menu.buildFromTemplate(/** @type {Electron.MenuItemConstructorOptions[]} */ ([
     { label: "📌 看板娘", enabled: false },
     { type: "separator" },
     { label: "显示/隐藏", click: () => { if (win) { win.isVisible() ? win.hide() : win.show(); } } },
@@ -249,7 +250,7 @@ async function buildTrayMenu() {
     { label: "打开输出目录", click: () => { safeSpawn("explorer", [path.join(ROOT, "output")]); } },
     { type: "separator" },
     { label: "退出", click: () => { app.quit(); } },
-  ]);
+  ]));
   tray.setContextMenu(menu);
 }
 
@@ -822,7 +823,7 @@ async function parseDocFile(ext, data) {
     const { pathToFileURL } = await import("node:url");
     // 中文 PDF 需要 cmap 数据（CID 字体映射）；Node 端要求 file:// URL（含尾斜杠）
     const pdfjsRoot = path.join(import.meta.dirname, "..", "node_modules", "pdfjs-dist");
-    const pdf = await getDocument({
+    const pdf = await getDocument(/** @type {any} */ ({
       data: new Uint8Array(data),
       cMapUrl: pathToFileURL(path.join(pdfjsRoot, "cmaps") + path.sep).toString(),
       cMapPacked: true,
@@ -830,12 +831,12 @@ async function parseDocFile(ext, data) {
       useWorkerFetch: false,
       isEvalSupported: false,
       disableFontFace: true,
-    }).promise;
+    })).promise;
     const pages = [];
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      pages.push(content.items.map((it) => (it.str || "")).filter(Boolean).join(" "));
+      pages.push(content.items.map((it) => (/** @type {any} */ (it).str || "")).filter(Boolean).join(" "));
     }
     const text = pages.join("\n").trim();
     if (!text) return { ok: false, error: "PDF 没有可提取文本，可能是图片型 PDF，请复制文本粘贴" };

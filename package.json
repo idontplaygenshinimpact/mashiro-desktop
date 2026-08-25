@@ -38,6 +38,7 @@
     "bench:agent": "node --experimental-test-module-mocks scripts/benchmark-agent.mjs",
     "bench:web": "node scripts/web-task-bench.mjs",
     "typecheck": "tsc --noEmit",
+    "typecheck:desktop": "tsc -p tsconfig.desktop.json",
     "lint": "eslint .",
     "coverage": "node --experimental-test-module-mocks --experimental-test-coverage --test \"tests/*.test.mjs\"",
     "dist": "electron-builder --win --publish never",

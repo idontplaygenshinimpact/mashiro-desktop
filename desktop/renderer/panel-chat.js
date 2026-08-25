@@ -202,7 +202,7 @@ $("import-save")?.addEventListener("click", async () => {
   btn.disabled = true;
   btn.textContent = "保存中…";
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/output/import", {
+    const r = await fetch(API_BASE + "/api/output/import", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, content, source: $("import-source").value.trim() }),
     }).then((x) => x.json());
@@ -308,7 +308,7 @@ async function loadCrawlData() {
   } catch { /* ignore */ }
   // 上下文计量（当前对话用量，防上下文盲区）
   try {
-    const cm = await fetch("http://127.0.0.1:8899/api/context-meter").then((r) => r.json());
+    const cm = await fetch(API_BASE + "/api/context-meter").then((r) => r.json());
     const meter = document.getElementById("ctx-meter");
     if (meter && cm?.ok) {
       const ratio = cm.ratio || 0;
@@ -450,7 +450,7 @@ $("patrol-run").addEventListener("click", async () => {
 // ============ 系统自检（自行发现隐患：表堆积/产出污染/巡检停摆/LLM 失败率） ============
 async function loadSelfCheck() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/self-check");
+    const r = await fetch(API_BASE + "/api/self-check");
     const j = await r.json();
     renderSelfCheck(j.report);
   } catch (e) {
@@ -483,7 +483,7 @@ $("self-check-btn")?.addEventListener("click", async () => {
   btn.disabled = true;
   btn.textContent = "⏳ 检查中…";
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/self-check", { method: "POST" });
+    const r = await fetch(API_BASE + "/api/self-check", { method: "POST" });
     const j = await r.json();
     // j 本身就是报告 {ok, at, issues, checks}：ok 是"检查全绿"标记，不是"请求成功"——
     // 曾按 ok 分支导致发现任何问题都被误报成"⚠️ 检查失败"（请求实际成功，异常走 catch）
@@ -543,7 +543,7 @@ let currentApproval = null;
 
 async function checkApprovals() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/approval-pending");
+    const r = await fetch(API_BASE + "/api/approval-pending");
     const j = await r.json();
     const first = j?.pending?.[0] || null;
     const bar = document.getElementById("approval-bar");
@@ -566,7 +566,7 @@ async function sendApproval(action) {
   const allow = action !== "deny";
   const session = action === "allow-session";
   try {
-    await fetch("http://127.0.0.1:8899/api/approval", {
+    await fetch(API_BASE + "/api/approval", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ toolName: currentApproval.toolName, allow, session }),
@@ -586,7 +586,7 @@ let currentAsk = null;
 
 async function checkAsks() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/ask/pending");
+    const r = await fetch(API_BASE + "/api/ask/pending");
     const j = await r.json();
     const first = j?.asks?.[0] || null;
     const bar = document.getElementById("ask-bar");
@@ -612,7 +612,7 @@ async function checkAsks() {
 async function sendAskAnswer(label) {
   if (!currentAsk) return;
   try {
-    await fetch("http://127.0.0.1:8899/api/ask/answer", {
+    await fetch(API_BASE + "/api/ask/answer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: currentAsk.id, selected: [label] }),
@@ -645,7 +645,7 @@ document.getElementById("restart-btn")?.addEventListener("click", async () => {
 // ============ 服务版本检测（后台 widget 是旧进程时提示重启桌宠） ============
 async function checkServiceVersion() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/health", { cache: "no-store" });
+    const r = await fetch(API_BASE + "/api/health", { cache: "no-store" });
     const j = await r.json();
     const warn = document.getElementById("service-warn");
     if (!warn) return;
@@ -693,7 +693,7 @@ async function loadMascotModels() {
 // ============ 任务清单（agent todo：多步任务可见进度） ============
 async function loadTodo() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/todo");
+    const r = await fetch(API_BASE + "/api/todo");
     const j = await r.json();
     const box = document.getElementById("todo-box");
     if (!box) return;

@@ -4,6 +4,7 @@ import globals from "globals";
 
 // 面板跨文件共享全局（desktop/renderer/panel-*.js 普通 script 互相引用，非模块导出）
 const panelGlobals = {
+  API_BASE: "readonly", // Phase 2：API 基址单一来源（panel-core.js 定义，全面板共享）
   $: "readonly",
   addChatMsg: "readonly",
   AudioWorkletProcessor: "readonly",
@@ -22,6 +23,8 @@ const panelGlobals = {
   loadDocs: "readonly",
   loadDocsProject: "readonly",
   loadFocus: "readonly",
+  loadIvResume: "readonly",
+  loadIvHistory: "readonly",
   loadIvResumeAuto: "readonly",
   loadIvWeakChips: "readonly",
   loadJobs: "readonly",

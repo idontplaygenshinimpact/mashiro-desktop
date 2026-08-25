@@ -9,7 +9,7 @@ let jobsFilter = { status: "", fav: false }; // 校招筛选：status 走后端�
 // ============ 学习-求职闭环（多向驱动状态 + 规则建议） ============
 async function loadLoop() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/loop");
+    const r = await fetch(API_BASE + "/api/loop");
     const j = await r.json();
     if (!j?.ok) return;
     const box = document.getElementById("loop-box");
@@ -34,7 +34,7 @@ async function loadLoop() {
 // ============ 全局闭环状态条（顶栏下，所有 Tab 可见） ============
 async function loadLoopBar() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/loop");
+    const r = await fetch(API_BASE + "/api/loop");
     const j = await r.json();
     if (!j?.ok) return;
     const bar = document.getElementById("loop-bar");
@@ -61,7 +61,7 @@ async function loadLoopBar() {
 
 // ============ 平台账号（BOSS 等：AI 逛网搜岗 + 半自动投递） ============
 const AUTH_STATUS = { none: "未配置", cookie: "已配置 Cookie", edge: "浏览器会话", browser: "浏览器会话" };
-const P_API = "http://127.0.0.1:8899/api/platforms";
+const P_API = API_BASE + "/api/platforms";
 
 async function loadPlatforms() {
   try {
@@ -153,7 +153,7 @@ async function platformAction(btn) {
       btn.textContent = act === "greet-gen" ? "⏳ 生成中…" : "⏳ 精修中（约 10-30s）…";
       try {
         const isPolish = act === "greet-polish";
-        const res = await fetch("http://127.0.0.1:8899/api/greeting", {
+        const res = await fetch(API_BASE + "/api/greeting", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ company: "", title: "", summary: "", polish: isPolish }),
@@ -246,8 +246,8 @@ async function loadJobs() {
   try {
     // 非"全部"状态 → 走 GET /api/jobs?status=；否则用推荐列表（技术岗 + 匹配排序）
     const url = jobsFilter.status
-      ? `http://127.0.0.1:8899/api/jobs?status=${encodeURIComponent(jobsFilter.status)}`
-      : "http://127.0.0.1:8899/api/jobs/recommended";
+      ? `${API_BASE}/api/jobs?status=${encodeURIComponent(jobsFilter.status)}`
+      : `${API_BASE}/api/jobs/recommended`;
     const r = await fetch(url);
     const j = await r.json();
     let jobs = j.recommended || j.jobs || [];
@@ -292,7 +292,7 @@ async function loadJobs() {
         btn.disabled = true;
         btn.textContent = "⏳ 提炼考点…";
         try {
-          const res = await fetch("http://127.0.0.1:8899/api/loop/job-study", {
+          const res = await fetch(API_BASE + "/api/loop/job-study", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ jobId: id }),
           });
@@ -320,7 +320,7 @@ async function loadJobs() {
         btn.disabled = true;
         btn.textContent = "⏳ 面试官就位…";
         try {
-          const res = await fetch("http://127.0.0.1:8899/api/loop/interview-for-job", {
+          const res = await fetch(API_BASE + "/api/loop/interview-for-job", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ jobId: id }),
           });
@@ -357,7 +357,7 @@ async function loadJobs() {
     document.querySelectorAll(".job-fav").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const fav = btn.dataset.fav === "1" ? 0 : 1;
-        await fetch("http://127.0.0.1:8899/api/jobs/favorite", {
+        await fetch(API_BASE + "/api/jobs/favorite", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: btn.dataset.id, favorite: fav }),
         });
@@ -367,7 +367,7 @@ async function loadJobs() {
     document.querySelectorAll(".job-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         if (!btn.dataset.status) return; // 收藏/其它无 data-status 的按钮不触发状态更新
-        await fetch("http://127.0.0.1:8899/api/jobs/status", {
+        await fetch(API_BASE + "/api/jobs/status", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: btn.dataset.id, status: btn.dataset.status }),
         });
@@ -396,7 +396,7 @@ document.getElementById("jobs-direction-btn")?.addEventListener("click", async (
   if (!direction) { statusEl.textContent = "⚠️ 请先选择想做的方向"; return; }
   statusEl.textContent = "⏳ 生成方向建议中…";
   try {
-    const res = await fetch("http://127.0.0.1:8899/api/jobs/direction", {
+    const res = await fetch(API_BASE + "/api/jobs/direction", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ direction }),
     });
@@ -419,7 +419,7 @@ document.getElementById("jobs-collect-btn")?.addEventListener("click", async () 
   btn.textContent = "⏳ 搜集校招中（可能 1-3 分钟）…";
   statusEl.textContent = "开始搜集：官网优先 → 公司名单 → 大小厂兜底…";
   try {
-    const res = await fetch("http://127.0.0.1:8899/api/jobs/collect", {
+    const res = await fetch(API_BASE + "/api/jobs/collect", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
     });
     const j = await res.json();
@@ -440,7 +440,7 @@ document.getElementById("jobs-collect-btn")?.addEventListener("click", async () 
 // ============ 官方学习文档（前端/AI/Agent 三类 + 版本检测） ============
 async function loadDocs() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/learning");
+    const r = await fetch(API_BASE + "/api/learning");
     const j = await r.json();
     const list = document.getElementById("docs-list");
     if (!j.categories?.length) {
@@ -506,7 +506,7 @@ async function loadDocs() {
 // 项目路径：读取 + 保存（用于"最新版 vs 项目内版本"对比；输入框在设置中心）
 async function loadDocsProject() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/learning/project");
+    const r = await fetch(API_BASE + "/api/learning/project");
     const j = await r.json();
     if (j?.ok && j.path) document.getElementById("set-docs-project").value = j.path;
   } catch { /* ignore */ }
@@ -514,7 +514,7 @@ async function loadDocsProject() {
 document.getElementById("docs-project-btn")?.addEventListener("click", async () => {
   const p = document.getElementById("docs-project").value.trim();
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/learning/project", {
+    const r = await fetch(API_BASE + "/api/learning/project", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: p }),
     });
     const j = await r.json();
@@ -532,7 +532,7 @@ document.getElementById("docs-check-btn")?.addEventListener("click", async () =>
   btn.textContent = "⏳ 检查中（约 1 分钟）…";
   statusEl.textContent = "正在抓取各官方文档版本页…";
   try {
-    const res = await fetch("http://127.0.0.1:8899/api/learning/check", {
+    const res = await fetch(API_BASE + "/api/learning/check", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
     });
     const j = await res.json();
@@ -551,7 +551,7 @@ document.getElementById("docs-check-btn")?.addEventListener("click", async () =>
 // ============ 求职驾驶舱（本周总览 + 7 天活动 + 累计进度 + 周报建议） ============
 async function loadDashboard() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/dashboard");
+    const r = await fetch(API_BASE + "/api/dashboard");
     const j = await r.json();
     if (!j?.ok) return;
     const w = j.week || {};
@@ -636,7 +636,7 @@ function stopJobsSchedTimer() {
 async function loadSettings() {
   // 方向
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/loop");
+    const r = await fetch(API_BASE + "/api/loop");
     const j = await r.json();
     if (j?.ok && j.nodes?.direction) $("set-direction").value = j.nodes.direction;
   } catch { /* ignore */ }
@@ -658,13 +658,13 @@ async function loadSettings() {
   } catch { /* ignore */ }
   // RSS
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/rss/config");
+    const r = await fetch(API_BASE + "/api/rss/config");
     const j = await r.json();
     if (j?.ok) $("set-rss-feeds").value = (j.feeds || []).join("\n");
   } catch { /* ignore */ }
   // 邮箱
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/mail/config");
+    const r = await fetch(API_BASE + "/api/mail/config");
     const j = await r.json();
     if (j?.config?.email) $("set-mail-email").value = j.config.email;
     $("set-mail-enabled").checked = !!j.config?.enabled;
@@ -682,7 +682,7 @@ async function loadSettings() {
   } catch { /* ignore */ }
   // 通知提醒开关（复习到期 / 定时学习）
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/settings/reminders");
+    const r = await fetch(API_BASE + "/api/settings/reminders");
     const j = await r.json();
     if (j?.ok) {
       $("set-notify-review").checked = !!j.reviewReminder;
@@ -692,7 +692,7 @@ async function loadSettings() {
   } catch { /* ignore */ }
   // 简历项目源码（面试官拷打素材）
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/settings/personal-projects");
+    const r = await fetch(API_BASE + "/api/settings/personal-projects");
     const j = await r.json();
     if (j?.ok) {
       const lines = (j.projects || []).map((p) => `${p.name}=${p.dir}`).join("\n");
@@ -713,7 +713,7 @@ async function loadSettings() {
   loadLlmKeyStatus();
   // 项目路径
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/learning/project");
+    const r = await fetch(API_BASE + "/api/learning/project");
     const j = await r.json();
     if (j?.ok && j.path) $("set-docs-project").value = j.path;
   } catch { /* ignore */ }
@@ -729,7 +729,7 @@ async function loadBackups() {
   const box = $("backup-list");
   if (!box) return;
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/backups");
+    const r = await fetch(API_BASE + "/api/backups");
     const j = await r.json();
     const list = (j?.ok && Array.isArray(j.backups)) ? j.backups : [];
     const last = list[0];
@@ -751,7 +751,7 @@ async function loadBackups() {
         const name = btn.dataset.restore;
         if (!confirm("恢复会把数据替换为该备份的版本（替换前自动备份当前状态作安全网），重启桌宠后生效。确认恢复？")) return;
         try {
-          const rr = await fetch("http://127.0.0.1:8899/api/backups/restore", {
+          const rr = await fetch(API_BASE + "/api/backups/restore", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name }),
           });
@@ -775,7 +775,7 @@ document.getElementById("set-backup-now")?.addEventListener("click", async () =>
   btn.textContent = "⏳ 备份中…";
   if (statusEl) statusEl.textContent = "备份中（WAL checkpoint + 复制存档）…";
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/backup", { method: "POST" });
+    const r = await fetch(API_BASE + "/api/backup", { method: "POST" });
     const j = await r.json();
     if (statusEl) statusEl.textContent = j?.ok ? `✅ ${j.note}（${j.name}）` : `⚠️ ${j?.error || "备份失败"}`;
     window.kanban?.notify?.("💾 数据备份", j?.ok ? "备份完成" : String(j?.error || "备份失败"));
@@ -794,7 +794,7 @@ async function loadPluginsAdmin() {
   const box = $("plugin-admin-list");
   if (!box) return;
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/plugins");
+    const r = await fetch(API_BASE + "/api/plugins");
     const j = await r.json();
     if (!j?.ok || !Array.isArray(j.plugins)) {
       box.innerHTML = '<div style="color:#8a87a8;font-size:12px;">后台服务未返回插件列表（旧版服务，重启桌宠后可用）</div>';
@@ -829,7 +829,7 @@ async function loadPluginsAdmin() {
         const id = cb.dataset.plgToggle;
         const enabled = cb.checked;
         try {
-          const r = await fetch("http://127.0.0.1:8899/api/plugins/toggle", {
+          const r = await fetch(API_BASE + "/api/plugins/toggle", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id, enabled }),
           });
@@ -849,7 +849,7 @@ async function loadPluginMarket() {
   const box = $("plugin-market-list");
   if (!box) return;
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/plugins/market");
+    const r = await fetch(API_BASE + "/api/plugins/market");
     const j = await r.json();
     const list = (j?.ok && Array.isArray(j.plugins)) ? j.plugins : [];
     if (!list.length) {
@@ -873,7 +873,7 @@ async function loadPluginMarket() {
         btn.disabled = true;
         btn.textContent = "⏳ 安装中…";
         try {
-          const r = await fetch("http://127.0.0.1:8899/api/plugins/install", {
+          const r = await fetch(API_BASE + "/api/plugins/install", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id }),
           });
@@ -921,7 +921,7 @@ async function loadSettingsMascot() {
 // ============ 🌳 知识树（掌握度骨架；转方向/开源可整体替换） ============
 async function loadKnowledgeTree() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/knowledge/tree");
+    const r = await fetch(API_BASE + "/api/knowledge/tree");
     const j = await r.json();
     if (!j?.ok) return;
     $("set-knowledge-tree").value = JSON.stringify(j.tree, null, 1);
@@ -937,7 +937,7 @@ $("set-tree-save")?.addEventListener("click", async () => {
   try {
     let tree = null;
     try { tree = JSON.parse($("set-knowledge-tree").value); } catch { $("set-tree-status").textContent = "⚠️ JSON 解析失败，请检查格式"; return; }
-    const r = await fetch("http://127.0.0.1:8899/api/knowledge/tree", {
+    const r = await fetch(API_BASE + "/api/knowledge/tree", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tree }),
     });
@@ -952,7 +952,7 @@ $("set-tree-save")?.addEventListener("click", async () => {
 });
 
 $("set-tree-reset")?.addEventListener("click", async () => {
-  const r = await fetch("http://127.0.0.1:8899/api/knowledge/tree", {
+  const r = await fetch(API_BASE + "/api/knowledge/tree", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reset: true }),
   });
@@ -964,7 +964,7 @@ $("set-tree-reset")?.addEventListener("click", async () => {
 // 知识树方向模板（前端/后端/算法一键切换）
 async function loadTreeTemplates() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/knowledge/templates");
+    const r = await fetch(API_BASE + "/api/knowledge/templates");
     const j = await r.json();
     if (!j?.ok) return;
     const box = $("set-tree-templates");
@@ -977,7 +977,7 @@ async function loadTreeTemplates() {
       a.textContent = t.name + (t.current ? "（当前）" : "");
       if (!t.current) {
         a.onclick = async () => {
-          const rr = await fetch("http://127.0.0.1:8899/api/knowledge/load-template", {
+          const rr = await fetch(API_BASE + "/api/knowledge/load-template", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name: t.name }),
           });
@@ -994,7 +994,7 @@ async function loadTreeTemplates() {
 // ============ 🔑 LLM API Key（设置中心配置，无需改 .env） ============
 async function loadLlmKeyStatus() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/settings/llm");
+    const r = await fetch(API_BASE + "/api/settings/llm");
     const j = await r.json();
     if (!j?.ok) return;
     $("set-llm-key-status").textContent = j.hasKey
@@ -1010,7 +1010,7 @@ $("set-llm-key-save")?.addEventListener("click", async () => {
   btn.disabled = true;
   try {
     const apiKey = $("set-llm-key").value.trim();
-    const r = await fetch("http://127.0.0.1:8899/api/settings/llm", {
+    const r = await fetch(API_BASE + "/api/settings/llm", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ apiKey }),
     });
@@ -1028,7 +1028,7 @@ $("set-llm-base-save")?.addEventListener("click", async () => {
   const btn = $("set-llm-base-save");
   btn.disabled = true;
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/settings/llm", {
+    const r = await fetch(API_BASE + "/api/settings/llm", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ baseUrl: $("set-llm-base").value.trim(), model: $("set-llm-model").value.trim() }),
     });
@@ -1047,7 +1047,7 @@ $("set-direction-btn")?.addEventListener("click", async () => {
   const btn = $("set-direction-btn");
   btn.disabled = true;
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/jobs/direction", {
+    const r = await fetch(API_BASE + "/api/jobs/direction", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ direction: $("set-direction").value }),
     });
@@ -1067,7 +1067,7 @@ $("set-direction-btn")?.addEventListener("click", async () => {
 // ============ 🧭 方向画像（讲解/面试/考点提炼角度；转方向/开源只改这里） ============
 async function loadCareerProfile() {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/career/profile");
+    const r = await fetch(API_BASE + "/api/career/profile");
     const j = await r.json();
     if (!j?.ok || !j.profile) return;
     const p = j.profile;
@@ -1086,7 +1086,7 @@ $("set-career-save")?.addEventListener("click", async () => {
   const btn = $("set-career-save");
   btn.disabled = true;
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/career/profile", {
+    const r = await fetch(API_BASE + "/api/career/profile", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         roleLabel: $("set-career-role").value.trim(),
@@ -1108,7 +1108,7 @@ $("set-career-save")?.addEventListener("click", async () => {
 });
 
 $("set-career-reset")?.addEventListener("click", async () => {
-  const r = await fetch("http://127.0.0.1:8899/api/career/profile", {
+  const r = await fetch(API_BASE + "/api/career/profile", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reset: true }),
   });
@@ -1168,7 +1168,7 @@ $("set-rag-enabled")?.addEventListener("change", async () => {
 // 通知提醒开关（复习到期 / 定时学习）
 async function saveReminderSwitch(key, on) {
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/settings/reminders", {
+    const r = await fetch(API_BASE + "/api/settings/reminders", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [key]: on }),
     });
@@ -1203,7 +1203,7 @@ $("set-personal-projects-save")?.addEventListener("click", async () => {
       $("set-personal-projects-status").textContent = "⚠️ 请至少填一行 项目名=目录";
       return;
     }
-    const r = await fetch("http://127.0.0.1:8899/api/settings/personal-projects", {
+    const r = await fetch(API_BASE + "/api/settings/personal-projects", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projects }),
     });
     const j = await r.json();
@@ -1220,7 +1220,7 @@ $("set-personal-projects-save")?.addEventListener("click", async () => {
 $("set-rss-save")?.addEventListener("click", async () => {
   const feeds = $("set-rss-feeds").value.split("\n").map((s) => s.trim()).filter(Boolean);
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/rss/config", {
+    const r = await fetch(API_BASE + "/api/rss/config", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feeds }),
     });
     const j = await r.json();
@@ -1236,7 +1236,7 @@ $("set-mail-save")?.addEventListener("click", async () => {
   const authCode = $("set-mail-authcode").value.trim();
   if (!email || !authCode) { $("set-mail-status").textContent = "⚠️ 请填写邮箱和授权码；要改开关可直接点上面复选框"; return; }
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/mail/config", {
+    const r = await fetch(API_BASE + "/api/mail/config", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, authCode, enabled: $("set-mail-enabled").checked }),
     });
     const j = await r.json();
@@ -1247,7 +1247,7 @@ $("set-mail-save")?.addEventListener("click", async () => {
 $("set-mail-enabled")?.addEventListener("change", async () => {
   // 只切开关（保留已有凭据）：setConfig 未提交 email/authCode 时保留
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/mail/config", {
+    const r = await fetch(API_BASE + "/api/mail/config", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: $("set-mail-enabled").checked }),
     });
     const j = await r.json();
@@ -1257,7 +1257,7 @@ $("set-mail-enabled")?.addEventListener("change", async () => {
 $("set-mail-test")?.addEventListener("click", async () => {
   $("set-mail-status").textContent = "⏳ 测试中…";
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/mail/test", {
+    const r = await fetch(API_BASE + "/api/mail/test", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
     });
     const j = await r.json();
@@ -1279,7 +1279,7 @@ $("set-voice-btn")?.addEventListener("click", () => {
 $("set-docs-project-btn")?.addEventListener("click", async () => {
   const p = $("set-docs-project").value.trim();
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/learning/project", {
+    const r = await fetch(API_BASE + "/api/learning/project", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: p }),
     });
     const j = await r.json();
@@ -1296,7 +1296,7 @@ $("set-kb-rebuild")?.addEventListener("click", async () => {
   btn.textContent = "⏳ 重建中（约 15-60s）…";
   $("set-maintain-status").textContent = "正在重建索引…";
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/knowledge/rebuild", {
+    const r = await fetch(API_BASE + "/api/knowledge/rebuild", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
     });
     const j = await r.json();
@@ -1311,7 +1311,7 @@ $("set-kb-rebuild")?.addEventListener("click", async () => {
 $("set-self-check")?.addEventListener("click", async () => {
   $("set-maintain-status").textContent = "⏳ 自检中…";
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/self-check", {
+    const r = await fetch(API_BASE + "/api/self-check", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
     });
     const j = await r.json();
@@ -1340,7 +1340,7 @@ async function loadRss() {
   const list = $("rss-list");
   const statusEl = $("rss-status");
   try {
-    const r = await fetch("http://127.0.0.1:8899/api/rss/digest");
+    const r = await fetch(API_BASE + "/api/rss/digest");
     const j = await r.json();
     const last = j.lastDigestAt ? new Date(j.lastDigestAt).toLocaleString("zh-CN", { hour12: false }) : "—";
     if (!j.digest?.length) {
@@ -1382,7 +1382,7 @@ $("rss-refresh-btn")?.addEventListener("click", async () => {
   btn.textContent = "⏳ 抓取摘要中（约 1 分钟）…";
   statusEl.textContent = "正在抓取 RSS 源并 AI 摘要…";
   try {
-    const res = await fetch("http://127.0.0.1:8899/api/rss/check", {
+    const res = await fetch(API_BASE + "/api/rss/check", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
     });
     const j = await res.json();

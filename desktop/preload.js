@@ -1,4 +1,6 @@
 // preload：安全桥接 IPC
+// Phase 2 §3.5：类型契约（kanban-api.d.ts 声明全量 API；checkJs 校验实现与声明一致）
+/// <reference path="./kanban-api.d.ts" />
 const { contextBridge, ipcRenderer } = require("electron");
 
 let voiceEnabled = true; // 语音开关（渲染层可切换）
@@ -47,7 +49,7 @@ function streamPromise({ channel, invokeName, args, onChunk, jsonMode = false, e
   });
 }
 
-contextBridge.exposeInMainWorld("kanban", {
+contextBridge.exposeInMainWorld("kanban", /** @type {import("./kanban-api").KanbanApi} */ ({
   modelPath,
   getData: () => ipcRenderer.invoke("widget:data"),
   getProgress: () => ipcRenderer.invoke("widget:progress"),
@@ -137,4 +139,4 @@ contextBridge.exposeInMainWorld("kanban", {
   onRunDiscover: (cb) => ipcRenderer.on("run-discover", () => cb()),
   // 专注监督气泡/语音事件（主进程 pet-say 广播 → 桌宠 app.js 订阅）
   onPetSay: (cb) => ipcRenderer.on("pet-say", (e, { text, scene }) => cb({ text, scene })),
-});
+}));

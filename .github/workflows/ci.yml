@@ -35,6 +35,8 @@ jobs:
           retention-days: 14
       - name: Type check (tsc --noEmit, checkJs)
         run: npm run typecheck
+      - name: Desktop type check (preload/main/api-client, checkJs — Phase 2 前后端类型化)
+        run: npm run typecheck:desktop
       - name: Lint
         run: npm run lint
       - name: Build renderer bundle
