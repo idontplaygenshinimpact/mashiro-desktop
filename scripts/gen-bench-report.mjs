@@ -34,9 +34,9 @@ export function buildBadgeUrl(text, label = "mashiro-eval") {
   return `https://img.shields.io/badge/${encodeURIComponent(label)}-${encodeURIComponent(text.replace(/[··]/g, "_"))}-blue`;
 }
 
-/** trend.svg：最近 n 次 composite/truth 折线（纯字符串拼接，无依赖） */
+/** trend.svg：最近 n 次 composite/truth 折线（纯字符串拼接，无依赖；仅主评测 full/quick 行） */
 export function buildTrendSvg(rows, n = 8) {
-  const aRuns = (rows || []).filter((r) => r.layer === "A" && r.composite !== "");
+  const aRuns = (rows || []).filter((r) => r.layer === "A" && r.composite !== "" && r.mode !== "ablation");
   aRuns.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
   const recent = aRuns.slice(-n);
   if (!recent.length) return null;

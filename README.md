@@ -433,7 +433,9 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 ### 消融基线（`npm run bench:ablation -- --sample N`，诚实版）
 
 - 同题 A/B：**裸 prompt（无模板）vs 全链路**（结构化 prompt 工程），固定 seed 随机顺序消除判官偏差
-- 产出 Δ 数字（讲解均分 / CRAG / 覆盖度）——**数值只写实测，不预填**
+- **实测（sample=20，deepseek-v4-flash，$0.11）**：A 裸 prompt judge85/CRAG75/覆盖91% vs B 全链路 judge82/CRAG43/覆盖94% → Δ judge -3pt · Δ cover **+3pt** · Δ CRAG -43pt
+- **诚实解读（方法论发现）**：结构化模板的收益只在**覆盖度**（必考要点更全，+3pt 可信）；judge/CRAG 的负 Δ 经抽检（B 链路 HTTP 缓存回答内容完全正确却被判 incorrect）指向**判官对 5000+ 字长文存在系统性误判**——消融暴露了评测自身的判官短板，后续工作是长文判官校准（截断/金标），而非据此否定结构化 prompt
+- 数值只写实测，不预填；sample=4 初版（+6pt）与 sample=20（-3pt）方向相反，正是小样本误导的实例——正式口径以 sample=20 为准
 
 ### 为什么讲解链路不用 RAG（决策档案，有据可依）
 
