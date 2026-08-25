@@ -5,8 +5,9 @@ import { ensureQuiz, drawQuiz, submitQuiz, getQuizStats } from "#lib/quiz.mjs";
 import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
 import { memory } from "#lib/memory.mjs";
 import { readBody } from "#lib/widget-core.mjs";
-import { createSSEPush } from "#lib/routes/contract.mjs";
+import { createSSEPush, withContract } from "#lib/routes/contract.mjs";
 import { StudyStreamEvent } from "#lib/contracts/sse.mjs";
+import { ReviewAddInput, ReviewAddOutput, ReviewSubmitInput, ReviewSubmitOutput, ReviewDueOutput } from "#lib/contracts/review.mjs";
 
 /**
  * 注册复习域路由
@@ -16,22 +17,17 @@ import { StudyStreamEvent } from "#lib/contracts/sse.mjs";
 export function registerReviewRoutes(router, ctx) {
   const { getCorsOrigin } = ctx;
 
-  router.route("/api/review/due", (req, res) => {
+  router.route("/api/review/due", "GET", withContract(
     // 今日到期复习卡片 + 统计 + 趋势（7 天复习量 + 连续天数）+ 今日已复习主题（面试检验用）
-    try {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({
-        ok: true,
-        due: reviewApi.review.getDailySession(),
-        stats: reviewApi.review.getStats(),
-        trend: reviewApi.review.getReviewTrend(),
-        todayReviewed: reviewApi.review.getTodayReviewedTopics(),
-      }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-  });
+    () => ({
+      ok: true,
+      due: reviewApi.review.getDailySession(),
+      stats: reviewApi.review.getStats(),
+      trend: reviewApi.review.getReviewTrend(),
+      todayReviewed: reviewApi.review.getTodayReviewedTopics(),
+    }),
+    { output: ReviewDueOutput }
+  ));
 
   router.route("/api/review/wrong", (req, res) => {
     // 错题本：答错 >=2 次的卡（错题自动讲解闭环）
@@ -178,45 +174,32 @@ ${kbContext ? `本地知识库相关段落（仅作补充素材）：\n${kbConte
       .finally(() => { try { res.end(); } catch { /* ignore */ } });
   });
 
-  router.route("/api/review/add", "POST", (req, res) => {
+  router.route("/api/review/add", "POST", withContract(
     // 添加复习卡（学习清单/薄弱点回流用）
-    readBody(req, res, (body) => {
-      try {
-        const { topic, question = "", answer = "", source = "" } = JSON.parse(body || "{}");
-        if (!topic) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "topic required" })); return; }
-        const card = reviewApi.review.addCard({ topic, question, answer, source });
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, card }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-  });
+    (input) => {
+      const card = reviewApi.review.addCard({ topic: input.topic, question: input.question, answer: input.answer, source: input.source });
+      return { ok: true, card };
+    },
+    { input: ReviewAddInput, output: ReviewAddOutput }
+  ));
 
-  router.route("/api/review/submit", "POST", (req, res) => {
+  router.route("/api/review/submit", "POST", withContract(
     // 复习提交评级 0-3（0=Again 忘了——注意 0 是合法值，不能用 || 兜底）
-    readBody(req, res, (body) => {
+    (input) => {
+      // 归一化一次：非法值才兜底 2（契约已保证 0-3，此处防御性保留）
+      const rn = Number.isInteger(input.rating) && input.rating >= 0 && input.rating <= 3 ? input.rating : 2;
+      const r = reviewApi.review.reviewCard(input.id, rn);
+      // 答错（Again/Hard）→ 真白安慰
+      let emotion = null;
       try {
-        const { id, rating } = JSON.parse(body || "{}");
-        const rt = parseInt(rating, 10);
-        const rn = Number.isInteger(rt) && rt >= 0 && rt <= 3 ? rt : 2; // 归一化一次：非法值才兜底 2
-        const r = reviewApi.review.reviewCard(id, rn);
-        // 答错（Again/Hard）→ 真白安慰
-        let emotion = null;
-        try {
-          if (rn <= 1) {
-            emotion = pickEmotion(EMOTIONS.comfort);
-          } else if (rn >= 2 && r.card && r.card.fsrs && r.card.fsrs.stability >= 21) {
-            emotion = pickEmotion(EMOTIONS.celebrate);
-          }
-        } catch { /* ignore */ }
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ...r, emotion }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-  });
+        if (rn <= 1) {
+          emotion = pickEmotion(EMOTIONS.comfort);
+        } else if (rn >= 2 && r.card && r.card.fsrs && r.card.fsrs.stability >= 21) {
+          emotion = pickEmotion(EMOTIONS.celebrate);
+        }
+      } catch { /* ignore */ }
+      return { ...r, emotion };
+    },
+    { input: ReviewSubmitInput, output: ReviewSubmitOutput }
+  ));
 }

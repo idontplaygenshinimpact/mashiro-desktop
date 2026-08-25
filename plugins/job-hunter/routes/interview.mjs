@@ -4,67 +4,36 @@ import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
 import { memory } from "#lib/memory.mjs";
 import { readBody } from "#lib/widget-core.mjs";
+import { withContract } from "#lib/routes/contract.mjs";
+import { InterviewStartInput, InterviewAnswerInput, InterviewResult, InterviewStatusOutput } from "#lib/contracts/interview.mjs";
+import { InterviewHistoryOutput } from "#lib/contracts/misc.mjs";
 
 export function registerInterviewRoutes(router, { laneSubmit = (fn) => fn() } = {}) {
-  router.route("/api/interview/start", (req, res) => {
-    readBody(req, res, async (body) => {
-      try {
-        const r = await laneSubmit(() => interviewApi.startInterview(JSON.parse(body || "{}")));
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(e?.statusCode || 500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-  });
+  router.route("/api/interview/start", "POST", withContract(
+    async (input) => laneSubmit(() => interviewApi.startInterview(input)),
+    { input: InterviewStartInput, output: InterviewResult }
+  ));
 
-  router.route("/api/interview/answer", (req, res) => {
-    readBody(req, res, async (body) => {
-      try {
-        const r = await laneSubmit(() => interviewApi.submitAnswer(JSON.parse(body || "{}").answer || ""));
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-  });
+  router.route("/api/interview/answer", "POST", withContract(
+    async (input) => laneSubmit(() => interviewApi.submitAnswer(input.answer)),
+    { input: InterviewAnswerInput, output: InterviewResult }
+  ));
 
-  router.route("/api/interview/end", (req, res) => {
-    laneSubmit(() => interviewApi.endInterview())
-      .then((r) => {
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(r));
-      })
-      .catch((e) => {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      });
-  });
+  router.route("/api/interview/end", "POST", withContract(
+    () => laneSubmit(() => interviewApi.endInterview()),
+    { output: InterviewResult }
+  ));
 
-  router.route("/api/interview/history", (req, res) => {
+  router.route("/api/interview/history", "GET", withContract(
     // 面试历史（复盘报告）
-    try {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, history: memory.getInterviewHistory() }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-  });
+    () => ({ ok: true, history: memory.getInterviewHistory() }),
+    { output: InterviewHistoryOutput }
+  ));
 
-  router.route("/api/interview/status", (req, res) => {
-    // 进行中会话状态（面板"继续上一场"入口；C8 恢复闭环）
-    try {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify(interviewApi.getInterviewStatus()));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-  });
+  router.route("/api/interview/status", "GET", withContract(
+    () => interviewApi.getInterviewStatus(),
+    { output: InterviewStatusOutput }
+  ));
 
   router.route("/api/interview-notes", (req, res) => {
     // 面试实录：把真实面试被问住的知识点加入学习清单（必会）+ 建复习卡

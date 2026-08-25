@@ -85,6 +85,24 @@ test("全部域路由注册齐全（原版 55 条内联路径一个不少；业�
   ];
   const missingNew = NEW_PATHS.filter((p) => !router.resolve(p, "GET") && !router.resolve(p, "POST"));
   assert.deepEqual(missingNew, [], `新增路由缺失：\n${missingNew.join("\n")}`);
+
+  // Phase 2 契约覆盖率：高频路由应已挂 input/output 契约（withContract），防回归
+  const contracted = router.schemaCount();
+  assert.ok(contracted >= 15, `已挂契约的路由数应 >= 15（实际 ${contracted}）——高频路由迁移回归护栏`);
+  const CONTRACT_GATED = [
+    ["/api/chat", "POST"],
+    ["/api/chat/session", "DELETE"],
+    ["/api/interview/start", "POST"],
+    ["/api/interview/answer", "POST"],
+    ["/api/interview/end", "POST"],
+    ["/api/review/add", "POST"],
+    ["/api/review/submit", "POST"],
+    ["/api/settings/rag", "POST"],
+    ["/api/study-check", "POST"],
+  ];
+  for (const [p, m] of CONTRACT_GATED) {
+    assert.ok(router.hasSchema(p, m), `高频路由应挂契约: ${p} ${m}`);
+  }
 });
 
 test.after(() => cleanupTempDb(tmpDir));

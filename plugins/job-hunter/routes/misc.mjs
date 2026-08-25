@@ -16,6 +16,8 @@ import { saveAccount as savePlatformAccount } from "#lib/platform-accounts.mjs";
 import * as personalProjectsApi from "#lib/personal-projects.mjs";
 import { runSelfCheck, getLastSelfCheck, saveSelfCheck } from "#lib/self-check.mjs";
 import { readBody } from "#lib/widget-core.mjs";
+import { withContract } from "#lib/routes/contract.mjs";
+import { RagSettingsInput, RagSettingsOutput } from "#lib/contracts/misc.mjs";
 
 export function registerMiscRoutes(router) {
   // ---------- LLM API Key / Base URL / 模型配置（设置中心；settings > .env/环境变量，面板可改） ----------
@@ -122,29 +124,19 @@ export function registerMiscRoutes(router) {
       res.end(JSON.stringify({ error: e.message }));
     }
   });
-  router.route("/api/settings/rag", "POST", (req, res) => {
-    readBody(req, res, (body) => {
-      try {
-        const { enabled } = JSON.parse(body || "{}");
-        if (typeof enabled !== "boolean") {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ ok: false, error: "enabled 必须是布尔值" })); return;
-        }
-        db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('rag_enabled', ?, ?)").run(enabled ? "1" : "0", Date.now());
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({
-          ok: true,
-          enabled,
-          message: enabled
-            ? "✅ 知识库已开启：将自动重建索引（纯关键词检索，秒级完成，零模型占用），之后对话可引用"
-            : "已关闭知识库：不再加载模型/构建索引，内存占用归零",
-        }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
-  });
+  router.route("/api/settings/rag", "POST", withContract(
+    (input) => {
+      db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('rag_enabled', ?, ?)").run(input.enabled ? "1" : "0", Date.now());
+      return {
+        ok: true,
+        enabled: input.enabled,
+        message: input.enabled
+          ? "✅ 知识库已开启：将自动重建索引（纯关键词检索，秒级完成，零模型占用），之后对话可引用"
+          : "已关闭知识库：不再加载模型/构建索引，内存占用归零",
+      };
+    },
+    { input: RagSettingsInput, output: RagSettingsOutput }
+  ));
 
   // ---------- 通知提醒开关（设置中心；复习到期/定时学习提醒） ----------
   router.route("/api/settings/reminders", "GET", (req, res) => {

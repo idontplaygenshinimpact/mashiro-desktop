@@ -258,16 +258,20 @@ test("GET /api/schedule → events 数组", async () => {
 });
 
 // ---------- 错误路径 ----------
-test("POST /api/chat 缺 message → 400", async () => {
-  const r = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+test("POST /api/chat 非法 JSON body → 400 INVALID_JSON（契约统一错误格式，客户端错误不落 500）", async () => {
+  const r = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: "not-json" });
   assert.equal(r.status, 400);
+  const j = await r.json();
+  assert.equal(j.error, "INVALID_JSON");
+  assert.ok(j.issues, "结构化 issues");
 });
 
-test("POST /api/chat 非法 JSON body → 500 错误不崩溃", async () => {
-  const r = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: "not-json" });
-  assert.equal(r.status, 500);
+test("POST /api/chat 缺 message → 400 VALIDATION_ERROR + issues（契约校验）", async () => {
+  const r = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+  assert.equal(r.status, 400);
   const j = await r.json();
-  assert.ok(j.error);
+  assert.equal(j.error, "VALIDATION_ERROR");
+  assert.ok(Array.isArray(j.issues) && j.issues.length > 0);
 });
 
 test("未知路由 → 非 500（服务不崩）", async () => {

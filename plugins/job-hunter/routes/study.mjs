@@ -10,8 +10,9 @@ import { isSimilarTopicForArchive } from "#lib/memory.mjs";
 import { queryFollowupCache } from "#lib/followup-cache.mjs";
 import { readBody } from "#lib/widget-core.mjs";
 import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
-import { createSSEPush } from "#lib/routes/contract.mjs";
+import { createSSEPush, withContract } from "#lib/routes/contract.mjs";
 import { StudyStreamEvent } from "#lib/contracts/sse.mjs";
+import { StudyPlanOutput, StudyCheckInput, StudyCheckOutput } from "#lib/contracts/study.mjs";
 
 // 同知识点讲解复用：清单里语义相似的另一条目已有讲解存档 → 直接复用（内容一致 + 省 LLM）
 // 背景：同一知识点可能因来源不同（面经产出/面试实录/复习卡恢复）存在多条近似条目
@@ -87,21 +88,18 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
   // 统一 SSE push（Phase 2 §3.4：StudyStreamEvent 契约；开发期 MIANSHI_SSE_STRICT=1 校验漂移）
   const makePush = (res) => createSSEPush(res, { eventSchema: StudyStreamEvent }).push;
 
-  router.route("/api/study-plan", (req, res) => {
+  router.route("/api/study-plan", "GET", withContract(
     // 学习清单（读取）——为每条附加讲解文件路径
-    try {
+    () => {
       const plan = studyApi.getPlan();
       const items = (plan.items || []).map((it) => {
         const filePath = findStudyFile(it);
         return { ...it, filePath, hasFile: !!filePath };
       });
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, plan: { ...plan, items } }));
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-  });
+      return { ok: true, plan: { ...plan, items } };
+    },
+    { output: StudyPlanOutput }
+  ));
 
   router.route("/api/study-note/reset", "POST", (req, res) => {
     // 讲解重置：删除该条目的本地讲解存档（study_notes/{topic}.md）
@@ -486,11 +484,11 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
       });
   });
 
-  router.route("/api/study-check", (req, res) => {
-    // 勾选完成 → 返回真白情感反馈（庆祝/取消）
-    const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
-    const done = u.searchParams.get("done") === "1";
-    studyApi.checkItem(u.searchParams.get("id"), done).then((r) => {
+  router.route("/api/study-check", withContract(
+    // 勾选完成 → 返回真白情感反馈（庆祝/取消）；入参来自 query（src=query）
+    async (input) => {
+      const done = input.done === "1";
+      const r = await studyApi.checkItem(input.id, done);
       let emotion = null;
       let emotionScene = null;
       try {
@@ -502,13 +500,10 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
           emotionScene = "encourage";
         }
       } catch { /* ignore */ }
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ...r, emotion, emotionScene }));
-    }).catch((e) => {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    });
-  });
+      return { ...r, emotion, emotionScene };
+    },
+    { src: "query", input: StudyCheckInput, output: StudyCheckOutput }
+  ));
 
   router.route("/api/study-review", (req, res) => {
     // 复盘：出验证题
