@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { appendEvalSummary } from "../lib/eval-summary.mjs";
 import { mockLLM, mockFetchPage, setLlmResponses, setMockPages, setupTempDb, setBrowseFails, resetBrowseFails } from "../tests/helpers.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -588,6 +589,12 @@ if (CHILD_ID) {
     writeFileSync(path.join(REPORT_DIR, `agent-${ts}.json`), JSON.stringify(report, null, 2), "utf8");
     writeFileSync(path.join(REPORT_DIR, "agent-latest.json"), JSON.stringify(report, null, 2), "utf8");
     console.log(`报告: benchmark/reports/agent-${ts}.json`);
+    // eval_summary.csv 行（layer=B：mock 确定性，成本 0）
+    appendEvalSummary([
+      new Date().toISOString(), "B", "agent", "mock", "mock-llm",
+      Math.round((pass1Total / total) * 100), 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, Math.round((pass1Total / total) * 100), taxonomy.failCount ?? 0, pass1Total === total ? 0 : 1,
+    ]);
   }
   process.exit(pass1Total === total ? 0 : 1);
 }

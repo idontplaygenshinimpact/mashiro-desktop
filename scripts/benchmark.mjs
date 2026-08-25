@@ -2,13 +2,16 @@
 // 注意：本层反映「模型 + prompt」组合能力（内部仍调 LLM API），用于回归监控 prompt/模型变更，
 // 不体现 harness 能力。Agent 机制本身的评测见 scripts/benchmark-agent.mjs（Layer B，mock LLM 故障注入）。
 // 用法: node scripts/benchmark.mjs [--quick] [--no-save] [--judge-check]
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { llmChat, extractJson } from "../lib/llm.mjs";
+import { llmChat, extractJson, startEvalMetrics, getEvalMetrics } from "../lib/llm.mjs";
 import { solveQuestion, classifyPage, detectQuestions } from "../lib/ai.mjs";
 import { matchKp } from "../lib/knowledge.mjs";
+import { summarizeEvalCost, formatEvalCost } from "../lib/eval-cost.mjs";
+import { appendEvalSummary } from "../lib/eval-summary.mjs";
+import { computeDatasetHash } from "./validate-evaldata.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const QUICK = process.argv.includes("--quick");
@@ -19,6 +22,16 @@ import { setupTempDb } from "../tests/helpers.mjs";
 setupTempDb("bench-a");
 const load = (f) => JSON.parse(readFileSync(path.join(ROOT, "benchmark", f), "utf8"));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ---------- 评测期 LLM 成本/延迟计数（Phase 评测 W2：本地计数器，零落盘） ----------
+startEvalMetrics();
+
+// ---------- eval_summary.csv 追加（回归对比的数据底座；共享写入模块） ----------
+const NO_SUMMARY = process.argv.includes("--no-summary");
+function appendSummary(fields) {
+  if (NO_SUMMARY) return;
+  return appendEvalSummary(fields);
+}
 
 // ---------- 真实性标签（CRAG）----------
 // correct +1 / acceptable +0.5 / missing 0 / incorrect -1，映射到 0-100
@@ -74,7 +87,7 @@ async function judgeAnswer(q, answer) {
       const data = await llmChat([
         { role: "system", content: "你是严格的前端面试官评委，只输出合法 JSON。" },
         { role: "user", content: prompt },
-      ], { maxTokens: 500, temperature: 0.2 });
+      ], { maxTokens: 500, temperature: 0.2, tag: "judge" });
       const content = data?.choices?.[0]?.message?.content ?? "";
       const parsed = extractJson(content);
       if (parsed && typeof parsed.total === "number") return parsed;
@@ -111,7 +124,7 @@ ${refText(q)}
       const data = await llmChat([
         { role: "system", content: "你是事实核查员，只输出合法 JSON。" },
         { role: "user", content: prompt },
-      ], { maxTokens: 200, temperature: 0.2 });
+      ], { maxTokens: 200, temperature: 0.2, tag: "judge" });
       const content = data?.choices?.[0]?.message?.content ?? "";
       const parsed = extractJson(content);
       if (parsed && TRUTH_LABEL_SCORE[parsed.label] !== undefined) return parsed;
@@ -141,7 +154,7 @@ AI 回答：${answer.slice(0, 6000)}
       const data = await llmChat([
         { role: "system", content: "你是严谨的评测员，只输出合法 JSON。" },
         { role: "user", content: prompt },
-      ], { maxTokens: 200, temperature: 0.2 });
+      ], { maxTokens: 200, temperature: 0.2, tag: "judge" });
       const content = data?.choices?.[0]?.message?.content ?? "";
       const parsed = extractJson(content);
       if (parsed && typeof parsed.relevance === "number" && typeof parsed.utilization === "number" &&
@@ -271,7 +284,7 @@ async function judgeTruthfulnessGold(g) {
       const data = await llmChat([
         { role: "system", content: "你是事实核查员，只输出合法 JSON。" },
         { role: "user", content: prompt },
-      ], { maxTokens: 200, temperature: 0.2 });
+      ], { maxTokens: 200, temperature: 0.2, tag: "judge" });
       const content = data?.choices?.[0]?.message?.content ?? "";
       const parsed = extractJson(content);
       if (parsed && TRUTH_LABEL_SCORE[parsed.label] !== undefined) return parsed.label;
@@ -314,6 +327,13 @@ async function runJudgeCheck() {
   console.log(`\n判官一致性: 精确一致 ${exactRate}% (${exact}/${compared}) | 相邻一致 ${adjacentRate}% (${adjacent}/${compared}) | 判官间一致 ${interRate}% (${interExact}/${interCompared})`);
   if (warning) console.log(`⚠️ 警告: 判官精确一致率 < 70%，金标校验未通过，需检查判官 prompt 或金标标注`);
   const agreement = { total: gold.length, compared, exact, adjacent, exactRate, adjacentRate, interJudgeRate: interRate, warning };
+  // judge-check 也写 summary 行（mode=judge-check，composite 位置放判官 exactRate）
+  const costJ = summarizeEvalCost(getEvalMetrics());
+  appendSummary([
+    new Date().toISOString(), "A", "judge-check", computeDatasetHash(2, load("judge-gold.json").pairs), costJ.model || "",
+    Math.round(exactRate), 0, 0, 0, 0, 0, 0,
+    costJ.costTokens, costJ.costUsd, costJ.p50Ms, costJ.p95Ms, "", costJ.failCount, 0,
+  ].join(","));
   if (!NO_SAVE) {
     const reportsDir = path.join(ROOT, "benchmark", "reports");
     mkdirSync(reportsDir, { recursive: true });
@@ -479,8 +499,27 @@ if (!NO_SAVE) {
   const reportsDir = path.join(ROOT, "benchmark", "reports");
   mkdirSync(reportsDir, { recursive: true });
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 16);
+  // Phase 评测 W2：成本/延迟/模型/hash/pass1/failCount（回归对比与简历数据底座）
+  const cost = summarizeEvalCost(getEvalMetrics());
+  const dataHash = computeDatasetHash(2, load("questions.json").questions);
+  const failCount = [...qResults, ...traceResults].filter((r) => /失败/.test(String(r.detail || ""))).length;
+  const pass1 = codeTotal > 0 ? Math.round((codePass / codeTotal) * 1000) / 10 : null; // code/predict 客观首次通过率
+  console.log(`\n【成本/延迟】${formatEvalCost(cost)}`);
   const report = {
+    // envelope（可复现性 §6.3）：model / datasetHash / node / temperature / 模式
     ts: new Date().toISOString(), mode: QUICK ? "quick" : "full", composite,
+    envelope: {
+      model: cost.model || null,
+      datasetHash: dataHash,
+      node: process.version,
+      params: { judgeTemperature: 0.2, solverTemperature: 0.5 },
+      mocked: false,
+    },
+    metrics: {
+      costTokens: cost.costTokens, costUsd: cost.costUsd, calls: cost.calls,
+      failCount: cost.failCount + failCount, p50Ms: cost.p50Ms, p95Ms: cost.p95Ms,
+      byTag: cost.byTag, pass1,
+    },
     dims: { solve: qScore, codePass: `${codePass}/${codeTotal}`, classify: cRes.rate, detect: dRes.rate, static: sRes.rate },
     truthfulness,
     trace: traceDims,
@@ -489,6 +528,12 @@ if (!NO_SAVE) {
   };
   writeFileSync(path.join(reportsDir, `${ts}.json`), JSON.stringify(report, null, 2), "utf8");
   writeFileSync(path.join(reportsDir, "latest.json"), JSON.stringify(report, null, 2), "utf8");
+  // eval_summary.csv 追加（回归对比底座；成本 0 也如实记录）
+  appendSummary([
+    new Date().toISOString(), "A", QUICK ? "quick" : "full", dataHash, cost.model || "",
+    composite, qScore, truthfulness, cRes.rate, dRes.rate, sRes.rate, traceAvg,
+    cost.costTokens, cost.costUsd, cost.p50Ms, cost.p95Ms, pass1 ?? "", cost.failCount + failCount, 0,
+  ].join(","));
   console.log(`\n报告已保存: benchmark/reports/${ts}.json`);
 }
 process.exit(0);

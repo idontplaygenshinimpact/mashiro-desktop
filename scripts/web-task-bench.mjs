@@ -24,6 +24,8 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { appendEvalSummary } from "../lib/eval-summary.mjs";
+import { computeDatasetHash } from "./validate-evaldata.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TASKS_FILE = path.join(ROOT, "benchmark", "web-tasks", "tasks.json");
@@ -339,6 +341,16 @@ if (!NO_SAVE) {
   writeFileSync(path.join(REPORTS_DIR, "web-tasks-latest.json"), JSON.stringify(report, null, 2), "utf8");
   console.log(`\n报告已保存: benchmark/reports/web-tasks-${ts}.json`);
 }
+// eval_summary.csv 行（layer=web；成本/延迟留空——web 任务耗时在 avgDurationMs）
+try {
+  const tasks = JSON.parse(readFileSync(TASKS_FILE, "utf8"));
+  appendEvalSummary([
+    new Date().toISOString(), "web", "web-tasks",
+    computeDatasetHash(tasks.version ?? 2, tasks.tasks || []),
+    config.model || "", Math.round(passRate), 0, 0, 0, 0, 0, 0,
+    "", "", "", "", passRate, 0, 0,
+  ]);
+} catch { /* summary 失败不影响主流程 */ }
 
 // web_search/fetch_page 会缓存 Playwright chromium 实例，不关闭则进程不退出；关闭后正常结束
 try {
