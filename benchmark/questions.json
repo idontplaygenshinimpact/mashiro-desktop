@@ -1,5 +1,10 @@
 {
-  "_说明": "讲解质量评测集 v2：客观可判定为主（对标 SWE-bench 的判定逻辑，领域换成前端面试题）。题型：code=提取讲解中JS代码跑测试断言；predict=跑代码比对stdout；coverage=讲解文本命中必考要点。Judge 双评仅作辅助分。",
+  "version": 2,
+  "meta": {
+    "generatedBy": "迁移脚本/人工",
+    "updatedAt": "2026-08-25T11:42:17.008Z",
+    "note": "讲解质量评测集 v2：客观可判定为主（对标 SWE-bench 的判定逻辑，领域换成前端面试题）。题型：code=提取讲解中JS代码跑测试断言；predict=跑代码比对stdout；coverage=讲解文本命中必考要点。Judge 双评仅作辅助分。"
+  },
   "questions": [
     {
       "id": "q1",
@@ -7,7 +12,14 @@
       "question": "解释浏览器事件循环宏任务/微任务机制，并说明下面代码的输出顺序及原因：\nconsole.log(1);\nsetTimeout(() => console.log(2), 0);\nPromise.resolve().then(() => console.log(3));\nconsole.log(4);",
       "type": "predict",
       "expected_stdout": "1\n4\n3\n2",
-      "must_cover": ["微任务", "宏任务", "执行顺序", "Promise", "setTimeout"]
+      "must_cover": [
+        "微任务",
+        "宏任务",
+        "执行顺序",
+        "Promise",
+        "setTimeout"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "q2",
@@ -16,7 +28,13 @@
       "type": "code",
       "fn": "debounce",
       "test": "const calls = [];\nconst f = debounce((x) => calls.push(x), 100);\nf(1); f(2); f(3); f(4); f(5);\nsetTimeout(() => {\n  if (calls.length !== 1) { console.error('debounce fail: 触发' + calls.length + '次'); process.exit(1); }\n  if (calls[0] !== 5) { console.error('debounce fail: 应传最后一次参数' + calls[0]); process.exit(1); }\n  console.log('PASS');\n}, 300);",
-      "must_cover": ["防抖", "定时器", "this", "取消"]
+      "must_cover": [
+        "防抖",
+        "定时器",
+        "this",
+        "取消"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "q3",
@@ -25,7 +43,13 @@
       "type": "code",
       "fn": "throttle",
       "test": "let count = 0;\nconst f = throttle(() => count++, 200);\nconst t = setInterval(f, 30);\nsetTimeout(() => {\n  clearInterval(t);\n  if (count < 2 || count > 7) { console.error('throttle fail: ' + count + '次'); process.exit(1); }\n  console.log('PASS');\n}, 1000);",
-      "must_cover": ["节流", "时间戳", "定时器", "防抖区别"]
+      "must_cover": [
+        "节流",
+        "时间戳",
+        "定时器",
+        "防抖区别"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "q4",
@@ -34,7 +58,14 @@
       "type": "code",
       "fn": "deepClone",
       "test": "const a = { x: 1, arr: [1, { y: 2 }], d: new Date(123) };\nconst b = deepClone(a);\nif (b === a) { console.error('fail: 返回了原对象'); process.exit(1); }\na.arr[1].y = 999;\nif (b.arr[1].y !== 2) { console.error('fail: 不是深拷贝'); process.exit(1); }\nif (!(b.d instanceof Date) || b.d.getTime() !== 123) { console.error('fail: Date 处理'); process.exit(1); }\nconst c = {}; c.self = c;\ntry {\n  const d = deepClone(c);\n  if (d.self !== d) { console.error('fail: 循环引用结果不对'); process.exit(1); }\n} catch (e) { console.error('fail: 循环引用崩溃 ' + e.message); process.exit(1); }\nconsole.log('PASS');",
-      "must_cover": ["深拷贝", "浅拷贝", "循环引用", "Date", "WeakMap"]
+      "must_cover": [
+        "深拷贝",
+        "浅拷贝",
+        "循环引用",
+        "Date",
+        "WeakMap"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "q5",
@@ -43,42 +74,83 @@
       "type": "code",
       "fn": "promiseAll",
       "test": "promiseAll([Promise.resolve(1), new Promise((res) => setTimeout(() => res(2), 10))]).then((v) => {\n  if (v.join(',') !== '1,2') { console.error('fail: 结果 ' + v.join(',')); process.exit(1); }\n  return promiseAll([Promise.resolve(1), Promise.reject(new Error('x'))]).then(\n    () => { console.error('fail: 应 reject'); process.exit(1); },\n    () => { console.log('PASS'); }\n  );\n}).catch((e) => { console.error('crash: ' + e.message); process.exit(1); });",
-      "must_cover": ["Promise", "all", "reject", "并发"]
+      "must_cover": [
+        "Promise",
+        "all",
+        "reject",
+        "并发"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "q6",
       "title": "React Hooks 原理",
       "question": "解释 React Hooks 的实现原理：为什么 useState 不能写在条件语句中，hooks 链表如何工作，闭包陷阱是什么。",
       "type": "coverage",
-      "must_cover": ["Fiber", "链表", "调用顺序", "闭包", "依赖"]
+      "must_cover": [
+        "Fiber",
+        "链表",
+        "调用顺序",
+        "闭包",
+        "依赖"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "q7",
       "title": "HTTP 缓存策略",
       "question": "完整讲解 HTTP 缓存：强缓存与协商缓存的区别、Cache-Control 指令、ETag/Last-Modified 工作方式。",
       "type": "coverage",
-      "must_cover": ["强缓存", "协商缓存", "Cache-Control", "ETag", "Last-Modified"]
+      "must_cover": [
+        "强缓存",
+        "协商缓存",
+        "Cache-Control",
+        "ETag",
+        "Last-Modified"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "q8",
       "title": "跨域与 CORS",
       "question": "讲解浏览器跨域限制、JSONP 原理与局限、CORS 完整流程（预检/简单请求/响应头）与常见解决方案。",
       "type": "coverage",
-      "must_cover": ["同源", "JSONP", "CORS", "预检", "Access-Control"]
+      "must_cover": [
+        "同源",
+        "JSONP",
+        "CORS",
+        "预检",
+        "Access-Control"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "q9",
       "title": "前端性能优化",
       "question": "给出前端性能优化完整方案：网络加载层、渲染层、运行时三个维度，说明每项的优化原理与衡量指标。",
       "type": "coverage",
-      "must_cover": ["首屏", "懒加载", "渲染", "指标", "代码分割"]
+      "must_cover": [
+        "首屏",
+        "懒加载",
+        "渲染",
+        "指标",
+        "代码分割"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "q10",
       "title": "SSE 与前端流式交互",
       "question": "讲解 Server-Sent Events 原理（与 WebSocket 区别）、fetch 流式读取（ReadableStream）、在 AI Agent 应用中的实践。",
       "type": "coverage",
-      "must_cover": ["SSE", "WebSocket", "ReadableStream", "流式", "打字机"]
+      "must_cover": [
+        "SSE",
+        "WebSocket",
+        "ReadableStream",
+        "流式",
+        "打字机"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "t1",
@@ -86,7 +158,14 @@
       "type": "trace",
       "context": "JavaScript 是单线程语言，通过事件循环（Event Loop）协调异步任务。任务分为两类：宏任务（macrotask，如 setTimeout、setInterval、I/O 事件）和微任务（microtask，如 Promise.then、MutationObserver）。每次执行完一个宏任务后，事件循环会清空当前所有微任务队列，之后才进行渲染或进入下一个宏任务。",
       "question": "根据下面材料回答问题：一段同步代码执行完毕后，一个 setTimeout(0) 回调和一个 Promise.resolve().then() 回调，哪个会先执行？请依据材料说明原因。",
-      "must_cover": ["事件循环", "微任务", "宏任务", "setTimeout", "Promise.then"]
+      "must_cover": [
+        "事件循环",
+        "微任务",
+        "宏任务",
+        "setTimeout",
+        "Promise.then"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "t2",
@@ -94,7 +173,14 @@
       "type": "trace",
       "context": "HTTP 缓存分为强缓存和协商缓存两类。强缓存由响应头 Cache-Control 的 max-age 或 Expires 控制，命中后浏览器直接使用本地缓存，不发请求。协商缓存由 ETag/If-None-Match 或 Last-Modified/If-Modified-Since 控制，浏览器需要发送请求，由服务器判断资源是否变化，未变化则返回 304 让浏览器继续用缓存。",
       "question": "根据下面材料回答问题：强缓存和协商缓存的核心区别是什么？它们分别使用哪些 HTTP 头？请依据材料回答。",
-      "must_cover": ["强缓存", "协商缓存", "Cache-Control", "ETag", "Last-Modified"]
+      "must_cover": [
+        "强缓存",
+        "协商缓存",
+        "Cache-Control",
+        "ETag",
+        "Last-Modified"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "t3",
@@ -102,7 +188,14 @@
       "type": "trace",
       "context": "React 中，父组件的 state 发生变化会触发其子树重新渲染。React.memo 通过浅比较 props 来跳过未变化组件的重渲染；useCallback 和 useMemo 用于稳定函数/值的引用，避免因每次渲染都生成新引用而破坏 React.memo 的优化效果。",
       "question": "根据下面材料回答问题：React 中父组件 state 变化时子组件为什么会重渲染？可以用哪些手段避免不必要的重渲染？请依据材料回答。",
-      "must_cover": ["子树重渲染", "React.memo", "浅比较", "useCallback", "useMemo"]
+      "must_cover": [
+        "子树重渲染",
+        "React.memo",
+        "浅比较",
+        "useCallback",
+        "useMemo"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     },
     {
       "id": "t4",
@@ -110,7 +203,15 @@
       "type": "trace",
       "context": "防抖（debounce）指事件连续触发时，只在最后一次触发后等待指定时间才执行一次。节流（throttle）指在指定时间间隔内最多执行一次，无论触发多频繁。防抖常用于搜索输入联想，节流常用于滚动事件、窗口 resize 等高频场景。",
       "question": "根据下面材料回答问题：防抖和节流的核心区别是什么？请各举一个适用场景。请依据材料回答。",
-      "must_cover": ["防抖", "节流", "最后一次", "时间间隔", "搜索", "滚动"]
+      "must_cover": [
+        "防抖",
+        "节流",
+        "最后一次",
+        "时间间隔",
+        "搜索",
+        "滚动"
+      ],
+      "source": "人工整理：经典前端面试题（经验提炼）"
     }
   ]
 }

@@ -35,6 +35,7 @@
     "test:integration": "node --test \"tests/integration-widget.test.mjs\"",
     "bench": "node scripts/benchmark.mjs",
     "bench:quick": "node scripts/benchmark.mjs --quick",
+    "bench:validate": "node scripts/validate-evaldata.mjs --report benchmark/evaldata-hashes.json",
     "bench:agent": "node --experimental-test-module-mocks scripts/benchmark-agent.mjs",
     "bench:web": "node scripts/web-task-bench.mjs",
     "typecheck": "tsc --noEmit",

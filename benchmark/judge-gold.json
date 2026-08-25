@@ -1,65 +1,80 @@
 {
-  "_说明": "判官金标校验集：手写、无歧义的题目-回答对。gold label ∈ {correct, acceptable, missing, incorrect}（CRAG 真实性标签）。用于 --judge-check 模式校验事实核查判官的一致性（精确 + 相邻）。",
+  "version": 2,
+  "meta": {
+    "generatedBy": "迁移脚本/人工",
+    "updatedAt": "2026-08-25T11:42:17.008Z",
+    "note": "判官金标校验集：手写、无歧义的题目-回答对。gold label ∈ {correct, acceptable, missing, incorrect}（CRAG 真实性标签）。用于 --judge-check 模式校验事实核查判官的一致性（精确 + 相邻）。"
+  },
   "pairs": [
     {
       "id": "g1",
       "question": "JavaScript 中 `typeof null` 的返回值是什么？",
       "answer": "`typeof null` 返回字符串 `'object'`，这是 JavaScript 历史遗留的 bug，因为最初的类型标签设计把 null 的对象类型标志位设为了 0。",
-      "label": "correct"
+      "label": "correct",
+      "source": "人工标注：权威 JS 概念题（MDN/ECMAScript 语义）"
     },
     {
       "id": "g2",
       "question": "Promise.all 在输入数组中任意一个 Promise 被 reject 时的行为是什么？",
       "answer": "Promise.all 会在任意一个输入 Promise reject 时立即以该原因整体 reject，不会等待其他 Promise 完成，也不会返回部分结果。",
-      "label": "correct"
+      "label": "correct",
+      "source": "人工标注：权威 JS 概念题（MDN/ECMAScript 语义）"
     },
     {
       "id": "g3",
       "question": "JavaScript 中 `==` 和 `===` 的区别是什么？",
       "answer": "`==` 是宽松相等，比较前会做隐式类型转换；`===` 是严格相等，不做类型转换，类型不同直接返回 false。",
-      "label": "correct"
+      "label": "correct",
+      "source": "人工标注：权威 JS 概念题（MDN/ECMAScript 语义）"
     },
     {
       "id": "g4",
       "question": "什么是闭包？",
       "answer": "闭包就是函数可以访问它外层函数作用域中的变量。",
-      "label": "acceptable"
+      "label": "acceptable",
+      "source": "人工标注：权威 JS 概念题（MDN/ECMAScript 语义）"
     },
     {
       "id": "g5",
       "question": "let 和 var 的区别是什么？",
       "answer": "let 有块级作用域，var 是函数作用域。",
-      "label": "acceptable"
+      "label": "acceptable",
+      "source": "人工标注：权威 JS 概念题（MDN/ECMAScript 语义）"
     },
     {
       "id": "g6",
       "question": "解释 React Fiber 是什么？",
       "answer": "React 是一个非常流行的前端框架，主要用于构建用户界面，很多公司在用。",
-      "label": "missing"
+      "label": "missing",
+      "source": "人工标注：权威 JS 概念题（MDN/ECMAScript 语义）"
     },
     {
       "id": "g7",
       "question": "什么是防抖（debounce）？",
       "answer": "防抖和节流都是前端常见的性能优化手段，面试经常考，需要掌握。",
-      "label": "missing"
+      "label": "missing",
+      "source": "人工标注：权威 JS 概念题（MDN/ECMAScript 语义）"
     },
     {
       "id": "g8",
       "question": "CSS 中 `display: none` 和 `visibility: hidden` 的区别是什么？",
       "answer": "`display: none` 会隐藏元素但依然占据布局空间，`visibility: hidden` 则彻底移除元素不占空间。",
-      "label": "incorrect"
+      "label": "incorrect",
+      "source": "人工标注：权威 JS 概念题（MDN/ECMAScript 语义）"
     },
     {
       "id": "g9",
       "question": "HTTP 状态码 404 表示什么？",
       "answer": "404 表示服务器内部错误，通常意味着服务器代码抛出了异常。",
-      "label": "incorrect"
+      "label": "incorrect",
+      "source": "人工标注：权威 JS 概念题（MDN/ECMAScript 语义）"
     },
     {
       "id": "g10",
       "question": "JavaScript 中 `[] == ![]` 的结果是什么？",
       "answer": "结果是 false，因为数组与布尔值类型不同，宽松相等也会返回 false。",
-      "label": "incorrect"
+      "label": "incorrect",
+      "source": "人工标注：权威 JS 概念题（MDN/ECMAScript 语义）"
     }
   ]
 }

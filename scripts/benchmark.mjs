@@ -350,18 +350,29 @@ async function runDetect(cases) {
   const pass = results.filter((r) => r.ok).length;
   return { pass, total: results.length, rate: Math.round((pass / results.length) * 1000) / 10, results };
 }
-const STATIC_CASES = [
-  ["事件循环与微任务", "js-event-loop"],
-  ["React Hooks 原理", "rc-hooks"],
-  ["原型链", "js-prototype"],
-  ["Webpack 配置", "eng-build"],
-  ["XSS 跨域 CORS", "br-security"],
-  ["完全不相关内容", null],
-];
+// 静态用例（Phase 评测 W1 迁移：从硬编码迁至 benchmark/static.json，来源可追溯）
+function loadStaticCases() {
+  try {
+    const data = load("static.json");
+    if (Array.isArray(data?.cases)) {
+      return data.cases.map((c) => [c.text, c.expected ?? null]);
+    }
+  } catch { /* 迁移失败回退硬编码（不应发生） */ }
+  return [
+    ["事件循环与微任务", "js-event-loop"],
+    ["React Hooks 原理", "rc-hooks"],
+    ["原型链", "js-prototype"],
+    ["Webpack 配置", "eng-build"],
+    ["XSS 跨域 CORS", "br-security"],
+    ["完全不相关内容", null],
+  ];
+}
 function runStatic() {
-  const results = STATIC_CASES.map(([text, expected]) => {
+  const results = loadStaticCases().map(([text, expected]) => {
     const actual = matchKp(text);
-    return { text, expected, actual, ok: actual === expected };
+    // expected=null 语义："应未命中知识树点"——matchKp 未命中时兜底返回原文
+    const ok = expected === null ? actual === text : actual === expected;
+    return { text, expected, actual, ok };
   });
   const pass = results.filter((r) => r.ok).length;
   return { pass, total: results.length, rate: Math.round((pass / results.length) * 1000) / 10, results };

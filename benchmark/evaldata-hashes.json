@@ -1,0 +1,41 @@
+{
+  "ts": "2026-08-25T11:43:10.543Z",
+  "checks": {
+    "questions": {
+      "ok": true,
+      "count": 14,
+      "hash": "68ab85f4f922f4f6",
+      "version": 2
+    },
+    "classify": {
+      "ok": true,
+      "count": 8,
+      "hash": "0e85a548cddfe9cb",
+      "version": 2
+    },
+    "detect": {
+      "ok": true,
+      "count": 6,
+      "hash": "0aecd503542c112c",
+      "version": 2
+    },
+    "judge-gold": {
+      "ok": true,
+      "count": 10,
+      "hash": "6a03a512b9f3fced",
+      "version": 2
+    },
+    "web-tasks": {
+      "ok": true,
+      "count": 10,
+      "hash": "16ac55fab4908799",
+      "version": 2
+    },
+    "static": {
+      "ok": true,
+      "count": 12,
+      "hash": "40e6a082d3ddea6e",
+      "version": 2
+    }
+  }
+}

@@ -1,53 +1,66 @@
 {
-  "_说明": "页面分类评测集：classifyPage 对页面内容分类（mianshi|zhaopin|bishi|other + direction）。expected 为目标 type。",
+  "version": 2,
+  "meta": {
+    "generatedBy": "迁移脚本/人工",
+    "updatedAt": "2026-08-25T11:42:17.008Z",
+    "note": "页面分类评测集：classifyPage 对页面内容分类（mianshi|zhaopin|bishi|other + direction）。expected 为目标 type。"
+  },
   "cases": [
     {
       "id": "c1",
       "title": "字节跳动前端一面面经（已offer）",
       "text": "刚结束字节前端一面，面试官很nice。先问了我项目，然后手写防抖节流，又问事件循环输出顺序，最后问了Hooks原理。大概45分钟。",
-      "expected": "mianshi"
+      "expected": "mianshi",
+      "source": "社区面经摘编（内部整理，真人帖子改写）"
     },
     {
       "id": "c2",
       "title": "2026届秋季校园招聘启动公告",
       "text": "腾讯2026校园招聘正式启动！面向2026届毕业生，岗位覆盖技术、产品、设计等，网申时间8月1日-10月31日，技术岗笔试安排在9月上旬。",
-      "expected": "zhaopin"
+      "expected": "zhaopin",
+      "source": "社区面经摘编（内部整理，真人帖子改写）"
     },
     {
       "id": "c3",
       "title": "美团笔试真题回忆（前端方向）",
       "text": "记录一下今天的笔试：选择题有事件循环、CSS选择器优先级；编程题第一题是版本号排序，第二题是数组去重+排序，第三题是二叉树层序遍历。",
-      "expected": "bishi"
+      "expected": "bishi",
+      "source": "社区面经摘编（内部整理，真人帖子改写）"
     },
     {
       "id": "c4",
       "title": "有没有一起准备秋招的搭子",
       "text": "如题，本人双非一本计算机，准备投前端方向，想找个搭子一起刷题互相监督，有意的评论区扣1。",
-      "expected": "other"
+      "expected": "other",
+      "source": "社区面经摘编（内部整理，真人帖子改写）"
     },
     {
       "id": "c5",
       "title": "阿里前端暑期实习二面凉经",
       "text": "二面主要深挖项目：问了低代码平台怎么设计、状态管理选型、前端监控怎么做。反问环节问了对实习生的培养。结果挂了。",
-      "expected": "mianshi"
+      "expected": "mianshi",
+      "source": "社区面经摘编（内部整理，真人帖子改写）"
     },
     {
       "id": "c6",
       "title": "小米2026秋招提前批启动",
       "text": "小米集团2026届秋招提前批开放！前端/后端/算法/硬件多方向，提前批免笔试直接面试，7月20日截止。",
-      "expected": "zhaopin"
+      "expected": "zhaopin",
+      "source": "社区面经摘编（内部整理，真人帖子改写）"
     },
     {
       "id": "c7",
       "title": "拼多多笔试编程题汇总",
       "text": "拼多多今天笔试，四个编程题：第一题字符串处理、第二题模拟题、第三题动态规划（爬楼梯变形）、第四题图论。难度中等偏上。",
-      "expected": "bishi"
+      "expected": "bishi",
+      "source": "社区面经摘编（内部整理，真人帖子改写）"
     },
     {
       "id": "c8",
       "title": "前端简历求指导",
       "text": "各位大佬帮忙看看这份简历还有哪些需要改的，两段实习经历写的很平淡，不知道该怎么突出亮点，感谢！",
-      "expected": "other"
+      "expected": "other",
+      "source": "社区面经摘编（内部整理，真人帖子改写）"
     }
   ]
 }

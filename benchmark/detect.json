@@ -1,41 +1,52 @@
 {
-  "_说明": "题目检测评测集：detectQuestions 判断页面是否含具体可作答的题目。expected: true=含题目 false=不含（攻略文/闲聊）。",
+  "version": 2,
+  "meta": {
+    "generatedBy": "迁移脚本/人工",
+    "updatedAt": "2026-08-25T11:42:17.008Z",
+    "note": "题目检测评测集：detectQuestions 判断页面是否含具体可作答的题目。expected: true=含题目 false=不含（攻略文/闲聊）。"
+  },
   "cases": [
     {
       "id": "d1",
       "title": "字节面经：事件循环被问麻了",
       "text": "一面问了：1. 输出以下代码的执行顺序：console.log(1); setTimeout(()=>console.log(2),0); Promise.resolve().then(()=>console.log(3)); console.log(4); 2. 手写一个 deepClone。",
-      "expected": true
+      "expected": true,
+      "source": "社区面经摘编（内部整理，混合正负例）"
     },
     {
       "id": "d2",
       "title": "React 面试前必须会的十道题",
       "text": "1. 为什么 useState 不能写在条件里？2. useMemo 和 useCallback 的区别？3. React 18 的并发特性是什么？4. 什么是合成事件？",
-      "expected": true
+      "expected": true,
+      "source": "社区面经摘编（内部整理，混合正负例）"
     },
     {
       "id": "d3",
       "title": "前端学习路线分享（长文）",
       "text": "总结一下我的前端学习路线：大一学 HTML/CSS，大二学 JS 和框架，大三开始刷 LeetCode。推荐几本书：红宝书、你不知道的JS、React 官方文档。",
-      "expected": false
+      "expected": false,
+      "source": "社区面经摘编（内部整理，混合正负例）"
     },
     {
       "id": "d4",
       "title": "求一个内推，有偿",
       "text": "秋招投了几十家都石沉大海，求各位大佬内推，前端方向，base 北京上海都行，可以请喝奶茶。",
-      "expected": false
+      "expected": false,
+      "source": "社区面经摘编（内部整理，混合正负例）"
     },
     {
       "id": "d5",
       "title": "美团一面：手写题合集",
       "text": "今天美团一面手写了三道题：手写 Promise.all、手写数组扁平化、手写防抖。还问了一道场景题：设计一个带并发限制的请求队列。",
-      "expected": true
+      "expected": true,
+      "source": "社区面经摘编（内部整理，混合正负例）"
     },
     {
       "id": "d6",
       "title": "面试官问我怎么优化首屏",
       "text": "分享一次面试经历：面试官问首屏优化，我答了代码分割、CDN、图片懒加载。他又追问浏览器渲染流程，我讲到了关键渲染路径。",
-      "expected": true
+      "expected": true,
+      "source": "社区面经摘编（内部整理，混合正负例）"
     }
   ]
 }

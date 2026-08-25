@@ -1,0 +1,82 @@
+{
+  "version": 2,
+  "meta": {
+    "generatedBy": "迁移脚本",
+    "updatedAt": "2026-08-25T11:42:17.008Z",
+    "note": "静态用例：matchKp 知识树命中校验（text → 期望命中 or null）。来源：知识树高频点 + 反例"
+  },
+  "cases": [
+    {
+      "id": "s01",
+      "text": "事件循环与微任务",
+      "expected": "js-event-loop",
+      "source": "知识树高频点（frontend 模板）"
+    },
+    {
+      "id": "s02",
+      "text": "React Hooks 原理",
+      "expected": "rc-hooks",
+      "source": "知识树高频点（frontend 模板）"
+    },
+    {
+      "id": "s03",
+      "text": "原型链",
+      "expected": "js-prototype",
+      "source": "知识树高频点（frontend 模板）"
+    },
+    {
+      "id": "s04",
+      "text": "Webpack 配置",
+      "expected": "eng-build",
+      "source": "知识树高频点（frontend 模板）"
+    },
+    {
+      "id": "s05",
+      "text": "XSS 跨域 CORS",
+      "expected": "br-security",
+      "source": "知识树高频点（frontend 模板）"
+    },
+    {
+      "id": "s06",
+      "text": "完全不相关内容",
+      "expected": null,
+      "source": "反例：无知识点映射应回落 null"
+    },
+    {
+      "id": "s07",
+      "text": "事件循环",
+      "expected": "js-event-loop",
+      "source": "泛化表述仍应命中（知识树关键词）"
+    },
+    {
+      "id": "s08",
+      "text": "HTTP 强缓存与协商缓存",
+      "expected": "br-cache",
+      "source": "HTTP 缓存归知识树浏览器缓存点（br-cache）"
+    },
+    {
+      "id": "s09",
+      "text": "JS 事件循环输出顺序",
+      "expected": "js-event-loop",
+      "source": "同知识点不同表述（含 JS 前缀）"
+    },
+    {
+      "id": "s10",
+      "text": "React Fiber 调度",
+      "expected": "rc-render",
+      "source": "Fiber 调度归 React 渲染簇（rc-render）"
+    },
+    {
+      "id": "s11",
+      "text": "随便一句话没有知识点",
+      "expected": null,
+      "source": "反例：闲聊文本不命中"
+    },
+    {
+      "id": "s12",
+      "text": "深拷贝与浅拷贝",
+      "expected": null,
+      "source": "知识树无深拷贝点 → 兜底原文（未命中树点）"
+    }
+  ]
+}
