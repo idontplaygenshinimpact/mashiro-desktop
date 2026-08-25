@@ -90,6 +90,7 @@ contextBridge.exposeInMainWorld("kanban", {
   invStart: (cfg) => ipcRenderer.invoke("interview:start", cfg),
   invAnswer: (answer) => ipcRenderer.invoke("interview:answer", { answer }),
   invEnd: () => ipcRenderer.invoke("interview:end"),
+  invStatus: () => ipcRenderer.invoke("interview:status"),
   // 复习
   reviewDue: () => ipcRenderer.invoke("review:due"),
   reviewSubmit: (id, rating) => ipcRenderer.invoke("review:submit", { id, rating }),

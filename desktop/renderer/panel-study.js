@@ -216,6 +216,42 @@ async function startIvSession(cfg) {
   }
 }
 
+// ============ 进行中会话"继续上一场"（C8 恢复闭环 + 关面板不丢进度） ============
+// 进入面试 Tab 时检测服务端进行中会话 → 显示"🔄 继续上一场"按钮（无缝续，不用收尾重开）
+async function loadIvResume() {
+  const btn = $("iv-resume");
+  if (!btn) return;
+  try {
+    const r = await window.kanban.invStatus();
+    if (r?.ok && r.active) {
+      btn.classList.remove("hidden");
+      btn.textContent = `🔄 继续上一场面试（第 ${r.round} 轮${r.roundsCount ? ` · 已完成 ${r.roundsCount} 轮` : ""}）`;
+      btn.onclick = () => resumeIvSession(r);
+    } else {
+      btn.classList.add("hidden");
+      btn.onclick = null;
+    }
+  } catch { btn.classList.add("hidden"); }
+}
+
+// 恢复面试中形态：用服务端会话状态直接渲染（与服务端内存会话对齐，无需重新 start）
+// 注意顺序：showInterviewUi 内部会重置 ivScoreSum/ivScoreCount → 必须先渲染再恢复累计分
+function resumeIvSession(status) {
+  showInterviewUi({
+    question: status.question, basis: status.basis, dimension: status.dimension,
+    criteria: status.criteria, boundary: status.boundary,
+    round: status.round, roundType: status.roundType, depth: status.depth,
+    weakQueue: status.weakQueue || [], totalRounds: status.totalRounds,
+  });
+  // 已评分轮次 → 恢复全场均分累计（服务端镜像持续累计，逐轮增量写）
+  ivScoreCount = Number(status.roundsCount) || 0;
+  if (status.scoreSum) {
+    ivScoreSum = { tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0 };
+    for (const k of Object.keys(ivScoreSum)) ivScoreSum[k] = Number(status.scoreSum[k]) || 0;
+  }
+  addIvLog(`↩️ 已恢复上一场面试（第 ${status.round} 轮${status.roundsCount ? `，此前已完成 ${status.roundsCount} 轮` : ""}）——录音/计时不跨进程保留，作答照常`);
+}
+
 // 面试中形态切换 + 首问渲染（startIvSession 与残留会话重试共用）
 function showInterviewUi(r) {
   ivSetup.classList.add("hidden");
@@ -297,15 +333,26 @@ async function submitAnswer() {
       $("iv-status").textContent = "面试结束，正在生成复盘...";
       $("iv-answer-area").style.display = "none";
       addIvLog("✅ 面试结束");
-      const end = await window.kanban.invEnd();
-      if (end?.ok && end.report) {
-        renderIvSummary();
-        showIvReport(end.report); // 毛玻璃弹窗展示复盘报告
-        addIvLog(end.hint || "");
-        // 薄弱点覆盖统计（录音保留：复盘时可回听）
-        if (end.weakTotal > 0) {
-          addIvLog(`🎯 本场薄弱点覆盖：${end.weakCovered ?? 0}/${end.weakTotal}${end.weakCoveredTopics?.length ? "（" + end.weakCoveredTopics.join("、") + "）" : ""}`);
+      // 修复 P1-5：finished 分支必须有 catch——否则 invEnd 抛错时状态文案永久错误，
+      // 且 isGeneratingReview 已在服务端复位，用户可重试（对齐 :396-425 iv-end 按钮的写法）
+      try {
+        const end = await window.kanban.invEnd();
+        if (end?.ok && end.report) {
+          renderIvSummary();
+          showIvReport(end.report); // 毛玻璃弹窗展示复盘报告
+          $("iv-status").textContent = "✅ 面试结束，复盘已生成";
+          addIvLog(end.hint || "");
+          // 薄弱点覆盖统计（录音保留：复盘时可回听）
+          if (end.weakTotal > 0) {
+            addIvLog(`🎯 本场薄弱点覆盖：${end.weakCovered ?? 0}/${end.weakTotal}${end.weakCoveredTopics?.length ? "（" + end.weakCoveredTopics.join("、") + "）" : ""}`);
+          }
+        } else {
+          $("iv-status").textContent = "⚠️ " + (end?.error || "结束失败，请重试");
+          window.kanban.notify("模拟面试", end?.error || "结束失败，请重试");
         }
+      } catch (err) {
+        $("iv-status").textContent = "⚠️ 复盘生成异常: " + String(err?.message || err).slice(0, 80);
+        window.kanban.notify("模拟面试", "复盘生成异常: " + String(err?.message || err).slice(0, 80));
       }
       return;
     }
@@ -325,6 +372,47 @@ function showIvReport(report) {
 $("iv-report-close").addEventListener("click", () => $("iv-report-overlay").classList.add("hidden"));
 $("iv-report-overlay").addEventListener("click", (e) => {
   if (e.target === $("iv-report-overlay")) $("iv-report-overlay").classList.add("hidden"); // 点遮罩关闭
+});
+
+// ============ 历史复盘回看（C6 闭环：复盘不只弹窗一次，模拟面试区随时可回看） ============
+// 复用 /api/interview/history（preload interviewHistory）+ showIvReport（毛玻璃弹窗完整渲染 Markdown）
+function fmtIvDate(iso) {
+  if (!iso) return "";
+  try { return new Date(iso).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }); } catch { return ""; }
+}
+
+async function loadIvHistory() {
+  const countEl = $("iv-history-count");
+  const body = $("iv-history-body");
+  try {
+    const h = await window.kanban.interviewHistory();
+    const list = (h?.history || []).slice().reverse(); // 新的在前
+    if (countEl) countEl.textContent = String(list.length);
+    if (!body) return;
+    if (!list.length) {
+      body.innerHTML = '<div style="color:#7c7c7c;font-size:12px">暂无面试记录——开始一场模拟面试后，复盘报告会保存在这里，随时可回看</div>';
+      return;
+    }
+    body.innerHTML = list.map((it, i) => `
+      <div class="iv-hist-item">
+        <div class="iv-hist-head">${esc(it.position || "模拟面试")} · ${esc(it.role || "")} · ${it.rounds || 0} 轮
+          <span class="iv-hist-score">均分 ${it.avg ?? it.avgScore ?? "-"}</span>
+          ${it.report ? `<button class="iv-hist-open" data-i="${i}">查看复盘</button>` : ""}
+        </div>
+        <div style="font-size:11px;color:#8a87a8">${fmtIvDate(it.date)}</div>
+      </div>`).join("");
+    body.querySelectorAll(".iv-hist-open").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const it = list[Number(btn.dataset.i)];
+        if (it?.report) showIvReport(it.report); // 复用毛玻璃复盘弹窗（完整 Markdown 渲染，含目录）
+      });
+    });
+  } catch { body.innerHTML = '<div style="color:#7c7c7c;font-size:12px">历史加载失败（服务未就绪）</div>'; }
+}
+$("iv-history-toggle").addEventListener("click", () => {
+  const hidden = $("iv-history-body").classList.toggle("hidden");
+  $("iv-history-toggle").textContent = `📜 历史复盘（${$("iv-history-count")?.textContent || "-"} 场）${hidden ? "▸" : "▾"}`;
+  if (!hidden) loadIvHistory(); // 展开时刷新
 });
 
 // 结束小结：全场均分 + 五维均分条（基于每轮累计）
@@ -869,6 +957,16 @@ function showReviewFeedback(rating, nextDue, nextCard) {
   fb.innerHTML = `<span style="color:${color};font-weight:600;">${label}</span> · 间隔 <b>${schedDays || 1}</b> 天 · 下次复习：<b>${nextDue ? relDue(nextDue) : "—"}</b>`;
   fb.classList.remove("hidden");
 }
+// 学习计划即时反馈（P1-9：复习进事件流 → 计划引擎返回对比基线提示，追加在 FSRS 反馈下方）
+function appendReviewTip(tip) {
+  const fb = $("rc-feedback");
+  if (!fb || !tip) return;
+  const div = document.createElement("div");
+  div.className = "rc-tip";
+  div.style.cssText = "margin-top:4px;font-size:11px;color:#6d4fd8;";
+  div.textContent = "🎯 " + String(tip);
+  fb.appendChild(div);
+}
 
 $("rc-show").addEventListener("click", async () => {
   const card = reviewQueue[reviewIdx];
@@ -900,6 +998,8 @@ document.querySelectorAll(".rc-btn").forEach((btn) => {
     const r = await window.kanban.reviewSubmit(card.id, rating);
     // FSRS 反馈：下次复习时间 + 间隔
     if (r?.nextDue) showReviewFeedback(rating, r.nextDue, r.card);
+    // 学习计划即时反馈（对比基线）
+    if (r?.tip) appendReviewTip(r.tip);
     // 答错（忘了/困难）→ 显示「让真白讲一遍」（复习即学闭环）+ 后台换一批选择题
     const explainBtn = $("rc-explain");
     if (explainBtn) {
@@ -1940,23 +2040,30 @@ function inlineMd(s) {
 }
 
 $("study-gen").addEventListener("click", async () => {
-  $("study-gen").disabled = true;
-  $("study-gen").textContent = "生成中...";
-  const r = await window.kanban.studyGenerate();
-  loadStudyPlan();
-  $("study-gen").disabled = false;
-  $("study-gen").textContent = "✨ 从产出生成清单";
-  // 反馈生成结果：新增 N 条 / 全部与现有清单重复
-  const p = r?.plan;
-  if (p?.error) {
-    window.kanban.notify("✨ 生成清单", `生成失败：${p.error}`);
-  } else if (p?.addedCount > 0) {
-    window.kanban.notify("✨ 生成清单", `已新增 ${p.addedCount} 个知识点${(p.skippedSimilar || p.skippedExact) ? `，${(p.skippedSimilar || 0) + (p.skippedExact || 0)} 条与现有重复已跳过` : ""}`);
-  } else {
-    const dup = (p?.skippedSimilar || 0) + (p?.skippedExact || 0);
-    window.kanban.notify("✨ 生成清单", dup > 0
-      ? `本次提炼 ${dup} 条知识点全部与现有清单重复，已跳过（清单已覆盖这些考点，无需膨胀）`
-      : "未提炼到新知识点");
+  const btn = $("study-gen");
+  btn.disabled = true;
+  btn.textContent = "生成中...";
+  try {
+    const r = await window.kanban.studyGenerate();
+    loadStudyPlan();
+    // 反馈生成结果：新增 N 条 / 全部与现有清单重复
+    const p = r?.plan;
+    if (p?.error) {
+      window.kanban.notify("✨ 生成清单", `生成失败：${p.error}`);
+    } else if (p?.addedCount > 0) {
+      window.kanban.notify("✨ 生成清单", `已新增 ${p.addedCount} 个知识点${(p.skippedSimilar || p.skippedExact) ? `，${(p.skippedSimilar || 0) + (p.skippedExact || 0)} 条与现有重复已跳过` : ""}`);
+    } else {
+      const dup = (p?.skippedSimilar || 0) + (p?.skippedExact || 0);
+      window.kanban.notify("✨ 生成清单", dup > 0
+        ? `本次提炼 ${dup} 条知识点全部与现有清单重复，已跳过（清单已覆盖这些考点，无需膨胀）`
+        : "未提炼到新知识点");
+    }
+  } catch (e) {
+    // 修复 P0：生成失败必须复位按钮 + 提示（原实现无 catch → 抛错后永久卡"生成中..."）
+    window.kanban.notify("✨ 生成清单", "生成失败：" + String(e?.message || e).slice(0, 80));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "✨ 从产出生成清单";
   }
 });
 

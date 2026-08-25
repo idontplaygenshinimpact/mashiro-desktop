@@ -25,7 +25,7 @@ function switchTab(name) {
   if (btn) btn.classList.add("active");
   const panel = document.getElementById("tab-" + name);
   if (panel) panel.classList.add("active");
-  if (name === "interview") { loadIvWeakChips(); loadIvResumeAuto(); }
+  if (name === "interview") { loadIvWeakChips(); loadIvResumeAuto(); loadIvResume(); loadIvHistory(); }
   if (name === "study") { loadStudyPlan(); loadFocus(); }
   if (name === "crawl") { loadCrawlData(); loadRss(); }
   if (name === "review") loadReview();

@@ -107,6 +107,30 @@ test("appendChat DB 防堆积：超出 200 条自动删最旧", () => {
   assert.ok(String(oldest.content).includes("堆积消息"), "留下的都是最近消息");
 });
 
+test("deleteChatSession 同步清内存镜像（防已删会话复活注入 prompt）", () => {
+  // 回归 P1-8：原来只删 DB 不清 mem.chatHistory → 已删会话借 agent 无 history 路径复活
+  memory.appendChat("user", "会话A的消息", "sessA");
+  memory.appendChat("assistant", "会话A的回复", "sessA");
+  memory.appendChat("user", "会话B的消息", "sessB");
+  assert.ok(memory.getChatHistory().some((m) => m.sessionId === "sessA"), "内存含会话 A");
+  const r = memory.deleteChatSession("sessA");
+  assert.equal(r.ok, true);
+  assert.equal(memory.getChatHistory().filter((m) => m.sessionId === "sessA").length, 0, "内存镜像已清会话 A");
+  assert.ok(memory.getChatHistory().some((m) => m.sessionId === "sessB"), "会话 B 不受影响");
+  // DB 也清了
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM chat_history WHERE session_id='sessA'").get().n, 0);
+});
+
+test("appendChat DB 按会话分桶互不截断（多会话历史不互吞）", () => {
+  // 回归：原全局 200 条互截 → 高频会话会把低频会话旧消息顶掉；现按 session 各自保留
+  for (let i = 0; i < 150; i++) memory.appendChat("user", `默认会话${i}`, "default");
+  for (let i = 0; i < 150; i++) memory.appendChat("user", `沉淀会话${i}`, "sess_archive");
+  const defN = db.prepare("SELECT COUNT(*) n FROM chat_history WHERE session_id='default'").get().n;
+  const arcN = db.prepare("SELECT COUNT(*) n FROM chat_history WHERE session_id='sess_archive'").get().n;
+  assert.equal(defN, 150, "default 会话完整保留（未被高频默认消息截断）");
+  assert.equal(arcN, 150, "低频会话不被其他会话顶掉");
+});
+
 // ---------- 薄弱点 ----------
 test("addWeakPoint 过滤伪知识点", () => {
   memory.addWeakPoint("综合能力", "复盘验证");

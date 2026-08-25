@@ -131,6 +131,12 @@ test("GET /api/interview/history", async () => {
   assert.ok(Array.isArray(r.history));
 });
 
+test("GET /api/interview/status 无进行中会话 → active:false", async () => {
+  const r = await (await api("/api/interview/status")).json();
+  assert.equal(r.ok, true);
+  assert.equal(r.active, false);
+});
+
 // ---------- 写路由（无 LLM） ----------
 test("POST /api/study-check 不存在的 id → 错误不崩溃", async () => {
   const r = await (await api("/api/study-check?id=nope&done=1")).json();
@@ -160,6 +166,7 @@ test("POST /api/review/add + submit 完整复习流程", async () => {
   const sub = await (await api("/api/review/submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: add.card.id, rating: 3 }) })).json();
   assert.equal(sub.ok, true);
   assert.ok(sub.card?.fsrs, "FSRS 状态更新");
+  assert.ok("tip" in sub, "复习提交返回学习计划即时反馈字段（可为 null）");
 });
 
 test("POST /api/review/submit 不存在的卡 → ok:false", async () => {

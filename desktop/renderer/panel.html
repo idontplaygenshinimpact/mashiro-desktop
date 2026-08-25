@@ -88,8 +88,16 @@
           <textarea id="iv-resume" placeholder="或直接粘贴简历文本：项目经历、实习、技能、教育背景...&#10;留空自动使用设置中心已上传的简历（面试官同样会拷打项目）"></textarea>
           <div class="resume-status" id="resume-status"></div>
         </div>
-        <button id="iv-start" class="primary">🎤 开始模拟面试</button>
+        <div class="iv-start-row">
+          <button id="iv-start" class="primary">🎤 开始模拟面试</button>
+          <button id="iv-resume" class="secondary hidden" title="继续上一场未结束的模拟面试（关面板/杀进程不丢进度）">🔄 继续上一场面试</button>
+        </div>
         <div class="iv-hint">面试会参考你的学习清单 + 最近面经 + 薄弱点出题；简历自动联动（设置里上传的 / 本框粘贴的都会用于项目拷打）</div>
+        <!-- 历史复盘回看（C6 闭环：复盘不只弹窗一次，随时可回看，复用毛玻璃复盘弹窗） -->
+        <div class="mastery-box" style="margin-top:10px;">
+          <button class="mastery-toggle" id="iv-history-toggle" type="button">📜 历史复盘（<span id="iv-history-count">-</span> 场）▸</button>
+          <div class="mastery-body hidden" id="iv-history-body"></div>
+        </div>
         <div class="iv-weak-row hidden" id="iv-weak-row">
           <span style="font-size:11px;color:#5d48b8;font-weight:600;">🎯 已知薄弱点（点一下填入重点方向，面试将优先考察）：</span>
           <div class="iv-weak-chips" id="iv-weak-chips"></div>

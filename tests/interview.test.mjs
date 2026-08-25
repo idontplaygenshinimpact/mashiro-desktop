@@ -5,7 +5,8 @@ import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses } 
 
 const dbDir = setupTempDb("interview");
 mockLLM();
-const { startInterview, submitAnswer, endInterview } = await import("../lib/interview.mjs");
+const { startInterview, submitAnswer, endInterview, getInterviewStatus } = await import("../lib/interview.mjs");
+const { db } = await import("../lib/db.mjs");
 const { memory } = await import("../lib/memory.mjs");
 const { review } = await import("../lib/review.mjs");
 
@@ -83,6 +84,38 @@ test("submitAnswer 评分 + 推进下一问", async () => {
   assert.equal(r.total, 60); // (80+70+60+50+40)/5
   assert.ok(r.question.includes("Fiber"), "下一问");
   assert.equal(memory.getInterview().rounds.length, 1);
+});
+
+test("getInterviewStatus：进行中返回可续数据，结束后 active:false（继续上一场入口）", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  const s = await getInterviewStatus();
+  assert.equal(s.ok, true);
+  assert.equal(s.active, true);
+  assert.equal(s.round, 1);
+  assert.ok(s.question.includes("事件循环"), "当前问题可续");
+  assert.equal(s.roundsCount, 0);
+  assert.equal(s.totalRounds, 9);
+  assert.equal(typeof s.roundType, "string");
+  // 结束（清会话）后失活
+  memory.clearInterview();
+  const s2 = await getInterviewStatus();
+  assert.equal(s2.ok, true);
+  assert.equal(s2.active, false);
+});
+
+test("submitAnswer 学习计划埋点：learning_events 写入 kind=interview", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses('{"scores":{"tech":80,"expr":70,"depth":60,"edge":50,"reflect":40},"comment":"不错","finish":false,"next_question":"讲讲 React Fiber","next_basis":"x","next_dimension":"原理","next_criteria":"c","next_boundary":"b","weak_topic":"事件循环"}');
+  const r = await submitAnswer("我的回答");
+  assert.equal(r.ok, true);
+  const ev = db.prepare("SELECT topic, kind, result, quality FROM learning_events WHERE kind='interview'").all();
+  assert.equal(ev.length, 1, "面试每轮写入学习事件流");
+  // topic 优先取本轮薄弱知识点名
+  assert.equal(ev[0].topic, "事件循环");
+  assert.equal(ev[0].result, "pass", "total=60 → pass（阈值口径与薄弱点回流一致）");
+  assert.equal(ev[0].quality, 0.6);
 });
 
 // ---------- 面试官 agent 化：出题前可检索项目资源（题库/档案/知识库/薄弱点） ----------

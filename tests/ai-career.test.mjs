@@ -69,6 +69,29 @@ test("importChallengesData 批量导入：字段落库 + 幂等覆盖 + 非法�
   assert.equal(ac.importChallengesData(null).ok, false);
 });
 
+test("importChallengesData 重跑导入保留做题状态（不被打回零）", () => {
+  // 回归 P1-A：INSERT OR REPLACE 整行重建 → 重跑导入清零 done/done_at/wrong_count；
+  // 改 ON CONFLICT DO UPDATE 只刷内容列，保留用户进度（import-codetop-top400"幂等覆盖"承诺）
+  ac.importChallengesData(SAMPLE);
+  const done = ac.markChallengeDone("debounce");
+  assert.equal(done.ok, true);
+  ac.markChallengeWrong("debounce");
+  ac.markChallengeWrong("debounce");
+  const before = db.prepare("SELECT done, done_at, wrong_count FROM challenges WHERE id='debounce'").get();
+  assert.equal(before.done, 1);
+  assert.ok(before.done_at > 0, "done_at 已记录");
+  assert.equal(before.wrong_count, 2);
+  // 重新导入（内容更新）：状态列必须保留，内容列刷新
+  const r = ac.importChallengesData([{ ...SAMPLE[0], title: "手写防抖（更新）", frequency: 2 }]);
+  assert.equal(r.ok, true);
+  const after = db.prepare("SELECT title, frequency, done, done_at, wrong_count FROM challenges WHERE id='debounce'").get();
+  assert.equal(after.title, "手写防抖（更新）", "内容列刷新");
+  assert.equal(after.frequency, 2, "内容列刷新");
+  assert.equal(after.done, 1, "重导不清零 done");
+  assert.equal(after.done_at, before.done_at, "重导不清零 done_at");
+  assert.equal(after.wrong_count, 2, "重导不清零 wrong_count");
+});
+
 // ---------- 查询 / 统计 ----------
 test("getChallenges 过滤：category / difficulty / done + 字段 String 化", () => {
   ac.importChallengesData(SAMPLE);

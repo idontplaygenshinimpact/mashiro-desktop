@@ -406,6 +406,7 @@ ipcMain.handle("widget:chat-session-delete", (_e, { id }) => {
 });
 ipcMain.handle("widget:study-plan", () => widgetGet("/api/study-plan"));
 ipcMain.handle("widget:interview-history", () => widgetGet("/api/interview/history"));
+ipcMain.handle("interview:status", () => widgetGet("/api/interview/status"));
 ipcMain.handle("widget:stats", () => widgetGet("/api/stats"));
 ipcMain.handle("widget:observability", () => widgetGet("/api/observability"));
 // 自动巡检配置：无参数 GET 读取，有参数 POST 修改（即时重排定时器）

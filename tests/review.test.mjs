@@ -33,6 +33,25 @@ test("addCard 同 topic 更新不重复建卡", () => {
   assert.equal(cards[0].question, "q2");
 });
 
+// P1-9 回归：复习提交 → 学习计划事件流埋点（kind=review）+ 返回即时反馈 tip
+test("reviewCard 埋点学习事件：recordLearningEvent 落库 + tip 字段", () => {
+  const card = review.addCard({ topic: "异步并发控制" });
+  const r = review.reviewCard(card.id, 0); // Again 答错 → fail
+  assert.equal(r.ok, true);
+  assert.ok("tip" in r, "返回 tip 字段（无计划时可为 null）");
+  const ev = db.prepare("SELECT topic, kind, result, quality FROM learning_events WHERE kind='review'").all();
+  assert.equal(ev.length, 1, "复习事件写入学习事件流");
+  assert.equal(ev[0].topic, "异步并发控制");
+  assert.equal(ev[0].result, "fail", "Again(0) 归一到 fail");
+  assert.equal(ev[0].quality, 0);
+  // 答好 → pass
+  const r2 = review.reviewCard(card.id, 3); // Easy 答对 → pass
+  assert.equal(r2.ok, true);
+  const ev2 = db.prepare("SELECT result, quality FROM learning_events WHERE kind='review' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(ev2.result, "pass", "Easy(3) 归一到 pass");
+  assert.equal(ev2.quality, 1);
+});
+
 // F3 回归：同 tick 批量建卡 id 不碰撞（旧版 `c${Date.now()}` 同毫秒重复 → INSERT OR IGNORE 丢弃后续卡）
 test("multiple addCard calls in one tick all persist", () => {
   const topics = ["闭包", "事件循环", "原型链", "Promise", "防抖节流"];

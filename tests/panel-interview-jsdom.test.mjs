@@ -139,3 +139,34 @@ test("残留会话且收尾失败 → 明确提示（不崩、可重试）", asy
     assert.equal(btn.disabled, false, "按钮恢复");
   });
 });
+
+test("进行中会话 → 渲染「继续上一场」按钮 → 点击恢复面试中形态（C8 恢复闭环）", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    kanban.invStatus = async () => ({
+      ok: true, active: true, round: 3, roundType: "八股穿插", question: "讲讲事件循环的顺序", basis: "b", dimension: "d", criteria: "c", boundary: "bd", depth: 0, totalRounds: 9, roundsCount: 2,
+      weakQueue: [], scoreSum: { tech: 80, expr: 80, depth: 80, edge: 80, reflect: 80, total: 400 },
+    });
+    window.switchTab("interview");
+    await tick();
+    const resumeBtn = window.document.getElementById("iv-resume");
+    assert.ok(!resumeBtn.classList.contains("hidden"), "有进行中会话 → 显示继续按钮");
+    assert.match(resumeBtn.textContent, /第 3 轮/, "按钮标注续接轮次");
+    resumeBtn.click();
+    await tick();
+    const session = window.document.getElementById("interview-session");
+    assert.ok(!session.classList.contains("hidden"), "点击后切换面试中形态");
+    assert.ok(window.document.getElementById("iv-question").textContent.includes("事件循环"), "恢复当前问题");
+    assert.match(window.document.getElementById("iv-status").textContent, /第 3 轮/);
+  });
+});
+
+test("无进行中会话 → 「继续上一场」按钮隐藏", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    kanban.invStatus = async () => ({ ok: true, active: false });
+    window.switchTab("interview");
+    await tick();
+    const resumeBtn = window.document.getElementById("iv-resume");
+    // switchTab 顶层会先以 mock 空库跑一遍 → 保证始终 hidden
+    assert.ok(resumeBtn.classList.contains("hidden"), "无会话 → 按钮隐藏");
+  });
+});

@@ -55,6 +55,17 @@ export function registerInterviewRoutes(router, { laneSubmit = (fn) => fn() } = 
     }
   });
 
+  router.route("/api/interview/status", (req, res) => {
+    // 进行中会话状态（面板"继续上一场"入口；C8 恢复闭环）
+    try {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(interviewApi.getInterviewStatus()));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+
   router.route("/api/interview-notes", (req, res) => {
     // 面试实录：把真实面试被问住的知识点加入学习清单（必会）+ 建复习卡
     readBody(req, res, (body) => {
