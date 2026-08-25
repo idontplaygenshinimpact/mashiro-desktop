@@ -23,11 +23,12 @@ const arrow = (d) => (d === null ? "  " : d > 0 ? " ↑" : d < 0 ? " ↓" : " �
 
 export function compareRunsFromRows(rows) {
   if (!rows || !rows.length) return { ok: true, notice: "无历史数据", hardFails: [], warnings: [], groups: [] };
-  // 按 (layer, datasetHash) 分组（hash 空的行不参与对比）
+  // 按 (layer, datasetHash, mode) 分组（hash 空的行不参与对比；mode 隔离——ablation 的
+  // composite 列是 Δ 非综合分，与 full/quick 混比会误导）
   const groups = new Map();
   for (const r of rows) {
     if (!r.layer || !r.datasetHash) continue;
-    const key = `${r.layer}|${r.datasetHash}`;
+    const key = `${r.layer}|${r.datasetHash}|${r.mode || ""}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
   }
@@ -37,7 +38,7 @@ export function compareRunsFromRows(rows) {
   for (const [key, runs] of groups) {
     const sorted = runs.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
     if (sorted.length < 2) continue; // 只有一次 → 无对比
-    const [layer, hash] = key.split("|");
+    const [layer, hash, mode] = key.split("|");
     const prev = sorted[sorted.length - 2];
     const cur = sorted[sorted.length - 1];
     const DIMS = [
