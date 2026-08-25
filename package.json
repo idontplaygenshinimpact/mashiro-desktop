@@ -38,6 +38,7 @@
     "bench:validate": "node scripts/validate-evaldata.mjs --report benchmark/evaldata-hashes.json",
     "bench:compare": "node scripts/bench-compare.mjs",
     "bench:gate": "node scripts/bench-compare.mjs --gate",
+    "bench:ablation": "node scripts/bench-ablation.mjs",
     "bench:agent": "node --experimental-test-module-mocks scripts/benchmark-agent.mjs",
     "bench:web": "node scripts/web-task-bench.mjs",
     "typecheck": "tsc --noEmit",

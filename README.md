@@ -403,17 +403,46 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 ## 评测（Benchmark）
 
-两层评测体系，报告存 `benchmark/reports/`：
+<!-- EVAL_BADGE -->
 
-### Layer A：模型基线（`npm run bench` / `npm run bench:quick`）
+两层评测体系 + 指标/门禁/消融/可视化，报告存 `benchmark/reports/`（`eval_summary.csv` 为回归底座）：
 
-- **讲解质量**：10 道真实面试题（8 前端 + 2 Agent 方向），客观判定为主：
+### Layer A：模型基线（`npm run bench` / `npm run bench:quick` / `npm run bench:ablation`）
+
+- **讲解质量**：14+ 道真实面试题（code/predict/coverage/trace 四型），客观判定为主：
   - `code` 型：提取讲解中的 JS 代码注入测试断言，node 子进程跑（过了就是过了）
   - `predict` 型：跑讲解代码块，stdout 与期望输出比对（如事件循环输出顺序）
   - `coverage` 型：讲解文本命中必考要点覆盖率
-  - LLM-as-Judge 双评打分（辅助分，带空响应重试）
-- **分类/检测/匹配准确率**：面经/招聘/笔试/闲聊分类、题目检测、知识点匹配
+  - LLM-as-Judge 双评打分（辅助分，带空响应重试）+ CRAG 事实判官（correct/acceptable/missing/incorrect）
+- **分类/检测/匹配准确率**：面经/招聘/笔试/闲聊分类、题目检测、知识点匹配（静态用例在 `benchmark/static.json`）
+- **指标**：综合分 + pass@1 + 成本（tokens/USD，solver vs judge 分账）+ 延迟（p50/p95）+ 失败分类，全部落 `eval_summary.csv`
 - 注意：本层反映「模型 + prompt」组合能力，用于**回归监控**（改 prompt/换模型前后对比），不体现 harness
+
+### 数据集治理（`npm run bench:validate`，CI 每次跑）
+
+- 统一 envelope：`version` / `meta`（生成方+更新时间）/ 每样本 `source`（来源可追溯——面试被问"样本哪来的"能答）
+- schema 校验（type 枚举/must_cover/judge 标签/web judge 类型）+ `datasetHash`（sha256）——回归对比**同 hash 才可比**
+
+### 回归门禁（`npm run bench:compare` / `npm run bench:gate`）
+
+- 同 layer ∧ 同 datasetHash 的最近两次 Δ 表；分层门禁：
+  - **硬红**（--gate exit 1）：分类/检测/静态任一降 >3pt（确定性高、样本大）
+  - **黄牌**：讲解/真实性降 3~5pt（波动大，连续两次同向才升级红）
+- 数据集变更（hash 不同）不跨集对比，不拿不同样本数当回归
+
+### 消融基线（`npm run bench:ablation -- --sample N`，诚实版）
+
+- 同题 A/B：**裸 prompt（无模板）vs 全链路**（结构化 prompt 工程），固定 seed 随机顺序消除判官偏差
+- 产出 Δ 数字（讲解均分 / CRAG / 覆盖度）——**数值只写实测，不预填**
+
+### 为什么讲解链路不用 RAG（决策档案，有据可依）
+
+讲解链路刻意**不引入 RAG**，这是工程决策而非缺失：
+
+- **黑箱 vs 可解释**：RAG 检索来源不可见；讲解要求"每一点可讲出来源"，结构化 prompt + 模型固有知识 + 可回溯检索更可控
+- **任务匹配**：讲解是"把已知讲清楚"（固有知识 + 结构化输出足够），不是"检索罕见事实"（那才是 RAG 主场）
+- **按任务分流，不是全有或全无**：出题/刷题/agent 搜索仍用 `searchKnowledge`（RAG 保留于检索型任务）
+- 消融 2（RAG on/off 同题 A/B）为可选验证项——若实测 RAG 有增益则如实修正决策
 
 ### Layer B：Agent/Harness 能力（`npm run bench:agent`）
 

@@ -11,6 +11,7 @@ import { solveQuestion, classifyPage, detectQuestions } from "../lib/ai.mjs";
 import { matchKp } from "../lib/knowledge.mjs";
 import { summarizeEvalCost, formatEvalCost } from "../lib/eval-cost.mjs";
 import { appendEvalSummary } from "../lib/eval-summary.mjs";
+import { judgeAnswer, judgeTruthfulness, coverageRate, truthScore, TRUTH_LABEL_SCORE, TRUTH_LABEL_RANK } from "../lib/eval-scoring.mjs";
 import { computeDatasetHash } from "./validate-evaldata.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -33,11 +34,8 @@ function appendSummary(fields) {
   return appendEvalSummary(fields);
 }
 
-// ---------- 真实性标签（CRAG）----------
-// correct +1 / acceptable +0.5 / missing 0 / incorrect -1，映射到 0-100
-const TRUTH_LABEL_SCORE = { correct: 100, acceptable: 75, missing: 50, incorrect: 0 };
-const TRUTH_LABEL_RANK = { correct: 0, acceptable: 1, missing: 2, incorrect: 3 };
-function truthScore(label) { return TRUTH_LABEL_SCORE[label] ?? null; }
+// ---------- 真实性标签（CRAG；共享实现见 lib/eval-scoring.mjs）----------
+// 本地保留 truthAdjacent（judge-check 相邻一致性用）
 function truthAdjacent(a, b) {
   if (!a || !b || TRUTH_LABEL_RANK[a] === undefined || TRUTH_LABEL_RANK[b] === undefined) return false;
   return Math.abs(TRUTH_LABEL_RANK[a] - TRUTH_LABEL_RANK[b]) <= 1;
@@ -63,80 +61,10 @@ function normStdout(s) {
   return String(s || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 }
 
-function coverageRate(text, mustCover) {
-  const t = String(text || "").toLowerCase();
-  const hit = (mustCover || []).filter((k) => t.includes(String(k).toLowerCase()));
-  return { hit, rate: (mustCover || []).length ? Math.round((hit.length / mustCover.length) * 100) : 0 };
-}
+// coverageRate 已由 lib/eval-scoring.mjs 提供（共享）
 
-// ---------- LLM-as-Judge（辅助分，带重试+降级：偶发网关空响应不影响评测） ----------
-async function judgeAnswer(q, answer) {
-  const prompt = `你是严格的前端面试官评委。下面是一道面试题和 AI 的讲解，请按四维打分（各 0-25）：
-- conclusion 结论：是否先给出清晰正确的结论
-- principle 原理：是否准确有深度
-- implementation 实现JS：代码是否正确可运行
-- boundary 边界：是否覆盖边界情况
-给分要严格：结论错误 conclusion≤8；代码有明显错误 implementation≤8。
-题目：${q.title}
-必考要点：${(q.must_cover || []).join("、")}
-讲解：${answer.slice(0, 6000)}
-只输出 JSON：{"conclusion":0,"principle":0,"implementation":0,"boundary":0,"total":0}，total=四维之和。`;
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const data = await llmChat([
-        { role: "system", content: "你是严格的前端面试官评委，只输出合法 JSON。" },
-        { role: "user", content: prompt },
-      ], { maxTokens: 500, temperature: 0.2, tag: "judge" });
-      const content = data?.choices?.[0]?.message?.content ?? "";
-      const parsed = extractJson(content);
-      if (parsed && typeof parsed.total === "number") return parsed;
-      // 兜底：llm.mjs 层已对空响应重试；这里再补 2 次短退避
-      if (attempt < 2) await sleep(1000 * (attempt + 1));
-    } catch {
-      if (attempt < 2) await sleep(1000 * (attempt + 1));
-    }
-  }
-  return null; // 3 次失败 → 降级（评分时按无 judge 处理）
-}
-
-// ---------- 真实性判官（CRAG，只判事实正确性，独立于质量判官） ----------
-function refText(q) {
-  const parts = [];
-  if (q.must_cover?.length) parts.push("必考要点：" + q.must_cover.join("、"));
-  if (q.context) parts.push("给定材料：" + String(q.context).slice(0, 3000));
-  return parts.join("\n") || "（无参考要点，仅依据题目常识判断事实正误）";
-}
-
-async function judgeTruthfulness(q, answer) {
-  const prompt = `你是事实核查员。下面是一道面试题、参考要点/材料，以及 AI 的讲解。请只判断讲解的**事实正确性**（不评判文笔/结构/详略），输出一个标签：
-- correct：讲解的事实全部正确，无错误陈述
-- acceptable：基本正确，但有个别不严谨或不完整的轻微瑕疵（不影响结论）
-- missing：讲解没有回答题目的核心问题，或避而不答、只重复题干
-- incorrect：讲解存在明确的事实错误，或结论与参考要点相悖
-题目：${q.title}
-${refText(q)}
-讲解：${answer.slice(0, 6000)}
-只输出 JSON：{"label":"correct|acceptable|missing|incorrect"}`;
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const data = await llmChat([
-        { role: "system", content: "你是事实核查员，只输出合法 JSON。" },
-        { role: "user", content: prompt },
-      ], { maxTokens: 200, temperature: 0.2, tag: "judge" });
-      const content = data?.choices?.[0]?.message?.content ?? "";
-      const parsed = extractJson(content);
-      if (parsed && TRUTH_LABEL_SCORE[parsed.label] !== undefined) return parsed;
-      if (attempt < 2) await sleep(1000 * (attempt + 1));
-    } catch {
-      if (attempt < 2) await sleep(1000 * (attempt + 1));
-    }
-  }
-  return null; // 3 次失败 → 降级（该题不计入真实性均分）
-}
-
-// ---------- TRACe 四维判官（0-1，逐维打分） ----------
+// ---------- LLM-as-Judge / 真实性判官（共享实现见 lib/eval-scoring.mjs：judgeAnswer/judgeTruthfulness/refText） ----------
+// 本地保留 TRACe 四维判官（消融不涉及，仅主评测用）
 async function judgeTrace(q, answer) {
   const prompt = `你是严谨的评测员。下面是一道基于给定材料的问答题（"根据下面材料回答"式）、给定材料、以及 AI 的回答。请按四个维度打分（各 0-1，可给 0.1 粒度的小数）：
 - relevance 相关性：回答是否紧扣题目要求，无跑题或无关内容（0=完全跑题，1=完全相关）
@@ -154,7 +82,7 @@ AI 回答：${answer.slice(0, 6000)}
       const data = await llmChat([
         { role: "system", content: "你是严谨的评测员，只输出合法 JSON。" },
         { role: "user", content: prompt },
-      ], { maxTokens: 200, temperature: 0.2, tag: "judge" });
+      ], { maxTokens: 2000, temperature: 0.2, tag: "judge" });
       const content = data?.choices?.[0]?.message?.content ?? "";
       const parsed = extractJson(content);
       if (parsed && typeof parsed.relevance === "number" && typeof parsed.utilization === "number" &&
