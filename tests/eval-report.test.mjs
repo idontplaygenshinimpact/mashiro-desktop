@@ -9,12 +9,12 @@ const rows = [
   { ts: "2026-01-04T00:00:00Z", layer: "A", mode: "ablation", composite: "12", truthfulness: "30", classifyRate: "" },
 ];
 
-test("latestRun：取最近一次 A 层（full 优先于 ablation）", async () => {
+test("latestRun：默认取主评测（full/quick），ablation 不冒充徽章", async () => {
   const { latestRun } = await import("../scripts/gen-bench-report.mjs");
   const r = latestRun(rows, { layer: "A" });
-  assert.equal(r.ts, "2026-01-04T00:00:00Z", "默认 modes 含 ablation 时取最新");
-  const r2 = latestRun(rows, { layer: "A", modes: ["full"] });
-  assert.equal(r2.ts, "2026-01-02T00:00:00Z", "限定 full 模式");
+  assert.equal(r.ts, "2026-01-02T00:00:00Z", "默认 modes 排除 ablation（composite 列是 Δ 非综合分）");
+  const r2 = latestRun(rows, { layer: "A", modes: ["full", "quick", "ablation"] });
+  assert.equal(r2.ts, "2026-01-04T00:00:00Z", "显式含 ablation 时可取到");
   assert.equal(latestRun(rows, { layer: "X" }), null, "无该层 → null");
 });
 

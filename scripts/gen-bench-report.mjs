@@ -12,8 +12,8 @@ const WRITE_README = process.argv.includes("--write-readme");
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 
-/** 最近一次指定 layer+mode 的运行行 */
-export function latestRun(rows, { layer = "A", modes = ["full", "quick", "ablation"] } = {}) {
+/** 最近一次指定 layer+mode 的运行行（默认取主评测 full/quick——ablation 的 composite 列是 Δ 非综合分，不冒充徽章） */
+export function latestRun(rows, { layer = "A", modes = ["full", "quick"] } = {}) {
   const cands = (rows || []).filter((r) => r.layer === layer && modes.includes(r.mode));
   cands.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
   return cands.length ? cands[cands.length - 1] : null;
