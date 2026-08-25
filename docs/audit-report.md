@@ -137,35 +137,40 @@
 | P2 | progress.json 僵尸清理 | S |
 | P2 | chat-log 布局 + 审批条遮挡 / 轮询按 Tab 启停 / todo 联动 | M |
 
-## 10. 外围闭环审计（子代理交付 + 主审核实）
+## 10. 外围闭环审计（子代理完整交付 + 主审核实）
 
 ### 九环矩阵（外围 4 链）
 
 | 功能 | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | C9 | 判定 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 巡检/定时 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | 1 弱环 |
-| 求职 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ⚠️ | 2 断环 |
-| 邮件/日程 | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ❌ | C9 断 |
-| 备份 | ⚠️ | ✅ | ✅ | ✅(恢复路径完整) | ✅ | ✅ | ❌ | ✅ | ✅ | 1 断环 |
+| 巡检/定时 | ✅ | ✅ | ⚠️ | ✅ | ⚠️ | ✅ | ⚠️ | ✅ | ✅ | 3 弱环（调度器子系统休眠） |
+| 求职 | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ❌ | ⚠️ | ❌ | C7/C9 断 |
+| 邮件/日程 | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | ❌ | **C7/C8/C9 三重断（最严重）** |
+| 备份 | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ❌ | ✅ | ⚠️ | C7 断（恢复路径完整） |
 
-### 外围断环清单（P0/P1/P2）
+### 外围断环清单
 
-**P1**
-- **导入题库清零做题进度（数据血缘 C7 断）**：`lib/ai-career.mjs:19` `importChallengesData` 用 `INSERT OR REPLACE`，INSERT 列不含 `done/done_at/wrong_count` → REPLACE 重建行时这些状态列重置为默认。用户跑一次 import 脚本，全部做题进度（448 题 done/wrongCount）清空。
-  - 修复（S）：改 `INSERT OR IGNORE` + 内容列 `UPDATE`（保留状态列），或 INSERT 列补 `done/wrong_count` 用原值
-- **邮件无终态（C9 断）**：邮件读到后永不标记"已读"，日程事件无删除接口——已处理/未处理无法区分，重复提醒。
-  - 修复（M）：mail 列表加"标记已读" + schedule 事件删除接口
-- **求职终态残尸（C7/C9 断）**：岗位 done（拿到 offer/结束）后关联的笔试/面试日程仍继续提醒（job done 不回写 schedule）。
-  - 修复（M）：`setJobStatus("done")` 时联动作废该岗位的未完成日程
-- **端口回退后 UI 不可达（C8 断）**：widget 8899 被占用回退 8900/8901 后，主进程/面板仍写死请求 8899 → 死恢复链（守护探测 health 失败 → 反复拉起冲突实例）。
-  - 修复（M）：widget 端口回退时更新 widget-port.json 并让主进程读取（或禁止回退直接报错）
+**P1（主链功能级，8 条）**
+1. **导入题库清零做题进度（C7，主审核实）**：`lib/ai-career.mjs:19` `importChallengesData` 用 INSERT OR REPLACE，列清单不含 done/done_at/wrong_count → 整行重建抹掉用户做题状态，违背 import-codetop-top400.mjs:8"幂等覆盖"承诺。修复（S）：改 `ON CONFLICT DO UPDATE` 只刷内容列。
+2. **邮件无"已处理"终态（C9）**：`lib/mail.mjs:148-197` fetchUnreadEmails 从不标 `\Seen` → 同一批未读每 30 分钟重新拉取+全文送 LLM（**token 永久燃烧**）。修复（M）：识别后置 Seen 或本地 uid 高水位。
+3. **schedule_events 无删除/已完成接口（C9/C3）**：core.mjs:374 仅 GET；误识别邀约与 interview_at=NULL 事件（mail.mjs:441 恒匹配）永久滞留。修复（M）：补 DELETE/:id 与 done 标记。
+4. **邮箱时间 UTC 解析 +8h 漂移（C8）**：mail.mjs:388 `new Date(rawAt)` vs job-reminders.mjs:6-14 parseLocalDate → 东八区提醒窗口错位。修复（S）：统一 parseLocalDate。
+5. **求职终态残尸（C7/C9）**：`setJobStatus('done')`（jobs.mjs:481）不清理 email_id=`job_<id>` 的 schedule_events → 已结束岗位笔试提醒继续轰炸（4h 冷却）。回退 new 时 applied_at 也残留。修复（M）：done/清 bishi_date 时按 email_id 删日程。
+6. **岗位无删除/归档接口（C9）**：全仓库无 DELETE FROM job_posts，表只增不减。修复（M）：补归档接口。
+7. **端口回退死恢复链（C8，主审核实）**：widget EADDRINUSE 回退 8899+n 写 widget-port.json（零消费方）；渲染层硬编码 8899 且 CSP connect-src 仅允许 8899 → 回退实例对 UI 不可达，守护可能对着占位僵尸误判。修复（M）：fail-fast 去掉回退，或让守护/渲染层消费端口文件。
+8. **删会话不清内存镜像（C8/C9，主审核实）**：`memory.mjs:167-171` 只删 DB，mem.chatHistory 保留 → 已删对话借 agent 无 history 路径复活注入 prompt；镜像 cap40 跨会话混流 + chat_history 全局 200 条互截。修复（S）：删除时同步清内存 + 按 session 分桶。
 
-**P2**
-- **progress.json 永久 running 幽灵**：爬取进度文件写 running 后崩溃未清理 → 面板永远显示"爬取中"。
-  - 修复（S）：widget 启动扫描 output/progress.json，running 超过 N 分钟视为僵尸清掉
-- **scheduler 子系统入口缺失**：lib/scheduler.mjs（若存在）或 schedule 管理无面板入口（定时任务列表/手动触发/暂停）。
-- **deleteChatSession 内存镜像复活**：`memory.mjs deleteChatSession` 只删 DB，`mem.chatHistory` 内存残留 → agent 无 history 对话仍能读到已删消息。
-  - 修复（S）：deleteChatSession 同步清内存镜像
+**P2（缺口级，12 条，要点）**
+- 手动巡检 fire-and-forget 吞错恒报"已触发"（core.mjs:331）；任务连续失败禁用对用户静默（widget.mjs:669）
+- patrol-config POST 先落间隔再校验，被拒 400 但副作用已生效（core.mjs:287-301）
+- 搜集失败无退避：每 30 分钟重跑官网抓取+多轮 LLM（widget.mjs:688-691）
+- scheduled_jobs 子系统：表/调度器/执行器齐备但无管理路由，种子任务 enabled:false 永不可启用（widget.mjs:605-670）
+- progress.json 非原子直写，崩溃残留 running → 面板永久进度条（无 ts 新鲜度校验，backup.mjs:66 注释自证已知）
+- 备份盲区：career-sites.json / platform-accounts.json（投递 cookie）/ mcp-servers.json / token 不入备份 → 半恢复态（backup.mjs:46-71）
+- output-import 序号=已有数+1 可碰撞覆盖；patrol 每轮文件名序号从 01 重置（同日跨轮同名覆盖）
+- chat message 未限类型长度、client history 未校验 role 可注入 system（agent.mjs:559）
+- remindedToday/notify 内存态，重启当日重复提醒
+- 非优雅退出遗留 detached discover 孤儿；writeJsonAtomic 无 fsync
 
 ### 幽灵状态清单（外围）
 
@@ -173,5 +178,10 @@
 |---|---|
 | output/progress.json | 崩溃残留 running → 面板永久"爬取中" |
 | 端口回退 | 8899 死链，UI 不可达且守护误判拉起 |
-| job done 后 | 日程残尸继续提醒 |
+| job done 后 | 笔试日程残尸继续提醒 |
 | deleteChatSession | 已删会话消息在内存"复活" |
+| scheduled_jobs | 种子任务永 disabled，tick 空转 |
+
+### 外围未覆盖项（子代理声明）
+
+renderer Tab 交互细节、lib/tools/impl.mjs、rss/focus/study/review 四链、mcp-server.mjs、Electron 主进程窗口生命周期、真实 IMAP 行为验证。
