@@ -1,0 +1,2 @@
+ts,layer,mode,datasetHash,llmModel,composite,solveScore,truthfulness,classifyRate,detectRate,staticRate,traceScore,costTokens,costUsd,p50Ms,p95Ms,pass1,failCount,exitCode
+2026-08-25T12:41:16.866Z,A,ablation,68ab85f4f922f4f6,deepseek-v4-flash,6,100,100,0,0,0,0,108042,0.0342,16291,70078,,0,0

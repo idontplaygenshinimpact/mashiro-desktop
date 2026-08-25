@@ -149,6 +149,137 @@
       },
       "timeoutMs": 600000,
       "source": "人工构造：WebArena 风格任务（自拟）"
+    },
+    {
+      "id": "easy-promise",
+      "name": "Bing 搜索 Promise 面试题并讲解",
+      "difficulty": "easy",
+      "prompt": "用 Bing 搜索 Promise 相关的常见面试题，选一道完整讲解（原理+实现）。",
+      "judge": {
+        "type": "solved_question",
+        "requiredKeywords": [
+          "Promise"
+        ]
+      },
+      "timeoutMs": 600000,
+      "source": "人工构造（WebArena 风格）"
+    },
+    {
+      "id": "easy-react18",
+      "name": "Bing 搜索 React 18 新特性",
+      "difficulty": "easy",
+      "prompt": "用 Bing 搜索 React 18 有哪些新特性，总结 3 个。",
+      "judge": {
+        "type": "answer_contains",
+        "requiredKeywords": [
+          "React",
+          "18"
+        ]
+      },
+      "timeoutMs": 600000,
+      "source": "人工构造（WebArena 风格）"
+    },
+    {
+      "id": "easy-deepcopy",
+      "name": "Bing 搜索深拷贝实现并讲解",
+      "difficulty": "easy",
+      "prompt": "用 Bing 搜索 JavaScript 深拷贝的面试实现，讲解如何处理循环引用。",
+      "judge": {
+        "type": "solved_question",
+        "requiredKeywords": [
+          "深拷贝"
+        ]
+      },
+      "timeoutMs": 600000,
+      "source": "人工构造（WebArena 风格）"
+    },
+    {
+      "id": "easy-http",
+      "name": "Bing 搜索 HTTP 缓存机制",
+      "difficulty": "easy",
+      "prompt": "用 Bing 搜索 HTTP 强缓存和协商缓存的区别，简要说明。",
+      "judge": {
+        "type": "answer_contains",
+        "requiredKeywords": [
+          "缓存",
+          "HTTP"
+        ]
+      },
+      "timeoutMs": 600000,
+      "source": "人工构造（WebArena 风格）"
+    },
+    {
+      "id": "easy-debounce",
+      "name": "Bing 搜索防抖节流区别",
+      "difficulty": "easy",
+      "prompt": "用 Bing 搜索防抖和节流的区别与适用场景。",
+      "judge": {
+        "type": "answer_contains",
+        "requiredKeywords": [
+          "防抖",
+          "节流"
+        ]
+      },
+      "timeoutMs": 600000,
+      "source": "人工构造（WebArena 风格）"
+    },
+    {
+      "id": "med-closure",
+      "name": "找闭包面试题并讲解",
+      "difficulty": "medium",
+      "prompt": "找到闭包相关的前端面试题，抓取一篇面经，提取题目并完整讲解。",
+      "judge": {
+        "type": "solved_question",
+        "requiredKeywords": [
+          "闭包"
+        ]
+      },
+      "timeoutMs": 600000,
+      "source": "人工构造（WebArena 风格）"
+    },
+    {
+      "id": "med-vite",
+      "name": "搜索 Vite 原理并讲解",
+      "difficulty": "medium",
+      "prompt": "搜索 Vite 的工作原理（为什么快），抓取资料并完整讲解。",
+      "judge": {
+        "type": "solved_question",
+        "requiredKeywords": [
+          "Vite"
+        ]
+      },
+      "timeoutMs": 600000,
+      "source": "人工构造（WebArena 风格）"
+    },
+    {
+      "id": "med-http3",
+      "name": "找 HTTP/3 面试题并讲解",
+      "difficulty": "medium",
+      "prompt": "找到 HTTP/3 相关面试题，抓取一篇讲解 QUIC 的特点。",
+      "judge": {
+        "type": "solved_question",
+        "requiredKeywords": [
+          "HTTP",
+          "3"
+        ]
+      },
+      "timeoutMs": 600000,
+      "source": "人工构造（WebArena 风格）"
+    },
+    {
+      "id": "hard-oj",
+      "name": "搜索力扣题解并验证思路",
+      "difficulty": "hard",
+      "prompt": "搜索'两数之和'的最优解法，抓取一篇题解，用代码实现并验证。",
+      "judge": {
+        "type": "output_file",
+        "requiredKeywords": [
+          "twoSum"
+        ]
+      },
+      "minFiles": 1,
+      "timeoutMs": 600000,
+      "source": "人工构造（WebArena 风格）"
     }
   ]
 }

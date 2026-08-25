@@ -75,6 +75,76 @@
       "answer": "结果是 false，因为数组与布尔值类型不同，宽松相等也会返回 false。",
       "label": "incorrect",
       "source": "人工标注：权威 JS 概念题（MDN/ECMAScript 语义）"
+    },
+    {
+      "id": "g11",
+      "question": "JavaScript 中 `null == undefined` 的结果是什么？",
+      "answer": "`null == undefined` 返回 `true`，因为宽松相等规定 null 和 undefined 互相相等。",
+      "label": "correct",
+      "source": "人工标注（MDN 语义）"
+    },
+    {
+      "id": "g12",
+      "question": "CSS 中 `position: sticky` 的定位基准是什么？",
+      "answer": "sticky 是相对最近滚动容器定位，在滚动到指定阈值前保持普通流位置，达到阈值后固定。",
+      "label": "correct",
+      "source": "人工标注（MDN 语义）"
+    },
+    {
+      "id": "g13",
+      "question": "`Array.prototype.map` 会修改原数组吗？",
+      "answer": "map 会直接修改原数组，把每个元素替换成回调的返回值。",
+      "label": "incorrect",
+      "source": "人工标注（故意错误：map 返回新数组）"
+    },
+    {
+      "id": "g14",
+      "question": "事件冒泡和事件捕获的执行顺序是什么？",
+      "answer": "先捕获后冒泡，事件从 window 向下捕获到目标，再从目标向上冒泡回 window。",
+      "label": "correct",
+      "source": "人工标注（DOM 语义）"
+    },
+    {
+      "id": "g15",
+      "question": "`==` 和 `===` 的区别是什么？",
+      "answer": "`==` 会做类型转换，`===` 不做转换，类型不同直接 false。",
+      "label": "acceptable",
+      "source": "人工标注（简述可接受）"
+    },
+    {
+      "id": "g16",
+      "question": "React 中 key 的作用是什么？",
+      "answer": "key 用于给组件设置样式类名，方便 CSS 选择器定位。",
+      "label": "incorrect",
+      "source": "人工标注（故意错误：key 是列表 diff 标识）"
+    },
+    {
+      "id": "g17",
+      "question": "什么是 Promise？",
+      "answer": "Promise 是异步编程的一种解决方案。",
+      "label": "missing",
+      "source": "人工标注（避答核心：未解释状态机/链式）"
+    },
+    {
+      "id": "g18",
+      "question": "HTTP 状态码 304 表示什么？",
+      "answer": "304 Not Modified 表示资源未修改，协商缓存命中时服务端返回 304，客户端可使用本地缓存。",
+      "label": "correct",
+      "source": "人工标注（HTTP 语义）"
+    },
+    {
+      "id": "g19",
+      "question": "深拷贝和浅拷贝的区别？",
+      "answer": "深拷贝会复制所有层级，浅拷贝只复制第一层，嵌套对象仍共享引用。",
+      "label": "correct",
+      "source": "人工标注（基础概念）"
+    },
+    {
+      "id": "g20",
+      "question": "`var` 和 `let` 的区别是什么？",
+      "answer": "`let` 有块级作用域，`var` 没有；`var` 可以重复声明，`let` 不行；`var` 有变量提升，`let` 有暂时性死区。",
+      "label": "correct",
+      "source": "人工标注（ES6 语义）"
     }
   ]
 }

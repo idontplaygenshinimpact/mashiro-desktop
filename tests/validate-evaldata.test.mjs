@@ -57,5 +57,5 @@ test("validateDataset：真实 questions.json envelope 完整", () => {
     if (!["code", "predict", "coverage", "trace"].includes(c.type)) errs.push("bad-type");
   } });
   assert.equal(r.ok, true, r.errors.join(";"));
-  assert.equal(r.count, 14);
+  assert.ok(r.count >= 26, `扩容后 questions 数量应 >= 26（实际 ${r.count}）`);
 });
