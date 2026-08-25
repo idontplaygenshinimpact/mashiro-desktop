@@ -164,3 +164,15 @@ test("createSSEPush：heartbeat 只近关闭即清（不泄漏）", async () => 
     globalThis.clearInterval = realClear;
   }
 });
+
+// Phase 2 验收 §5.3：人为把 ChatOutput.reply 改名 → 契约校验拒绝（漂移拦得住）
+test("ChatOutput 字段改名漂移 → 契约拒绝（reply 缺失）", async () => {
+  const { ChatOutput } = await import("../lib/contracts/chat.mjs");
+  // 正常响应通过
+  assert.ok(ChatOutput.safeParse({ reply: "你好", voice: "", history: [] }).success);
+  // 模拟服务端把 reply 改成 answer（历史客户端读 reply 会 undefined）
+  const drifted = { answer: "你好", voice: "", history: [] };
+  assert.ok(!ChatOutput.safeParse(drifted).success, "reply 改名后 → 拒绝（SCHEMA_MISMATCH 会 500 暴露 bug）");
+  // 类型错也拒绝
+  assert.ok(!ChatOutput.safeParse({ reply: 123 }).success, "reply 非 string → 拒绝");
+});
