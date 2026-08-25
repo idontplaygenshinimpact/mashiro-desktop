@@ -10,6 +10,8 @@ import { isSimilarTopicForArchive } from "#lib/memory.mjs";
 import { queryFollowupCache } from "#lib/followup-cache.mjs";
 import { readBody } from "#lib/widget-core.mjs";
 import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
+import { createSSEPush } from "#lib/routes/contract.mjs";
+import { StudyStreamEvent } from "#lib/contracts/sse.mjs";
 
 // 同知识点讲解复用：清单里语义相似的另一条目已有讲解存档 → 直接复用（内容一致 + 省 LLM）
 // 背景：同一知识点可能因来源不同（面经产出/面试实录/复习卡恢复）存在多条近似条目
@@ -82,7 +84,8 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     Connection: "keep-alive",
     "Access-Control-Allow-Origin": getCorsOrigin(req),
   });
-  const send = (res) => (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
+  // 统一 SSE push（Phase 2 §3.4：StudyStreamEvent 契约；开发期 MIANSHI_SSE_STRICT=1 校验漂移）
+  const makePush = (res) => createSSEPush(res, { eventSchema: StudyStreamEvent }).push;
 
   router.route("/api/study-plan", (req, res) => {
     // 学习清单（读取）——为每条附加讲解文件路径
@@ -164,7 +167,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     // 无文件：SSE 流式生成
     res.writeHead(200, sseHeaders(req));
     res.on("error", () => {}); // 客户端断开时避免无监听 error 崩溃进程
-    const push = send(res);
+    const push = makePush(res);
     push({ type: "start", topic: item.topic });
     let full = "";
     import("#lib/ai.mjs").then(async ({ solveQuestionStream }) => {
@@ -229,7 +232,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     if (cached) {
       res.writeHead(200, sseHeaders(req));
       res.on("error", () => {});
-      const push = send(res);
+      const push = makePush(res);
       push({ type: "start", topic: item.topic });
       push({ type: "delta", delta: cached.answer });
       push({ type: "cache", hit: true, similarity: cached.similarity, cachedQuestion: cached.question });
@@ -239,7 +242,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     }
     res.writeHead(200, sseHeaders(req));
     res.on("error", () => {});
-    const push = send(res);
+    const push = makePush(res);
     push({ type: "start", topic: item.topic });
     let full = "";
     import("#lib/ai.mjs").then(async ({ solveAppendStream }) => {
@@ -293,7 +296,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     if (!content || content.length < 200) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "还没有讲解内容，先点「💡 讲解」生成" })); return; }
     res.writeHead(200, sseHeaders(req));
     res.on("error", () => {});
-    const push = send(res);
+    const push = makePush(res);
     push({ type: "start", topic: item.topic });
     let full = "";
     import("#lib/ai.mjs").then(async ({ consolidateStudyStream }) => {
@@ -349,7 +352,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         }
         res.writeHead(200, sseHeaders(req));
         res.on("error", () => {});
-        const push = send(res);
+        const push = makePush(res);
         push({ type: "start", topic: topics.map((t) => t.topic).join(" + ") });
         let full = "";
         import("#lib/ai.mjs").then(async ({ clusterStudyStream }) => {

@@ -5,6 +5,8 @@ import { ensureQuiz, drawQuiz, submitQuiz, getQuizStats } from "#lib/quiz.mjs";
 import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
 import { memory } from "#lib/memory.mjs";
 import { readBody } from "#lib/widget-core.mjs";
+import { createSSEPush } from "#lib/routes/contract.mjs";
+import { StudyStreamEvent } from "#lib/contracts/sse.mjs";
 
 /**
  * 注册复习域路由
@@ -123,7 +125,8 @@ export function registerReviewRoutes(router, ctx) {
       "Access-Control-Allow-Origin": getCorsOrigin(req),
     });
     res.on("error", () => {}); // 客户端断开避免无监听 error 崩溃
-    const send = (obj) => { if (!res.destroyed && !res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
+    // 统一 SSE push（Phase 2 §3.4：StudyStreamEvent 契约；开发期 MIANSHI_SSE_STRICT=1 校验漂移）
+    const send = createSSEPush(res, { eventSchema: StudyStreamEvent }).push;
     send({ type: "start", topic: card.topic });
     // 知识库检索（本地 RAG，快；失败静默降级为纯 LLM）→ 流式讲解
     Promise.resolve()
