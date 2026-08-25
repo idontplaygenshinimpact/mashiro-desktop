@@ -79,6 +79,10 @@ function loadJson(file) {
 function hashOf(version, cases) {
   return createHash("sha256").update(`${version}|${JSON.stringify(cases)}`).digest("hex").slice(0, 16);
 }
+/** datasetHash 计算（benchmark/compare 复用：同 version∧同 cases 才可比） */
+export function computeDatasetHash(version, cases) {
+  return hashOf(version, cases);
+}
 
 /**
  * 校验一个 case 列表（纯函数，数据集无关的强制项 + 各数据集类型枚举）。
