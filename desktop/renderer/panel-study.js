@@ -1824,7 +1824,12 @@ $("sd-regenerate-btn").addEventListener("click", async () => {
     if (!j.ok) throw new Error(j.error || "重置失败");
     delete studyDetailCache[id];
     sdGen++; // 中断可能还在跑的旧流（若有）
-    await showStudyDetail(id); // 重新流式生成
+    sdForceRegen = true; // 强制生成本条自己的讲解（原逻辑重置后仍复用相似错档，重新生成不生效）
+    try {
+      await showStudyDetail(id); // 重新流式生成
+    } finally {
+      sdForceRegen = false;
+    }
     window.kanban.notify("📖 讲解", j.deleted ? "已删除旧存档，重新生成中…" : "无存档，直接重新生成…");
   } catch (e) {
     window.kanban.notify("📖 讲解", "重新生成失败: " + String(e.message || e).slice(0, 60));
@@ -1888,6 +1893,8 @@ $("sd-consolidate-btn").addEventListener("click", consolidateStudyDetail);
 
 // 流式获取讲解（走 IPC 通道，避开渲染层 fetch 的 webSecurity 限制）
 // 返回 { topic, similarFrom }（similarFrom：同知识点复用来源，无则 null）
+// sdForceRegen：重新生成入口置 true → 请求带 noSimilar=1，强制生成自己的讲解（不复用相似错档）
+let sdForceRegen = false;
 async function streamStudyDetail(id, onUpdate) {
   let content = "";
   let topic = "讲解";
@@ -1895,7 +1902,7 @@ async function streamStudyDetail(id, onUpdate) {
     if (!delta) return;
     content += delta;
     onUpdate(content);
-  });
+  }, { noSimilar: sdForceRegen });
   // JSON 模式（有文件）：result 带 topic/content
   if (result?.fromFile) {
     content = result.content || content;

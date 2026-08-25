@@ -69,8 +69,8 @@ contextBridge.exposeInMainWorld("kanban", {
   ragConfig: (cfg) => ipcRenderer.invoke("widget:settings-rag", cfg || {}),
   interviewNotes: (topics) => ipcRenderer.invoke("widget:interview-notes", { topics }),
   studyDetail: (id) => ipcRenderer.invoke("widget:study-detail", { id }),
-  studyDetailStream: (id, onChunk) => streamPromise({
-    channel: "study-detail-chunk", invokeName: "widget:study-detail-stream", args: { id }, onChunk, jsonMode: true,
+  studyDetailStream: (id, onChunk, opts = {}) => streamPromise({
+    channel: "study-detail-chunk", invokeName: "widget:study-detail-stream", args: { id, noSimilar: !!opts.noSimilar }, onChunk, jsonMode: true,
   }),
   studyDetailAppend: (id, question, onChunk, onEvent) => streamPromise({
     channel: "study-append-chunk", invokeName: "widget:study-append-stream", args: { id, question }, onChunk, onEvent,

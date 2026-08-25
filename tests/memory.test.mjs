@@ -16,6 +16,29 @@ beforeEach(async () => {
 });
 after(() => { cleanupTempDb(dbDir); });
 
+// ---------- 讲解复用判据（比薄弱点去重更严格，防"数组中第K大"错配到"数组中未出现数"） ----------
+const { isSimilarTopicForArchive } = await import("../lib/memory.mjs");
+
+test("isSimilarTopicForArchive：不同题目不复用讲解（共享'数组中'前缀不算同一题）", () => {
+  // 回归：findSimilarArchive 曾用 isSimilarWeakTopic 宽松 3-gram → 共享"数组中"即判相似 →
+  // "数组中第K个最大元素"错配到"1-n数组中未出现数"的讲解（张冠李戴，重新生成也绕不开）
+  assert.equal(isSimilarTopicForArchive("数组中第K个最大元素", "1-n数组中未出现数"), false);
+  assert.equal(isSimilarTopicForArchive("手撕LRU缓存", "HTTP强缓存与协商缓存"), false);
+});
+
+test("isSimilarTopicForArchive：同一知识点的不同表述仍可复用", () => {
+  // 合法复用保留（词序不同/同簇知识点）：
+  assert.equal(isSimilarTopicForArchive("版本号比较", "比较版本号"), true, "倒序表述");
+  assert.equal(isSimilarTopicForArchive("状态机与异步并发", "异步状态机与并发提交控制"), true, "同簇知识点");
+  assert.equal(isSimilarTopicForArchive("类组件生命周期与状态", "组件生命周期"), true, "包含/被包含");
+});
+
+test("isSimilarTopicForArchive：完全不相关返回 false", () => {
+  assert.equal(isSimilarTopicForArchive("事件循环", "深拷贝"), false);
+  assert.equal(isSimilarTopicForArchive("", "事件循环"), false);
+  assert.equal(isSimilarTopicForArchive("React", "Vue"), false);
+});
+
 // ---------- 关注点 ----------
 test("addInterests 去重 + trim + 持久化(DB)", () => {
   memory.addInterests(["React", "字节", "React"]);

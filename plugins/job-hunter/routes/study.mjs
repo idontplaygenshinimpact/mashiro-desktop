@@ -6,8 +6,8 @@ import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
 import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
 import { findStudyFile, studyNotesDir, sanitizeFilename } from "#lib/study-files.mjs";
+import { isSimilarTopicForArchive } from "#lib/memory.mjs";
 import { queryFollowupCache } from "#lib/followup-cache.mjs";
-import { isSimilarWeakTopic } from "#lib/memory.mjs";
 import { readBody } from "#lib/widget-core.mjs";
 import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
 
@@ -16,13 +16,16 @@ import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
 //       （如「版本号比较」「比较版本号」「版本号数组排序」），各自生成讲解质量参差。
 // 选择策略：取相似存档中【创建最早】的一份（birthtime）——用户反馈最初生成的
 //       （如简单 split 方案）通常最扎实，后续生成的容易跑偏/冗余。追加追问只改 mtime 不改 birthtime。
+// 修复：复用判据用 isSimilarTopicForArchive（isSimilarWeakTopic 加 2-gram 重叠率门槛）——
+//       isSimilarWeakTopic 是薄弱点去重的宽松 3-gram 判定，直接用于讲解复用会把
+//       "数组中第K个最大元素"误配到"1-n数组中未出现数"（共享"数组中"），讲解张冠李戴
 function findSimilarArchive(topic, { excludeId, items } = {}) {
   const list = items || (studyApi.getPlan().items || []);
   let best = null;
   for (const other of list) {
     if (!other || other.id === excludeId) continue;
     if (String(other.topic || "").startsWith("项目·")) continue; // 项目条目不参与知识点相似
-    if (!isSimilarWeakTopic(String(topic), String(other.topic))) continue;
+    if (!isSimilarTopicForArchive(String(topic), String(other.topic))) continue;
     const f = findStudyFile(other);
     if (!f) continue;
     try {
@@ -42,7 +45,7 @@ function findEarlierArchive(topic, ownBirth, { excludeId, items } = {}) {
   for (const other of list) {
     if (!other || other.id === excludeId) continue;
     if (String(other.topic || "").startsWith("项目·")) continue;
-    if (!isSimilarWeakTopic(String(topic), String(other.topic))) continue;
+    if (!isSimilarTopicForArchive(String(topic), String(other.topic))) continue;
     const f = findStudyFile(other);
     if (!f) continue;
     try {
@@ -122,6 +125,9 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     // 学习详情（流式）：SSE 逐段推送讲解；有文件直接返回；无文件边生成边推 + 存档
     const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
     const id = u.searchParams.get("id") || "";
+    // 强制生成本条自己的讲解（跳过相似条目存档复用）——"重新生成"入口用：
+    // 修复：原流程重置后仍复用同一相似错档 → 用户永远拿不到自己的讲解（重新生成不生效）
+    const noSimilar = u.searchParams.get("noSimilar") === "1";
     const item = (studyApi.getPlan().items || []).find((i) => i.id === id);
     if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
     const filePath = findStudyFile(item);
@@ -145,7 +151,8 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
       }
     }
     // 无自身存档 → 复用语义相似条目的已有讲解（同知识点不重复生成，内容一致）
-    const similar = findSimilarArchive(item.topic, { excludeId: item.id });
+    // noSimilar=1（重新生成）时跳过——用户要求生成本条自己的讲解，不接受复用错档
+    const similar = noSimilar ? null : findSimilarArchive(item.topic, { excludeId: item.id });
     if (similar) {
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({

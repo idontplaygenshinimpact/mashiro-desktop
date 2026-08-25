@@ -418,10 +418,12 @@ ipcMain.handle("widget:interview-notes", (e, { topics }) => widgetPost("/api/int
 ipcMain.handle("widget:study-detail", (e, { id }) => widgetGet(`/api/study-detail?id=${encodeURIComponent(id)}`));
 // 流式讲解：main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）
 // 并发隔离：preload 每次调用带 __streamToken，chunk 定向发送到 `channel:token`（曾广播串流）
-ipcMain.handle("widget:study-detail-stream", async (e, { id, __streamToken: token }) => {
+ipcMain.handle("widget:study-detail-stream", async (e, { id, noSimilar, __streamToken: token }) => {
   const chan = token ? `study-detail-chunk:${token}` : "study-detail-chunk";
   try {
-    const res = await widgetFetch(`${WIDGET_URL}/api/study-detail-stream?id=${encodeURIComponent(id)}`);
+    // noSimilar=1（重新生成）：跳过相似条目存档复用，强制生成本条自己的讲解
+    const q = `id=${encodeURIComponent(id)}${noSimilar ? "&noSimilar=1" : ""}`;
+    const res = await widgetFetch(`${WIDGET_URL}/api/study-detail-stream?${q}`);
     const ctype = res.headers.get("content-type") || "";
     // 有文件：一次性 JSON
     if (!ctype.includes("text/event-stream")) {
