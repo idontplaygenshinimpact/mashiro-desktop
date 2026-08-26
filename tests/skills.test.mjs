@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   loadSkills, getSkillTools, getSkillPermission, getSkillNames,
   buildSkillHintsPrompt, callSkillTool, parseSkillMd, reloadSkills, inspectSkills,
+  setActiveSkillSet,
 } from "../lib/skills.mjs";
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "skills");
@@ -105,4 +106,29 @@ test("reloadSkills：清缓存重扫 + hooks 不重复注册", async () => {
   // 重载后工具仍可调用
   const ping = await callSkillTool("skill__good-skill__ping", { echo: "re" }, FIXTURES);
   assert.equal(ping.ok, true);
+});
+
+// ---------- 场景装配（Phase P1）：only 子集加载 ----------
+test("loadSkills only：只加载名单内技能（场景装配隔离）", async () => {
+  const r = await loadSkills(FIXTURES, { only: ["good-skill"] });
+  assert.deepEqual(r.names, ["good-skill"], "仅 good-skill 被加载");
+  assert.ok(!r.names.includes("md-only-skill"), "名单外技能不加载");
+  const hints = r.hints.map((h) => h.name);
+  assert.deepEqual(hints, ["good-skill"], "hints 只含名单内");
+  assert.ok(r.tools.every((t) => t.function.name.startsWith("skill__good-skill__")), "工具只含名单内");
+});
+
+test("setActiveSkillSet：激活集影响 getters（null=全量向后兼容）", async () => {
+  // getters 固定读生产 skills/ 目录——激活集验证用生产目录（仓库内置 6 技能）
+  const { SKILLS_DIR } = await import("../lib/skills.mjs");
+  setActiveSkillSet(["frontend-cheatsheet"]);
+  await loadSkills(SKILLS_DIR);
+  assert.deepEqual(getSkillNames(), ["frontend-cheatsheet"], "激活集生效（仅子集）");
+  assert.ok(getSkillTools().every((t) => t.function.name.startsWith("skill__frontend-cheatsheet__")), "tools 是子集");
+  const prompt = buildSkillHintsPrompt();
+  assert.ok(prompt.includes("frontend-cheatsheet") && !prompt.includes("company-intel"), "prompt 只含激活集 hints");
+  // 复位全量（向后兼容：旧调用方零感知）
+  setActiveSkillSet(null);
+  await loadSkills(SKILLS_DIR);
+  assert.ok(getSkillNames().includes("company-intel"), "复位后全量恢复");
 });

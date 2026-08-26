@@ -31,6 +31,9 @@ import { createPatrol } from "./lib/patrol.mjs";
 import { installInternalBridge, emitEvent, onEventDecision } from "./lib/events.mjs";
 import { createAutonomy } from "./lib/autonomy.mjs";
 import { createCcWatcher } from "./lib/adapters/cc-watcher.mjs";
+// 场景装配（Phase P1）：事件 → 技能子集映射
+import { resolveEvent, getCurrentScenario } from "./lib/scenarios.mjs";
+import { setActiveSkillSet } from "./lib/skills.mjs";
 
 // 纵向拆分路由注册：核心基础设施域直注册；业务域（秋招助手）经插件加载器
 const router = createRouter();
@@ -510,12 +513,28 @@ if (!DISABLE_BACKGROUND) {
   registerInterval(ragBuildTick, 6 * 3600 * 1000); // 每 6 小时增量更新（新 md/新岗位/新复习卡自动进库）
 }
 
-// ============ 事件驱动内核接线（Phase 事件驱动内核 W1-W3） ============
+// ============ 事件驱动内核接线（Phase 事件驱动内核 W1-W3 + P1 场景装配） ============
 // 内部事件归一（chat_done 等存量 hooks → 统一事件总线）
 installInternalBridge();
+// 场景装配（Phase P1）：事件 → 匹配场景 → 若切换更新技能激活集（在 autonomy 决策前）
+let currentSceneId = getCurrentScenario().id;
 // 自主决策（默认 notify：只播报外部事件；off 时 handle 直接不动作；full 才允许 LLM 精炼）
 const autonomy = createAutonomy();
-onEventDecision((ev) => { autonomy.handle(ev); });
+onEventDecision((ev) => {
+  // scene:switched 是场景切换的结果事件——不再触发场景解析（防递归回跳），只走表达规则
+  if (ev.type === "scene:switched" || ev.source === "scenarios") {
+    autonomy.handle(ev);
+    return;
+  }
+  // 场景解析（规则，零 LLM）：切场景 → 更新技能激活集（agent 下次对话按场景加载）
+  const { changed, scenario } = resolveEvent(ev);
+  if (changed && scenario.id !== currentSceneId) {
+    currentSceneId = scenario.id;
+    setActiveSkillSet(scenario.skills);
+    console.log(`[scenes] 切换到场景「${scenario.name}」（技能：${scenario.skills.join(", ") || "无"}）`);
+  }
+  autonomy.handle(ev);
+});
 // CC 会话 watcher（零侵入感知源）：门控 = 非 DISABLE_BACKGROUND ∧ MIANSHI_CC_WATCH != 0 ∧ 非 autonomy=off
 const CC_WATCH = process.env.MIANSHI_CC_WATCH !== "0";
 if (!DISABLE_BACKGROUND && CC_WATCH && process.env.MIANSHI_AUTONOMY !== "off") {
