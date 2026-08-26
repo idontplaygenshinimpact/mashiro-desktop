@@ -31,7 +31,8 @@ startEvalMetrics();
 const NO_SUMMARY = process.argv.includes("--no-summary");
 function appendSummary(fields) {
   if (NO_SUMMARY) return;
-  return appendEvalSummary(fields);
+  // 兼容数组与 join 后的字符串两种调用形态
+  return appendEvalSummary(Array.isArray(fields) ? fields : String(fields).split(","));
 }
 
 // ---------- 真实性标签（CRAG；共享实现见 lib/eval-scoring.mjs）----------
@@ -198,30 +199,10 @@ async function evalTraceQuestion(q) {
 
 // ---------- 判官金标校验（--judge-check） ----------
 async function judgeTruthfulnessGold(g) {
-  const prompt = `你是事实核查员。判断下面回答对题目的**事实正确性**标签（只输出一个标签）：
-- correct：回答事实全部正确
-- acceptable：基本正确但有个别不严谨/不完整
-- missing：未回答题目核心问题、避而不答
-- incorrect：存在明确事实错误、结论错误
-题目：${g.question}
-回答：${g.answer}
-只输出 JSON：{"label":"correct|acceptable|missing|incorrect"}`;
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const data = await llmChat([
-        { role: "system", content: "你是事实核查员，只输出合法 JSON。" },
-        { role: "user", content: prompt },
-      ], { maxTokens: 200, temperature: 0.2, tag: "judge" });
-      const content = data?.choices?.[0]?.message?.content ?? "";
-      const parsed = extractJson(content);
-      if (parsed && TRUTH_LABEL_SCORE[parsed.label] !== undefined) return parsed.label;
-      if (attempt < 2) await sleep(1000 * (attempt + 1));
-    } catch {
-      if (attempt < 2) await sleep(1000 * (attempt + 1));
-    }
-  }
-  return null;
+  // 复用评测真实判官（lib/eval-scoring.mjs 的 judgeTruthfulness——含长文校准规则）：
+  // 修复：此前独立实现（旧 prompt + maxTokens 200）→ 金标校验校验的不是评测实际用的判官，失去意义
+  const j = await judgeTruthfulness({ title: g.question, must_cover: [] }, g.answer);
+  return j ? j.label : null;
 }
 
 async function runJudgeCheck() {
