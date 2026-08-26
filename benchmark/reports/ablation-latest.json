@@ -1,8 +1,9 @@
 {
-  "ts": "2026-08-26T10:17:06.453Z",
+  "ts": "2026-08-26T10:44:59.970Z",
   "mode": "ablation",
-  "sample": 20,
+  "sample": 4,
   "seed": 42,
+  "cacheHits": 8,
   "datasetHash": "bd52f5204fe01906",
   "envelope": {
     "model": "deepseek-v4-flash",
@@ -14,91 +15,79 @@
     }
   },
   "a": {
-    "n": 20,
-    "solve": 84,
-    "truth": 90,
-    "cover": 88,
-    "judgeOk": 20,
+    "n": 4,
+    "solve": 85,
+    "truth": 75,
+    "cover": 89,
+    "judgeOk": 4,
     "fails": 0
   },
   "b": {
-    "n": 20,
+    "n": 4,
     "solve": 91,
-    "truth": 73,
-    "cover": 93,
-    "judgeOk": 20,
+    "truth": 94,
+    "cover": 94,
+    "judgeOk": 4,
     "fails": 0
   },
   "delta": {
-    "solve": 7,
-    "truth": -17,
+    "solve": 6,
+    "truth": 19,
     "cover": 5
   },
   "cost": {
-    "tokens": 708170,
-    "usd": 0.2255,
-    "calls": 160,
+    "tokens": 85189,
+    "usd": 0.0261,
+    "calls": 24,
     "failCount": 0,
-    "p50Ms": 18689,
-    "p95Ms": 131781,
+    "p50Ms": 14564,
+    "p95Ms": 52770,
     "byTag": {
-      "misc": {
-        "calls": 20,
-        "tokens": 145644,
-        "ms": 1768401,
-        "fails": 0
-      },
       "judge": {
-        "calls": 120,
-        "tokens": 511728,
-        "ms": 2627938,
-        "fails": 0
-      },
-      "solver": {
-        "calls": 20,
-        "tokens": 50798,
-        "ms": 367398,
+        "calls": 24,
+        "tokens": 85189,
+        "ms": 429989,
         "fails": 0
       }
     }
   },
-  "summary": "全链路 vs 裸 prompt：讲解均分 84→91（8%），CRAG correct 均分 90→73，覆盖度 88→93（实测，sample=20）",
+  "summary": "全链路 vs 裸 prompt：讲解均分 85→91（7%），CRAG correct 均分 75→94，覆盖度 89→94（实测，sample=4）",
   "details": {
-    "B|ccodetop-0160": {
-      "judge": 100,
+    "B|q3": {
+      "judge": 74,
       "truth": {
-        "label": "correct",
-        "score": 100
+        "label": "acceptable",
+        "score": 75
       },
-      "coverRate": 100,
-      "answerLen": 3231
+      "coverRate": 75,
+      "answerLen": 5930
     },
     "B|q4": {
-      "judge": 87,
+      "judge": 90,
       "truth": {
         "label": "correct",
         "score": 100
       },
       "coverRate": 100,
-      "answerLen": 5547
+      "answerLen": 5389
     },
-    "A|ccodetop-0121": {
-      "judge": 64,
+    "A|q4": {
+      "judge": 77,
       "truth": {
         "label": "correct",
         "score": 100
       },
       "coverRate": 100,
-      "answerLen": 2468
+      "answerLen": 4535
     },
-    "B|ccodetop-0300": {
-      "judge": 98,
+    "A|q3": {
+      "judge": 71,
       "truth": {
         "label": "incorrect",
         "score": 0
       },
-      "coverRate": 50,
-      "answerLen": 5803
+      "coverRate": 75,
+      "answerLen": 2282
     },
     "B|q1": {
       "judge": 100,
@@ -107,268 +96,16 @@
         "score": 100
       },
       "coverRate": 100,
-      "answerLen": 3964
+      "answerLen": 4129
     },
-    "A|ccodetop-0415": {
-      "judge": 100,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 1581
-    },
-    "B|q10": {
-      "judge": 77,
-      "truth": {
-        "label": "acceptable",
-        "score": 75
-      },
-      "coverRate": 100,
-      "answerLen": 14015
-    },
-    "A|q4": {
-      "judge": 100,
-      "truth": {
-        "label": "incorrect",
-        "score": 0
-      },
-      "coverRate": 100,
-      "answerLen": 3841
-    },
-    "A|q9": {
-      "judge": 74,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 80,
-      "answerLen": 4922
-    },
-    "A|ccodetop-0146": {
-      "judge": 75,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 75,
-      "answerLen": 4047
-    },
-    "A|ccodetop-0300": {
-      "judge": 83,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 50,
-      "answerLen": 2107
-    },
-    "B|q3": {
-      "judge": 97,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 75,
-      "answerLen": 5816
-    },
-    "B|ccodetop-0438": {
-      "judge": 77,
-      "truth": {
-        "label": "incorrect",
-        "score": 0
-      },
-      "coverRate": 100,
-      "answerLen": 9482
-    },
-    "A|ccodetop-0136": {
-      "judge": 81,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 2037
-    },
-    "A|q7": {
-      "judge": 95,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 4603
-    },
-    "B|ccodetop-0146": {
-      "judge": 100,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 5254
-    },
-    "A|q3": {
-      "judge": 65,
-      "truth": {
-        "label": "acceptable",
-        "score": 75
-      },
-      "coverRate": 75,
-      "answerLen": 3233
-    },
-    "B|q5": {
-      "judge": 96,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 3910
-    },
-    "A|ccodetop-0141": {
-      "judge": 88,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 67,
-      "answerLen": 2182
-    },
-    "B|q6": {
-      "judge": 77,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 7907
-    },
-    "A|q10": {
-      "judge": 78,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 5558
-    },
-    "A|ccodetop-0020": {
-      "judge": 85,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 2964
-    },
-    "B|ccodetop-0415": {
-      "judge": 100,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 5718
-    },
-    "A|ccodetop-0215": {
-      "judge": 70,
-      "truth": {
-        "label": "acceptable",
-        "score": 75
-      },
-      "coverRate": 75,
-      "answerLen": 5447
-    },
-    "A|q2": {
-      "judge": 97,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 2850
-    },
-    "B|ccodetop-0215": {
+    "B|q2": {
       "judge": 98,
       "truth": {
         "label": "correct",
         "score": 100
       },
-      "coverRate": 75,
-      "answerLen": 5545
-    },
-    "B|ccodetop-0121": {
-      "judge": 100,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
       "coverRate": 100,
-      "answerLen": 3209
-    },
-    "B|q9": {
-      "judge": 61,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 10681
-    },
-    "A|q8": {
-      "judge": 93,
-      "truth": {
-        "label": "acceptable",
-        "score": 75
-      },
-      "coverRate": 100,
-      "answerLen": 6017
-    },
-    "B|ccodetop-0136": {
-      "judge": 100,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 3858
-    },
-    "A|ccodetop-0160": {
-      "judge": 76,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 67,
-      "answerLen": 2962
-    },
-    "B|ccodetop-0141": {
-      "judge": 99,
-      "truth": {
-        "label": "incorrect",
-        "score": 0
-      },
-      "coverRate": 67,
-      "answerLen": 3912
-    },
-    "A|ccodetop-0438": {
-      "judge": 69,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 2671
-    },
-    "B|q8": {
-      "judge": 72,
-      "truth": {
-        "label": "incorrect",
-        "score": 0
-      },
-      "coverRate": 100,
-      "answerLen": 8180
+      "answerLen": 8437
     },
     "A|q1": {
       "judge": 90,
@@ -376,53 +113,17 @@
         "label": "correct",
         "score": 100
       },
-      "coverRate": 100,
-      "answerLen": 1209
+      "coverRate": 80,
+      "answerLen": 1429
     },
-    "B|q7": {
-      "judge": 98,
-      "truth": {
-        "label": "incorrect",
-        "score": 0
-      },
-      "coverRate": 100,
-      "answerLen": 5105
-    },
-    "A|q5": {
-      "judge": 100,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 75,
-      "answerLen": 3323
-    },
-    "B|ccodetop-0020": {
+    "A|q2": {
       "judge": 100,
       "truth": {
         "label": "correct",
         "score": 100
       },
       "coverRate": 100,
-      "answerLen": 3011
-    },
-    "B|q2": {
-      "judge": 85,
-      "truth": {
-        "label": "acceptable",
-        "score": 75
-      },
-      "coverRate": 100,
-      "answerLen": 5899
-    },
-    "A|q6": {
-      "judge": 94,
-      "truth": {
-        "label": "acceptable",
-        "score": 75
-      },
-      "coverRate": 100,
-      "answerLen": 3918
+      "answerLen": 2419
     }
   }
 }

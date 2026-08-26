@@ -3,3 +3,5 @@ ts,layer,mode,datasetHash,llmModel,composite,solveScore,truthfulness,classifyRat
 2026-08-25T13:15:15.621Z,A,ablation,68ab85f4f922f4f6,deepseek-v4-flash,-3,82,43,0,0,0,0,343068,0.1093,18538,90083,,0,0
 2026-08-26T08:56:09.748Z,A,ablation,bd52f5204fe01906,deepseek-v4-flash,2,87,69,0,0,0,0,275868,0.0871,16859,58098,,0,0
 2026-08-26T10:17:06.457Z,A,ablation,bd52f5204fe01906,deepseek-v4-flash,7,91,73,0,0,0,0,708170,0.2255,18689,131781,,0,0
+2026-08-26T10:37:27.413Z,A,ablation,bd52f5204fe01906,deepseek-v4-flash,8,94,69,0,0,0,0,114183,0.0371,20582,97750,,0,0
+2026-08-26T10:44:59.971Z,A,ablation,bd52f5204fe01906,deepseek-v4-flash,6,91,94,0,0,0,0,85189,0.0261,14564,52770,,0,0
