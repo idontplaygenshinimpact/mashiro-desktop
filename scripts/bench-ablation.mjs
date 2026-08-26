@@ -42,6 +42,27 @@ function seededShuffle(arr, seed) {
   return a;
 }
 
+// ---------- solver 输出缓存（降本：重跑消融复用已生成讲解，只重判 judge） ----------
+// 缓存键 = 数据集 hash + 题 id + 变体；solver 输出不受判官 prompt 影响，可安全复用
+import { existsSync as fsExists, readFileSync as fsRead, writeFileSync as fsWrite, mkdirSync as fsMkdir } from "node:fs";
+const CACHE_DIR = path.join(ROOT, "benchmark", "reports", "ablation-cache");
+function cacheKey(datasetHash, variant, id) {
+  return `${datasetHash.slice(0, 8)}-${variant}-${String(id).replace(/[^a-zA-Z0-9-]/g, "_")}`;
+}
+function cachedAnswer(datasetHash, variant, id) {
+  try {
+    const f = path.join(CACHE_DIR, cacheKey(datasetHash, variant, id) + ".txt");
+    if (fsExists(f)) return fsRead(f, "utf8");
+  } catch { /* ignore */ }
+  return null;
+}
+function saveAnswer(datasetHash, variant, id, answer) {
+  try {
+    fsMkdir(CACHE_DIR, { recursive: true });
+    fsWrite(path.join(CACHE_DIR, cacheKey(datasetHash, variant, id) + ".txt"), answer, "utf8");
+  } catch { /* ignore */ }
+}
+
 // ---------- 两个 solver ----------
 /** 基线 A：裸 prompt（无结构模板/无人格/无约束） */
 async function solveBare(q) {
@@ -82,10 +103,18 @@ const jobs = picked.flatMap((q) => [
   { q, variant: "B", run: () => solveFull(q) },
 ]);
 const results = {};
+let cacheHits = 0;
 for (const job of seededShuffle(jobs, SEED)) {
   const key = `${job.variant}|${job.q.id}`;
   try {
-    const answer = await job.run();
+    // 缓存命中：复用已生成讲解（判官 prompt 变更不影响 solver 输出，可安全复用）
+    let answer = cachedAnswer(datasetHash, job.variant, job.q.id);
+    if (answer !== null) {
+      cacheHits++;
+    } else {
+      answer = await job.run();
+      saveAnswer(datasetHash, job.variant, job.q.id, answer);
+    }
     results[key] = await scoreQuestion(job.q, answer);
     const s = results[key];
     console.log(`  ${job.variant} ${job.q.id} ${job.q.title.slice(0, 16)}: judge${s.judge ?? "-"} 真${s.truth?.label ?? "?"} 覆盖${s.coverRate}% ${String(s.answerLen)}字`);
@@ -128,7 +157,7 @@ console.log(`B 全链路:    judge均分 ${B.solve ?? "-"} · CRAG ${B.truth ?? 
 if (delta.solve !== null) console.log(`Δ solve: ${delta.solve > 0 ? "+" : ""}${delta.solve}pt（${pctDelta(delta.solve, A.solve)}%）`);
 if (delta.truth !== null) console.log(`Δ truth: ${delta.truth > 0 ? "+" : ""}${delta.truth}pt（${pctDelta(delta.truth, A.truth)}%）`);
 if (delta.cover !== null) console.log(`Δ cover: ${delta.cover > 0 ? "+" : ""}${delta.cover}pt`);
-console.log(`\n【成本/延迟】${formatEvalCost(cost)}`);
+console.log(`\n【成本/延迟】${formatEvalCost(cost)}${cacheHits ? `（solver 缓存命中 ${cacheHits}/${jobs.length}，重跑只判 judge）` : ""}`);
 
 const summaryLine = A.solve !== null && B.solve !== null
   ? `全链路 vs 裸 prompt：讲解均分 ${A.solve}→${B.solve}（${pctDelta(delta.solve, A.solve)}%），CRAG correct 均分 ${A.truth}→${B.truth}，覆盖度 ${A.cover}→${B.cover}（实测，sample=${SAMPLE}）`
@@ -143,6 +172,7 @@ if (!NO_SAVE) {
     ts: new Date().toISOString(),
     mode: "ablation",
     sample: SAMPLE, seed: SEED,
+    cacheHits,
     datasetHash,
     envelope: { model: cost.model || null, node: process.version, mocked: false, params: { solverTemp: 0.5, judgeTemp: 0.2 } },
     a: A, b: B, delta,
