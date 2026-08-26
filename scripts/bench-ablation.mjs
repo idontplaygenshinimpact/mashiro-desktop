@@ -43,23 +43,28 @@ function seededShuffle(arr, seed) {
 }
 
 // ---------- solver 输出缓存（降本：重跑消融复用已生成讲解，只重判 judge） ----------
-// 缓存键 = 数据集 hash + 题 id + 变体；solver 输出不受判官 prompt 影响，可安全复用
+// 缓存键 = solver 口径版本 + 变体 + **单题内容 hash**（修复：原键含整个数据集 hash，
+// 数据集加/改任何题都会让全部缓存失效——现按单题内容，题没变就命中，增量扩容不烧旧题）
+// SOLVER_VERSION：A/B solver 的 prompt/实现或评测模型变更时手动 bump（防旧缓存误用）
 import { existsSync as fsExists, readFileSync as fsRead, writeFileSync as fsWrite, mkdirSync as fsMkdir } from "node:fs";
+import { createHash as fsHash } from "node:crypto";
+const SOLVER_VERSION = "v1";
 const CACHE_DIR = path.join(ROOT, "benchmark", "reports", "ablation-cache");
-function cacheKey(datasetHash, variant, id) {
-  return `${datasetHash.slice(0, 8)}-${variant}-${String(id).replace(/[^a-zA-Z0-9-]/g, "_")}`;
+function cacheKey(variant, q) {
+  const qHash = fsHash("sha256").update(`${q.title}|${q.question}`).digest("hex").slice(0, 10);
+  return `${SOLVER_VERSION}-${variant}-${qHash}`;
 }
-function cachedAnswer(datasetHash, variant, id) {
+function cachedAnswer(variant, q) {
   try {
-    const f = path.join(CACHE_DIR, cacheKey(datasetHash, variant, id) + ".txt");
+    const f = path.join(CACHE_DIR, cacheKey(variant, q) + ".txt");
     if (fsExists(f)) return fsRead(f, "utf8");
   } catch { /* ignore */ }
   return null;
 }
-function saveAnswer(datasetHash, variant, id, answer) {
+function saveAnswer(variant, q, answer) {
   try {
     fsMkdir(CACHE_DIR, { recursive: true });
-    fsWrite(path.join(CACHE_DIR, cacheKey(datasetHash, variant, id) + ".txt"), answer, "utf8");
+    fsWrite(path.join(CACHE_DIR, cacheKey(variant, q) + ".txt"), answer, "utf8");
   } catch { /* ignore */ }
 }
 
@@ -108,12 +113,12 @@ for (const job of seededShuffle(jobs, SEED)) {
   const key = `${job.variant}|${job.q.id}`;
   try {
     // 缓存命中：复用已生成讲解（判官 prompt 变更不影响 solver 输出，可安全复用）
-    let answer = cachedAnswer(datasetHash, job.variant, job.q.id);
+    let answer = cachedAnswer(job.variant, job.q);
     if (answer !== null) {
       cacheHits++;
     } else {
       answer = await job.run();
-      saveAnswer(datasetHash, job.variant, job.q.id, answer);
+      saveAnswer(job.variant, job.q, answer);
     }
     results[key] = await scoreQuestion(job.q, answer);
     const s = results[key];
