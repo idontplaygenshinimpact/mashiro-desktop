@@ -433,10 +433,10 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 ### 消融基线（`npm run bench:ablation -- --sample N`，诚实版）
 
 - 同题 A/B：**裸 prompt（无模板）vs 全链路**（结构化 prompt 工程），固定 seed 随机顺序消除判官偏差
-- **校准前实测（sample=20，deepseek-v4-flash，$0.11）**：A judge85/CRAG75/覆盖91% vs B judge82/CRAG43/覆盖94% → Δ judge -3pt · Δ cover **+3pt** · Δ CRAG -43pt
-- **判官校准（Phase 评测 W5，已验证有效）**：抽检发现 CRAG 判官对 5000+ 字长文系统性误判（内容完全正确的讲解被判 incorrect）→ 校准判官 prompt（篇幅不影响标签 / incorrect 只用于可指认的事实错误）+ judge-check 金标校验复用真实评测判官（此前校验的不是实际判官，失去意义）。校准验证：同题 B 链路 HTTP 缓存 incorrect → acceptable；金标 80% exact / 95% adjacent / 判官间 100% 保持；Δ CRAG -43pt → **-15pt**（sample=8 中间验证）
-- **诚实解读**：结构化模板的收益在**覆盖度**（+3pt 可信）；校准后 judge/CRAG 负 Δ 大幅收窄但仍有残余（抽检 B q5 内容基本正确仍被判 incorrect——判官校准是持续迭代项）；校准后正式 sample=20 结果以报告为准
-- 数值只写实测，不预填；sample=4 初版（+6pt）与 sample=20（-3pt）方向相反，正是小样本误导的实例——正式口径以全量报告为准
+- **校准后正式实测（sample=20，deepseek-v4-flash，$0.23，题集与校准前相同）**：A judge84/CRAG90/覆盖88% vs B judge91/CRAG73/覆盖93% → **Δ judge +7pt（+8%）· Δ cover +5pt · Δ CRAG -17pt**
+- **判官校准（Phase 评测 W5，已验证有效）**：抽检发现 CRAG 判官对 5000+ 字长文系统性误判（内容完全正确的讲解被判 incorrect）→ 校准判官 prompt（篇幅不影响标签 / incorrect 只用于可指认的事实错误）+ judge-check 金标校验复用真实评测判官（此前校验的不是实际判官，失去意义）。校准效果：同题 B q5 Promise.all 从 incorrect → correct；Δ judge 从校准前 **-3pt → +7pt**（判官长文偏差曾拖累全链路评分，校准后结构化 prompt 的真实质量优势显现）；Δ CRAG 从 **-43pt → -17pt**（大幅收窄）
+- **诚实解读**：结构化模板的收益实锤——讲解质量（judge +7pt）与覆盖完整度（+5pt）；Δ CRAG 残余 -17pt 部分来自判官对长文的**随机波动**（同题 B q7 在两次运行分别判 acceptable/incorrect，内容不变）——判官校准是持续迭代项，方向是长文判官方差控制（金标回归 + 更多抽检）
+- 数值只写实测，不预填；校准前 sample=4（+6pt）/sample=20（-3pt）方向相反是小样本+判官偏差的实例——正式口径以校准后全量报告为准
 
 ### 为什么讲解链路不用 RAG（决策档案，有据可依）
 
