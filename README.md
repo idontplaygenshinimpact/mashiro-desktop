@@ -433,9 +433,10 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 ### 消融基线（`npm run bench:ablation -- --sample N`，诚实版）
 
 - 同题 A/B：**裸 prompt（无模板）vs 全链路**（结构化 prompt 工程），固定 seed 随机顺序消除判官偏差
-- **实测（sample=20，deepseek-v4-flash，$0.11）**：A 裸 prompt judge85/CRAG75/覆盖91% vs B 全链路 judge82/CRAG43/覆盖94% → Δ judge -3pt · Δ cover **+3pt** · Δ CRAG -43pt
-- **诚实解读（方法论发现）**：结构化模板的收益只在**覆盖度**（必考要点更全，+3pt 可信）；judge/CRAG 的负 Δ 经抽检（B 链路 HTTP 缓存回答内容完全正确却被判 incorrect）指向**判官对 5000+ 字长文存在系统性误判**——消融暴露了评测自身的判官短板，后续工作是长文判官校准（截断/金标），而非据此否定结构化 prompt
-- 数值只写实测，不预填；sample=4 初版（+6pt）与 sample=20（-3pt）方向相反，正是小样本误导的实例——正式口径以 sample=20 为准
+- **校准前实测（sample=20，deepseek-v4-flash，$0.11）**：A judge85/CRAG75/覆盖91% vs B judge82/CRAG43/覆盖94% → Δ judge -3pt · Δ cover **+3pt** · Δ CRAG -43pt
+- **判官校准（Phase 评测 W5，已验证有效）**：抽检发现 CRAG 判官对 5000+ 字长文系统性误判（内容完全正确的讲解被判 incorrect）→ 校准判官 prompt（篇幅不影响标签 / incorrect 只用于可指认的事实错误）+ judge-check 金标校验复用真实评测判官（此前校验的不是实际判官，失去意义）。校准验证：同题 B 链路 HTTP 缓存 incorrect → acceptable；金标 80% exact / 95% adjacent / 判官间 100% 保持；Δ CRAG -43pt → **-15pt**（sample=8 中间验证）
+- **诚实解读**：结构化模板的收益在**覆盖度**（+3pt 可信）；校准后 judge/CRAG 负 Δ 大幅收窄但仍有残余（抽检 B q5 内容基本正确仍被判 incorrect——判官校准是持续迭代项）；校准后正式 sample=20 结果以报告为准
+- 数值只写实测，不预填；sample=4 初版（+6pt）与 sample=20（-3pt）方向相反，正是小样本误导的实例——正式口径以全量报告为准
 
 ### 为什么讲解链路不用 RAG（决策档案，有据可依）
 
