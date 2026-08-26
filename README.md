@@ -148,6 +148,8 @@ Claude Code 配置（`claude mcp add` 或 `.mcp.json`）：
 
 重启 DSH 后，agent 获得 `mcp__mashiro__*` 工具（search_posts / solve_question / get_study_plan / start_interview / 个人数据 5 件套），可让 DSH 直接"搜面经 → 讲解 → 建清单 → 模拟面试"。
 
+> 📦 完整分发文档（工具清单/各客户端配置/使用示例/FAQ）：[docs/mcp.md](docs/mcp.md)
+
 ---
 
 ## 使用方式
