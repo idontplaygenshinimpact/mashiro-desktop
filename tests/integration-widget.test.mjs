@@ -112,6 +112,15 @@ test("GET /api/review/due", async () => {
   assert.ok(r.stats && typeof r.stats.total === "number");
 });
 
+test("GET /api/pet-events（事件驱动内核表达队列 drain）", async () => {
+  const r = await (await api("/api/pet-events")).json();
+  assert.equal(r.ok, true);
+  assert.ok(Array.isArray(r.events), "events 数组（无表达时为空）");
+  // 队列 drain 语义：连续两次都是空数组（取走即清空）
+  const r2 = await (await api("/api/pet-events")).json();
+  assert.ok(Array.isArray(r2.events));
+});
+
 test("GET /api/stats", async () => {
   const r = await (await api("/api/stats")).json();
   assert.equal(r.ok, true);

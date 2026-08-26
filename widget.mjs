@@ -27,6 +27,10 @@ import { loadEnabledPlugins, listPlugins, setPluginEnabled, readPluginSettings, 
 import { createBackup, listBackups, markRestore, hoursSinceLastBackup, backupConfig } from "./lib/backup.mjs";
 import { db } from "./lib/db.mjs";
 import { createPatrol } from "./lib/patrol.mjs";
+// 事件驱动内核（Phase 事件驱动内核 W1-W3）：事件总线 / 自主决策 / CC 会话 watcher
+import { installInternalBridge, emitEvent, onEventDecision } from "./lib/events.mjs";
+import { createAutonomy } from "./lib/autonomy.mjs";
+import { createCcWatcher } from "./lib/adapters/cc-watcher.mjs";
 
 // 纵向拆分路由注册：核心基础设施域直注册；业务域（秋招助手）经插件加载器
 const router = createRouter();
@@ -504,6 +508,24 @@ const ragBuildTick = async () => {
 if (!DISABLE_BACKGROUND) {
   registerTimer(ragBuildTick, 10 * 1000);
   registerInterval(ragBuildTick, 6 * 3600 * 1000); // 每 6 小时增量更新（新 md/新岗位/新复习卡自动进库）
+}
+
+// ============ 事件驱动内核接线（Phase 事件驱动内核 W1-W3） ============
+// 内部事件归一（chat_done 等存量 hooks → 统一事件总线）
+installInternalBridge();
+// 自主决策（默认 notify：只播报外部事件；off 时 handle 直接不动作；full 才允许 LLM 精炼）
+const autonomy = createAutonomy();
+onEventDecision((ev) => { autonomy.handle(ev); });
+// CC 会话 watcher（零侵入感知源）：门控 = 非 DISABLE_BACKGROUND ∧ MIANSHI_CC_WATCH != 0 ∧ 非 autonomy=off
+const CC_WATCH = process.env.MIANSHI_CC_WATCH !== "0";
+if (!DISABLE_BACKGROUND && CC_WATCH && process.env.MIANSHI_AUTONOMY !== "off") {
+  const ccWatcher = createCcWatcher({ emit: (ev) => emitEvent(ev) });
+  registerInterval(() => {
+    try { ccWatcher.tick(); } catch (e) { console.log(`[cc-watch] 扫描异常: ${String(e?.message || e).slice(0, 80)}`); }
+  }, 2000);
+  console.log("[widget] CC 会话 watcher 已启动（2s 增量扫描；MIANSHI_CC_WATCH=0 关闭；表达经 /api/pet-events 由主进程轮询播报）");
+} else {
+  console.log("[widget] CC watcher 未启动（DISABLE_BACKGROUND / MIANSHI_CC_WATCH=0 / MIANSHI_AUTONOMY=off）");
 }
 
 // ============ 周期任务 ============
