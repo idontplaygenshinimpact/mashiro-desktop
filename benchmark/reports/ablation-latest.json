@@ -1,7 +1,7 @@
 {
-  "ts": "2026-08-26T10:44:59.970Z",
+  "ts": "2026-08-26T11:33:04.055Z",
   "mode": "ablation",
-  "sample": 4,
+  "sample": 8,
   "seed": 42,
   "cacheHits": 8,
   "datasetHash": "bd52f5204fe01906",
@@ -15,106 +15,163 @@
     }
   },
   "a": {
-    "n": 4,
-    "solve": 85,
-    "truth": 75,
-    "cover": 89,
-    "judgeOk": 4,
+    "n": 8,
+    "solve": 88,
+    "truth": 100,
+    "cover": 94,
+    "judgeOk": 8,
     "fails": 0
   },
   "b": {
-    "n": 4,
-    "solve": 91,
-    "truth": 94,
-    "cover": 94,
-    "judgeOk": 4,
+    "n": 8,
+    "solve": 80,
+    "truth": 97,
+    "cover": 97,
+    "judgeOk": 8,
     "fails": 0
   },
   "delta": {
-    "solve": 6,
-    "truth": 19,
-    "cover": 5
+    "solve": -8,
+    "truth": -3,
+    "cover": 3
   },
   "cost": {
-    "tokens": 85189,
-    "usd": 0.0261,
-    "calls": 24,
+    "tokens": 217216,
+    "usd": 0.0685,
+    "calls": 56,
     "failCount": 0,
-    "p50Ms": 14564,
-    "p95Ms": 52770,
+    "p50Ms": 18403,
+    "p95Ms": 65978,
     "byTag": {
+      "solver": {
+        "calls": 4,
+        "tokens": 16011,
+        "ms": 137536,
+        "fails": 0
+      },
       "judge": {
-        "calls": 24,
-        "tokens": 85189,
-        "ms": 429989,
+        "calls": 48,
+        "tokens": 182226,
+        "ms": 936810,
+        "fails": 0
+      },
+      "misc": {
+        "calls": 4,
+        "tokens": 18979,
+        "ms": 265957,
         "fails": 0
       }
     }
   },
-  "summary": "全链路 vs 裸 prompt：讲解均分 85→91（7%），CRAG correct 均分 75→94，覆盖度 89→94（实测，sample=4）",
+  "summary": "全链路 vs 裸 prompt：讲解均分 88→80（-9%），CRAG correct 均分 100→97，覆盖度 94→97（实测，sample=8）",
   "details": {
+    "A|q6": {
+      "judge": 90,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 3781
+    },
+    "B|q7": {
+      "judge": 87,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 6304
+    },
+    "B|q2": {
+      "judge": 92,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 3602
+    },
+    "B|q5": {
+      "judge": 88,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 6275
+    },
+    "A|q7": {
+      "judge": 65,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 4423
+    },
     "B|q3": {
-      "judge": 74,
+      "judge": 86,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 75,
+      "answerLen": 5618
+    },
+    "B|q4": {
+      "judge": 70,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 7473
+    },
+    "A|q4": {
+      "judge": 94,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 3738
+    },
+    "A|q8": {
+      "judge": 86,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 4574
+    },
+    "B|q6": {
+      "judge": 66,
       "truth": {
         "label": "acceptable",
         "score": 75
       },
-      "coverRate": 75,
-      "answerLen": 5930
-    },
-    "B|q4": {
-      "judge": 90,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
       "coverRate": 100,
-      "answerLen": 5389
-    },
-    "A|q4": {
-      "judge": 77,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 4535
-    },
-    "A|q3": {
-      "judge": 71,
-      "truth": {
-        "label": "incorrect",
-        "score": 0
-      },
-      "coverRate": 75,
-      "answerLen": 2282
-    },
-    "B|q1": {
-      "judge": 100,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 4129
-    },
-    "B|q2": {
-      "judge": 98,
-      "truth": {
-        "label": "correct",
-        "score": 100
-      },
-      "coverRate": 100,
-      "answerLen": 8437
+      "answerLen": 7164
     },
     "A|q1": {
-      "judge": 90,
+      "judge": 94,
       "truth": {
         "label": "correct",
         "score": 100
       },
       "coverRate": 80,
-      "answerLen": 1429
+      "answerLen": 1339
+    },
+    "B|q8": {
+      "judge": 75,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 11819
     },
     "A|q2": {
       "judge": 100,
@@ -123,7 +180,34 @@
         "score": 100
       },
       "coverRate": 100,
-      "answerLen": 2419
+      "answerLen": 4347
+    },
+    "A|q5": {
+      "judge": 97,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 4496
+    },
+    "B|q1": {
+      "judge": 78,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 5437
+    },
+    "A|q3": {
+      "judge": 76,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 75,
+      "answerLen": 2348
     }
   }
 }
