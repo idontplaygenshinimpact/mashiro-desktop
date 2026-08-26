@@ -4,6 +4,18 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { config } from "./config.mjs";
+import { getSettingsApiKey } from "./lib/llm.mjs";
+
+// LLM 工具前置校验：无 key 时快速失败（修复：此前无 key 会走 llm 重试/failover 链，
+// 干净环境（npm 安装后未配置）下卡 15s+ 才超时，体验为"工具挂了"而非"需要配置"）。
+// 真实 key 链与 llm.mjs 一致：settings 表（共享桌宠数据目录时自动继承）> .env / 环境变量 / opencode
+const NO_KEY_HINT = "⚠️ 未检测到 LLM API Key。请配置后重试：\n  Linux/macOS: export DEEPSEEK_API_KEY=sk-xxx\n  Windows: set DEEPSEEK_API_KEY=sk-xxx\n  （或让本包的数据目录指向你已有的 Mashiro 桌宠数据——设置中心配过的 key 会自动继承）";
+function requireLlmKey() {
+  let settingsKey = "";
+  try { settingsKey = getSettingsApiKey() || ""; } catch { /* db 未就绪按无 key 处理 */ }
+  return (settingsKey || config.apiKey) ? null : NO_KEY_HINT;
+}
 
 const server = new McpServer({
   name: "mashiro-desktop",
@@ -40,6 +52,8 @@ server.tool(
     verify_question: z.string().optional().describe("附加的验证题（可选）") },
   async ({ question }) => {
     try {
+      const noKey = requireLlmKey();
+      if (noKey) return { content: [{ type: "text", text: noKey }], isError: true };
       const { solveQuestion } = await import("./lib/ai.mjs");
       const md = await solveQuestion({
         title: question,
@@ -86,6 +100,8 @@ server.tool(
     focus: z.string().optional().describe("重点方向，如 React / 事件循环") },
   async ({ position, role, focus }) => {
     try {
+      const noKey = requireLlmKey();
+      if (noKey) return { content: [{ type: "text", text: noKey }], isError: true };
       const { startInterview } = await import("./lib/interview.mjs");
       const r = await startInterview({ position, role: role || "技术深挖型", focus });
       if (r.error) return { content: [{ type: "text", text: `⚠️ ${r.error}` }] };

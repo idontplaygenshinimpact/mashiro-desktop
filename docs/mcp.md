@@ -3,9 +3,22 @@
 > 真白秋招助手是标准 **MCP Server**：`npm i -g mashiro-mcp` 后，任何支持 MCP 的 AI 工具
 > （Claude Code / Cline / Cursor / OpenCode）都能调用真白的能力——不需要桌宠、不需要本项目代码。
 
+## 0. 诚实前置说明（两档可用性，先读这个）
+
+本包是**个人秋招数据助手**的分发，不是通用工具。9 个工具全部围绕秋招场景定制（面经/清单/面试/个人数据），
+实测（干净环境，无数据无 key）的可用性分两档：
+
+| 档位 | 工具 | 条件 | 实测结果 |
+|---|---|---|---|
+| **A. 零配置可用** | 全部 6 个数据工具（get_study_plan / get_jobs_status / get_schedule_events / get_study_progress / get_personal_profile / get_project_archives） | 无需任何配置 | ✅ 空库优雅返回"暂无数据"（不崩溃）；**但内容是空的**——要有内容，需让数据目录指向你已有的 Mashiro 桌宠数据（见 §5） |
+| **B. 需配置 LLM Key** | solve_question / start_interview（及 search_posts 的 AI 挑帖环节） | 需要 LLM API Key（§1 安装后配置） | 无 key 时快速返回配置提示（已实测，不会卡死）；配 key 后可用 |
+
+> 换句话说：**装包即可连、结构可用**；**要有"真白的内容"必须带上你自己的数据**（指向桌宠数据目录即可，见 §5）——
+> 它分发的是"助手能力 + 个人数据管道"，不是通用问答机器人。
+
 ---
 
-## 1. 安装
+## 1. 安装与配置
 
 **Node.js ≥ 22**（项目最低要求）。
 
@@ -15,6 +28,18 @@ npm install -g mashiro-mcp
 
 # GitHub Packages 镜像（国内网络优先，随 Release 自动发布）
 npm install -g @idontplaygenshinimpact/mashiro-mcp --registry=https://npm.pkg.github.com/
+```
+
+**LLM Key（B 档工具必需）**——三选一：
+
+```bash
+# 方式 1：环境变量（推荐）
+export DEEPSEEK_API_KEY=sk-xxx        # Linux/macOS
+set DEEPSEEK_API_KEY=sk-xxx           # Windows
+
+# 方式 2：数据目录指向已有桌宠数据（设置中心配过的 key 自动继承，见 §5）
+
+# 方式 3：安装目录建 .env（DEEPSEEK_API_KEY=sk-xxx）
 ```
 
 验证：
@@ -91,11 +116,12 @@ Windows（npm 全局脚本是 `.cmd`，需经 cmd 转发）：
 
 ## 5. 数据与权限说明
 
-- **数据来源**：本地 `~/.mashiro/`（或项目 `data/`）目录下的个人数据（简历/清单/投递/日程）——
-  MCP 只读这些数据，不对外传输
-- **模型调用**：`start_interview`/`solve_question` 需要 LLM（环境变量 `DEEPSEEK_API_KEY` 或
-  面板设置里的 key）；其余工具纯本地检索零模型成本
-- **无遥测**：不收集使用数据；日志仅本地
+- **数据来源**：默认 `~/.mashiro/data/`（SQLite + 产出文件），可用 `MIANSHI_DATA_DIR` 覆盖。
+  **要让数据工具返回真实内容**：把 `MIANSHI_DATA_DIR` 指向你已有的 Mashiro 桌宠数据目录
+  （Linux/macOS 默认 `~/.mashiro/data`；桌宠版自定义过目录则指向该目录）——
+  同一份数据，桌宠与 MCP 共享；设置中心配过的 LLM key 也随之继承
+- **LLM 调用**：`solve_question`/`start_interview` 需要 key（§1）；其余工具纯本地检索零模型成本
+- **只读边界**：全部工具只读个人数据，不对外传输、不写数据、无遥测
 
 ## 6. 常见问题
 
