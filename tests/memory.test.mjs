@@ -303,6 +303,14 @@ test("getProfileSummary 空状态仅剩目标", () => {
   assert.equal(memory.getProfileSummary(), "目标：前端秋招");
 });
 
+test("B1 修复：getProfileSummary 过滤 untrusted（画像进 system prompt 防污染）", () => {
+  memory.addWeakPoint("可信薄弱点", "x", "agent");
+  memory.addWeakPoint("伪知识点-爬虫提炼", "x", "untrusted");
+  const s = memory.getProfileSummary();
+  assert.ok(s.includes("可信薄弱点"), "可信来源进画像");
+  assert.ok(!s.includes("伪知识点-爬虫提炼"), "untrusted 不进画像（实锤漏洞修复）");
+});
+
 // ---------- 面试会话 ----------
 test("setInterview/getInterview/clearInterview 持久化(DB)", () => {
   assert.equal(memory.getInterview(), null);

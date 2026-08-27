@@ -10,6 +10,8 @@ import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, he
 import { safeSpawn, createWidgetServer } from "./lib/widget-server.mjs";
 import { readWindowState as readWinState, scheduleSaveWindowState as scheduleSaveWinState, isOnScreen as isRectOnScreen } from "./lib/window-state.mjs";
 import { rendererBundleStale as bundleStale, rebuildRendererBundle as rebuildBundle, killAllWidgetProcesses as killAllWidgets } from "./lib/restart.mjs";
+// 事件驱动表达轮询（B6 接线：companion-poller 2s 拉 pet-events → petSay；autonomy=off 不启动）
+import { startCompanionPoller } from "./lib/companion-poller.mjs";
 
 // ---------- 启动加速 ----------
 // 注意：透明窗口 + disable-gpu 会导致窗口不渲染（看不到）。
@@ -1385,6 +1387,15 @@ function registerWidgetAuth() {
 function widgetFetch(url, opts = {}) {
   return widgetFetchFactory(widgetToken, fetch)(url, opts);
 }
+
+// ---------- 事件驱动表达轮询（companion-poller 接线，B6 选 b） ----------
+// 2s 拉 widget /api/pet-events（事件内核表达队列，仅非空才返回数据）→ petSay 气泡+语音。
+// widget 未就绪时 tick 静默重试（不崩溃）；MIANSHI_AUTONOMY=off 时内部直接不启动。
+// 注：widgetFetch 需要完整 URL，这里适配 companion-poller 的相对路径调用。
+const companionPoller = startCompanionPoller({
+  widgetFetch: (path) => widgetFetch(`${WIDGET_URL}${path}`),
+  petSay,
+});
 
 // ---------- 生命周期 ----------
 app.whenReady().then(() => {

@@ -175,6 +175,28 @@ test("submitAnswer 伪知识点 weak_topic 不回流", async () => {
   assert.equal(memory.getWeakPoints().length, 0, "伪知识点不记录");
 });
 
+test("B2 修复：字符串/缺维度评分 → 不 NaN、薄弱点回流不被静默阻断", async () => {
+  // 脏 LLM 输出：tech 是字符串 "80分"、reflect 缺失（此前 → total=NaN → 回流恒 false）
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses('{"scores":{"tech":"80分","expr":30,"depth":30,"edge":30},"comment":"脏","finish":false,"next_question":"下一问","next_basis":"追问","next_dimension":"d","next_criteria":"c","next_boundary":"b","weak_topic":"防抖节流"}');
+  const r = await submitAnswer("回答");
+  assert.ok(Number.isFinite(r.total), `total 不 NaN（实际 ${r.total}）`);
+  assert.ok(r.total <= 100 && r.total >= 0, "total 在 0-100（缺维度按 0 + clamp）");
+  const weak = memory.getWeakPoints();
+  assert.ok(weak.some((w) => w.topic === "防抖节流"), "低分薄弱点回流正常（未被 NaN 阻断）");
+});
+
+test("B2 修复：越界维度 clamp 到 0-100（合法输入分数不变）", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  // tech=150 越界 → clamp 100；expr 等合法值不变
+  setLlmResponses('{"scores":{"tech":150,"expr":70,"depth":60,"edge":50,"reflect":40},"comment":"c","finish":true,"next_question":"","next_basis":"","next_dimension":"","next_criteria":"","next_boundary":"","weak_topic":""}');
+  const r = await submitAnswer("回答");
+  assert.ok(Number.isFinite(r.total), "不 NaN");
+  assert.ok(r.total <= 100, `clamp 生效（total=${r.total} ≤ 100）`);
+});
+
 test("submitAnswer finish → 面试结束", async () => {
   setLlmResponses(FIRST_Q);
   await startInterview({ position: "前端" });
