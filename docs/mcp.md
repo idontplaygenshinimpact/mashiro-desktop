@@ -10,8 +10,8 @@
 
 | 档位 | 工具 | 条件 | 实测结果 |
 |---|---|---|---|
-| **A. 零配置可用** | 全部 6 个数据工具（get_study_plan / get_jobs_status / get_schedule_events / get_study_progress / get_personal_profile / get_project_archives） | 无需任何配置 | ✅ 空库优雅返回"暂无数据"（不崩溃）；**但内容是空的**——要有内容，需让数据目录指向你已有的 Mashiro 桌宠数据（见 §5） |
-| **B. 需配置 LLM Key** | solve_question / start_interview（及 search_posts 的 AI 挑帖环节） | 需要 LLM API Key（§1 安装后配置） | 无 key 时快速返回配置提示（已实测，不会卡死）；配 key 后可用 |
+| **A. 零配置可用** | 全部 6 个数据工具（get_study_plan / get_jobs_status / get_schedule_events / get_study_progress / get_personal_profile / get_project_archives） | **自动探测**（见 §5）：已有 Mashiro 桌宠数据的用户**装包即连**，数据工具直接返回真实内容（实测：学习清单/岗位/简历真实数据）；全新用户返回空结构 | ✅ |
+| **B. 需配置 LLM Key** | solve_question / start_interview（及 search_posts 的 AI 挑帖环节） | 需要 LLM API Key（§1）；**已有桌宠数据的用户自动继承设置中心配过的 key** | 无 key 时快速返回配置提示（已实测，不会卡死） |
 
 > 换句话说：**装包即可连、结构可用**；**要有"真白的内容"必须带上你自己的数据**（指向桌宠数据目录即可，见 §5）——
 > 它分发的是"助手能力 + 个人数据管道"，不是通用问答机器人。
@@ -116,10 +116,11 @@ Windows（npm 全局脚本是 `.cmd`，需经 cmd 转发）：
 
 ## 5. 数据与权限说明
 
-- **数据来源**：默认 `~/.mashiro/data/`（SQLite + 产出文件），可用 `MIANSHI_DATA_DIR` 覆盖。
-  **要让数据工具返回真实内容**：把 `MIANSHI_DATA_DIR` 指向你已有的 Mashiro 桌宠数据目录
-  （Linux/macOS 默认 `~/.mashiro/data`；桌宠版自定义过目录则指向该目录）——
-  同一份数据，桌宠与 MCP 共享；设置中心配过的 LLM key 也随之继承
+- **数据目录自动探测**（`lib/data-detect.mjs`，实测有效）：启动时按优先级找"已存在的桌宠数据库"——
+  源码版（项目 data/）→ 打包版桌宠（Electron userData/data）→ `~/.mashiro/data`——
+  **已有桌宠数据的用户装包即连，无需任何配置**；全新用户自动创建 `~/.mashiro/data`（空结构）。
+  可用 `MIANSHI_DATA_DIR` 显式覆盖。
+- **LLM key 自动继承**：数据目录指向桌宠数据后，设置中心配过的 key（settings 表）自动生效
 - **LLM 调用**：`solve_question`/`start_interview` 需要 key（§1）；其余工具纯本地检索零模型成本
 - **只读边界**：全部工具只读个人数据，不对外传输、不写数据、无遥测
 
