@@ -38,6 +38,7 @@ function fakeImapClient({ emails = [] } = {}) {
         };
       }
     },
+    messageFlagsAdd: async () => {},
     logout: async () => {},
   };
 }
@@ -196,4 +197,53 @@ test("runMailCheck：完整流水线（假 IMAP 返回 1 封 → LLM 识别 → 
   assert.equal(r.added, 1);
   assert.equal(r.upcoming.length, 1);
   assert.equal(r.upcoming[0].company, "腾讯");
+});
+
+// ---------- B3：token 燃烧修复（标 \Seen + prompt 注入日期） ----------
+test("B3：识别 prompt 注入当前日期（相对时间可换算）", async () => {
+  const emails = [{ id: "1", from: "hr@x.com", subject: "面试", date: "", text: "下周一面试" }];
+  let promptText = "";
+  const llm = async (messages) => { promptText = messages[1]?.content || ""; return "[]"; };
+  await mail.extractInterviewEvents(emails, { llm });
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  assert.ok(promptText.includes(`今天是 ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`), "prompt 含今天日期");
+  assert.ok(promptText.includes("相对时间"), "prompt 含相对时间换算提示");
+  assert.ok(promptText.includes("星期"), "prompt 含星期");
+});
+
+test("B3：markSeenEmails 标记 Seen 标志（uid 直传）", async () => {
+  mail.setConfig({ email: "a@qq.com", authCode: "x" });
+  const flagsAdded = [];
+  const client = fakeImapClient();
+  client.messageFlagsAdd = async (uids, flags, opts) => { flagsAdded.push([uids, flags, opts]); };
+  const n = await mail.markSeenEmails(mail.getConfig(), ["11", "22"], { clientFactory: () => client });
+  assert.equal(n, 2, "返回标记数");
+  assert.deepEqual(flagsAdded[0][0], ["11", "22"], "uid 列表直传");
+  assert.deepEqual(flagsAdded[0][1], ["\\Seen"], "标记 Seen 标志");
+});
+
+test("B3：runMailCheck 只标记已识别邀约的邮件（非邀约邮件保持未读）", async () => {
+  mail.setConfig({ email: "a@qq.com", authCode: "x" });
+  const at = futureStr(2);
+  const flagsAdded = [];
+  const client = fakeImapClient({
+    emails: [
+      { uid: 11, from: "hr@x.com", subject: "面试邀约", raw: "Subject: 面试\n\n腾讯 面试" },
+      { uid: 22, from: "noreply@x.com", subject: "简历投递成功", raw: "Subject: 投递\n\n已投递" }, // 非邀约
+    ],
+  });
+  client.messageFlagsAdd = async (uids, flags, opts) => { flagsAdded.push([uids, flags, opts]); };
+  const llm = async () => JSON.stringify([{ company: "腾讯", role: "前端", interviewAt: at, form: "", location: "", link: "", emailId: "11" }]);
+  const r = await mail.runMailCheck({ clientFactory: () => client, llm });
+  assert.equal(r.ok, true);
+  assert.equal(r.added, 1);
+  assert.equal(r.marked, 1, "只标记 1 封（识别邀约的 uid 11）");
+  assert.deepEqual(flagsAdded[0][0], ["11"], "仅 uid 11 被标记");
+  // 再次检查同一批（标记后不再重复拉取识别——模拟：LLM 不再被调用）
+  let llmCalls = 0;
+  const llm2 = async () => { llmCalls++; return "[]"; };
+  // 若邮件已被标记为已读，search UNSEEN 不会返回它（IMAP 侧行为）；此处验证 marked 语义
+  await mail.runMailCheck({ clientFactory: () => client, llm: llm2 });
+  assert.equal(llmCalls, 1, "第二次仍会拉取（标记是 IMAP 侧状态，由服务器后续 UNSEEN 查询排除）");
 });
