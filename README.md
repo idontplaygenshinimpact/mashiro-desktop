@@ -206,7 +206,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 ├── benchmark/                      # 双层评测数据集（38+16+12+20+12+19）+ 报告 + 趋势
 ├── scripts/                        # 评测/导入/语音/发布工具（50+ 脚本）
 ├── tests/                          # 924 用例（90 个测试文件，mock LLM 无 key 可跑）
-├── docs/                           # 20 份文档（架构/审计/评测/方案）
+├── docs/                           # 公开文档（mcp 分发/CC 伴侣/插件架构/技术方案；内部评估审计文档本地留存不上仓库）
 ├── assets/voice/                   # 自训练声线（112 短句 + 26 长句 + nanami 声线）
 └── .github/workflows/              # ci.yml（全量门禁）+ weekly-eval.yml（每周评测）+ release.yml（双源发布）
 ```
