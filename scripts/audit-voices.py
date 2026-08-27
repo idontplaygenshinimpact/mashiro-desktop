@@ -23,7 +23,7 @@ def cov(got, exp):
     eg, gg = grams(clean(exp)), grams(clean(got))
     return len(eg & gg) / len(eg) if eg else 0.0
 
-POLLUTE = ["話しちゃダメ", "声をかけて", "空とに黙って", "エスカレーター", "綾野が"]
+POLLUTE = ["話しちゃダメ", "声をかけて", "空とに黙って", "エスカレーター", "綾野が"]  # ref-clean-A 特征（ref-clean-2 语气不符人设已回滚）
 TAIL_MIN = 0.3  # 末尾完整度下限（长句：结尾句子缺失 → <0.3 判话没说完）
 
 bad, trunc, pollute = [], [], []

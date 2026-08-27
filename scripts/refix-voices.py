@@ -55,6 +55,11 @@ for fname in targets:
     if not l:
         print(f"SKIP {fname}（不在清单）")
         continue
+    # 长句保护：整条合成会超过 GPT 生成时长上限（max_sec）导致尾部硬截断，
+    # 且 12 次采样救不了"系统性尾部丢词"——长句必须走 synth 的拆块+尾部专项评分。
+    if "-long-" in fname:
+        print(f"SKIP {fname}（长句禁止整条合成：请用 synth-mashiro-long.py 重跑该 scene，已带尾部覆盖评分+尾部块专项）")
+        continue
     TEXT = l["jp"]
     exp_g = grams(clean(TEXT))
     best = None  # (score, pol, secs, audio, sr)
@@ -63,7 +68,7 @@ for fname in targets:
         buf = io.BytesIO()
         sf.write(buf, audio, sr, format="WAV")
         buf.seek(0)
-        segs, _ = m.transcribe(buf, language="ja", beam_size=1)
+        segs, _ = m.transcribe(buf, language="ja", beam_size=5)
         got = "".join(s.text for s in segs).strip()
         g = clean(got)
         gg = grams(g) if len(g) >= 2 else set()

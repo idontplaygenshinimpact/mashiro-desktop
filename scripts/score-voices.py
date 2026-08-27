@@ -15,7 +15,7 @@ CFG_PATH = os.path.join(ROOT, "scripts", "long-lines.json")
 OUT_JSON = os.path.join(ROOT, "data", "voice-score-last.json")
 
 # ref 泄漏特征短语（与合成 ref 对应；换 ref 时同步更新）
-POLLUTE = ["話しちゃダメ", "声をかけて", "空とに黙って", "エスカレーター", "離しちゃダメ", "飛んでく", "戻ろうと思って"]
+POLLUTE = ["話しちゃダメ", "声をかけて", "空とに黙って", "エスカレーター", "離しちゃダメ", "飛んでく", "戻ろうと思って"]  # ref-clean-A 特征（ref-clean-2 语气不符人设已回滚）
 
 def clean(s):
     return "".join(ch for ch in s if (ch.isascii() and ch.isalnum()) or (not ch.isascii() and ch.isalnum()))
