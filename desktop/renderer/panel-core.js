@@ -115,7 +115,7 @@ async function initPluginTabs() {
         sec.className = "tab-panel";
         sec.innerHTML = `<div class="jobs-setup">
           <div class="form-row">
-            <label>${escHtml(t.label)} <span style="font-weight:normal;color:#8a87a8;font-size:11px;">—— 来自插件 ${escHtml(p.name)} v${escHtml(p.version || "")}</span></label>
+            <label>${escHtml(t.label)} <span style="font-weight:normal;color:#6a6790;font-size:11px;">—— 来自插件 ${escHtml(p.name)} v${escHtml(p.version || "")}</span></label>
           </div>
           <div class="plg-tab-body" data-plg="${escHtml(p.id)}" data-tab="${escHtml(t.id)}" style="margin-top:8px;"></div>
         </div>`;
@@ -126,7 +126,7 @@ async function initPluginTabs() {
       const firstBody = document.querySelector(`#tab-plg-${p.id}-${tabs[0].id} .plg-tab-body`);
       if (!firstBody) continue;
       if (!decls.length) {
-        firstBody.innerHTML = '<div style="color:#8a87a8;font-size:12px;">该插件未声明面板设置</div>';
+        firstBody.innerHTML = '<div style="color:#6a6790;font-size:12px;">该插件未声明面板设置</div>';
         continue;
       }
       try {
@@ -149,7 +149,7 @@ async function initPluginTabs() {
             <input type="${type}" id="${plgSetId(p.id, s.key)}" value="${escHtml(v ?? "")}"
               style="flex:1;min-width:140px;padding:5px 8px;font-size:11px;border-radius:6px;border:1px solid rgba(138,90,220,.25);background:rgba(20,18,36,.6);color:#e8e6f2;"></div>`;
         }).join("");
-        firstBody.innerHTML = `<div style="font-size:11px;color:#8a87a8;">插件设置（存于本机，命名空间 plg_${escHtml(p.id)}_*）</div>
+        firstBody.innerHTML = `<div style="font-size:11px;color:#6a6790;">插件设置（存于本机，命名空间 plg_${escHtml(p.id)}_*）</div>
           ${rows}
           <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
             <button class="secondary" style="padding:6px 12px;font-size:11px;" data-plg-save="${escHtml(p.id)}">💾 保存插件设置</button>
@@ -179,9 +179,12 @@ async function initPluginTabs() {
             if (st) st.textContent = allOk ? "✅ 已保存" : "⚠️ 部分保存失败";
           });
         }
-      } catch { firstBody.innerHTML = '<div style="color:#8a87a8;font-size:12px;">设置加载失败（旧版后台服务）</div>'; }
+      } catch { firstBody.innerHTML = '<div style="color:#6a6790;font-size:12px;">设置加载失败（旧版后台服务）</div>'; }
     }
   } catch { /* 后台服务未启动 → 插件 tab 不渲染（不打扰面板） */ }
 }
 initPluginTabs();
+
+
+
 

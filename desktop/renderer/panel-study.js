@@ -161,7 +161,7 @@ function startIvTimer() {
     const el = $("iv-timer");
     if (el) {
       el.textContent = `⏱ ${m}:${s}`;
-      el.style.color = ivRoundSeconds > 180 ? "#c05050" : ivRoundSeconds > 90 ? "#b07020" : "";
+      el.style.color = ivRoundSeconds > 180 ? "#c05050" : ivRoundSeconds > 90 ? "#9a5b00" : "";
     }
   };
   tick();
@@ -399,7 +399,7 @@ async function loadIvHistory() {
           <span class="iv-hist-score">均分 ${it.avg ?? it.avgScore ?? "-"}</span>
           ${it.report ? `<button class="iv-hist-open" data-i="${i}">查看复盘</button>` : ""}
         </div>
-        <div style="font-size:11px;color:#8a87a8">${fmtIvDate(it.date)}</div>
+        <div style="font-size:11px;color:#6a6790">${fmtIvDate(it.date)}</div>
       </div>`).join("");
     body.querySelectorAll(".iv-hist-open").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -793,7 +793,7 @@ function renderReviewBatch(queue) {
   const r2 = queue.filter((c) => c.history?.length === 1).length;
   const r3p = queue.length - first - r2;
   const chip = (label, n, color) => `<span class="job-badge" style="background:${color};color:#fff;">${label} ${n}</span>`;
-  box.innerHTML = `今日 ${queue.length} 张：${chip("🆕 首次", first, "rgba(80,160,255,.75)")} ${chip("🔁 第2次", r2, "rgba(138,90,220,.75)")} ${chip("🔁 3次+", r3p, "rgba(109,79,216,.55)")} <span style="font-size:10px;color:#8a87a8;">· 预计 ${Math.max(1, Math.round(queue.length / 2))} 分钟</span>`;
+  box.innerHTML = `今日 ${queue.length} 张：${chip("🆕 首次", first, "#2563eb")} ${chip("🔁 第2次", r2, "#7c3aed")} ${chip("🔁 3次+", r3p, "#5d48b8")} <span style="font-size:10px;color:#6a6790;">· 预计 ${Math.max(1, Math.round(queue.length / 2))} 分钟</span>`;
 }
 
 // 复习统计渲染：总卡/到期/今日完成/学习/掌握 + 今日进度条（今日完成 / 今日到期）
@@ -826,14 +826,14 @@ function renderReviewTrend({ trend = [], streak = 0 }) {
   box.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <span style="font-size:11px;color:#6a6790;font-weight:600;">🔥 连续复习 <b style="color:#8a5adc;">${streak}</b> 天</span>
-      <span style="font-size:11px;color:#8a87a8;">近 7 天复习量：</span>
+      <span style="font-size:11px;color:#6a6790;">近 7 天复习量：</span>
       ${trend.map((d) => {
         const h = Math.max(3, Math.round((d.count / max) * 30));
         const isToday = d.date === todayStr;
         return `<span title="${d.date} · 复习 ${d.count} 张" style="display:inline-block;margin:0 3px;text-align:center;">
-          <span style="display:block;font-size:9px;color:${d.count ? "#8a87a8" : "#c4c1d8"};">${d.count || ""}</span>
+          <span style="display:block;font-size:9px;color:${d.count ? "#6a6790" : "#c4c1d8"};">${d.count || ""}</span>
           <span style="display:block;width:16px;height:${h}px;background:${d.count ? "linear-gradient(180deg,#8a5adc,#5a3d9e)" : "rgba(109,79,216,.1)"};border-radius:3px;${isToday ? "outline:1.5px solid #8a5adc;outline-offset:1px;" : ""}"></span>
-          <span style="font-size:9px;color:${isToday ? "#8a5adc" : "#8a87a8"};font-weight:${isToday ? "700" : "400"};">${dayLabel(d)}</span>
+          <span style="font-size:9px;color:${isToday ? "#8a5adc" : "#6a6790"};font-weight:${isToday ? "700" : "400"};">${dayLabel(d)}</span>
         </span>`;
       }).join("")}
     </div>`;
@@ -883,7 +883,7 @@ async function loadMastery() {
 // 单个知识点条形：颜色按 score（<50 红 / 50-70 黄 / >=70 绿），宽度按 score%
 function masteryBar(k) {
   const score = Math.max(0, Math.min(100, Number(k.score) || 0));
-  const color = score < 50 ? "#d9534f" : score < 70 ? "#e0a800" : "#3a8d5a";
+  const color = score < 50 ? "#c0392b" : score < 70 ? "#8f6f00" : "#2f7a4a";
   return `<div class="mastery-item" title="${esc(k.id)}">
     <span class="mastery-name">${esc(k.title)}</span>
     <span class="mastery-bar"><i style="width:${score}%;background:${color}"></i></span>
@@ -912,7 +912,7 @@ function showReviewCard() {
   $("rc-progress-pct").textContent = pct + "%";
   $("rc-topic").textContent = "🔁 " + card.topic;
   // 默答引导：说明这题是"先心里作答→显示答案核对→选择题+评级"三步（此前标题无引导，用户困惑简答/选择的定位）
-  $("rc-question").innerHTML = `<div style="font-size:11px;color:#8a87a8;margin-bottom:4px;">📝 先默答这题（心里组织答案），再点「显示答案」核对，最后做选择题并评级</div>` + esc(card.question || card.topic);
+  $("rc-question").innerHTML = `<div style="font-size:11px;color:#6a6790;margin-bottom:4px;">📝 先默答这题（心里组织答案），再点「显示答案」核对，最后做选择题并评级</div>` + esc(card.question || card.topic);
   $("rc-answer").textContent = card.answer || "";
   $("rc-answer").classList.add("hidden");
   $("rc-show").classList.remove("hidden");
@@ -936,13 +936,13 @@ function showReviewCard() {
     const memPct = card.memPct;
     if (memPct === null || memPct === undefined) {
       memEl.innerHTML = `<span class="rc-stage-badge">${esc(stage.label)}</span>
-        <span style="font-size:11px;color:#8a87a8;">首次复习，学完记住它</span>`;
+        <span style="font-size:11px;color:#6a6790;">首次复习，学完记住它</span>`;
     } else {
       const color = memPct >= 80 ? "linear-gradient(90deg,#3a8a5a,#2f7d4e)" : memPct >= 60 ? "linear-gradient(90deg,#8a5adc,#6d4fd8)" : "linear-gradient(90deg,#d98a3d,#c07020)";
       memEl.innerHTML = `<span class="rc-stage-badge">${esc(stage.label)}</span>
         <span class="rc-mem-track"><i style="width:${memPct}%;background:${color}"></i></span>
-        <b class="rc-mem-pct" style="color:${memPct >= 80 ? "#2e9e5b" : memPct >= 60 ? "#5d48b8" : "#c07a20"};">${memPct}%</b>
-        <span style="font-size:10px;color:#8a87a8;">记忆强度</span>`;
+        <b class="rc-mem-pct" style="color:${memPct >= 80 ? "#2e9e5b" : memPct >= 60 ? "#5d48b8" : "#9a5b00"};">${memPct}%</b>
+        <span style="font-size:10px;color:#6a6790;">记忆强度</span>`;
     }
   }
 }
@@ -952,7 +952,7 @@ function showReviewFeedback(rating, nextDue, nextCard) {
   const fb = $("rc-feedback");
   if (!fb) return;
   const label = ["😵 忘了", "😕 困难", "🙂 记得", "😄 简单"][rating] || "";
-  const color = rating >= 2 ? "#3a8d5a" : "#c05050";
+  const color = rating >= 2 ? "#2f7a4a" : "#c05050";
   const schedDays = nextCard?.fsrs?.scheduled_days;
   fb.innerHTML = `<span style="color:${color};font-weight:600;">${label}</span> · 间隔 <b>${schedDays || 1}</b> 天 · 下次复习：<b>${nextDue ? relDue(nextDue) : "—"}</b>`;
   fb.classList.remove("hidden");
@@ -1083,7 +1083,7 @@ function renderQuiz(questions) {
     // 通过 DOM 拿当前卡 id（rc- 区域）——简化：先不加这里，避免复杂
   } catch { /* ignore */ }
   // kbUsed 提示（新生成时含知识库素材）
-  const kbNote = quizState.kbUsed ? '<div class="quiz-kb" style="font-size:11px;color:#8a87a8;margin:2px 0 6px;">📚 本题库引用了本地知识库真题素材</div>' : "";
+  const kbNote = quizState.kbUsed ? '<div class="quiz-kb" style="font-size:11px;color:#6a6790;margin:2px 0 6px;">📚 本题库引用了本地知识库真题素材</div>' : "";
   box.innerHTML = `<div class="quiz-head">🧠 复习自测 · 快速回忆（答完再评分）</div>${kbNote}` +
     questions.map((q, qi) => `
     <div class="quiz-q" data-qi="${qi}">
@@ -1151,7 +1151,7 @@ async function submitQuizAnswers() {
     const explains = (r.results || []).map((x) => String(x.explain || "").length);
     if (explains.length && Math.max(...explains) < 25) {
       quizSwapBatch(card.id);
-      if (summary) summary.innerHTML = (summary.innerHTML || "") + `<div style="font-size:11px;color:#8a87a8;margin-top:4px;">📝 本题解析较简略（旧题库），已自动换一批更详细的</div>`;
+      if (summary) summary.innerHTML = (summary.innerHTML || "") + `<div style="font-size:11px;color:#6a6790;margin-top:4px;">📝 本题解析较简略（旧题库），已自动换一批更详细的</div>`;
     }
     btn.classList.add("hidden");
   } catch (e) {
@@ -1299,7 +1299,7 @@ async function loadWrongBook() {
     const wrong = j.wrong || [];
     countEl.textContent = wrong.length;
     if (!wrong.length) {
-      listEl.innerHTML = '<div style="font-size:11px;color:#8a87a8;">暂无错题（答错 ≥2 次才进错题本）</div>';
+      listEl.innerHTML = '<div style="font-size:11px;color:#6a6790;">暂无错题（答错 ≥2 次才进错题本）</div>';
       return;
     }
     listEl.innerHTML = wrong.map((w) => `
@@ -1424,7 +1424,7 @@ async function loadStudyPlan() {
   ]);
   bindPlanItems(list, false); // 主列表绑定：学习/讲解按钮 + 勾选 + 组头折叠（此前缺失 → 点学习没反应）
   if (!filtered.length && (q || lv || st)) {
-    list.innerHTML = `<div style="color:#8a87a8;font-size:12px">没有匹配「${esc(q || lv || st)}」的条目</div>`;
+    list.innerHTML = `<div style="color:#6a6790;font-size:12px">没有匹配「${esc(q || lv || st)}」的条目</div>`;
   }
   // 已掌握折叠区（完成且无到期复习卡）
   doneToggle.style.display = masteredN ? "" : "none";
@@ -1503,7 +1503,7 @@ function renderPlanItemHtml(it) {
     <div class="study-item ${it.done ? "done" : ""}" data-id="${it.id}">
       <input type="checkbox" ${it.done ? "checked" : ""} />
       <div style="flex:1">
-        <div class="s-topic">${esc(it.topic)} ${it.level ? `<span class="s-lv ${lvCls[it.level] || "lv-must"}">${esc(it.level)}</span>` : ""} ${srcBadge}${it.reviewDue ? '<span class="s-src" style="background:rgba(220,150,60,.2);color:#b07020;">🔁 复习到期</span>' : ""}</div>
+        <div class="s-topic">${esc(it.topic)} ${it.level ? `<span class="s-lv ${lvCls[it.level] || "lv-must"}">${esc(it.level)}</span>` : ""} ${srcBadge}${it.reviewDue ? '<span class="s-src" style="background:rgba(220,150,60,.2);color:#9a5b00;">🔁 复习到期</span>' : ""}</div>
         <div class="s-why">${esc(it.why || "")}</div>
       </div>
       <button class="s-learn" data-id="${it.id}">${it.hasFile ? "📖 学习" : "💡 讲解"}</button>
@@ -1629,7 +1629,7 @@ async function showClusterResult(ids) {
   sdCurrentId = "cluster-" + ids.join("-");
   sdOverlay().classList.remove("hidden");
   $("sd-modal-title").textContent = "🔗 归并中...";
-  sdBody().innerHTML = '<div style="color:#8a87a8;font-size:13px;padding:12px">📚 正在归并多个讲解为主题簇综合讲解（去重合并 + 扩展关联考点）...</div>';
+  sdBody().innerHTML = '<div style="color:#6a6790;font-size:13px;padding:12px">📚 正在归并多个讲解为主题簇综合讲解（去重合并 + 扩展关联考点）...</div>';
   try {
     let merged = "";
     const r = await window.kanban.studyCluster(ids, (delta) => {
@@ -1665,7 +1665,7 @@ async function showStudyDetail(id) {
   sdCurrentId = id;
   // 显示弹层 + 加载态
   sdOverlay().classList.remove("hidden");
-  sdBody().innerHTML = '<div style="color:#8a87a8;font-size:13px;padding:12px">📖 加载讲解中...</div>';
+  sdBody().innerHTML = '<div style="color:#6a6790;font-size:13px;padding:12px">📖 加载讲解中...</div>';
   try {
     // 缓存命中：直接展示
     if (studyDetailCache[id]?.content) {
@@ -1686,7 +1686,7 @@ async function showStudyDetail(id) {
     // 同知识点复用提示（如「版本号数组排序」复用了「版本号比较」的讲解）
     if (result?.similarFrom?.topic && result.similarFrom.topic !== topic) {
       const tip = document.createElement("div");
-      tip.style.cssText = "color:#3a8d5a;font-size:12px;padding:6px 8px;background:rgba(58,141,90,.08);border-radius:6px;margin:0 0 6px;";
+      tip.style.cssText = "color:#1f5c33;font-size:12px;padding:6px 8px;background:rgba(58,141,90,.08);border-radius:6px;margin:0 0 6px;";
       tip.textContent = `📎 本条目与「${result.similarFrom.topic}」为同一知识点，已复用其讲解（内容一致，避免重复生成）`;
       sdBody().insertBefore(tip, sdBody().firstChild);
     }
@@ -1694,7 +1694,7 @@ async function showStudyDetail(id) {
     // （用户反馈：最初生成的讲解（如简单 split 方案）通常质量最好）
     if (result?.earlierArchive?.topic) {
       const box = document.createElement("div");
-      box.style.cssText = "color:#8a87a8;font-size:12px;padding:6px 8px;background:rgba(138,90,220,.06);border:1px solid rgba(138,90,220,.15);border-radius:6px;margin:0 0 6px;display:flex;gap:8px;align-items:center;";
+      box.style.cssText = "color:#6a6790;font-size:12px;padding:6px 8px;background:rgba(138,90,220,.06);border:1px solid rgba(138,90,220,.15);border-radius:6px;margin:0 0 6px;display:flex;gap:8px;align-items:center;";
       box.innerHTML = `<span>📎 同知识点「${esc(result.earlierArchive.topic)}」有更早生成的讲解</span>`;
       const btn = document.createElement("button");
       btn.className = "job-btn";
@@ -1767,7 +1767,7 @@ async function askStudyDetail() {
       if (j?.type === "cache" && j.hit) {
         cacheHit = true;
         const tip = document.createElement("div");
-        tip.style.cssText = "color:#3a8d5a;font-size:12px;padding:6px 8px;background:rgba(58,141,90,.08);border-radius:6px;margin:4px 0;";
+        tip.style.cssText = "color:#1f5c33;font-size:12px;padding:6px 8px;background:rgba(58,141,90,.08);border-radius:6px;margin:4px 0;";
         tip.textContent = `🔁 命中历史追问（相似度 ${Math.round((j.similarity || 0) * 100)}%）：与「${j.cachedQuestion || ""}」的回答相同，未消耗新生成`;
         sdBody().appendChild(tip);
       }
@@ -1860,7 +1860,7 @@ async function consolidateStudyDetail() {
       if (gen !== sdGen) return;
       $("sd-modal-title").textContent = "📖 " + topic;
     }
-    sdBody().innerHTML = '<div style="color:#8a87a8;font-size:13px;padding:12px">📚 正在整合全文（去重合并、统一结构）...</div>';
+    sdBody().innerHTML = '<div style="color:#6a6790;font-size:13px;padding:12px">📚 正在整合全文（去重合并、统一结构）...</div>';
     // 流式整合
     let merged = "";
     await window.kanban.studyConsolidate(id, (delta) => {
@@ -2089,9 +2089,9 @@ $("iv-notes-btn").addEventListener("click", async () => {
     if (!r?.ok) { result.textContent = "⚠️ " + (r?.error || "记录失败"); return; }
     result.innerHTML = `
       <div style="color:#3a8a5a">✅ 新增 ${r.added?.length || 0} 个：${esc((r.added || []).join("、") || "无")}</div>
-      ${r.existing?.length ? `<div style="color:#b07020">已在清单：${esc(r.existing.join("、"))}</div>` : ""}
-      ${r.skipped?.length ? `<div style="color:#8a87a8">跳过非知识点：${esc(r.skipped.map((s) => s.topic).join("、"))}</div>` : ""}
-      <div style="color:#8a87a8;font-size:11px;margin-top:4px">${esc(r.hint || "")}</div>`;
+      ${r.existing?.length ? `<div style="color:#9a5b00">已在清单：${esc(r.existing.join("、"))}</div>` : ""}
+      ${r.skipped?.length ? `<div style="color:#6a6790">跳过非知识点：${esc(r.skipped.map((s) => s.topic).join("、"))}</div>` : ""}
+      <div style="color:#6a6790;font-size:11px;margin-top:4px">${esc(r.hint || "")}</div>`;
     $("iv-notes-input").value = "";
     loadStudyPlan(); // 刷新清单显示新条目
   } catch (e) {
@@ -2136,4 +2136,12 @@ $("review-submit").addEventListener("click", async () => {
   });
   loadStudyPlan();
 });
+
+
+
+
+
+
+
+
 

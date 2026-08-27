@@ -38,3 +38,9 @@ scripts/_voiceid_mashiro.tsv
 # 本地 ASR 模型（sherpa-onnx paraformer，~230MB，按需下载）
 models/
 
+
+# UI 截图产物（审计基线，不入库）
+ui-shots/
+# Python 缓存
+__pycache__/
+scripts/__pycache__/

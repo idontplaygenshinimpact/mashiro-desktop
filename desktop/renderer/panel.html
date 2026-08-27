@@ -175,7 +175,7 @@
       <div class="mastery-box" id="wrong-book-box">
         <button class="mastery-toggle" id="wrong-book-toggle" type="button">📕 错题本（<span id="wrong-book-count">-</span> 道）▸</button>
         <div class="mastery-body hidden" id="wrong-book-body">
-          <div class="wrong-book-hint" style="font-size:11px;color:#8a87a8;margin-bottom:6px;">复习时答错过 ≥2 次的题——点击直接开复习，或让真白讲一遍彻底搞懂</div>
+          <div class="wrong-book-hint" style="font-size:11px;color:#6a6790;margin-bottom:6px;">复习时答错过 ≥2 次的题——点击直接开复习，或让真白讲一遍彻底搞懂</div>
           <div id="wrong-book-list"></div>
         </div>
       </div>
@@ -199,7 +199,7 @@
         <div class="resume-status" id="focus-status">未开始专注</div>
         <div class="focus-countdown hidden" id="focus-countdown"></div>
         <div class="stats-row" id="focus-stats-row" style="margin-top:6px;"></div>
-        <div class="focus-week hidden" id="focus-week" style="margin-top:6px;font-size:11px;color:#8a87a8;"></div>
+        <div class="focus-week hidden" id="focus-week" style="margin-top:6px;font-size:11px;color:#6a6790;"></div>
       </div>
       <div class="study-toolbar">
         <button id="study-gen" class="primary">✨ 从产出生成清单</button>
@@ -255,7 +255,7 @@
         </div>
         <div class="sd-modal-body" id="rex-body">加载中...</div>
         <div class="sd-modal-ask">
-          <span id="rex-status" style="font-size:11px;color:#8a87a8;"></span>
+          <span id="rex-status" style="font-size:11px;color:#6a6790;"></span>
           <span style="flex:1;"></span>
           <button id="rex-plan-btn" class="primary hidden">📌 加入学习清单</button>
         </div>
@@ -281,7 +281,7 @@
           <button id="import-close" class="sd-close" title="关闭">✕</button>
         </div>
         <div class="sd-modal-body" style="display:flex;flex-direction:column;gap:8px;max-height:calc(82vh - 60px);overflow-y:auto;">
-          <div style="font-size:11px;color:#8a87a8;">支持粘贴文本或选择 .md/.txt 文件。保存后进入产出目录（与爬取同构），自动被面试素材/巡检识别。</div>
+          <div style="font-size:11px;color:#6a6790;">支持粘贴文本或选择 .md/.txt 文件。保存后进入产出目录（与爬取同构），自动被面试素材/巡检识别。</div>
           <input id="import-title" type="text" placeholder="标题（必填，如：字节前端一面面经）" style="padding:6px 10px;font-size:12px;" />
           <input id="import-source" type="text" placeholder="来源（可选，链接或公众号名）" style="padding:6px 10px;font-size:12px;" />
           <textarea id="import-content" rows="10" placeholder="粘贴面经内容（必填）..." style="padding:6px 10px;font-size:12px;font-family:Consolas,monospace;line-height:1.6;"></textarea>
@@ -289,7 +289,7 @@
             <button id="import-file" class="secondary" style="padding:6px 12px;font-size:11px;">📄 选文件导入</button>
             <input type="file" id="import-file-input" accept=".md,.txt,.html,.htm,.docx,.pdf" hidden />
             <button id="import-save" class="primary" style="padding:6px 12px;font-size:11px;">💾 保存到产出</button>
-            <span style="font-size:11px;color:#8a87a8;" id="import-status"></span>
+            <span style="font-size:11px;color:#6a6790;" id="import-status"></span>
           </div>
         </div>
       </div>
@@ -320,18 +320,18 @@
     <!-- ========== 对话 Tab ========== -->
     <section id="tab-chat" class="tab-panel">
       <div id="mascot-box" class="mascot-box" style="margin-bottom:8px;padding:8px 10px;background:rgba(138,90,220,.08);border-radius:8px;font-size:12px;">
-        <div style="color:#c9c6dd;font-weight:600;margin-bottom:4px;">🎀 桌宠形象 <span id="mascot-current" style="color:#8a87a8;font-weight:400;"></span></div>
+        <div style="color:#6a6790;font-weight:600;margin-bottom:4px;">🎀 桌宠形象 <span id="mascot-current" style="color:#6a6790;font-weight:400;"></span></div>
         <div id="mascot-models" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
       </div>
       <div id="todo-box" class="todo-box hidden" style="margin-bottom:8px;padding:8px 10px;background:rgba(109,79,216,.07);border-radius:8px;font-size:12px;">
-        <div style="color:#c9c6dd;font-weight:600;margin-bottom:4px;">📋 真白的任务清单 <span id="todo-progress" style="color:#8a87a8;font-weight:400;"></span></div>
+        <div style="color:#6a6790;font-weight:600;margin-bottom:4px;">📋 真白的任务清单 <span id="todo-progress" style="color:#6a6790;font-weight:400;"></span></div>
         <div id="todo-items" style="line-height:1.8;"></div>
       </div>
       <!-- 多会话栏：新建/切换/删除（测试与真实对话互不干扰） -->
       <div class="chat-session-bar">
         <button id="chat-new-session" class="sd-close" title="新对话" style="width:auto;padding:2px 10px;flex-shrink:0;">➕ 新对话</button>
         <div id="chat-session-list" class="chat-session-list"></div>
-        <button id="chat-del-session" class="sd-close" title="删除当前会话" style="width:auto;padding:2px 10px;flex-shrink:0;color:#c93a3f;">🗑</button>
+        <button id="chat-del-session" class="sd-close" title="删除当前会话" style="width:auto;padding:2px 10px;flex-shrink:0;color:#b91c1c;">🗑</button>
       </div>
       <div id="chat-log" class="chat-log"></div>
       <div class="chat-input-row">
@@ -379,7 +379,7 @@
         <div class="patrol-status" id="patrol-status">加载中…</div>
       </div>
       <div class="patrol-card" style="margin-top:10px;">
-        <h4>🔍 系统自检 <span id="self-check-time" style="color:#8a87a8;font-weight:400;font-size:11px;"></span></h4>
+        <h4>🔍 系统自检 <span id="self-check-time" style="color:#6a6790;font-weight:400;font-size:11px;"></span></h4>
         <div style="display:flex;gap:6px;margin-bottom:6px;">
           <button id="self-check-btn" class="secondary">🔄 立即检查</button>
         </div>
@@ -393,7 +393,7 @@
 
       <!-- 📰 今日资讯（RSS 摘要，并入爬取产出） -->
       <div class="patrol-card" style="margin-top:12px;">
-        <h4>📰 今日技术资讯 <span style="color:#8a87a8;font-weight:400;font-size:11px;">（RSS 聚合 → AI 摘要，源配置在「⚙️ 设置」）</span></h4>
+        <h4>📰 今日技术资讯 <span style="color:#6a6790;font-weight:400;font-size:11px;">（RSS 聚合 → AI 摘要，源配置在「⚙️ 设置」）</span></h4>
         <div style="display:flex;gap:6px;margin-bottom:6px;">
           <button id="rss-refresh-btn" class="secondary">🔄 立即刷新</button>
         </div>
@@ -494,7 +494,7 @@
         <div class="resume-status" id="challenge-status">题库加载中…</div>
         <div style="display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap;">
           <input id="challenge-search" type="search" placeholder="🔍 搜题目/关键词（如 Promise、二分、手写 Promise.all）" style="flex:1;min-width:180px;padding:5px 10px;border:1px solid rgba(109,79,216,.25);border-radius:6px;font-size:12px;background:rgba(255,255,255,.85);outline:none;">
-          <span id="challenge-count" style="font-size:11px;color:#8a87a8;"></span>
+          <span id="challenge-count" style="font-size:11px;color:#6a6790;"></span>
         </div>
         <div id="challenge-cats" style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0;"></div>
       </div>
@@ -578,7 +578,7 @@
             <button id="profile-save-btn" class="secondary">💾 保存简历</button>
             <button id="profile-plan-btn" class="secondary" title="把简历项目加入学习清单，逐个准备拷打档案">🎯 生成拷打清单</button>
           </div>
-          <div style="font-size:11px;color:#8a87a8;margin-top:4px;">支持 .txt / .md / .json / .docx / .pdf，或直接粘贴文本</div>
+          <div style="font-size:11px;color:#6a6790;margin-top:4px;">支持 .txt / .md / .json / .docx / .pdf，或直接粘贴文本</div>
         </div>
         <textarea id="profile-resume" placeholder="粘贴简历文本：项目经历、实习、技能、教育背景..."></textarea>
         <div class="resume-status" id="profile-status"></div>
@@ -646,7 +646,7 @@
           <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
             <button id="set-career-save" class="secondary" style="padding:6px 12px;font-size:11px;">💾 保存画像</button>
             <button id="set-career-reset" class="secondary" style="padding:6px 12px;font-size:11px;" title="重置为前端默认画像">↩ 重置为默认</button>
-            <span id="set-career-status" class="resume-status" style="font-size:11px;color:#8a87a8;"></span>
+            <span id="set-career-status" class="resume-status" style="font-size:11px;color:#6a6790;"></span>
           </div>
         </div>
       </div>
@@ -656,14 +656,14 @@
         <div class="form-row">
           <label>🌳 知识树（复习 Tab「掌握度」的骨架 + 答题知识点匹配；内置前端/后端/算法模板一键切换，也可整体替换，格式 [{id,title,points:[{id,title,kws?}]}]）</label>
           <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center;">
-            <span style="font-size:11px;color:#8a87a8;">快速切换模板：</span>
+            <span style="font-size:11px;color:#6a6790;">快速切换模板：</span>
             <span id="set-tree-templates" style="font-size:11px;color:#4a3a9d;"></span>
           </div>
           <textarea id="set-knowledge-tree" rows="7" style="width:100%;font-family:Consolas,monospace;font-size:10px;padding:8px 10px;border:1px solid rgba(109,79,216,.25);border-radius:6px;background:rgba(255,255,255,.8);white-space:pre;overflow:auto;" placeholder='[{"id":"js","title":"JavaScript 核心","points":[{"id":"js-closure","title":"闭包与作用域","kws":["闭包","作用域"]}]}]'></textarea>
           <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center;">
             <button id="set-tree-save" class="secondary" style="padding:6px 12px;font-size:11px;">💾 保存知识树</button>
             <button id="set-tree-reset" class="secondary" style="padding:6px 12px;font-size:11px;" title="重置为默认前端知识树">↩ 重置为默认</button>
-            <span id="set-tree-status" class="resume-status" style="font-size:11px;color:#8a87a8;"></span>
+            <span id="set-tree-status" class="resume-status" style="font-size:11px;color:#6a6790;"></span>
           </div>
         </div>
       </div>
@@ -711,7 +711,7 @@
             <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#4a3a9d;cursor:pointer;" title="DS 峰谷计价：峰时（北京 09:00-12:00 + 14:00-18:00）价格 2 倍，谷时半价——峰时内的巡检自动推迟到谷时（12:00 或 18:00 后），账单直接减半">
               <input type="checkbox" id="set-patrol-avoid-peak" style="width:15px;height:15px;accent-color:#6d4fd8;"> 避开 DS 峰时
             </label>
-            <span style="font-size:11px;color:#8a87a8;" id="set-patrol-status"></span>
+            <span style="font-size:11px;color:#6a6790;" id="set-patrol-status"></span>
           </div>
         </div>
         <div class="form-row" style="margin-top:8px;">
@@ -723,16 +723,16 @@
           </div>
         </div>
         <div class="form-row" style="margin-top:8px;align-items:flex-start;">
-          <label>📚 本地知识库（RAG）<span style="font-weight:normal;color:#8a87a8;font-size:11px;">——面经/学习清单/岗位 JD 可检索。纯关键词检索（FTS5）零模型零内存，秒级构建</span></label>
+          <label>📚 本地知识库（RAG）<span style="font-weight:normal;color:#6a6790;font-size:11px;">——面经/学习清单/岗位 JD 可检索。纯关键词检索（FTS5）零模型零内存，秒级构建</span></label>
           <div style="display:flex;gap:10px;align-items:center;">
             <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#4a3a9d;cursor:pointer;">
               <input type="checkbox" id="set-rag-enabled" style="width:15px;height:15px;accent-color:#6d4fd8;"> 开启本地知识库
             </label>
-            <span style="font-size:11px;color:#8a87a8;" id="set-rag-status"></span>
+            <span style="font-size:11px;color:#6a6790;" id="set-rag-status"></span>
           </div>
         </div>
         <div class="form-row" style="margin-top:8px;align-items:flex-start;">
-          <label>🔔 通知提醒<span style="font-weight:normal;color:#8a87a8;font-size:11px;">——复习卡到期提醒每天一次（19-22 点），定时学习提醒每天 20/21 点；关闭后不再弹对应通知</span></label>
+          <label>🔔 通知提醒<span style="font-weight:normal;color:#6a6790;font-size:11px;">——复习卡到期提醒每天一次（19-22 点），定时学习提醒每天 20/21 点；关闭后不再弹对应通知</span></label>
           <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
             <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#4a3a9d;cursor:pointer;">
               <input type="checkbox" id="set-notify-review" style="width:15px;height:15px;accent-color:#6d4fd8;"> 复习卡到期提醒
@@ -740,11 +740,11 @@
             <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#4a3a9d;cursor:pointer;">
               <input type="checkbox" id="set-notify-study" style="width:15px;height:15px;accent-color:#6d4fd8;"> 定时学习提醒
             </label>
-            <span style="font-size:11px;color:#8a87a8;" id="set-notify-status"></span>
+            <span style="font-size:11px;color:#6a6790;" id="set-notify-status"></span>
           </div>
         </div>
         <div class="form-row" style="margin-top:8px;align-items:flex-start;">
-          <label>🎯 简历项目源码<span style="font-weight:normal;color:#8a87a8;font-size:11px;">——填你的项目名与本地源码目录（每行一个，格式：项目名=目录）。面试官会在项目拷打轮基于真实代码追问（技术选型/实现/坑），不再只靠简历一句话</span></label>
+          <label>🎯 简历项目源码<span style="font-weight:normal;color:#6a6790;font-size:11px;">——填你的项目名与本地源码目录（每行一个，格式：项目名=目录）。面试官会在项目拷打轮基于真实代码追问（技术选型/实现/坑），不再只靠简历一句话</span></label>
           <textarea id="set-personal-projects" rows="3" style="font-size:11px;font-family:Consolas,monospace;" placeholder="低代码平台=D:\projects\lowcode&#10;面试辅导Agent=D:\projects\interview-agent"></textarea>
           <div style="display:flex;gap:6px;margin-top:6px;">
             <button id="set-personal-projects-save" class="secondary" style="padding:6px 12px;font-size:11px;">💾 保存并生成档案</button>
@@ -810,11 +810,11 @@
       <!-- 🧩 插件管理（阶段 3：已装插件列表/启停/健康 + 插件市场安装） -->
       <div class="jobs-setup" style="margin-top:8px;">
         <div class="form-row">
-          <label>🧩 插件管理<span style="font-weight:normal;color:#8a87a8;font-size:11px;">——插件是功能的载体（秋招助手 = 一个整体插件）。停用/安装后重启桌宠生效</span></label>
+          <label>🧩 插件管理<span style="font-weight:normal;color:#6a6790;font-size:11px;">——插件是功能的载体（秋招助手 = 一个整体插件）。停用/安装后重启桌宠生效</span></label>
         </div>
         <div id="plugin-admin-list" style="margin-top:6px;display:flex;flex-direction:column;gap:8px;"></div>
         <div class="form-row" style="margin-top:10px;">
-          <label>🛒 插件市场<span style="font-weight:normal;color:#8a87a8;font-size:11px;">——一键安装可用的插件（下载到 plugins/ 目录）</span></label>
+          <label>🛒 插件市场<span style="font-weight:normal;color:#6a6790;font-size:11px;">——一键安装可用的插件（下载到 plugins/ 目录）</span></label>
         </div>
         <div id="plugin-market-list" style="margin-top:6px;display:flex;flex-direction:column;gap:8px;"></div>
       </div>
@@ -822,7 +822,7 @@
       <!-- 🛠 数据维护 -->
       <div class="jobs-setup" style="margin-top:8px;">
         <div class="form-row">
-          <label>🛠 数据维护（知识库 / 系统自检 / 数据备份）<span style="font-weight:normal;color:#8a87a8;font-size:11px;">——备份含全部数据（清单/复习卡/题库/岗位/简历）+ AI 讲解存档，自动每天一次，保留最近 10 份；恢复前自动快照当前状态</span></label>
+          <label>🛠 数据维护（知识库 / 系统自检 / 数据备份）<span style="font-weight:normal;color:#6a6790;font-size:11px;">——备份含全部数据（清单/复习卡/题库/岗位/简历）+ AI 讲解存档，自动每天一次，保留最近 10 份；恢复前自动快照当前状态</span></label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button id="set-kb-rebuild" class="secondary" style="padding:6px 12px;font-size:11px;">🔄 重建知识库索引</button>
             <button id="set-self-check" class="secondary" style="padding:6px 12px;font-size:11px;">🔍 立即系统自检</button>
@@ -850,6 +850,7 @@
   </div>
 
   <!-- 纵向拆分：panel.js → 5 个模块文件（普通 script 共享全局作用域，加载顺序不可变） -->
+  <script src="speech-queue.bundle.js"></script>
   <script src="panel-core.js"></script>
   <script src="panel-study.js"></script>
   <script src="panel-chat.js"></script>
@@ -858,3 +859,7 @@
   <script src="panel-rest.js"></script>
 </body>
 </html>
+
+
+
+

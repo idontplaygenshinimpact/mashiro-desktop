@@ -20,7 +20,7 @@ async function loadProfileStatus() {
     const upd = j.rawUpdatedAt ? new Date(j.rawUpdatedAt).toLocaleString("zh-CN") : "—";
     savedBox.innerHTML = `
       <div class="jobs-advice-box">
-        <h4>📄 已存档简历 <span style="font-weight:400;color:#8a87a8;">（${upd} 更新 · 原文 ${j.rawLength} 字）</span></h4>
+        <h4>📄 已存档简历 <span style="font-weight:400;color:#6a6790;">（${upd} 更新 · 原文 ${j.rawLength} 字）</span></h4>
         <div class="job-meta">技能：${esc(skills || "—")}</div>
         <div class="job-meta">方向：${esc(dirs || "—")}</div>
       </div>`;
@@ -39,7 +39,7 @@ async function renderProfileDrive(profile) {
   const body = $("profile-drive-body");
   if (!body) return;
   if (!profile) {
-    body.innerHTML = '<div style="color:#8a87a8;font-size:12px;">存档简历后这里会展示它驱动的模块：岗位匹配 / 面试拷打 / 投递招呼语 / 学习清单</div>';
+    body.innerHTML = '<div style="color:#6a6790;font-size:12px;">存档简历后这里会展示它驱动的模块：岗位匹配 / 面试拷打 / 投递招呼语 / 学习清单</div>';
     return;
   }
   const skills = profile.skills || [];
@@ -61,7 +61,7 @@ async function renderProfileDrive(profile) {
     const drillCount = planItems.filter((i) => /简历|拷打|面试实录/.test(i.source || "")).length;
     body.innerHTML = `
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px;">
-        <span style="font-size:11px;color:#8a87a8;align-self:center;">技能画像：</span>${skillChips || '<span style="font-size:11px;color:#8a87a8;">（未提取到技能，重新保存简历试试）</span>'}
+        <span style="font-size:11px;color:#6a6790;align-self:center;">技能画像：</span>${skillChips || '<span style="font-size:11px;color:#6a6790;">（未提取到技能，重新保存简历试试）</span>'}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <div class="stat-chip" style="cursor:pointer;" title="简历技能命中驱动的岗位推荐，点击去校招 Tab">
@@ -212,13 +212,13 @@ async function kbSearch() {
     const j = await res.json();
     if (j.disabled) { list.innerHTML = `<div class="empty-hint">📭 知识库未启用——到「⚙️ 设置」开启后即可搜索（纯关键词检索，秒级构建）</div>`; return; }
     if (!j.hits?.length) { list.innerHTML = '<div class="empty-hint">没有命中——换个说法，或点「🔄 重建索引」</div>'; return; }
-    list.innerHTML = `<div style="font-size:11px;color:#8a87a8;margin:2px 0 6px;">命中 ${j.hits.length} 条（关键词检索）</div>` +
+    list.innerHTML = `<div style="font-size:11px;color:#6a6790;margin:2px 0 6px;">命中 ${j.hits.length} 条（关键词检索）</div>` +
       j.hits.map((h) => `
       <div class="job-item">
         <div class="job-head">
           <span class="job-badge">${KIND_LABEL[h.kind] || h.kind}</span>
           <b style="font-size:12px;">${esc(h.title)}</b>
-          ${h.ftsScore ? `<span class="job-badge" style="background:rgba(120,180,120,.15);color:#3a8d5a;">关键词</span>` : ""}
+          ${h.ftsScore ? `<span class="job-badge" style="background:rgba(120,180,120,.15);color:#2f7a4a;">关键词</span>` : ""}
         </div>
         <div class="job-summary">${esc(h.content.slice(0, 150))}${h.content.length > 150 ? "…" : ""}</div>
       </div>`).join("");
@@ -247,7 +247,7 @@ $("kb-ask-btn")?.addEventListener("click", async () => {
       <div class="jobs-advice-box">
         <h4>💬 回答</h4>
         <div style="font-size:12px;line-height:1.7;color:#2d2a45;">${renderMd(String(j.answer || ""))}</div>
-        <div style="font-size:10px;color:#8a87a8;margin-top:8px;">📚 引用 ${j.hits.length} 条：${j.hits.map((h) => esc(h.title.slice(0, 24))).join(" / ")}</div>
+        <div style="font-size:10px;color:#6a6790;margin-top:8px;">📚 引用 ${j.hits.length} 条：${j.hits.map((h) => esc(h.title.slice(0, 24))).join(" / ")}</div>
       </div>`;
   } catch (e) {
     box.innerHTML = '<div class="jobs-advice-box"><h4>⚠️ 失败</h4><p style="font-size:11px;color:#6a6790;">' + esc(e.message) + "</p></div>";
@@ -291,7 +291,7 @@ async function loadZhenti() {
     list.innerHTML = j.papers.map((p) => `
       <div class="job-item">
         <div class="job-head">
-          <span class="job-badge" style="${p.kind === "simulate" ? "background:rgba(120,180,120,.15);color:#3a8d5a;" : "background:rgba(109,79,216,.12);color:#5d48b8;"}">${p.kind === "simulate" ? "🧪 模拟卷" : "🏢 真题"}</span>
+          <span class="job-badge" style="${p.kind === "simulate" ? "background:rgba(120,180,120,.15);color:#2f7a4a;" : "background:rgba(109,79,216,.12);color:#5d48b8;"}">${p.kind === "simulate" ? "🧪 模拟卷" : "🏢 真题"}</span>
           <b style="font-size:12px;">${esc(p.company || "平台")}</b>
           <span class="job-title">${esc(p.title)}</span>
         </div>
@@ -470,20 +470,20 @@ async function toggleOjDetail(item, btn) {
     const div = document.createElement("div");
     div.className = "oj-body";
     div.style.cssText = "padding:10px;margin:8px 0;background:rgba(109,79,216,.06);border:1px solid rgba(109,79,216,.18);border-radius:8px;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-all;";
-    let html = `<div style="color:#5d48b8;font-weight:bold;margin-bottom:4px;">📖 ${esc(btn.dataset.title)}${j.cached ? ' <span style="color:#8a87a8;font-weight:normal;">(本地缓存)</span>' : ""}</div>`;
-    if (j.meta) html += `<div style="color:#8a87a8;margin-bottom:6px;">${esc(j.meta)}</div>`;
+    let html = `<div style="color:#5d48b8;font-weight:bold;margin-bottom:4px;">📖 ${esc(btn.dataset.title)}${j.cached ? ' <span style="color:#6a6790;font-weight:normal;">(本地缓存)</span>' : ""}</div>`;
+    if (j.meta) html += `<div style="color:#6a6790;margin-bottom:6px;">${esc(j.meta)}</div>`;
     html += `<div>${esc(j.content || "")}</div>`;
     if (samples.length) {
       html += `<div style="margin-top:8px;font-weight:bold;color:#5d48b8;">示例</div>`;
       for (const s of samples) {
         html += `<div style="margin:4px 0;">【${esc(s.title)}】`;
-        if (s.input) html += `<div style="color:#3a8d5a;">输入：${esc(s.input)}</div>`;
-        if (s.output) html += `<div style="color:#b07020;">输出：${esc(s.output)}</div>`;
-        if (s.note) html += `<div style="color:#8a87a8;">说明：${esc(s.note)}</div>`;
+        if (s.input) html += `<div style="color:#2f7a4a;">输入：${esc(s.input)}</div>`;
+        if (s.output) html += `<div style="color:#9a5b00;">输出：${esc(s.output)}</div>`;
+        if (s.note) html += `<div style="color:#6a6790;">说明：${esc(s.note)}</div>`;
         html += `</div>`;
       }
     }
-    html += `<div style="margin-top:8px;color:#8a87a8;font-size:11px;">看题不消耗牛客额度；去牛客在线答题可自测运行。</div>`;
+    html += `<div style="margin-top:8px;color:#6a6790;font-size:11px;">看题不消耗牛客额度；去牛客在线答题可自测运行。</div>`;
     div.innerHTML = html;
     item.appendChild(div);
   } catch (e) { alert("⚠️ " + e.message); }
@@ -498,7 +498,7 @@ let chDone = 0;      // 0 全部 / 1 未做 / 2 已做（前端过滤）
 let chVisible = 60;  // 懒加载：每批条数（448 道全渲染太卡且难找）
 let chAll = [];      // 当前完整排序列表（过滤前）
 
-const DIFF_LABEL = { 1: ["简单", "#3a8d5a"], 2: ["中等", "#b07020"], 3: ["困难", "#c93a3f"] };
+const DIFF_LABEL = { 1: ["简单", "#2f7a4a"], 2: ["中等", "#9a5b00"], 3: ["困难", "#b91c1c"] };
 const freqStars = (n) => "🔥".repeat(Math.max(0, Math.min(3, Number(n) || 0)));
 
 async function loadChallenges() {
@@ -566,8 +566,8 @@ function renderChallenges() {
   // 懒加载：每批 60 条 + 「加载更多」（448 道全量渲染滚动太长）
   const show = filtered.slice(0, chVisible);
   list.innerHTML = show.map((p) => {
-    const [dl, dc] = DIFF_LABEL[p.difficulty] || ["难度" + p.difficulty, "#8a87a8"];
-    const wrong = p.wrongCount > 0 ? `<span style="color:#c93a3f;">答错 ${p.wrongCount} 次</span>` : "";
+    const [dl, dc] = DIFF_LABEL[p.difficulty] || ["难度" + p.difficulty, "#6a6790"];
+    const wrong = p.wrongCount > 0 ? `<span style="color:#b91c1c;">答错 ${p.wrongCount} 次</span>` : "";
     const desc = String(p.description || "").trim();
     return `
     <div class="job-item" id="ch-${esc(p.id)}" title="点击展开/收起题干" style="cursor:pointer;">
@@ -576,7 +576,7 @@ function renderChallenges() {
         <span style="color:${dc};font-size:11px;">${dl}</span>
         <span style="font-size:11px;" title="面试出现频率">${freqStars(p.frequency)}</span>
         <span class="job-title">${esc(p.title)}</span>
-        ${p.done ? '<span style="color:#3a8d5a;font-size:11px;">✅ 已做</span>' : ""}
+        ${p.done ? '<span style="color:#2f7a4a;font-size:11px;">✅ 已做</span>' : ""}
         ${wrong}
       </div>
       ${desc ? `<div class="job-summary" style="margin-top:3px;">${esc(desc.slice(0, 90))}${desc.length > 90 ? "…" : ""}</div>` : ""}
@@ -617,7 +617,7 @@ function toggleChallengeBody(item) {
   div.style.cssText = "padding:10px;margin:8px 0;background:rgba(109,79,216,.06);border:1px solid rgba(109,79,216,.18);border-radius:8px;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-all;";
   div.innerHTML = `<div style="color:#5d48b8;font-weight:bold;margin-bottom:4px;">📖 ${esc(p.title)}</div>
     <div>${esc(p.description || "（本题暂无题干说明）")}</div>
-    <div style="margin-top:6px;color:#8a87a8;font-size:11px;">建议 ${p.timeLimit || 10} 分钟内完成 · 点「✍️ 做题」展开编辑器（本地沙箱判题）</div>`;
+    <div style="margin-top:6px;color:#6a6790;font-size:11px;">建议 ${p.timeLimit || 10} 分钟内完成 · 点「✍️ 做题」展开编辑器（本地沙箱判题）</div>`;
   item.appendChild(div);
 }
 
@@ -657,19 +657,19 @@ function bindChPractice() {
           div.innerHTML = `
             <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
               <b style="color:#5d48b8;">${esc(c.title)}</b>
-              <span style="color:#8a87a8;">（${c.category === "handwrite" ? "手写" : "算法"} · ${(DIFF_LABEL[c.difficulty] || ["", ""])[0]} · 建议 ${c.timeLimit || 10} 分钟内）</span>
+              <span style="color:#6a6790;">（${c.category === "handwrite" ? "手写" : "算法"} · ${(DIFF_LABEL[c.difficulty] || ["", ""])[0]} · 建议 ${c.timeLimit || 10} 分钟内）</span>
               <span style="flex:1;"></span>
               <button class="job-btn ch-editor-close" style="padding:3px 8px;">✖</button>
             </div>
             <div style="color:#444;white-space:pre-wrap;margin-bottom:8px;max-height:140px;overflow:auto;">${esc(c.description)}</div>
             <div class="ch-code" style="position:relative;border:1px solid rgba(109,79,216,.3);border-radius:6px;background:#faf9ff;">
-              <div class="ch-lines" style="position:absolute;left:0;top:0;bottom:0;width:34px;overflow:hidden;background:#f0edff;color:#8a87a8;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;padding:7px 0;text-align:right;user-select:none;pointer-events:none;border-right:1px solid rgba(109,79,216,.15);z-index:3;"></div>
+              <div class="ch-lines" style="position:absolute;left:0;top:0;bottom:0;width:34px;overflow:hidden;background:#f0edff;color:#6a6790;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;padding:7px 0;text-align:right;user-select:none;pointer-events:none;border-right:1px solid rgba(109,79,216,.15);z-index:3;"></div>
               <textarea class="ch-ta" spellcheck="false" style="position:relative;z-index:2;display:block;width:100%;min-height:160px;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;padding:7px 8px 7px 42px;border:none;background:transparent;color:transparent;caret-color:#5d48b8;resize:vertical;box-sizing:border-box;white-space:pre;overflow:auto;outline:none;tab-size:2;">${esc(c.skeleton)}</textarea>
               <pre class="ch-hl" aria-hidden="true" style="position:absolute;inset:0;margin:0;padding:7px 8px 7px 42px;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;white-space:pre;overflow:hidden;pointer-events:none;color:#333;z-index:1;"></pre>
             </div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
               <button class="job-btn ch-editor-run" style="background:linear-gradient(135deg,#8a5adc,#6d4fd8);color:#fff;">▶ 运行判题</button>
-              <button class="job-btn ch-editor-mark" data-id="${esc(c.id)}" style="display:none;background:linear-gradient(135deg,#3a8d5a,#2f7d4e);color:#fff;">✅ 全部通过，标记完成</button>
+              <button class="job-btn ch-editor-mark" data-id="${esc(c.id)}" style="display:none;background:linear-gradient(135deg,#2f7a4a,#2f7d4e);color:#fff;">✅ 全部通过，标记完成</button>
               <span class="ch-editor-state" style="align-self:center;font-size:12px;"></span>
             </div>
             <pre class="ch-editor-result" style="display:none;margin-top:8px;padding:8px;background:#1e1e2e;color:#cdd6f4;border-radius:6px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;"></pre>`;
@@ -685,10 +685,10 @@ function bindChPractice() {
           const hlJS = (code) => escHtml(String(code)).replace(HL_RE, (m, str, kw, num, fn) => {
             if (str !== undefined) {
               const cmt = /^\/\//.test(str) || /^\/\*/.test(str);
-              return `<span style="color:${cmt ? "#8a87a8;font-style:italic" : "#b07020"};">${str}</span>`;
+              return `<span style="color:${cmt ? "#6a6790;font-style:italic" : "#9a5b00"};">${str}</span>`;
             }
             if (kw !== undefined) return `<span style="color:#8a5adc;font-weight:600;">${kw}</span>`;
-            if (num !== undefined) return `<span style="color:#b07020;">${num}</span>`;
+            if (num !== undefined) return `<span style="color:#9a5b00;">${num}</span>`;
             return `<span style="color:#2f7d4e;">${fn}</span>`;
           });
           const syncEditor = () => {
@@ -809,11 +809,11 @@ $("challenge-refresh-btn")?.addEventListener("click", () => {
 
 const activeChip = "background:linear-gradient(135deg,#8a5adc,#6d4fd8);color:#fff;";
 function diffColor(d) {
-  if (!d) return "#8a87a8";
-  if (d.includes("入门")) return "#3a8d5a";
-  if (d.includes("简单")) return "#3a8d5a";
-  if (d.includes("中等")) return "#b07020";
-  return "#c93a3f";
+  if (!d) return "#6a6790";
+  if (d.includes("入门")) return "#2f7a4a";
+  if (d.includes("简单")) return "#2f7a4a";
+  if (d.includes("中等")) return "#9a5b00";
+  return "#b91c1c";
 }
 
 $("oj-collect-btn")?.addEventListener("click", async () => {
@@ -1194,9 +1194,9 @@ function renderFocus(j) {
       const h = Math.max(3, Math.round((d.minutes / max) * 36));
       const isToday = d.date === todayStr;
       return `<span title="${d.date} · ${d.minutes} 分钟" style="display:inline-block;margin:0 3px;text-align:center;">
-        <span style="display:block;font-size:9px;color:${d.minutes ? "#8a87a8" : "#c4c1d8"};">${d.minutes || ""}</span>
+        <span style="display:block;font-size:9px;color:${d.minutes ? "#6a6790" : "#c4c1d8"};">${d.minutes || ""}</span>
         <span style="display:block;width:18px;height:${h}px;background:${d.minutes ? "linear-gradient(180deg,#8a5adc,#5a3d9e)" : "rgba(109,79,216,.1)"};border-radius:3px;${isToday ? "outline:1.5px solid #8a5adc;outline-offset:1px;" : ""}"></span>
-        <span style="font-size:9px;color:${isToday ? "#8a5adc" : "#8a87a8"};font-weight:${isToday ? "700" : "400"};">${dayLabel(d)}</span></span>`;
+        <span style="font-size:9px;color:${isToday ? "#8a5adc" : "#6a6790"};font-weight:${isToday ? "700" : "400"};">${dayLabel(d)}</span></span>`;
     }).join("");
   }
 }
@@ -1249,7 +1249,7 @@ async function loadFocusGoalSuggest() {
     const box = document.createElement("div");
     box.id = "focus-goal-suggest";
     box.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;";
-    box.innerHTML = '<span style="font-size:11px;color:#8a87a8;align-self:center;">🎯 推荐：</span>' + j.goals.map((g) => `
+    box.innerHTML = '<span style="font-size:11px;color:#6a6790;align-self:center;">🎯 推荐：</span>' + j.goals.map((g) => `
       <button class="job-btn" data-topic="${esc(g.topic)}" title="点击填入目标">${esc(g.text)}</button>`).join("");
     box.querySelectorAll("button[data-topic]").forEach((btn) => {
       btn.addEventListener("click", () => { input.value = btn.dataset.topic; input.focus(); });
@@ -1355,7 +1355,7 @@ async function loadSchedule() {
       if (!at) return "";
       const diff = at - now;
       if (diff <= 48 * H) return ` · <span style="color:#c05050;font-weight:700;">${diff <= H ? "即将开始" : Math.max(1, Math.round(diff / H)) + " 小时后"}</span>`;
-      if (diff <= 7 * D) return ` · <span style="color:#b07020;font-weight:600;">${Math.max(1, Math.round(diff / D))} 天后</span>`;
+      if (diff <= 7 * D) return ` · <span style="color:#9a5b00;font-weight:600;">${Math.max(1, Math.round(diff / D))} 天后</span>`;
       return ` · ${Math.round(diff / D)} 天后`;
     };
     list.innerHTML = groups.filter((g) => g.items.length).map((g) => `
@@ -1449,4 +1449,9 @@ setInterval(checkApprovals, 2000);
 setInterval(checkAsks, 2000);
 // 轮询任务清单（agent todo 进度）
 setInterval(loadTodo, 3000);
+
+
+
+
+
 

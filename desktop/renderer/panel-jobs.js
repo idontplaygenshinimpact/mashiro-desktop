@@ -15,7 +15,7 @@ async function loadLoop() {
     const box = document.getElementById("loop-box");
     if (!box) return;
     const n = j.nodes || {};
-    const chip = (label, val, color) => `<span class="job-badge" style="background:${color || "rgba(109,79,216,.12)"};color:${color ? "#fff" : "#7c6fd8"}">${label} ${esc(String(val))}</span>`;
+    const chip = (label, val, color) => `<span class="job-badge" style="background:${color || "rgba(109,79,216,.12)"};color:${color ? "#3a2d5c" : "#4a3f8a"}">${label} ${esc(String(val))}</span>`;
     box.innerHTML = `
       <div style="display:flex;gap:6px;flex-wrap:wrap;padding:4px 0;">
         ${chip("🎯 方向", n.direction || "未设置", n.direction ? "rgba(80,160,255,.2)" : "rgba(220,120,80,.2)")}
@@ -25,8 +25,8 @@ async function loadLoop() {
         ${chip("📮 已投", n.jobs?.applied ?? "—")}
         ${chip("🎤 最近面试", n.interview ? `${n.interview.avg}分` : "无", n.interview ? "rgba(138,90,220,.25)" : "rgba(120,120,140,.15)")}
       </div>
-      <div style="padding:4px 0 2px;line-height:1.7;font-size:12px;color:#c9c6dd;">
-        ${(j.suggestions || []).map((s) => `<div>${esc(s)}</div>`).join("") || '<div style="color:#8a87a8">暂无建议</div>'}
+      <div style="padding:4px 0 2px;line-height:1.7;font-size:12px;color:#6a6790;">
+        ${(j.suggestions || []).map((s) => `<div>${esc(s)}</div>`).join("") || '<div style="color:#6a6790">暂无建议</div>'}
       </div>`;
   } catch { /* widget 未启动忽略 */ }
 }
@@ -73,7 +73,7 @@ async function loadPlatforms() {
     box.innerHTML = j.platforms.map((p) => `
       <div class="platform-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px dashed rgba(109,79,216,.15);">
         <b style="min-width:90px">${esc(p.label)}</b>
-        <span class="job-badge" style="background:${p.enabled ? "rgba(80,220,120,.15);color:#2e9e5b" : "rgba(120,120,140,.15);color:#7c7c8c"}">${p.enabled ? "🟢 已启用" : "⚪ 未启用"}</span>
+        <span class="job-badge" style="background:${p.enabled ? "rgba(80,220,120,.15);color:#1f7a44" : "rgba(120,120,140,.15);color:#7c7c8c"}">${p.enabled ? "🟢 已启用" : "⚪ 未启用"}</span>
         <span class="job-badge">登录态：${AUTH_STATUS[p.authStatus] || p.authStatus}</span>
         <span class="job-badge">今日投递 ${p.applyToday}/${p.applyDailyLimit}</span>
         <button class="job-btn" data-pname="${p.name}" data-act="toggle" title="${p.enabled ? "停用后不再搜岗/投递" : "启用后 AI 可搜索该平台岗位"}">${p.enabled ? "🔌 停用" : "▶️ 启用"}</button>
@@ -89,7 +89,7 @@ async function loadPlatforms() {
           <textarea id="pgreet-${p.name}" placeholder="投递招呼语（发送给 HR 的第一句话，可点「✨ 生成」自动写一段展示优势的）" style="flex:2;min-width:220px;padding:5px 8px;border:1px solid rgba(109,79,216,.25);border-radius:6px;font-size:11px;background:rgba(255,255,255,.85);height:36px;">${esc(p.greeting || "")}</textarea>
           <button class="job-btn" data-pname="${p.name}" data-act="greet-gen" title="根据简历（学校/实习/项目/技能）自动生成展示优势的招呼语">✨ 生成</button>
           <button class="job-btn" data-pname="${p.name}" data-act="greet-polish" title="用 AI 把招呼语改写得更有吸引力（消耗一次 LLM 调用，写完点保存生效）">🪄 AI 精修</button>
-          <label style="font-size:11px;color:#8a87a8;align-self:center">每日上限</label>
+          <label style="font-size:11px;color:#6a6790;align-self:center">每日上限</label>
           <input id="plimit-${p.name}" type="number" min="1" max="50" value="${p.applyDailyLimit}" style="width:56px;padding:5px 8px;border:1px solid rgba(109,79,216,.25);border-radius:6px;font-size:11px;background:rgba(255,255,255,.85);">
           <button class="job-btn" data-pname="${p.name}" data-act="save-config">💾 保存设置</button>
         </div>
@@ -192,7 +192,7 @@ async function platformAction(btn) {
         ${j.jobs.map((job) => `
           <div class="job-item">
             <div class="job-head"><b>${esc(job.company)}</b><span class="job-title">${esc(job.title)}</span></div>
-            <div class="job-meta">${esc(job.salary || "")} ${esc(job.location || "")} ${job.dup ? '<span style="color:#8a87a8">已入库</span>' : '<span style="color:#2e9e5b">新入库</span>'}</div>
+            <div class="job-meta">${esc(job.salary || "")} ${esc(job.location || "")} ${job.dup ? '<span style="color:#6a6790">已入库</span>' : '<span style="color:#1f7a44">新入库</span>'}</div>
             <div class="job-actions">
               <a class="job-link" href="${esc(safeUrl(job.url))}" target="_blank" rel="noopener">🔗 查看</a>
               <button class="job-btn" data-pname="${name}" data-apply="${esc(safeUrl(job.url))}" data-jid="${job.id || ""}">📮 投递</button>
@@ -263,7 +263,7 @@ async function loadJobs() {
           <b>${esc(job.company)}</b>
           <span class="job-title">${esc(job.title)}</span>
           <span class="job-badge">${DIRECTION_LABEL[job.direction] || job.direction}</span>
-          <span class="job-badge" style="background:rgba(80,160,255,.15);color:#3a7bd5;">匹配 ${job.match || "—"}</span>
+          <span class="job-badge" style="background:rgba(80,160,255,.15);color:#1f5fa8;">匹配 ${job.match || "—"}</span>
         </div>
         <div class="job-meta">
           ${job.jobType ? `<span>${esc(job.jobType)}</span>` : ""}
@@ -465,7 +465,7 @@ async function loadDocs() {
           // 项目内版本对比：项目版本 < 最新 → 橙色升级提示
           let upgrade = "";
           if (c.version && c.localVersion && c.localVersion !== c.version) {
-            upgrade = `<div class="job-meta" style="color:#c07a20;font-weight:600;">📌 你的项目：v${esc(c.localVersion)} → 最新 v${esc(c.version)}</div>`;
+            upgrade = `<div class="job-meta" style="color:#9a5b00;font-weight:600;">📌 你的项目：v${esc(c.localVersion)} → 最新 v${esc(c.version)}</div>`;
           }
           // 升级命令（registry 包名存在时）
           let cmd = "";
@@ -479,7 +479,7 @@ async function loadDocs() {
           <div class="job-item">
             <div class="job-head">
               <b>${esc(s.name)}</b>
-              <span class="job-badge" style="background:${c.ok ? "rgba(120,180,120,.15);color:#3a8d5a;" : "rgba(220,150,60,.15);color:#b07020;"}">${badge}</span>
+              <span class="job-badge" style="background:${c.ok ? "rgba(120,180,120,.15);color:#2f7a4a;" : "rgba(220,150,60,.15);color:#9a5b00;"}">${badge}</span>
             </div>
             <div class="job-meta">${esc(s.desc)}</div>
             ${upgrade}
@@ -573,7 +573,7 @@ async function loadDashboard() {
         return ["日", "一", "二", "三", "四", "五", "六"][n] || d.date.slice(5);
       };
       $("dashboard-series").innerHTML = `
-        <div style="font-size:11px;color:#8a87a8;margin:8px 0 4px;">📈 近 7 天活动（绿=学习 · 紫=复习 · 蓝=刷题 · 底部条=专注时长）</div>
+        <div style="font-size:11px;color:#6a6790;margin:8px 0 4px;">📈 近 7 天活动（绿=学习 · 紫=复习 · 蓝=刷题 · 底部条=专注时长）</div>
         <div style="display:flex;gap:6px;align-items:flex-end;">
           ${series.map((d) => {
             const isToday = d.date === todayStr;
@@ -587,7 +587,7 @@ async function loadDashboard() {
                 <span style="width:6px;height:${h3}px;background:${d.challenge ? "#4a6fe0" : "rgba(74,111,224,.08)"};border-radius:2px;" title="刷题 ${d.challenge}"></span>
               </div>
               <div style="width:100%;height:4px;background:${d.focus ? "linear-gradient(90deg,#8a5adc,#5a3d9e)" : "rgba(109,79,216,.08)"};border-radius:2px;margin-top:2px;" title="专注 ${d.focus} 分钟"></div>
-              <div style="font-size:9px;color:${isToday ? "#8a5adc" : "#8a87a8"};font-weight:${isToday ? "700" : "400"};">${dayLabel(d)}</div>
+              <div style="font-size:9px;color:${isToday ? "#8a5adc" : "#6a6790"};font-weight:${isToday ? "700" : "400"};">${dayLabel(d)}</div>
             </div>`;
           }).join("")}
         </div>`;
@@ -608,7 +608,7 @@ async function loadDashboard() {
         <span class="track"><i style="width:${pct}%;background:${color}"></i></span><b>${done}/${total}</b></div>`;
     };
     $("dashboard-progress").innerHTML = `
-      <div style="font-size:11px;color:#8a87a8;margin:6px 0;">📌 累计进度（闭环总览）</div>
+      <div style="font-size:11px;color:#6a6790;margin:6px 0;">📌 累计进度（闭环总览）</div>
       ${bar("📚 学习清单", p.plan?.done, p.plan?.total)}
       ${bar("✍️ 手写/算法题库", p.challenges?.done, p.challenges?.total, "linear-gradient(90deg,#4a6fe0,#3a5bd5)")}
       ${bar("🔁 复习卡掌握", p.review?.mastered, p.review?.total, "linear-gradient(90deg,#3a8a5a,#2f7d4e)")}
@@ -741,11 +741,11 @@ async function loadBackups() {
     }
     box.innerHTML = list.slice(0, 8).map((b) => `
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:1px solid rgba(138,90,220,.15);border-radius:8px;padding:6px 8px;background:rgba(20,18,36,.4);font-size:11px;">
-        <span style="color:#8a87a8;">${b.reason === "auto" ? "🤖 自动" : b.reason === "pre-restore" ? "🛟 恢复前快照" : "👆 手动"}</span>
+        <span style="color:#6a6790;">${b.reason === "auto" ? "🤖 自动" : b.reason === "pre-restore" ? "🛟 恢复前快照" : "👆 手动"}</span>
         <span>${esc(new Date(b.createdAt).toLocaleString("zh-CN", { hour12: false }))}</span>
-        <span style="color:#8a87a8;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc((b.files || []).join("、"))}</span>
+        <span style="color:#6a6790;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc((b.files || []).join("、"))}</span>
         <button class="secondary" style="margin-left:auto;padding:3px 10px;font-size:10px;" data-restore="${esc(b.name)}">↩️ 恢复</button>
-      </div>`).join("") || '<div style="color:#8a87a8;font-size:11px;">暂无备份</div>';
+      </div>`).join("") || '<div style="color:#6a6790;font-size:11px;">暂无备份</div>';
     box.querySelectorAll("[data-restore]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const name = btn.dataset.restore;
@@ -797,7 +797,7 @@ async function loadPluginsAdmin() {
     const r = await fetch(API_BASE + "/api/plugins");
     const j = await r.json();
     if (!j?.ok || !Array.isArray(j.plugins)) {
-      box.innerHTML = '<div style="color:#8a87a8;font-size:12px;">后台服务未返回插件列表（旧版服务，重启桌宠后可用）</div>';
+      box.innerHTML = '<div style="color:#6a6790;font-size:12px;">后台服务未返回插件列表（旧版服务，重启桌宠后可用）</div>';
       return;
     }
     __installedPluginIds = new Set(j.plugins.map((p) => p.id));
@@ -808,19 +808,19 @@ async function loadPluginsAdmin() {
         : `<span style="color:#e07a5f;">⚠️ ${esc(load.error || "加载失败")}</span>`;
       const health = load.health?.ok === false
         ? `<div style="margin-top:2px;"><span style="color:#e0a95f;font-size:11px;">健康检查异常：${esc(load.health.detail || "")}</span></div>`
-        : (load.health?.detail ? `<div style="margin-top:2px;font-size:11px;color:#8a87a8;">健康：${esc(load.health.detail)}</div>` : "");
+        : (load.health?.detail ? `<div style="margin-top:2px;font-size:11px;color:#6a6790;">健康：${esc(load.health.detail)}</div>` : "");
       const tabs = (p.panel?.tabs || []).map((t) => t.label).join("、");
       return `<div style="border:1px solid rgba(138,90,220,.18);border-radius:10px;padding:8px 10px;background:rgba(20,18,36,.5);">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-weight:600;font-size:12px;">${esc(p.name)}</span>
-          <span style="font-size:10px;color:#8a87a8;">v${esc(p.version || "?")} · ${esc(p.id)}</span>
+          <span style="font-size:10px;color:#6a6790;">v${esc(p.version || "?")} · ${esc(p.id)}</span>
           ${status}
           <label style="margin-left:auto;display:flex;gap:5px;align-items:center;font-size:11px;color:#4a3a9d;cursor:pointer;" title="停用/启用后重启桌宠生效">
             <input type="checkbox" data-plg-toggle="${esc(p.id)}" ${p.disabled ? "" : "checked"} style="width:14px;height:14px;accent-color:#6d4fd8;"> 启用
           </label>
         </div>
-        ${p.description ? `<div style="font-size:11px;color:#8a87a8;margin-top:4px;">${esc(p.description)}</div>` : ""}
-        <div style="font-size:11px;color:#8a87a8;margin-top:4px;">${tabs ? `面板 tab：${esc(tabs)}` : "无面板声明"}${p.schedules?.length ? ` · 定时任务 ${p.schedules.length} 个` : ""}</div>
+        ${p.description ? `<div style="font-size:11px;color:#6a6790;margin-top:4px;">${esc(p.description)}</div>` : ""}
+        <div style="font-size:11px;color:#6a6790;margin-top:4px;">${tabs ? `面板 tab：${esc(tabs)}` : "无面板声明"}${p.schedules?.length ? ` · 定时任务 ${p.schedules.length} 个` : ""}</div>
         ${health}
       </div>`;
     }).join("");
@@ -853,7 +853,7 @@ async function loadPluginMarket() {
     const j = await r.json();
     const list = (j?.ok && Array.isArray(j.plugins)) ? j.plugins : [];
     if (!list.length) {
-      box.innerHTML = '<div style="color:#8a87a8;font-size:12px;">市场暂无可安装插件（data/plugin-market.json）</div>';
+      box.innerHTML = '<div style="color:#6a6790;font-size:12px;">市场暂无可安装插件（data/plugin-market.json）</div>';
       return;
     }
     box.innerHTML = list.map((p) => {
@@ -861,10 +861,10 @@ async function loadPluginMarket() {
       return `<div style="border:1px solid rgba(138,90,220,.18);border-radius:10px;padding:8px 10px;background:rgba(20,18,36,.5);">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-weight:600;font-size:12px;">${esc(p.name)}</span>
-          <span style="font-size:10px;color:#8a87a8;">v${esc(p.version || "?")}</span>
+          <span style="font-size:10px;color:#6a6790;">v${esc(p.version || "?")}</span>
           <button class="secondary" style="margin-left:auto;padding:5px 12px;font-size:11px;" data-plg-install="${esc(p.id)}" ${installed ? "disabled" : ""}>${installed ? "✅ 已安装" : "📥 安装"}</button>
         </div>
-        <div style="font-size:11px;color:#8a87a8;margin-top:4px;">${esc(p.description || "")}</div>
+        <div style="font-size:11px;color:#6a6790;margin-top:4px;">${esc(p.description || "")}</div>
       </div>`;
     }).join("");
     box.querySelectorAll("[data-plg-install]").forEach((btn) => {
@@ -973,7 +973,7 @@ async function loadTreeTemplates() {
     for (const t of j.templates) {
       const a = document.createElement("a");
       a.href = "javascript:void(0)";
-      a.style.cssText = "margin-right:8px;text-decoration:none;font-weight:600;color:" + (t.current ? "#6d4fd8" : "#8a87a8") + ";cursor:pointer;";
+      a.style.cssText = "margin-right:8px;text-decoration:none;font-weight:600;color:" + (t.current ? "#6d4fd8" : "#6a6790") + ";cursor:pointer;";
       a.textContent = t.name + (t.current ? "（当前）" : "");
       if (!t.current) {
         a.onclick = async () => {
@@ -1395,4 +1395,10 @@ $("rss-refresh-btn")?.addEventListener("click", async () => {
     loadRss();
   }
 });
+
+
+
+
+
+
 
