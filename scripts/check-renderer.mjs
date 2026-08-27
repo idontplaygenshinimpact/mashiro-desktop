@@ -9,6 +9,9 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const RENDERER = path.join(ROOT, "desktop", "renderer");
 const BUNDLE = path.join(RENDERER, "app.bundle.js");
 const SRC = ["app.js", "index.html", "style.css"].map((f) => path.join(RENDERER, f));
+// 实时语音：speech-queue.mjs → speech-queue.bundle.js（window.SpeechQueue，panel.html 引用）
+const SQ_BUNDLE = path.join(RENDERER, "speech-queue.bundle.js");
+const SQ_SRC = path.join(RENDERER, "speech-queue.mjs");
 
 const stale = [];
 try {
@@ -19,6 +22,8 @@ try {
       if (existsSync(f) && statSync(f).mtimeMs > bm) stale.push(path.basename(f));
     }
   }
+  if (!existsSync(SQ_BUNDLE)) stale.push("speech-queue.bundle.js 不存在");
+  else if (statSync(SQ_SRC).mtimeMs > statSync(SQ_BUNDLE).mtimeMs) stale.push("speech-queue.mjs");
 } catch (e) {
   console.error(`[check-renderer] 检查失败: ${e.message}`);
   process.exit(2);
@@ -26,8 +31,8 @@ try {
 
 if (stale.length) {
   console.error(`❌ 渲染源码比 bundle 新（${stale.join(", ")}）——改动尚未生效！`);
-  console.error("   修复：npm run build:renderer（或重启桌宠，会自动重建）");
+  console.error("   修复：npm run build:renderer && npm run build:speech-queue（或重启桌宠，会自动重建）");
   process.exit(1);
 }
-console.log("✅ app.bundle.js 与渲染源码一致");
+console.log("✅ app.bundle.js / speech-queue.bundle.js 与渲染源码一致");
 process.exit(0);

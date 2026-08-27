@@ -48,6 +48,7 @@
     "dist": "electron-builder --win --publish never",
     "dist:portable": "electron-builder --win portable --publish never",
     "build:renderer": "esbuild desktop/renderer/app.js --bundle --format=esm --outfile=desktop/renderer/app.bundle.js --log-level=warning",
+    "build:speech-queue": "esbuild desktop/renderer/speech-queue.mjs --format=iife --global-name=SpeechQueue --outfile=desktop/renderer/speech-queue.bundle.js --log-level=warning",
     "check:renderer": "node scripts/check-renderer.mjs",
     "voice:synth": "py -3.12 scripts/synth-mashiro-long.py",
     "voice:score": "py -3.12 scripts/score-voices.py --compare",

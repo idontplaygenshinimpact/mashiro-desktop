@@ -105,6 +105,10 @@ contextBridge.exposeInMainWorld("kanban", /** @type {import("./kanban-api").Kanb
   togglePanel: () => ipcRenderer.invoke("window:toggle-panel"),
   setIgnoreMouse: (ignore) => ipcRenderer.invoke("window:set-ignore", { ignore }),
   speak: (text) => ipcRenderer.invoke("window:speak", { text }),
+  // 实时语音两阶段（渲染层 speech-queue 预取流水线）：ttsSynth 准备 → ttsPlayFile 播放（播完 resolve）
+  ttsSynth: (text) => ipcRenderer.invoke("tts:synth", { text }),
+  ttsPlayFile: (path) => ipcRenderer.invoke("tts:play-file", { path }),
+  stopSpeak: () => ipcRenderer.invoke("tts:speak-stop"),
   playScene: (scene) => ipcRenderer.invoke("window:play-scene", { scene }),
   playLongScene: (scene) => ipcRenderer.invoke("window:play-long-scene", { scene }),
   playClickShort: () => ipcRenderer.invoke("window:play-click-short"),

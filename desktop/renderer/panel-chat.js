@@ -98,6 +98,25 @@ async function sendChat() {
   if (!msg) return;
   $("chat-input").value = "";
   addChatMsg("user", msg);
+  // 实时语音：流式句子级（预设优先 → GPT-SoVITS 本地合成），prepare/play 两阶段 + 预取流水线
+  const speechQ = window.SpeechQueue ? window.SpeechQueue.createSpeechQueue({
+    prepare: async (sentence) => {
+      if (!voiceOn) return null;
+      try { return await window.kanban.ttsSynth(sentence); } catch { return null; } // 失败 → 跳过本句
+    },
+    play: async (audio) => {
+      if (audio && audio.ok && audio.path) {
+        try { await window.kanban.ttsPlayFile(audio.path); } catch { /* 播放失败静默 */ }
+      }
+    },
+  }) : null;
+  let speechBuf = "";
+  const flushSpeech = () => {
+    if (!speechQ || !voiceOn) return;
+    const tail = window.SpeechQueue.flushRest(speechBuf);
+    if (tail) speechQ.push(tail);
+    speechBuf = "";
+  };
   const thinking = addChatMsg("bot", "🤔 真白思考中...");
   thinking.querySelector(".body").className = "body thinking";
   // agent 过程可视化：工具调用实时 chips（🔧 正在调 xx → ✅ 完成 / ⚠️ 失败）
@@ -135,6 +154,13 @@ async function sendChat() {
   try {
     const r = await window.kanban.chatStream(msg, chatHistory, (ev) => {
       if (!ev || !ev.type) return;
+      if (ev.type === "delta" && speechQ && voiceOn) {
+        // 流式切句：完整句立即入队合成播报，残句累积
+        speechBuf += String(ev.delta || "");
+        const { sentences, rest } = window.SpeechQueue.splitSentences(speechBuf);
+        if (sentences.length) { speechQ.push(sentences); speechBuf = rest; }
+        return;
+      }
       if (ev.type === "tool_start") {
         const label = `${friendly(ev.name)}${ev.args?.query ? `「${ev.args.query}」` : ev.args?.topic ? `「${ev.args.topic}」` : ev.args?.url ? "" : ""}`;
         addToolChip(ev.name, label + "…", "running");
@@ -148,7 +174,7 @@ async function sendChat() {
       }
     }, curSession);
     chatHistory = r.history || [];
-    if (voiceOn) window.kanban.speak(r.voice || r.reply || msg);
+    flushSpeech(); // 流式已逐句播报，这里只 flush 句尾残句（不再整段重复 speak）
     thinking.querySelector(".body").className = "body";
     thinking.querySelector(".body").innerHTML = renderMd(r.reply || "（无回复）");
     loadChatSessions(); // 会话标题/时间刷新（新会话在此落库后出现）
@@ -314,13 +340,13 @@ async function loadCrawlData() {
       const ratio = cm.ratio || 0;
       const color = ratio > 70 ? "#e05a5a" : ratio > 40 ? "#e0a03a" : "#5fd85f";
       meter.innerHTML = `
-        <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:#c9c6dd;">
+        <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:#6a6790;">
           <span>🧠 对话上下文</span>
           <div style="flex:1;max-width:220px;height:8px;background:rgba(255,255,255,.1);border-radius:4px;overflow:hidden;">
             <div style="width:${ratio}%;height:100%;background:${color};transition:width .4s;"></div>
           </div>
           <span>${cm.current.toLocaleString()} tok / ${(cm.budget / 1000).toFixed(0)}k（${ratio}%）</span>
-          <span style="color:#8a87a8">消息 ${cm.messages} 条 · ${cm.rounds} 轮${ratio >= 30 ? " · 已触发压缩阈值" : ""}</span>
+          <span style="color:#6a6790">消息 ${cm.messages} 条 · ${cm.rounds} 轮${ratio >= 30 ? " · 已触发压缩阈值" : ""}</span>
         </div>`;
     }
   } catch { /* ignore */ }
@@ -468,14 +494,14 @@ function renderSelfCheck(report) {
   if (!warns.length) {
     statusEl.textContent = `✅ 全部正常（${(report.checks || []).length} 项检查）`;
     issuesEl.innerHTML = (report.checks || []).map((c) =>
-      `<div style="color:#6b9d7d;">✓ ${esc(c.name)}：${esc(c.detail)}</div>`).join("");
+      `<div style="color:#4a7a5c;">✓ ${esc(c.name)}：${esc(c.detail)}</div>`).join("");
     return;
   }
   statusEl.textContent = `⚠️ 发现 ${warns.length} 个问题（自动修复 ${warns.filter((i) => i.fixed).length} 个）`;
   issuesEl.innerHTML = warns.map((i) => `
-    <div style="color:${i.fixed ? "#6b9d7d" : "#d98a3d"};margin-top:4px;">
+    <div style="color:${i.fixed ? "#4a7a5c" : "#d98a3d"};margin-top:4px;">
       ${i.fixed ? "🔧" : "⚠️"} <b>${esc(i.name)}</b>：${esc(i.detail)}
-      ${i.fixed ? '<span style="color:#8a87a8;">（已自动修复）</span>' : ""}
+      ${i.fixed ? '<span style="color:#6a6790;">（已自动修复）</span>' : ""}
     </div>`).join("");
 }
 $("self-check-btn")?.addEventListener("click", async () => {
@@ -705,8 +731,14 @@ async function loadTodo() {
     document.getElementById("todo-items").innerHTML = items.map((i, _idx) => `
       <div style="display:flex;gap:6px;align-items:center;">
         <span>${i.done ? "✅" : "⬜"}</span>
-        <span style="${i.done ? "text-decoration:line-through;color:#8a87a8" : "color:#e8e8ef"}">${esc(i.content)}</span>
+        <span style="${i.done ? "text-decoration:line-through;color:#6a6790" : "color:#4a4a62"}">${esc(i.content)}</span>
       </div>`).join("");
   } catch { /* ignore */ }
 }
+
+
+
+
+
+
 

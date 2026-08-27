@@ -909,6 +909,62 @@ ipcMain.handle("window:speak", async (e, { text }) => {
   return { ok: false };
 });
 
+// ---------- 实时语音（GPT-SoVITS 本地服务 :8900；渲染层 speech-queue 调度） ----------
+// 两阶段流水线：tts:synth 准备音频（预设命中→返回资产路径；未命中→合成写临时文件）→ tts:play-file 播放（播完 resolve）
+// 渲染层在播放当前句时预取下一句（合成与播放重叠，掩盖合成延迟）
+let ttsPlayingProc = null;
+ipcMain.handle("tts:synth", async (_e, { text }) => {
+  const clean = String(text || "").trim().slice(0, 60);
+  if (!clean) return { ok: false, error: "empty" };
+  try {
+    const tts = await getTtsEdge();
+    if (tts) {
+      const p = await tts.presetFile(clean); // 预设命中返回文件路径（不播放）
+      if (p.mode === "preset") return { ok: true, kind: "preset", path: p.path, scene: p.scene };
+    }
+    const ttsPort = Number(process.env.MIANSHI_TTS_PORT) || 8900;
+    const res = await fetch(`http://127.0.0.1:${ttsPort}/api/tts/synthesize`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: clean }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (res.status === 503) return { ok: false, error: "tts not ready" };
+    if (!res.ok) return { ok: false, error: `tts http ${res.status}` };
+    const data = await res.json();
+    const { writeFileSync: wfs } = await import("node:fs");
+    const tmp = path.join(app.getPath("temp"), `mashiro-tts-${Date.now()}.wav`);
+    wfs(tmp, Buffer.from(data.wav, "base64"));
+    return { ok: true, kind: "wav", path: tmp, ms: data.ms };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err).slice(0, 120) };
+  }
+});
+ipcMain.handle("tts:play-file", async (_e, { path: wavPath }) => {
+  if (!wavPath || !String(wavPath).trim()) return { ok: false, error: "no path" };
+  try {
+    const { resolveFfplay } = await import("./voice-pack.mjs");
+    const ffplay = resolveFfplay();
+    await new Promise((resolve) => {
+      const proc = safeSpawn(ffplay, ["-nodisp", "-autoexit", "-volume", "80", String(wavPath)], { stdio: "ignore" });
+      ttsPlayingProc = proc;
+      const done = () => { ttsPlayingProc = null; resolve(); };
+      proc.on("close", done);
+      proc.on("error", done);
+    });
+    // 合成临时文件播完即删（预设资产路径不删）
+    if (String(wavPath).includes("mashiro-tts-")) {
+      try { const { unlinkSync } = await import("node:fs"); unlinkSync(String(wavPath)); } catch { /* ignore */ }
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err).slice(0, 120) };
+  }
+});
+ipcMain.handle("tts:speak-stop", () => {
+  if (ttsPlayingProc) { try { ttsPlayingProc.kill(); } catch { /* ignore */ } ttsPlayingProc = null; }
+  return { ok: true };
+});
+
 // ---------- 桌宠形象（Live2D 模型切换） ----------
 // 模型枚举/持久化在 lib/mascot-models.mjs（纯函数可测）；主进程只做 IPC 与广播
 ipcMain.handle("mascot:models", async () => {
