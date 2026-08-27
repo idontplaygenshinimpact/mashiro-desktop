@@ -1,0 +1,234 @@
+# 手写防抖函数 debounce(fn, wait)
+
+## 一、什么是防抖？
+
+防抖（Debounce）的核心思想是：**当事件被连续触发时，只在最后一次触发后等待 `wait` 毫秒再执行函数**。如果在这段时间内又被触发，则重新计时。
+
+简单说就是：**“频繁触发，只执行最后一次”**。
+
+---
+
+## 二、基础版本（不带立即执行）
+
+```javascript
+function debounce(fn, wait) {
+  let timer = null;
+
+  return function (...args) {
+    // 每次触发都清除之前的定时器
+    if (timer) clearTimeout(timer);
+
+    // 重新设置定时器，wait 毫秒后执行 fn
+    timer = setTimeout(() => {
+      fn.apply(this, args);
+      timer = null;
+    }, wait);
+  };
+}
+```
+
+**原理：**
+- 每次调用返回的函数时，先把上一次的定时器清除。
+- 再重新设定一个新的定时器。
+- 只有最后一次触发能等到 `wait` 时间结束，然后执行 `fn`。
+
+---
+
+## 三、支持立即执行（immediate）
+
+立即执行的意思是：**第一次触发时立刻执行一次，之后在 wait 时间内再次触发不会执行，直到 wait 结束后才能再次触发执行。**
+
+```javascript
+function debounce(fn, wait, immediate = false) {
+  let timer = null;
+
+  return function (...args) {
+    // 判断是否已经调用过
+    const callNow = immediate && !timer;
+
+    // 清除上一次的定时器
+    if (timer) clearTimeout(timer);
+
+    // 重新设置定时器
+    timer = setTimeout(() => {
+      timer = null; // 时间到，重置状态，允许下一次立即调用
+      if (!immediate) {
+        fn.apply(this, args);
+      }
+    }, wait);
+
+    // 立即执行条件：immediate 为 true 且之前没有等待中的任务
+    if (callNow) {
+      fn.apply(this, args);
+    }
+  };
+}
+```
+
+**原理分析：**
+- `timer` 既用作定时器 ID，又用作“是否处于防抖等待期”的标志。
+- `callNow = immediate && !timer`：immediate 开启时，如果当前没有等待中的定时器（即不在防抖期间），说明这是第一次触发，应该立刻执行。
+- 如果已经处于防抖期间（timer 存在），则不会立刻执行，只重置定时器。
+- 定时器到时将 `timer` 置为 `null`，表示防抖期结束，下一次触发又可以立即执行。
+
+---
+
+## 四、支持取消方法（cancel）
+
+有时候需要在防抖等待期间主动取消执行，比如组件卸载时避免内存泄漏，或者用户做了某个操作后希望取消之前的防抖任务。
+
+```javascript
+function debounce(fn, wait, immediate = false) {
+  let timer = null;
+
+  const debounced = function (...args) {
+    const callNow = immediate && !timer;
+
+    if (timer) clearTimeout(timer);
+
+    timer = setTimeout(() => {
+      timer = null;
+      if (!immediate) {
+        fn.apply(this, args);
+      }
+    }, wait);
+
+    if (callNow) {
+      fn.apply(this, args);
+    }
+  };
+
+  // 取消方法：清除定时器并重置状态
+  debounced.cancel = function () {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+
+  return debounced;
+}
+```
+
+**cancel 的作用：**
+- 清除尚未执行的定时器。
+- 将 timer 置为 null，以便下一次调用时可以立即执行（如果 immediate 开启）。
+
+---
+
+## 五、完整代码（带注释）
+
+```javascript
+/**
+ * 防抖函数
+ * @param {Function} fn 目标函数
+ * @param {number} wait 等待时间（毫秒）
+ * @param {boolean} immediate 是否立即执行（第一次触发时）
+ * @returns {Function} 防抖处理后的函数
+ */
+function debounce(fn, wait, immediate = false) {
+  let timer = null;
+
+  const debounced = function (...args) {
+    // 是否应该立即调用
+    const callNow = immediate && !timer;
+
+    // 清除上一次的定时器
+    if (timer) clearTimeout(timer);
+
+    // 设置新的定时器
+    timer = setTimeout(() => {
+      timer = null; // 防抖等待期结束
+      if (!immediate) {
+        fn.apply(this, args); // 非立即执行模式，在等待期结束后执行
+      }
+    }, wait);
+
+    // 立即执行模式，且处于非等待期
+    if (callNow) {
+      fn.apply(this, args);
+    }
+  };
+
+  // 取消方法
+  debounced.cancel = function () {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+
+  return debounced;
+}
+```
+
+---
+
+## 六、使用场景
+
+### 1. 搜索框输入联想
+用户在搜索框连续输入时，不需要每次按键都请求后端，而是等用户停止输入一段时间后再请求，减少请求次数。
+
+```javascript
+const searchDebounced = debounce(async function (keyword) {
+  const res = await fetch(`/search?q=${keyword}`);
+  // 渲染结果
+}, 500);
+input.addEventListener('input', (e) => searchDebounced(e.target.value));
+```
+
+### 2. 浏览器窗口 resize 事件
+窗口大小改变时，频繁触发 resize 事件会导致大量重绘。防抖后只会在用户停止调整窗口大小后执行一次。
+
+```javascript
+window.addEventListener('resize', debounce(() => {
+  // 重新计算布局
+}, 300));
+```
+
+### 3. 按钮点击提交（防止重复提交）
+如果用户快速点击“提交”按钮，可以立即执行一次（immediate: true），并在等待时间内禁用后续点击。
+
+```javascript
+const submit = debounce(() => {
+  // 提交表单
+}, 2000, true);
+button.addEventListener('click', submit);
+```
+
+### 4. 表单校验
+用户输入时实时校验，但不想每个字符都校验，等用户停止输入后再校验。
+
+### 5. 组件卸载时取消未执行的任务
+在 React 等框架中，组件卸载时要取消防抖任务，避免在卸载后更新状态。
+
+```javascript
+useEffect(() => {
+  const debouncedSave = debounce(() => {
+    // 保存数据
+  }, 1000);
+
+  window.addEventListener('scroll', debouncedSave);
+
+  return () => {
+    window.removeEventListener('scroll', debouncedSave);
+    debouncedSave.cancel(); // 取消未执行的任务
+  };
+}, []);
+```
+
+---
+
+## 七、防抖 vs 节流（简单对比）
+
+| | 防抖 (debounce) | 节流 (throttle) |
+|---|---|---|
+| 行为 | 触发后等待 wait 时间，只有最后一次触发会执行 | 每个 wait 时间间隔内最多执行一次 |
+| 适合场景 | 输入搜索、resize | 滚动加载、拖拽、动画 |
+| 特点 | 停止触发后才会执行 | 持续触发也会按节奏执行 |
+
+---
+
+## 八、总结
+
+- 防抖的核心是**利用 setTimeout 和 clearTimeout 来重置计时**。
+- `immediate` 选项控制是“刚开始触发时立即执行”还是“结束后执行”。
+- `cancel` 方法用于手动取消未执行的防抖任务，避免回调在销毁后执行。
+- 在实际项目中，注意 `this` 的绑定和参数传递，通过 `apply` 实现。
+- 防抖非常适合处理高频事件，提升性能。

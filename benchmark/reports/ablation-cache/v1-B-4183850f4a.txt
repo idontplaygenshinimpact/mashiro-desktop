@@ -1,0 +1,231 @@
+## 题目
+手写节流函数 `throttle(fn, interval)`，保证在时间间隔内最多执行一次，并说明节流与防抖（debounce）的区别。
+
+---
+
+### 结论
+节流（throttle）是**以时间间隔为限制**，保证回调在指定的 `interval` 内**最多只执行一次**，用于控制高频触发的执行频率；防抖（debounce）是**以等待静默期为限制**，回调在事件停止触发后延迟执行。
+
+---
+
+### 原理
+
+#### 为什么需要节流？
+浏览器中很多事件（如 `scroll`、`resize`、`mousemove`）触发频率极高，每秒可能触发几十甚至上百次。如果每次触发都执行昂贵的操作（如 DOM 计算、接口请求、Canvas 绘制），会导致页面卡顿、资源浪费，甚至引发后端过载。
+
+节流的核心思想是**"限流"**：不管你触发多少次，我只按固定节奏执行，类似地铁站的闸机——人流量再大，闸机也是按固定速率放人。
+
+#### 节流与防抖的区别（面试核心）
+
+| 维度 | 节流（Throttle） | 防抖（Debounce） |
+|------|-----------------|-----------------|
+| 执行时机 | 按固定间隔执行，**间隔内最多一次** | 停止触发后等待 N 毫秒执行 |
+| 行为特征 | **均匀分布**，持续触发就持续执行 | **最后只执行一次**，触发中断则重新计时 |
+| 核心逻辑 | 关注"多久执行一次" | 关注"停下来才执行" |
+| 典型场景 | 滚动加载、窗口 resize、拖拽、游戏动画帧 | 搜索联想、输入验证、窗口 resize 结束后计算 |
+| 类比 | 地铁闸机限流 | 电梯等没人进来才关门 |
+
+**一个关键记忆点**：
+- 节流是"**控制频率**"——每 100ms 最多跑一次；
+- 防抖是"**延迟到最后**"——连续触发时一次都不跑，等停了我再跑。
+
+#### 底层工作方式
+
+**节流（时间戳版）**：
+1. 记录上次执行时间 `last`；
+2. 每次触发时判断 `now - last >= interval`；
+3. 若成立，执行 `fn` 并更新 `last`；若不成立，忽略本次触发。
+
+**防抖**：
+1. 每次触发时**清除之前的定时器**；
+2. 重新设定一个新的定时器；
+3. 定时器到时间才执行 `fn`——所以连续触发永远不会执行，停止后才会执行。
+
+---
+
+### 实现
+
+以下用 TypeScript 编写，包含 **时间戳版** 和 **定时器版** 两种写法，以及生产级完整版。
+
+#### 1. 时间戳版（立即执行，首触发生效）
+
+```typescript
+/**
+ * 节流函数 - 时间戳版
+ * 特点：第一次触发立即执行，停止触发后不再执行（尾调用丢失）
+ */
+function throttle<T extends (...args: any[]) => void>(
+  fn: T,
+  interval: number
+): (...args: Parameters<T>) => void {
+  let last = 0;
+
+  return function (this: unknown, ...args: Parameters<T>) {
+    const now = Date.now();
+
+    if (now - last >= interval) {
+      last = now;
+      fn.apply(this, args);
+    }
+  };
+}
+```
+
+#### 2. 定时器版（延迟执行，尾触发生效）
+
+```typescript
+/**
+ * 节流函数 - 定时器版
+ * 特点：第一次触发延迟执行，停止触发后会再执行一次（有尾调用）
+ */
+function throttleTimer<T extends (...args: any[]) => void>(
+  fn: T,
+  interval: number
+): (...args: Parameters<T>) => void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  return function (this: unknown, ...args: Parameters<T>) {
+    if (timer) return; // 定时器还在，说明还没到执行时间
+
+    timer = setTimeout(() => {
+      fn.apply(this, args);
+      timer = null;
+    }, interval);
+  };
+}
+```
+
+#### 3. 生产级完整版（头尾都执行 + 取消方法 + this 正确绑定）
+
+```typescript
+/**
+ * 节流函数 - 完整版
+ * 支持 leading（开始时执行）和 trailing（结束后执行）配置
+ * 返回一个带有 cancel 方法的节流函数
+ */
+interface ThrottleOptions {
+  leading?: boolean;  // 是否在开始时立即执行一次
+  trailing?: boolean; // 是否在结束后再执行一次
+}
+
+function throttle<T extends (...args: any[]) => void>(
+  fn: T,
+  interval: number,
+  options: ThrottleOptions = { leading: true, trailing: true }
+): ((...args: Parameters<T>) => void) & { cancel: () => void } {
+  let last = 0;        // 上次执行时间
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<T> | null = null;
+
+  const { leading = true, trailing = true } = options;
+
+  const throttled = function (this: unknown, ...args: Parameters<T>) {
+    const now = Date.now();
+
+    // 上次执行时间：如果 leading 为 false，从当前时刻开始计算
+    if (!last && leading === false) last = now;
+
+    const remaining = interval - (now - last);
+
+    // 剩余时间不足或超时，立即执行
+    if (remaining <= 0) {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      last = now;
+      fn.apply(this, args);
+      return;
+    }
+
+    // 需要尾调用时，记录参数并设置定时器
+    if (trailing && !timer) {
+      lastArgs = args;
+      timer = setTimeout(() => {
+        last = leading ? Date.now() : 0;
+        timer = null;
+        if (lastArgs) {
+          fn.apply(this, lastArgs);
+          lastArgs = null;
+        }
+      }, remaining);
+    }
+  };
+
+  throttled.cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    last = 0;
+    lastArgs = null;
+  };
+
+  return throttled;
+}
+
+// 使用示例
+// const onScroll = throttle(() => {
+//   console.log('scroll handler');
+// }, 200);
+// window.addEventListener('scroll', onScroll);
+// onScroll.cancel(); // 手动取消
+```
+
+#### 4. 防抖的参考实现（用于对比）
+
+```typescript
+/**
+ * 防抖函数
+ * 特点：停止触发后 delay 毫秒才执行
+ */
+function debounce<T extends (...args: any[]) => void>(
+  fn: T,
+  delay: number
+): (...args: Parameters<T>) => void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  return function (this: unknown, ...args: Parameters<T>) {
+    if (timer) clearTimeout(timer); // 每次触发都重置定时器
+    timer = setTimeout(() => {
+      fn.apply(this, args);
+      timer = null;
+    }, delay);
+  };
+}
+```
+
+---
+
+### 边界与追问
+
+#### 边界问题
+
+1. **`interval < 0` 或非法值**：`setTimeout` 的最小延迟是 1ms，传 0 或负数会加速执行但不会报错，生产环境建议做一层 `Math.max(interval, 0)` 保护。
+2. **`this` 绑定**：`setTimeout` 中 `this` 会指向 `window`（或 `undefined` 严格模式），必须用 `fn.apply(this, args)` 保持原 `this`。
+3. **尾调用丢失**：时间戳版在"停止触发前的最后一次"不会执行，如果业务上需要最后一次触发（如滚动到底部加载更多），要使用带 `trailing` 的完整版。
+4. **首次调用**：leading 默认为 `true`，业务上有时希望第一次不立即执行（如点击后防重复），可配置 `leading: false`。
+5. **取消机制**：组件卸载（如 React `useEffect` 清理）时，需要 `cancel()` 清除定时器，防止内存泄漏。
+6. **定时器叠加**：如果不做 `if (timer) return` 判断，每次触发都会新建定时器，导致间隔失效。
+
+#### 性能与安全
+
+- **减少 DOM 操作频率**：节流本质上是一种性能优化的通用手段，对渲染性能提升显著。
+- **注意长任务**：如果 `fn` 本身执行时间超过 `interval`，会导致任务堆积，考虑用 `requestIdleCallback` 或者 Web Worker 处理超重任务。
+- **安全场景**：节流常用于登录按钮防连点、支付请求防重放——注意节流只能"减少频率"不能"完全防重复"，后端仍需幂等设计。
+
+#### 面试官高频追问
+
+**Q1：节流和 `requestAnimationFrame` 的区别？什么时候用 rAF 更好？**
+`requestAnimationFrame` 是浏览器渲染帧驱动的，每帧执行一次（通常 60fps 即约 16.7ms）。当节流间隔与帧率匹配时（如动画场景），用 rAF 更顺滑且省电（页面不可见时自动暂停）。而 `throttle` 无视帧率，适合固定频率场景（如上报埋点）。
+
+**Q2：React 中如何使用节流？**
+两种方式：
+- 使用 `useRef` + `useMemo` 保存节流函数实例，避免每次渲染重新创建导致节流失效；
+- 使用 `useCallback` 包裹事件处理函数，配合自定义 hook（如 `useThrottle`）管理生命周期，组件卸载时调用 `cancel`。
+
+**Q3：节流的缺点是什么？**
+- 时间戳版会丢失"停止前的最后一次调用"；
+- 定时器版第一次触发会延迟执行；
+- 固定间隔会导致对"即将结束"的输入响应不够及时——此时可以考虑"防抖+节流"组合（如搜索框：节流保证最短间隔内一定发请求，防抖保证停止输入后再补一次）。
+
+**Q4：手写一个"防抖+节流"组合函数？**
+思路：节流保证至少每 `interval` 执行一次，防抖保证停止后 `delay` 再执行一次。两者取并集，就是 `lodash.throttle` 的实现本质——节流本身就是"时间戳 + 定时器"的组合。

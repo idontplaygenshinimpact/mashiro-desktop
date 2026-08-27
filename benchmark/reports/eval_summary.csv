@@ -8,3 +8,4 @@ ts,layer,mode,datasetHash,llmModel,composite,solveScore,truthfulness,classifyRat
 2026-08-26T11:02:35.499Z,A,ablation,bd52f5204fe01906,deepseek-v4-flash,-13,82,88,0,0,0,0,129263,0.0428,20230,76136,,0,0
 2026-08-26T11:10:17.154Z,A,ablation,bd52f5204fe01906,deepseek-v4-flash,-6,85,100,0,0,0,0,85255,0.0258,15845,52287,,0,0
 2026-08-26T11:33:04.057Z,A,ablation,bd52f5204fe01906,deepseek-v4-flash,-8,80,97,0,0,0,0,217216,0.0685,18403,65978,,0,0
+2026-08-27T05:25:01.268Z,B,agent,mock,mock-llm,100,0,0,0,0,0,0,0,0,0,0,100,0,0

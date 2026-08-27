@@ -1,0 +1,239 @@
+这道题主要考察你对 **Promise 原理、异步并发、边界情况** 的理解。面试官希望你不仅会用 `Promise.all`，还能自己实现一个行为一致的版本。
+
+---
+
+## 1. Promise.all 的行为
+
+- 参数：一个 **可迭代对象**（通常是数组）
+- 返回：一个 **新的 Promise**
+- 全部成功：返回一个数组，**结果顺序和传入顺序一致**
+- 任一失败：整体 reject，**只保留第一个失败原因**
+- 参数中的普通值会被 `Promise.resolve()` 包装，按成功处理
+- 空数组：直接 resolve 一个空数组
+
+例如：
+
+```js
+Promise.all([Promise.resolve(1), 2, Promise.resolve(3)])
+  .then(console.log) // [1, 2, 3]
+```
+
+```js
+Promise.all([Promise.resolve(1), Promise.reject('err'), Promise.resolve(3)])
+  .catch(console.log) // 'err'
+```
+
+---
+
+## 2. 手写核心思路
+
+我们要返回一个新的 Promise，然后在内部并发执行所有的 promise。
+
+关键点：
+
+1. 遍历传入的每一项，用 `Promise.resolve(item)` 统一包装成 Promise
+2. 每个 Promise 成功时，把结果存入结果数组的 **对应索引**
+3. 记录已完成的数量，当完成数等于总数量时，resolve 整个结果数组
+4. 任何一个 Promise 失败时，直接 reject 外层 Promise
+5. 结果不能用 `push`，因为异步完成顺序可能和传入顺序不一致，必须用索引赋值
+
+---
+
+## 3. 参考实现
+
+```js
+function promiseAll(iterable) {
+  return new Promise((resolve, reject) => {
+    // 1. 检查是否为可迭代对象（严格模拟 Promise.all）
+    if (iterable == null || typeof iterable[Symbol.iterator] !== 'function') {
+      reject(new TypeError(`${iterable} is not iterable`));
+      return;
+    }
+
+    // 2. 先把可迭代对象转成数组
+    const items = Array.from(iterable);
+    const length = items.length;
+
+    // 3. 结果数组固定长度，保证顺序
+    const results = new Array(length);
+
+    // 4. 记录还剩多少个没有完成
+    let remaining = length;
+
+    // 5. 空数组直接 resolve
+    if (remaining === 0) {
+      resolve(results);
+      return;
+    }
+
+    // 6. 遍历每一项，并发执行
+    items.forEach((item, index) => {
+      Promise.resolve(item).then(
+        (value) => {
+          // 成功：按索引存值
+          results[index] = value;
+
+          // 每完成一个，剩余数量减一
+          remaining--;
+
+          // 全部完成时 resolve
+          if (remaining === 0) {
+            resolve(results);
+          }
+        },
+        (reason) => {
+          // 失败：直接 reject，后续失败会被 Promise 状态机制忽略
+          reject(reason);
+        }
+      );
+    });
+  });
+}
+```
+
+---
+
+## 4. 测试
+
+```js
+// 测试1：混合普通值和 Promise，保持顺序
+const p1 = Promise.resolve(1);
+const p2 = 2;
+const p3 = new Promise((resolve) => setTimeout(() => resolve(3), 100));
+
+promiseAll([p1, p2, p3]).then((res) => {
+  console.log(res); // [1, 2, 3]
+});
+
+// 测试2：快速失败
+const f1 = Promise.resolve(1);
+const f2 = Promise.reject('error');
+const f3 = Promise.resolve(3);
+
+promiseAll([f1, f2, f3])
+  .then(console.log)
+  .catch((err) => {
+    console.log(err); // 'error'
+  });
+
+// 测试3：空数组
+promiseAll([]).then((res) => {
+  console.log(res); // []
+});
+```
+
+---
+
+## 5. 易错点分析
+
+### 为什么不能用 `push` 保存结果？
+
+因为异步任务的完成顺序不固定。例如：
+
+```js
+const a = new Promise((resolve) => setTimeout(() => resolve('a'), 100));
+const b = Promise.resolve('b');
+
+promiseAll([a, b]).then(console.log);
+```
+
+如果代码是：
+
+```js
+Promise.resolve(item).then(value => {
+  res.push(value);
+  // ...
+});
+```
+
+那么 `b` 先完成，先 push 了 `'b'`，然后 `a` 完成再 push `'a'`，最终结果是 `['b', 'a']`，顺序就不对了。
+
+所以必须用 **索引赋值**：
+
+```js
+results[index] = value;
+```
+
+### 为什么要用 `Promise.resolve(item)`？
+
+因为传入的项不一定是 Promise，可能是普通值、thenable 对象。  
+`Promise.resolve(item)` 可以统一包装成 Promise，并且对已经是 Promise 的项不会重复包装。
+
+### 为什么失败处理是 `reject` 而不是 `Promise.all` 的“等待全部结束”？
+
+`Promise.all` 是“快速失败”的：任意一个失败，整体立即 reject，不关心其他 Promise 是否完成。  
+我们的实现里，每个 Promise 的失败回调都调用最外层的 `reject`，由于 Promise 状态一旦改变就不会再变，所以只有第一个失败生效。
+
+### 空数组不处理会怎样？
+
+如果 `items.length === 0`，`forEach` 不会执行任何回调，`remaining` 永远是 0，但不会有人调用 `resolve`，Promise 就会一直 pending。  
+所以必须单独处理空数组的情况。
+
+### 传入的不是数组怎么办？
+
+`Promise.all` 接收的是可迭代对象，比如字符串、Set、Map 也可以：
+
+```js
+Promise.all('abc').then(console.log); // ['a', 'b', 'c']
+```
+
+所以实现中要支持任意可迭代对象。我们用 `Array.from(iterable)` 来转成数组，并简单检查 `Symbol.iterator`。
+
+---
+
+## 6. 可能被追问的变体
+
+### 与 `Promise.allSettled` 的区别？
+
+- `Promise.all`：只要有一个失败，整体失败；全部成功才返回结果数组
+- `Promise.allSettled`：等所有 Promise 结束，返回每个 Promise 的状态和结果，不管成功失败
+
+### 如果解决并发问题？
+
+这个方法本身是并发的，不会因为 `forEach` 而变成串行。  
+所有 Promise 在循环中同步启动，然后各自在微任务中完成。
+
+### 如果某个 Promise 永远 pending？
+
+我们的实现会一直 pending，和原生 `Promise.all` 一致。
+
+---
+
+## 7. 更简洁的实现（写法变体）
+
+如果你觉得上面太啰嗦，面试时也可以写这个版本：
+
+```js
+function promiseAll(promises) {
+  return new Promise((resolve, reject) => {
+    const list = Array.from(promises);
+    const result = new Array(list.length);
+    let count = 0;
+
+    if (list.length === 0) {
+      resolve(result);
+      return;
+    }
+
+    list.forEach((p, index) => {
+      Promise.resolve(p).then(
+        (value) => {
+          result[index] = value;
+          count++;
+
+          if (count === list.length) {
+            resolve(result);
+          }
+        },
+        reject
+      );
+    });
+  });
+}
+```
+
+这个版本逻辑更紧凑，但本质一样。
+
+---
+
+总结：这道题的关键是 **保持顺序、快速失败、支持普通值、处理空数组**。只要把这些点想清楚，代码自然就能写对。祝你面试顺利！

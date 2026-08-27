@@ -181,3 +181,38 @@ Phase 4（可选）B6：分段情绪联动（面试官表情）
 - 语音：`desktop/tts-edge.mjs`、`desktop/voice-pack.mjs`、`lib/agent.mjs:705`（voice 字段）、`lib/speech.mjs`、`desktop/speech-worker.mjs`
 - 桌宠窗口：`desktop/main.mjs`（createWindow:141、window:set-ignore:1066、mascot:menu:308）
 - 交互：`desktop/renderer/panel-chat.js:151`（speak 调用点）
+
+---
+
+## 七、补读（表达渲染管线 P2 素材）：表情渲染 + 情绪分类
+
+> 补读时间：事件驱动内核方案之后，为 P2 表达渲染管线收集素材。文件仍在 `%TEMP%\lingchat-research`。
+
+### 7.1 情绪 → 表现四件套映射表（GameRoleAvatar.vue + config.ts）
+
+LingChat 的情绪表达是**配置表驱动**，一个情绪对应四件事（`EMOTION_CONFIG[emotion]`）：
+1. **头像表情图**（`resolveAvatar()`：emotion + clothesName → `get_avatar_file` → 表情图，ImageCrossFade 交叉淡入淡出切换，防闪烁技巧见注释）
+2. **动画 class**（`config.animation`，`animationend` 后回 `normal`）
+3. **气泡图片**（`config.bubbleImage` + bubbleClass，2 秒超时自动隐藏）
+4. **音效**（`config.audio`，音量跟"气泡音量"设置）
+
+关键实现细节（直接可抄）：
+- **竞态保护**：`latestEmotionId` 计数器——快速连续切情绪时，只应用最后一次（我们 Live2D 表情切换同样需要）
+- **思考态独立反馈**：`currentStatus === 'thinking'` 走独立的"AI思考"气泡+音效，与情绪解耦（不是情绪，是状态）
+- **防闪烁**：移除 `?t=` cache-buster（本地资源重载导致闪烁）
+
+### 7.2 情绪分类双通道（classifier.rs，ONNX 本地模型）
+
+- **本地 BERT ONNX 分类器**（字符级 + 线性头，seq_len 128，ONNX Runtime）——情绪分类**不调 LLM，零成本离线**；置信度阈值极低（0.08，基本必出结果）
+- **direct passthrough**：输入文本本身就是合法情绪标签时直接透传（`ENABLE_DIRECT_EMOTION_CLASSIFIER`）——**LLM 出标签 + 本地模型兜底**双通道：LLM 输出带 `【开心】` 标记直接用；没标记才走本地分类器
+- **disabled 降级**：模型缺失时 `label = 输入原文`（透传），链路不崩
+
+### 7.3 对我们 P2（表达渲染管线）的直接映射
+
+| LingChat 机制 | 我们的对应物 | 结论 |
+|---|---|---|
+| EMOTION_CONFIG 四件套映射表 | `emotions.mjs`（稀缺峰值设计）+ `voice-pack.mjs`（场景→wav）+ Live2D（expression/motion 可程序播放） | **抄配置表模式**：emotion → {Live2D expression, 气泡文案, voice-pack 场景, 音效} 四件套；Live2D 替代表情图 |
+| LLM 出标签 + 本地兜底 | `lib/agent.mjs` 现剥掉【语音】标记；`emotions.mjs` 是规则式 | P2 可加【情绪】标记（LLM 直出标签），本地规则兜底；**本地 ONNX 分类器是可选项**（sherpa-onnx 已在依赖，但先不做，避免范围膨胀） |
+| 竞态保护 latestEmotionId | 无 | 抄：Live2D 表情/气泡切换加序号防竞态 |
+| 思考态独立反馈 | 无 | 抄：'thinking' 状态 → 独立气泡+音效，与情绪解耦 |
+| 情绪气泡 2s 自动隐藏 | 桌宠气泡已有 | 对齐行为 |

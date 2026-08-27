@@ -1,0 +1,182 @@
+## 题目
+
+完整讲解 HTTP 缓存：强缓存与协商缓存的区别、Cache-Control 指令、ETag/Last-Modified 工作方式。
+
+### 结论
+
+HTTP 缓存的核心是**「先问本地有没有，有且没过期就直接用；过期了再问服务器改没改，没改就 304 继续用，改了才重新下载」**。强缓存不发出任何请求，协商缓存会发出一次请求但可能没有响应体。
+
+---
+
+### 原理
+
+#### 1. 一张图看懂完整流程
+
+```
+第一次请求
+  浏览器 ── GET /app.js ──────────→ 服务器
+  浏览器 ←─ 200 + 文件 + Cache-Control + ETag/Last-Modified ── 服务器
+                    ↓
+       浏览器把文件存进本地缓存
+                    ↓
+第二次请求
+  判断强缓存是否过期（本地直接判断，不发请求）
+    ├─ 未过期 ──→ 直接用本地缓存（DevTools 显示 from disk/memory cache）
+    │
+    └─ 已过期 ──→ 携带条件头发起协商缓存请求
+        浏览器 ── GET /app.js + If-None-Match: "abc123"
+                         + If-Modified-Since: 时间 ──→ 服务器
+          ├─ 服务器比对：资源未变 ──→ 304 Not Modified（无 body）→ 浏览器继续用本地缓存
+          └─ 服务器比对：资源已变 ──→ 200 + 新文件 + 新 ETag/Last-Modified → 更新本地缓存
+```
+
+#### 2. 强缓存（Strong Cache）
+
+**核心思想：本地判断，不发请求。** 第一次请求后，浏览器把响应体的文件存进本地，同时记住 `Cache-Control` 里的 `max-age`。第二次请求时浏览器在本地直接用当前时间减去缓存存储时间，小于 `max-age` 就直接用缓存。
+
+涉及响应头：
+- `Cache-Control: max-age=3600`（HTTP/1.1，相对时间，优先级更高）
+- `Expires: Wed, 21 Oct 2025 07:28:00 GMT`（HTTP/1.0，绝对时间，存在「客户端/服务器时钟不一致」问题，已被 Cache-Control 取代）
+
+#### 3. 协商缓存（Negotiation Cache）
+
+**核心思想：发请求问服务器「资源变了吗」，未变则不发 body。** 强缓存过期后，浏览器把上次存下来的 `ETag` 和 `Last-Modified` 分别塞进请求头 `If-None-Match` 和 `If-Modified-Since`，服务器拿到后比对：
+
+| 比对方式 | 请求头 | 响应头 | 机制 | 缺点 |
+|---|---|---|---|---|
+| 内容指纹 | `If-None-Match` | `ETag: "abc123"` | 服务器重新计算资源 hash/版本号，一致则 304 | hash 计算有 CPU 开销 |
+| 修改时间 | `If-Modified-Since` | `Last-Modified: 时间` | 对比文件最后修改时间，早于或等于则 304 | 秒级粒度、可能不准（如 1 秒内多次修改、服务器时间被改） |
+
+**两者同时存在时，ETag 优先**。因为 ETag 基于内容，比时间更精确；且服务器实现中 `If-None-Match` 一旦命中，直接短路返回 304，不再检查 `If-Modified-Since`。
+
+#### 4. 强缓存 vs 协商缓存对比
+
+| 维度 | 强缓存 | 协商缓存 |
+|---|---|---|
+| 是否发请求 | 不发 | 发（但 304 时无 body） |
+| 状态码 | 200（from cache） | 304 |
+| 网络开销 | 0 | 一次完整请求往返（仅 header，无 body） |
+| 关键头 | Cache-Control / Expires | ETag / Last-Modified |
+| 判断方 | 浏览器本地判断 | 服务器判断 |
+| 用户体验 | 最快 | 有往返延迟 |
+| 失败兜底 | 过期后自动转入协商缓存 | 服务器返回 200 + 新资源 |
+
+**两者是接力关系，不是互斥关系**：先走强缓存 → 强缓存失效才走协商缓存 → 协商缓存也失效才重新下载。`Cache-Control: no-cache` + `ETag` 是最常见的「强制每次走协商缓存」组合。
+
+#### 5. Cache-Control 指令速查
+
+| 指令 | 含义 | 使用场景 |
+|---|---|---|
+| `max-age=3600` | 缓存 3600 秒（相对时间） | 静态资源短期缓存 |
+| `s-maxage=3600` | 覆盖 max-age，仅对 CDN/代理生效 | 区分浏览器缓存和 CDN 缓存策略 |
+| `public` | 任何中间节点（CDN、代理）都可缓存 | 静态资源、CDN 分发 |
+| `private` | 仅浏览器可缓存，CDN 不缓存 | 带用户信息的接口响应 |
+| `no-store` | 完全禁止缓存（强缓存+协商缓存都不行） | 银行交易、密钥、极敏感数据 |
+| `no-cache` | **不是「不缓存」**。资源可以缓存，但每次使用前必须发请求重新验证（走协商缓存） | HTML 入口文件、接口数据 |
+| `immutable` | 配合 max-age 使用，告诉浏览器「过期前内容绝对不变」，**用户刷新页面也不重新验证** | 带 hash 指纹的 JS/CSS |
+| `must-revalidate` | 缓存过期后必须向源服务器验证，不能用过期资源直接响应 | 要求数据强一致的接口 |
+| `stale-while-revalidate` | 允许「先返回过期缓存，同时后台异步刷新」 | 性能优先、可容忍短暂旧数据的场景 |
+
+注意 `no-cache` 是最容易被误解的指令：它允许缓存，只是「每次用之前必须先问服务器」，本质是**强制协商缓存**。
+
+#### 6. 前端项目中的典型实践
+
+| 文件类型 | 缓存策略 | 原因 |
+|---|---|---|
+| `index.html`（入口） | `Cache-Control: no-cache` + ETag | 必须每次都回源验证，保证用户拿到最新版本 |
+| `app.8f3k2a.js`（带 hash） | `Cache-Control: max-age=31536000, immutable` | hash 变了文件名就变，天然是新的 URL，旧缓存永不失效也无关紧要 |
+| 接口数据 | 通常 `no-store` 或 `no-cache` + ETag | 数据要实时/准实时，不能用过期数据 |
+| CDN 上的字体/图片 | `public, max-age=31536000, immutable` | 公共资源，交给 CDN 缓存，浏览器也长缓存 |
+
+这套策略的核心逻辑是：**「入口文件保持新鲜，静态资源通过文件名 hash 实现永久缓存」**。每次发版更新的是 index.html，它引导浏览器去加载新的 hash 文件名，而旧的 hash 文件即使缓存仍在也不再有入口引用（自然会被 LRU 淘汰）。
+
+#### 7. 开发环境 vs 生产环境的身份差异（为前 / 全栈加分）
+
+前端日常开发时，Vite/Webpack DevServer 默认会把 `Cache-Control` 设为 `no-store`（开发模式禁用缓存），避免改了代码页面不刷新。生产环境的 Nginx 配置则要显式区分：
+- `/index.html` → `add_header Cache-Control "no-cache";`
+- `/assets/`（带 hash）→ `add_header Cache-Control "max-age=31536000, immutable";`
+
+搞清这一点，面试时能体现「你真正上线部署过项目」，而不只是背概念。
+
+---
+
+### 实现
+
+无代码，纯 HTTP 协议/机制类知识点。下面的「关键操作序列」帮助你向面试官完整复述全过程：
+
+```
+第一次请求
+  请求:  GET /app.js
+  响应:  200 OK
+         Cache-Control: max-age=60, no-cache  # 演示用，实际不这么设
+         ETag: "v1-hash"
+         Last-Modified: Wed, 21 Oct 2025 07:28:00 GMT
+         (body: 文件内容)
+
+第二次请求（60 秒内）
+  不发请求，直接用本地缓存（from disk cache）
+
+第 61 秒请求（max-age 过期）
+  请求:  GET /app.js
+         If-None-Match: "v1-hash"
+         If-Modified-Since: Wed, 21 Oct 2025 07:28:00 GMT
+  响应:  304 Not Modified（无 body）
+         浏览器续用本地缓存
+
+下次再过期（资源已被修改）
+  请求:  GET /app.js
+         If-None-Match: "v1-hash"      # 旧值
+         If-Modified-Since: 旧时间
+  响应:  200 OK
+         ETag: "v2-hash"               # 新值
+         Last-Modified: 新时间
+         (body: 新文件内容 → 浏览器更新本地缓存)
+```
+
+---
+
+### 边界与追问
+
+#### 边界情况与注意事项
+
+**1. 浏览器行为差异（强缓存无效的场景）**
+- **Ctrl+F5（强制刷新）**：请求头加 `Cache-Control: no-cache` + `Pragma: no-cache`，绕过了强缓存。此时协商缓存仍可能生效（DevTools 里能看到 304），除非服务器对 `no-cache` 请求也返回 200。
+- **普通 F5（刷新）**：强缓存仍可能生效（`immutable` 资源即使 F5 也不重新验证）。
+- **开发者工具勾选「Disable cache」**：相当于每次强制刷新。
+- 手机端某些浏览器（如部分 WebView）会忽略 `Cache-Control` 直接走协商缓存，行为不一致。
+
+**2. 性能与一致性矛盾**
+- 强缓存时间设太长（如 `max-age=86400`）会导致用户 1 天内看到旧版本代码。生产环境**不要给入口 HTML 长缓存**。
+- 大数据量接口开强缓存可能导致「数据永远不更新」；`no-cache` 能保证新鲜度但每次多一次请求往返，对弱网用户是开销。
+
+**3. 安全**
+- `no-store` 必须用于 token、交易记录、个人隐私等敏感响应，防止被浏览器或 CDN 落盘。
+- 反向代理/CDN 若误配 `public` + 长 `max-age`，可能将带用户身份信息的响应缓存给其他用户（缓存污染，严重的安全事故）。
+- 跨域请求的缓存还要考虑 CORS：若响应带 `Access-Control-Allow-Origin: *`，某些浏览器禁止该响应被 `withCredentials` 的请求缓存。
+
+**4. 前端工程化联动**
+- 文件名 hash 不是「加了就安全」，要确保 hash 基于**内容**而非时间戳；否则内容没变但 hash 变了，会让 CDN 上存在大量冗余文件。
+- 使用 Service Worker 做 App Shell 缓存时，要设计版本号 + 主动清理策略（`caches.delete`），否则旧 Service Worker 会成为「比 HTTP 缓存更难清除的缓存」。
+
+---
+
+#### 面试官可能追问的 3 个问题
+
+**Q1：服务器多个节点（负载均衡）时，Last-Modified 或 ETag 可能出什么问题？**
+
+> Last-Modified 依赖每台服务器的本地文件时间，A 节点改了文件但 B 节点没同步，304 判断会不一致。ETag 若用 `mtime` 拼接生成也可能出现「两台机器生成的 ETag 不同导致缓存失效」。解决：后端统一用内容 hash 生成 ETag（如 sha1 文件内容），并保证各节点文件同步一致；`If-None-Match` 命中时优先返回 304，逻辑上对齐多节点。
+
+**Q2：no-cache 和 max-age=0（或 no-cache 与 must-revalidate）有什么区别？**
+
+> `no-cache` 是「可以缓存但每次必须回源验证」（验证通过后仍可复用，缓存策略由服务器响应头重新决定）；`max-age=0` 表示缓存立即过期，语义上是「下次直接走协商缓存」。`must-revalidate` 强调的是「过期后必须回源验证，**不能用过期缓存兜底**」；而 `stale-while-revalidate` 允许「先用过期缓存，异步刷新」，两者方向相反。`no-cache` 在实际行为上近似 `max-age=0 + must-revalidate`，但 `no-cache` 是显式语义声明，更清晰。
+
+**Q3：如何设计一个「发布新版本后，所有用户立刻看到最新前端代码」的缓存方案？**
+
+> 核心思路：**入口 HTML 不缓存（`no-cache` + ETag），静态资源带内容 hash + 长缓存（`max-age=31536000, immutable`）**。发版后 index.html 每次回源验证，一旦内容变化立即返回新的资源引用；带 hash 的静态资源内容不变就不会重新下载，内容变了新 hash 就是全新的 URL，直接绕过旧缓存。若想更激进，可在构建产物中注入版本号到 HTML，并配合 Nginx 对特定版本路径做 `Cache-Control: no-cache` 的过渡策略（灰度发布时）。
+
+---
+
+**一句话总结**：强缓存是「本地拍板不问了」，协商缓存是「问了才用但省下载」；面试答到「入口无缓存 / 静态资源 hash 永久缓存 / ETag 优先于 Last-Modified / no-cache 不是不缓存」这四个点，基本稳过。
+
+---
+来源：HTTP 缓存相关面试题（评测·前端岗位）

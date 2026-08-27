@@ -1,0 +1,396 @@
+## 题目
+
+讲解浏览器跨域限制、JSONP 原理与局限、CORS 完整流程（预检/简单请求/响应头）与常见解决方案。
+
+---
+
+## 问题一：同源策略与浏览器跨域限制的内核到底是什么？
+
+### 结论
+
+**同源策略是浏览器的安全沙箱规则，它限制的是"跨源读取"而非"跨源发送"，所以本质是：请求可以发出去，但浏览器不允许你拿到响应数据。**
+
+### 原理
+
+同源的定义：协议（protocol）+ 域名（host）+ 端口（port）三者完全一致，才算同源。举例：
+
+| 页面 URL | 请求 URL | 是否同源 |
+|---|---|---|
+| `https://a.com/page` | `https://a.com/api` | ✅ 同源 |
+| `https://a.com/page` | `http://a.com/api` | ❌ 协议不同 |
+| `https://a.com/page` | `https://b.com/api` | ❌ 域名不同 |
+| `https://a.com/page` | `https://a.com:8443/api` | ❌ 端口不同 |
+
+这里有一个关键机制需要理解透彻：**跨域限制不是发生在"请求发出"阶段，而是发生在"响应接收"阶段**。浏览器实际把网络请求发出去了，服务端也处理了，但当响应回到浏览器时，浏览器检查到跨源且没有合法的 CORS 授权头，就会把响应"丢弃"，并在控制台报错。
+
+同时，同源策略有例外清单：
+
+- `<script src>`、`<img src>`、`<link href>`、`<video src>` 等标签引用资源不受同源策略限制（但会限制读取内容）。
+- `<iframe>` 可以加载跨源页面，但父页面不能通过 JS 操作跨源 iframe 的 DOM。
+- 表单提交（`<form action>`）可以跨源发送请求，但页面会跳转，且你读不到响应。
+
+理解这一点很重要，因为它直接解释了为什么 JSONP 能用 script 标签"绕过"跨域限制，也解释了为什么 CORS 是一个"浏览器 + 服务器"合作机制——**浏览器负责拦截，服务器负责放行**。
+
+### 实现
+
+无代码，纯概念。重点记住一个心智模型：
+
+> 跨域报错 = 浏览器作为"安全中间人"，拦截了它认为"未被授权"的响应读取行为。
+
+### 边界与追问
+
+- **异常场景**：如果请求带上了特殊头或自定义方法，浏览器会触发预检流程（见问题三）；如果服务端返回了 CORS 头但浏览器端 Origin 不匹配，依然会拦截。
+- **安全场景**：同源策略保护的是用户数据，不是服务器。服务器如果想防 CSRF，仍需独立的防护手段（Token、SameSite Cookie 等）。
+- **面试追问**："既然 JSONP 能绕过跨域，为什么还会被 CORS 取代？" → 因为 JSONP 只能 GET、没有统一错误机制、且依赖注入安全风险大；CORS 是标准方案，支持完整 HTTP 语义。
+
+---
+
+## 问题二：JSONP 的原理与局限性
+
+### 结论
+
+**JSONP 的本质是：利用 `<script>` 标签天然不受同源策略限制的特性，通过动态插入 script 请求跨源接口，服务端返回的是一段"调用前端回调函数并传入数据"的 JavaScript 代码，而不是纯数据。**
+
+### 原理
+
+JSONP 的完整名称是 "JSON with Padding"（填充式 JSON），流程如下：
+
+1. 前端定义一个全局回调函数，比如 `handleData`，并把这个函数名拼到 URL 上：`https://api.example.com/user?callback=handleData`。
+2. 前端动态创建一个 `<script>` 标签，`src` 指向这个 URL，并挂载到 DOM 上。
+3. 浏览器加载该 script，请求到达服务器。
+4. 服务器拿到 `callback` 参数，业务逻辑返回数据 `{ name: 'Alice' }`，包装成 `handleData({ name: 'Alice' })` 返回，Content-Type 为 `application/javascript`。
+5. 浏览器把响应当脚本执行，全局函数被调用，参数就是数据。
+
+也就是说，JSONP 绕的其实不是"请求"这一关——请求本来就能发出去——**它绕的是"读取"这一关**，因为 script 标签加载执行的脚本不受同源策略限制。服务端返回的 JS 代码在页面全局作用域里执行，你的回调函数拿到了数据。
+
+它的局限也非常明显：
+
+- 只支持 GET 请求，因为 script 加载没有请求体。
+- 依赖服务器端配合，服务器必须支持 `callback` 参数包装。
+- 错误处理极弱，script 加载失败时你很难拿到 HTTP 状态码。
+- 安全性差，服务端如果不对 `callback` 参数做白名单校验，可被利用做 XSS。
+- 全局函数污染，需要手动清理。
+
+### 实现
+
+```javascript
+// 前端：手动实现 JSONP
+function jsonp(url, params, callbackName) {
+  return new Promise((resolve, reject) => {
+    // 1. 构建带 callback 参数的完整 URL
+    const query = new URLSearchParams({ ...params, callback: callbackName }).toString();
+    const fullUrl = `${url}?${query}`;
+
+    // 2. 注册全局回调函数
+    window[callbackName] = (data) => {
+      resolve(data);
+      cleanup();
+    };
+
+    // 3. 动态创建 script 标签
+    const script = document.createElement('script');
+    script.src = fullUrl;
+    script.async = true;
+
+    // 4. 错误处理：超时/加载失败
+    const timer = setTimeout(() => {
+      reject(new Error('JSONP request timeout'));
+      cleanup();
+    }, 10000);
+
+    // 5. 清理工作：移除 script 和全局函数
+    function cleanup() {
+      delete window[callbackName];
+      script.remove();
+      clearTimeout(timer);
+    }
+
+    script.onerror = () => {
+      reject(new Error('JSONP script load error'));
+      cleanup();
+    };
+
+    document.head.appendChild(script);
+  });
+}
+
+// 使用示例
+jsonp('https://api.example.com/user', { id: 1 }, 'handleUser')
+  .then(data => console.log('用户数据:', data))
+  .catch(err => console.error(err));
+```
+
+```javascript
+// 服务端（Node.js 示意）：包装响应
+const http = require('http');
+
+http.createServer((req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+  const callback = url.searchParams.get('callback'); // 拿到回调函数名
+
+  const data = { name: 'Alice', age: 25 };
+
+  // 注意：如果 callback 不校验，这里就是 XSS 注入点！
+  const safeCallback = /^[a-zA-Z_$][\w$]*$/.test(callback) ? callback : 'callback';
+
+  res.setHeader('Content-Type', 'application/javascript');
+  res.end(`${safeCallback}(${JSON.stringify(data)})`);
+}).listen(3000);
+```
+
+### 边界与追问
+
+- **安全风险**：服务端必须校验 `callback` 参数是否合法函数名，否则攻击者可以传 `alert(1)` 之类的代码直接执行。
+- **适用边界**：目前 JSONP 基本只出现在老系统、部分开放平台（如某些地图/天气 API）兼容场景中。
+- **替代方案**：CORS 解决后，绝大多数场景已不再需要 JSONP；若目标服务端不支持 CORS，可用同源代理转发。
+- **面试追问**："script 标签加载跨源资源，浏览器为什么不拦截？" → 因为 script 是浏览器允许的跨源引用类型，但**执行后的数据如果被尝试用 JS 读取**（比如访问别人的响应），会受限制；JSONP 的巧妙之处在于服务器主动把数据"伪装成脚本"送到你的页面上下文里执行。
+
+---
+
+## 问题三：CORS 完整流程——预检请求与简单请求
+
+### 结论
+
+**CORS 是浏览器和服务器协作的标准化跨域方案：前端请求会自动带上 `Origin` 头，服务器通过响应头 `Access-Control-Allow-Origin` 等明确授权，浏览器才把响应交给页面；对于"非简单请求"，浏览器会先用 OPTIONS 方法发送一次预检请求确认服务器允许后，才发送实际请求。**
+
+### 原理
+
+#### 第一步：区分"简单请求"与"非简单请求"
+
+一个请求要成为**简单请求**，需要同时满足：
+
+- 方法仅为 `GET`、`HEAD`、`POST`。
+- 只有安全头部：`Accept`、`Accept-Language`、`Content-Language`、`Content-Type`（且取值仅限 `application/x-www-form-urlencoded`、`multipart/form-data`、`text/plain`）。
+- 不使用 `ReadableStream` 作为请求体（现代浏览器的附加条件）。
+
+只要方法、请求头、Content-Type 任意一项超出上面范围，就是**非简单请求**。最常见的触发条件：`Content-Type: application/json`、自定义请求头（如 `Authorization`）、`PUT/DELETE/PATCH` 方法。
+
+#### 第二步：简单请求的流程
+
+```
+浏览器                 服务器
+  │ 1. GET /api 带 Origin: https://a.com
+  │ ────────────────────────────>
+  │
+  │ 2. 响应带 Access-Control-Allow-Origin: https://a.com
+  │ <────────────────────────────
+  │ 3. 浏览器核对：允许 ✅ → 把响应交给 JS
+  │    如果不允许 → 拦截响应，控制台报错
+```
+
+浏览器在简单请求中**不做预检**，因为这类请求在浏览器历史上已经可以发出（如表单提交），不需要额外询问。但浏览器仍会检查响应头，若服务器没有返回正确的 CORS 头，响应会被拦截。
+
+#### 第三步：预检请求（Preflight）的流程
+
+```
+浏览器                      服务器
+  │ 1. 预检请求 OPTIONS /api
+  │    带 Origin: https://a.com
+  │    Access-Control-Request-Method: POST
+  │    Access-Control-Request-Headers: content-type
+  │ ─────────────────────────────>
+  │
+  │ 2. 响应头：
+  │    Access-Control-Allow-Origin: https://a.com
+  │    Access-Control-Allow-Methods: POST, GET, OPTIONS
+  │    Access-Control-Allow-Headers: content-type
+  │    Access-Control-Max-Age: 86400
+  │ <─────────────────────────────
+  │
+  │ 3. 浏览器校验通过 ✅
+  │
+  │ 4. 发送真实请求 POST /api (Content-Type: application/json)
+  │ ─────────────────────────────>
+  │
+  │ 5. 响应带 Access-Control-Allow-Origin
+  │ <─────────────────────────────
+  │ 6. 浏览器校验通过 → 交给 JS
+```
+
+预检请求的意义：**让服务器在业务逻辑执行前，先确认"是否接受这种跨源请求方式"**，避免因为 CORS 策略导致服务器执行了危险操作却把响应丢弃。预检由浏览器自动触发，开发者不需要手动发送。
+
+#### 相关响应头解析
+
+| 响应头 | 作用 |
+|---|---|
+| `Access-Control-Allow-Origin` | 允许哪些源访问，`*` 表示所有源（但带凭证时不能为 `*`） |
+| `Access-Control-Allow-Methods` | 允许哪些 HTTP 方法，如 `GET, POST, PUT, DELETE` |
+| `Access-Control-Allow-Headers` | 允许哪些请求头，如 `Content-Type, Authorization` |
+| `Access-Control-Allow-Credentials` | 是否允许携带 Cookie/凭证，值为 `true` |
+| `Access-Control-Expose-Headers` | 默认 JS 只能读取部分响应头，此字段额外暴露自定义响应头 |
+| `Access-Control-Max-Age` | 预检结果缓存秒数，减少 OPTIONS 请求次数 |
+
+#### 凭证与通配符的坑
+
+如果请求需要携带 Cookie，前端必须开启 `fetch(url, { credentials: 'include' })` 或 `XMLHttpRequest.withCredentials = true`，同时服务端**不能**把 `Access-Control-Allow-Origin` 设为 `*`，必须显式指定具体的源，且不能依赖 `Origin: null`（比如从 file:// 协议打开页面时）判断来源。
+
+### 实现
+
+```javascript
+// Node.js 后端：Express 下完整 CORS 配置示意
+app.use((req, res, next) => {
+  const allowedOrigin = 'https://a.com'; // 生产环境应从白名单匹配
+
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  }
+
+  // 浏览器要求：Access-Control-Allow-Credentials 与具体源配合
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  // 允许的请求方法（预检时使用）
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+
+  // 允许的请求头（预检时使用）
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Requested-With'
+  );
+
+  // 暴露给前端 JS 的自定义响应头
+  res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count');
+
+  // 预检缓存 12 小时
+  res.setHeader('Access-Control-Max-Age', String(12 * 60 * 60));
+
+  // 处理预检请求：响应 204 并结束，不进入业务路由
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
+
+  next();
+});
+
+// 前端：携带凭证发起跨源请求
+fetch('https://api.example.com/user', {
+  method: 'POST',
+  credentials: 'include', // 关键：让 Cookie 随跨域请求发送
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'Alice' })
+});
+```
+
+### 边界与追问
+
+- **关于预检被缓存**：`Access-Control-Max-Age` 可以在一个浏览器会话中缓存 OPTIONS 预检结果，减少请求次数，但某些浏览器对 `Max-Age` 有上限。
+- **关于异常请求头**：如果预检中 `Access-Control-Request-Headers` 包含服务器不允许的头，预检会失败，真实请求不会被发送。
+- **关于 `credentials` + `*`**：这是最常见的坑，写 `Access-Control-Allow-Origin: *` 时浏览器不允许携带凭证，必须返回精确源。此时需要动态读取 `req.headers.origin` 并与白名单匹配。
+- **关于代理方案**：开发环境用 Vite Webpack proxy、生产环境用 Nginx 做反向代理，本质是把跨源请求变成同源请求，从而完全避开 CORS 限制：
+
+```javascript
+// vite.config.js：开发环境代理示意
+export default {
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://api.example.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
+  }
+};
+```
+
+```nginx
+# Nginx 生产环境反向代理示意
+location /api/ {
+    proxy_pass https://api.example.com/;
+    proxy_set_header Host $host;
+}
+```
+
+- **面试追问 1**："为什么简单请求不预检，POST + JSON 就预检？" → 历史上 HTML 表单就能发 GET/POST 且 Content-Type 只能为三种表单类型，浏览器无法阻止这类请求，所以干脆不预检；而自定义头、JSON 从未在旧时代出现过，需要多一次确认来保护服务器。
+- **面试追问 2**："预检请求是否会被 CSRF 利用？" → 不会。预检请求只是 OPTIONS 探测，服务器通常不处理业务逻辑；但服务器仍应校验 Origin，因为老浏览器不支持 CORS 或处于非标准模式时，跨源请求可能照发不误。
+- **面试追问 3**："为什么 `Access-Control-Allow-Origin: *` 很危险？" → 如果业务数据涉及用户隐私且允许 Cookie，任意源都可以跨源调用，等于把接口裸露给所有站点；这也是浏览器强制"凭证请求不允许 `*`"的原因。
+
+---
+
+## 问题四：跨域方案全景对比与选型
+
+### 结论
+
+**跨域问题本质上是"如何让浏览器信任来自另一个源的数据"，主流解法是"后端放行"（CORS）和"绕开浏览器检查"（代理 / JSONP / postMessage）两条路线，现代项目首选 CORS + 代理，JSONP 只用于遗留系统。**
+
+### 原理
+
+不同方案的核心差异在于：**谁来解决信任问题**。
+
+| 方案 | 核心机制 | 适用场景 | 优点 | 缺点 |
+|---|---|---|---|---|
+| CORS | 浏览器 + 服务器认证 | 前后端分离，后端可控 | 标准化、完整 HTTP 语义 | 需要后端配合；预检有额外开销 |
+| 开发代理（Vite/Webpack dev server） | 本地服务器转发请求，前后端同源 | 开发环境最常用 | 零后端改动，快速联调 | 仅限开发环境 |
+| Nginx 反向代理 | 服务端转发，浏览器只接触同源地址 | 生产环境 | 性能好、可隐藏后端地址 | 需运维配置 |
+| JSONP | script 标签绕过 | 老系统、第三方公共接口 | 实现简单 | 只支持 GET、不安全、不标准 |
+| postMessage + iframe | iframe 跨源通信 | 跨源窗口通信、OAuth 登录等 | 适合窗口间通信 | 需要页面两端都配合 |
+| WebSocket | 协议本身不受同源策略限制 | 实时通信 / AI Agent 流式输出 | 天然跨域 | 需服务端支持 WS 协议 |
+| `document.domain` | 降级主域 | 同主域不同子域 | 简单 | 只能解决子域问题，已被浏览器限制 `document.domain` 赋值能力 |
+| `location.hash` / `name` 传值 | 历史遗留 hack | 极端兼容场景 | 简单 | 容量小、难以维护，不推荐 |
+
+### 实现
+
+```javascript
+// postMessage：跨源 iframe 通信示意
+// 父页面 https://a.com
+const iframe = document.createElement('iframe');
+iframe.src = 'https://b.com/child.html';
+document.body.appendChild(iframe);
+
+// 父页面发送消息给子页面（也可等 iframe load 后再发）
+iframe.contentWindow.postMessage({ action: 'hello' }, 'https://b.com');
+
+// 父页面监听子页面回复
+window.addEventListener('message', (event) => {
+  // 安全校验：必须检查来源
+  if (event.origin !== 'https://b.com') return;
+  console.log('收到子页面消息:', event.data);
+});
+
+// 子页面 https://b.com/child.html
+window.addEventListener('message', (event) => {
+  if (event.origin !== 'https://a.com') return;
+  // 处理消息...
+  event.source.postMessage({ reply: 'pong' }, event.origin);
+});
+```
+
+```javascript
+// AI Agent 前端应用中常见的跨域场景：直接调用大模型 API
+// ❌ 浏览器直接调用 OpenAI/Anthropic API：
+//    1. 触发 CORS 预检
+//    2. API Key 暴露在浏览器里（严重安全问题）
+// 推荐做法：前端 → 自己的后端 → 大模型 API（同源转发）
+const response = await fetch('/api/chat', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    // 注意：Authorization 应放在后端，而不是前端！
+    // 'Authorization': `Bearer ${apiKey}` // ❌ 危险！
+  },
+  body: JSON.stringify({ prompt: 'hello' })
+});
+```
+
+### 边界与追问
+
+- **安全问题**：任何跨域方案都不能成为绕过鉴权的理由。服务端必须独立做身份认证、参数校验、频率控制。
+- **AI Agent 前端方向**：AI 应用经常需要 SSE（Server-Sent Events）或 WebSocket 做流式输出。SSE 走 HTTP，同样受 CORS 约束，需要服务端配置 `Access-Control-Allow-Origin`；WebSocket 不受同源策略限制，但仍需服务端校验 Origin 防止恶意站点建立连接。
+- **兼容性边界**：IE10 及以下不支持标准 CORS 的某些语法；老项目中若还要兼容 IE，可能不得不保留 JSONP 或 iframe + postMessage。
+- **面试追问 1**："为什么推荐后端代理而不是直接让前端调大模型 API？" → 因为 API Key 属于机密，放在前端等于公开密钥；且大模型 API 通常有计费限制，代理层可以统一鉴权、限流、审计，也方便切换供应商。
+- **面试追问 2**："Nginx 代理解决跨域的原理是什么？" → 浏览器只与同源的 Nginx 通信，Nginx 去请求真实后端并把结果返回，整个浏览器侧的跨域检查完全被绕开，同时响应头不需要任何 CORS 配置。
+- **面试追问 3**："如果后端已经配置了 CORS，还需要代理吗？" → 不需要。CORS 是标准方案，可用且更直接；代理应保留在"后端不可控、调试方便、需要保密 API Key"等场景。
+
+---
+
+## 总结：一道题打通跨域知识体系
+
+面试官问这道题，本质上在考察三个层次：
+
+1. **懂不懂安全模型**——同源策略到底限制的是什么，为什么会有跨域问题。
+2. **懂不懂协议细节**——CORS 的预检流程、响应头语义、凭证与通配符的坑。
+3. **有没有生产经验**——什么时候选 CORS，什么时候选代理，JSONP 为什么被抛弃，AI Agent 应用调第三方 API 时的安全考量。
+
+把这套知识吃透，前端、全栈和 AI Agent 前端应用方向的跨域问题基本都能从容应对。
+
+来源：用户提供的秋招评测题目 + 资深前端面试辅导讲解

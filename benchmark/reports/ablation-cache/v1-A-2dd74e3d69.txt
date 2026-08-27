@@ -1,0 +1,159 @@
+## 浏览器跨域限制、JSONP 与 CORS 详解
+
+---
+
+### 一、浏览器跨域限制（同源策略）
+
+**同源策略（Same-Origin Policy）** 是浏览器安全基石，规定：只有**协议 + 域名 + 端口**完全相同，两个页面才属于同源，否则为跨域。
+
+例如：
+- `https://a.com` 和 `http://a.com` 不同源（协议不同）
+- `https://a.com` 和 `https://b.com` 不同源（域名不同）
+- `https://a.com:8080` 和 `https://a.com:443` 不同源（端口不同）
+
+**限制内容：**
+- 跨域请求可以发出，但浏览器会拦截响应，JS 无法读取跨域响应数据。
+- 无法跨域操作 DOM、Cookie、LocalStorage 等。
+- 不受限的场景：`<script>`、`<img>`、`<link>` 等标签可以加载跨域资源，但应用无法直接读取其内容（除非配合 CORS/JSONP）。
+
+**目的：** 防止恶意网站窃取用户在其他网站的数据，保护用户隐私与安全。
+
+---
+
+### 二、JSONP（JSON with Padding）
+
+#### 1. 原理
+利用 `<script>` 标签 **不受同源策略限制** 的特点，动态向跨域服务器发起 GET 请求，服务端返回一段 JavaScript 代码（通常是一个函数调用），浏览器执行该脚本后，将数据传给预先定义好的回调函数。
+
+#### 2. 实现示例
+前端：
+```javascript
+function handleData(data) {
+  console.log(data);
+}
+const script = document.createElement('script');
+script.src = 'https://api.example.com/data?callback=handleData';
+document.head.appendChild(script);
+```
+后端返回：
+```javascript
+handleData({ "name": "Alice", "age": 18 });
+```
+浏览器加载这段脚本后，自动执行 `handleData`，实现跨域数据获取。
+
+#### 3. 局限
+- **只支持 GET 请求**：无法使用 POST、PUT、DELETE。
+- **安全性差**：服务端返回的是可执行代码，容易遭受 XSS 攻击；脚本来源不可控时风险极高。
+- **依赖后端配合**：需要服务端专门返回 JS 格式数据。
+- **错误处理困难**：如果请求失败，浏览器不会触发 `error` 事件（或兼容性差），难以定位问题。
+- **全局函数污染**：回调函数需要挂载在全局作用域上，会污染全局命名空间。
+- **无法获取非 200 状态码**：几乎无法处理 404/500 等响应。
+
+---
+
+### 三、CORS（Cross-Origin Resource Sharing，跨域资源共享）
+
+CORS 是 W3C 标准，通过 **HTTP 头** 控制是否允许跨域访问。浏览器在发起跨域请求时，会根据请求类型决定是否触发**预检请求**。
+
+---
+
+#### 1. 简单请求
+
+**满足以下所有条件时，为简单请求：**
+
+| 条件 | 说明 |
+|------|------|
+| 方法 | GET、HEAD、POST 之一 |
+| 请求头 | 只能使用安全头（如 Accept、Accept-Language、Content-Language、Content-Type、DPR 等） |
+| Content-Type | 仅限于 `text/plain`、`multipart/form-data`、`application/x-www-form-urlencoded` |
+
+**简单请求流程：**
+1. 浏览器直接发送真实请求，并在请求头带上 `Origin` 字段。
+2. 服务器响应，并携带 CORS 响应头。
+3. 浏览器检查响应头，若允许则把响应交给 JS，否则拦截。
+
+**相关响应头：**
+- `Access-Control-Allow-Origin`：指定允许的源（如 `https://a.com` 或 `*`）。
+- `Access-Control-Allow-Credentials`：是否允许携带 Cookie，需为 `true`（此时 `*` 无效）。
+- `Access-Control-Expose-Headers`：允许 JS 读取的额外响应头。
+
+---
+
+#### 2. 预检请求（Preflight）
+
+**满足以下任一条件时，会触发预检：**
+- 使用 `PUT`、`DELETE`、`PATCH` 等方法。
+- 包含自定义请求头（如 `Authorization`、`X-Requested-With`）。
+- `Content-Type` 为 `application/json` 等非简单类型。
+- 请求头超出简单请求允许范围。
+
+**预检流程：**
+1. 浏览器先发送一个 **OPTIONS 请求**，携带：
+   - `Origin`：源地址
+   - `Access-Control-Request-Method`：实际请求的方法
+   - `Access-Control-Request-Headers`：实际请求会携带的自定义头
+2. 服务器对该预检请求进行响应，返回：
+   - `Access-Control-Allow-Origin`
+   - `Access-Control-Allow-Methods`：允许的方法列表（如 `GET, POST, PUT, DELETE`）
+   - `Access-Control-Allow-Headers`：允许的请求头列表
+   - `Access-Control-Max-Age`：预检结果缓存时间（秒），可减少预检次数
+   - 如果需要携带 Cookie，还需 `Access-Control-Allow-Credentials: true`
+3. 浏览器判断预检是否通过。通过后，才发送**真实请求**；真实请求同样需要响应头满足 CORS 要求。
+
+---
+
+#### 3. CORS 完整流程（总结）
+
+```
+浏览器发起跨域请求
+    │
+    ├── 简单请求？──── 是 ──▶ 直接发送真实请求
+    │                       服务器响应带 CORS 头
+    │                       浏览器检查响应头，决定是否暴露给 JS
+    │
+    └── 非简单请求？── 否 ──▶ 发送 OPTIONS 预检请求
+                            服务器返回允许的源/方法/头
+                            浏览器验证预检通过
+                            发送真实请求
+                            再次检查响应头，暴露数据
+```
+
+**关键响应头速查表：**
+| 响应头 | 作用 |
+|--------|------|
+| `Access-Control-Allow-Origin` | 必填，指定允许跨域的源，`*` 表示所有（但无法与 `Credentials` 共用） |
+| `Access-Control-Allow-Methods` | 允许的方法列表 |
+| `Access-Control-Allow-Headers` | 允许的自定义请求头列表 |
+| `Access-Control-Allow-Credentials` | 是否允许发送 Cookie，需要 `true` |
+| `Access-Control-Max-Age` | 预检结果缓存时间 |
+| `Access-Control-Expose-Headers` | 允许 JS 读取的非默认响应头列表 |
+
+**注意事项：**
+- 通过 CORS 请求携带 Cookie 时，服务端必须设置 `Access-Control-Allow-Credentials: true`，且 `Access-Control-Allow-Origin` 不能是 `*`，必须指定具体源。
+- 前端使用 `fetch` 时需要设置 `credentials: 'include'`，XHR 需要设置 `withCredentials = true`。
+
+---
+
+### 四、常见跨域解决方案
+
+| 方案 | 原理 | 适用场景 |
+|------|------|----------|
+| **CORS** | 服务端配置响应头，标准官方方案 | 所有跨域请求，尤其是 RESTful API、前后端分离项目 |
+| **JSONP** | 利用 `<script>` 标签无跨域限制 | 仅 GET 请求、兼容老浏览器（如 IE） |
+| **反向代理（Nginx/Node/Webpack Dev Server）** | 浏览器请求同源服务器，服务器转发到目标服务器，绕开跨域限制 | 开发环境、生产环境部署时可统一配置 |
+| **postMessage + iframe** | 通过窗口消息事件跨域通信 | 跨域窗口通信、页面与 iframe 之间传值 |
+| **WebSocket** | WebSocket 协议本身不受同源策略限制 | 需要实时双向通信的场景 |
+| **document.domain** | 将主域名下的子域页面设置为同一 `domain` 实现同源 | 同主域名不同子域的页面交互（如 `a.example.com` 和 `b.example.com`） |
+| **代理服务器** | 浏览器请求代理，代理请求目标，并返回数据 | 移动端/客户端 / 后端转发，规避前端跨域 |
+| **关闭浏览器安全策略（开发用）** | 如 Chrome 启动参数 `--disable-web-security` | 仅限本地调试，生产禁用 |
+
+---
+
+### 五、面试亮点提示
+
+- 讲清**浏览器拦截的是响应而非请求**：请求已发起，但响应被拦截，JS 无法读取。
+- 强调 CORS 的**预检触发条件**：很多人只记得 `OPTIONS`，但忘了“简单请求”不触发。
+- 说明 `*` 和 `Credentials` 冲突：当需要跨域携带 Cookie 时，`Access-Control-Allow-Origin` 必须指定具体源。
+- 遇到复杂跨域场景时，优先推荐 **CORS + 代理** 组合方案，兼顾安全与灵活性。
+
+掌握以上内容，面试时关于跨域的题目基本可以完整回答。祝你面试顺利！

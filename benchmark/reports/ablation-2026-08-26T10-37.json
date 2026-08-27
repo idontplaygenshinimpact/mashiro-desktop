@@ -1,0 +1,141 @@
+{
+  "ts": "2026-08-26T10:37:27.412Z",
+  "mode": "ablation",
+  "sample": 4,
+  "seed": 42,
+  "cacheHits": 0,
+  "datasetHash": "bd52f5204fe01906",
+  "envelope": {
+    "model": "deepseek-v4-flash",
+    "node": "v22.19.0",
+    "mocked": false,
+    "params": {
+      "solverTemp": 0.5,
+      "judgeTemp": 0.2
+    }
+  },
+  "a": {
+    "n": 4,
+    "solve": 86,
+    "truth": 100,
+    "cover": 89,
+    "judgeOk": 4,
+    "fails": 0
+  },
+  "b": {
+    "n": 4,
+    "solve": 94,
+    "truth": 69,
+    "cover": 94,
+    "judgeOk": 4,
+    "fails": 0
+  },
+  "delta": {
+    "solve": 8,
+    "truth": -31,
+    "cover": 5
+  },
+  "cost": {
+    "tokens": 114183,
+    "usd": 0.0371,
+    "calls": 32,
+    "failCount": 0,
+    "p50Ms": 20582,
+    "p95Ms": 97750,
+    "byTag": {
+      "misc": {
+        "calls": 4,
+        "tokens": 14567,
+        "ms": 104398,
+        "fails": 0
+      },
+      "judge": {
+        "calls": 24,
+        "tokens": 92884,
+        "ms": 678696,
+        "fails": 0
+      },
+      "solver": {
+        "calls": 4,
+        "tokens": 6732,
+        "ms": 54262,
+        "fails": 0
+      }
+    }
+  },
+  "summary": "全链路 vs 裸 prompt：讲解均分 86→94（9%），CRAG correct 均分 100→69，覆盖度 89→94（实测，sample=4）",
+  "details": {
+    "B|q3": {
+      "judge": 82,
+      "truth": {
+        "label": "incorrect",
+        "score": 0
+      },
+      "coverRate": 75,
+      "answerLen": 5930
+    },
+    "B|q4": {
+      "judge": 95,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 5389
+    },
+    "A|q4": {
+      "judge": 86,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 4535
+    },
+    "A|q3": {
+      "judge": 62,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 75,
+      "answerLen": 2282
+    },
+    "B|q1": {
+      "judge": 100,
+      "truth": {
+        "label": "acceptable",
+        "score": 75
+      },
+      "coverRate": 100,
+      "answerLen": 4129
+    },
+    "B|q2": {
+      "judge": 97,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 8437
+    },
+    "A|q1": {
+      "judge": 97,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 80,
+      "answerLen": 1429
+    },
+    "A|q2": {
+      "judge": 97,
+      "truth": {
+        "label": "correct",
+        "score": 100
+      },
+      "coverRate": 100,
+      "answerLen": 2419
+    }
+  }
+}

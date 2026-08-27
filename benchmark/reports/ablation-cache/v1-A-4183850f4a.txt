@@ -1,0 +1,132 @@
+这道题考察的是**高频事件的性能优化**，核心是理解“节流”和“防抖”的区别，并能够手写一个可用的节流函数。
+
+---
+
+## 一、节流（throttle）是什么？
+
+节流的意思是：**不管你触发多少次，在指定的时间间隔内，最多只执行一次函数**。  
+就像公交车的发车时间——不管站台上来了多少人，每 10 分钟才发一趟。
+
+### 使用场景举例
+- 滚动事件监听
+- 窗口 resize
+- 鼠标移动、拖拽
+- 射击游戏中子弹发射间隔
+
+---
+
+## 二、手写节流函数
+
+### 方案一：时间戳实现（立即执行版）
+
+```javascript
+function throttle(fn, interval) {
+  let last = 0; // 上一次执行的时间戳
+
+  return function (...args) {
+    const now = Date.now();
+
+    // 如果距离上次执行的时间超过了 interval，就执行
+    if (now - last >= interval) {
+      last = now;
+      fn.apply(this, args);
+    }
+  };
+}
+```
+
+**特点**：第一次触发会立即执行，停止触发后不会执行最后一次。
+
+---
+
+### 方案二：定时器实现（延迟执行版）
+
+```javascript
+function throttle(fn, interval) {
+  let timer = null;
+
+  return function (...args) {
+    if (timer) return; // 如果定时器还在，说明还没到时间，直接忽略
+
+    timer = setTimeout(() => {
+      fn.apply(this, args);
+      timer = null; // 执行完清除定时器，允许下一次触发
+    }, interval);
+  };
+}
+```
+
+**特点**：第一次触发会在 `interval` 后才执行，停止触发后还会执行一次尾调用。
+
+---
+
+### 方案三：结合时间戳 + 定时器（较为完整）
+
+这样既能保证第一次立即执行，也能保证最后一次会被执行：
+
+```javascript
+function throttle(fn, interval) {
+  let last = 0;      // 上次执行时间
+  let timer = null;  // 定时器
+
+  return function (...args) {
+    const now = Date.now();
+    const remaining = interval - (now - last); // 还差多少时间
+
+    if (remaining <= 0) {
+      // 时间到了，立即执行
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      last = now;
+      fn.apply(this, args);
+    } else if (!timer) {
+      // 时间未到，设置一个定时器，保证最后一次执行
+      timer = setTimeout(() => {
+        last = Date.now();
+        timer = null;
+        fn.apply(this, args);
+      }, remaining);
+    }
+  };
+}
+```
+
+---
+
+## 三、与防抖（debounce）的区别
+
+| 对比项 | 节流 throttle | 防抖 debounce |
+|--------|--------------|--------------|
+| 核心思想 | 固定时间间隔内最多执行一次 | 事件停止触发后的一段时间才执行一次 |
+| 执行时机 | 高频触发时，按固定频率执行 | 只有停止触发后才会执行 |
+| 典型比喻 | 公交车固定时间发车 | 电梯等人，有人进来就重新计时 |
+| 多次触发结果 | 多次触发只会在间隔内执行有限次 | 连续触发只会执行最后一次 |
+| 适合场景 | 滚动、拖拽、resize 等持续触发且需要实时反馈 | 搜索框输入、窗口 resize 后的收尾计算、文本保存 |
+
+### 一个简单的对比例子
+
+```javascript
+// 用户连续点击按钮 10 次
+// throttle: 如果间隔 1 秒，可能执行 2~3 次
+// debounce: 如果延迟 1 秒，只会执行最后 1 次
+```
+
+**一句话总结**：
+
+- **节流**：控制执行频率，稀释执行次数。
+- **防抖**：控制执行时机，等用户停止操作后再执行。
+
+---
+
+## 四、面试加分点
+
+1. 能说出 `this` 和 `args` 需要透传，否则函数上下文会出错。
+2. 能说出时间戳版和定时器版的优缺点。
+3. 能主动提出“第一次是否立即执行”和“最后一次是否执行”这两种需求，并给出可配置的写法。
+4. 能结合源码或实际场景（如 lodash 的 throttle 实现）来讲解，会更有深度。
+
+---
+
+如果面试官让你“手写一个节流函数”，可以先用**时间戳版**写出来，再简要说明定时器版，最后谈谈两者的区别和适用场景，这基本就是满分回答了。

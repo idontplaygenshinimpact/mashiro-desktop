@@ -1,0 +1,250 @@
+## 题目
+
+> 手写 `deepClone`，处理对象/数组/Date/循环引用，并说明浅拷贝与深拷贝的区别。
+
+这是一个非常经典的“基础能力 + 边界意识”的考察。面试官真正想看的不是你能不能背出一个递归函数，而是你对 **JavaScript 引用类型、内存模型、循环引用、原型链、内置对象** 的理解程度，以及你是否有生产环境的工程意识（性能、安全、替代方案）。
+
+---
+
+### 结论
+
+深拷贝的本质是 **递归遍历整个引用树 + 用一个缓存表记录已访问对象**：对每个引用类型创建独立容器，把嵌套引用逐个复制；遇到循环引用时靠缓存直接返回已克隆对象，避免死循环和栈溢出。而浅拷贝只复制最外层容器，嵌套对象仍共享引用。
+
+---
+
+### 原理
+
+#### 1. 先搞清 JavaScript 的“值语义”和“引用语义”
+
+```js
+let a = 1;
+let b = a; // 基本类型：复制值，a、b 互不影响
+
+let obj1 = { x: 1 };
+let obj2 = obj1; // 引用类型：复制“引用”，obj2 和 obj1 指向同一块堆内存
+obj2.x = 100;
+console.log(obj1.x); // 100 —— 改一个，另一个跟着变
+```
+
+这是理解深浅拷贝的根基：**基本类型（string/number/boolean/null/undefined/bigint/symbol）按值复制；对象、数组、函数按引用复制**。
+
+#### 2. 赋值 vs 浅拷贝 vs 深拷贝
+
+| 方式 | 外层对象 | 嵌套对象 | 说明 |
+|---|---|---|---|
+| `const b = a` | 共享 | 共享 | 只是多加了一个别名，不是拷贝 |
+| `{ ...a }` / `Object.assign({}, a)` | 新对象 | 共享 | **浅拷贝**，只复制一层 |
+| `JSON.parse(JSON.stringify(a))` | 新对象 | 新对象 | “假”深拷贝，丢函数/Date/Symbol/undefined，循环引用直接报错 |
+| `structuredClone(a)` | 新对象 | 新对象 | 浏览器/Node 原生深拷贝，但不能克隆函数 |
+| 手写 `deepClone(a)` | 新对象 | 新对象 | 可定制，覆盖所有边界场景 |
+
+```js
+// 浅拷贝的典型陷阱
+const original = { name: 'Alice', address: { city: 'Beijing' } };
+const shallow = { ...original };
+
+shallow.name = 'Bob';        // 不影响 original
+shallow.address.city = 'Shanghai'; // 影响了 original！
+console.log(original.address.city); // 'Shanghai' —— 嵌套地址共享了
+```
+
+#### 3. 为什么 deepClone 要单独处理 Date？
+
+`Date` 是 JavaScript 内置的特殊引用类型，它内部封装的是一个时间戳数值。如果直接 `result.date = value.date`，两个对象会 `共享同一个 Date 实例`，改其中一个的时间，另一个也变，破坏独立性。正确做法是取出时间戳再造新实例：
+
+```js
+const d = new Date();
+const bad = d;                 // 共享
+const good = new Date(d.getTime()); // 独立副本
+```
+
+#### 4. 循环引用是深拷贝最大的坑
+
+```js
+const obj = { name: 'self' };
+obj.self = obj; // 对象引用了自己
+```
+
+普通递归实现会无限递归：`deepClone(obj) → deepClone(obj.self) → deepClone(obj.self.self) → ...`，最终**爆栈**。
+
+解决办法：维护一个缓存表（`Map` 或 `WeakMap`），每次克隆前先查表，**如果这个对象已经克隆过，直接返回之前克隆的结果**。这样循环引用就变成了一次“回头取引用”，而不是无限递归。
+
+**为什么用 `WeakMap` 而不是 `Map`？**
+
+- 缓存表保存的是 `原对象 → 克隆对象` 的映射；
+- `WeakMap` 的 key 是**弱引用**，不会阻止原对象被垃圾回收，深拷贝完成后如果不保留缓存表，整批对象可以被 GC 及时回收；
+- `Map` 则强引用 key，可能导致大对象克隆过程中占用内存无法释放，容易造成内存峰值。
+
+#### 5. 递归也是有代价的
+
+递归版本实现简单，但深度极深的对象（比如上万层嵌套）会触及**调用栈上限**（Chrome 大约 1 万层左右）。生产级实现要考虑用**显式栈 + BFS/DFS** 的迭代方案。下面实现先以递归讲清楚原理，追问部分再讨论迭代版。
+
+---
+
+### 实现
+
+完整实现覆盖：**对象 / 数组 / Date / 循环引用 / Map / Set / RegExp / Symbol 键 / 原型保留**。这是面试中“可上生产级别”的答案。
+
+```ts
+/**
+ * 手写 deepClone
+ * 支持：对象、数组、Date、RegExp、Map、Set、Symbol 键、循环引用
+ * 策略：递归 + WeakMap 缓存
+ */
+function deepClone<T>(value: T, cache = new WeakMap<object, any>()): T {
+  // —— 1. 原始类型 / 函数 / Symbol / BigInt：直接返回 ——
+  // 函数无法被“克隆”出独立闭包，共享引用是行业共识
+  if (typeof value !== 'object' || value === null) {
+    return value;
+  }
+
+  // —— 2. 循环引用拦截：已克隆过就返回缓存结果 ——
+  if (cache.has(value)) {
+    return cache.get(value);
+  }
+
+  // —— 3. 按类型创建容器 ——
+  let result: any;
+
+  if (value instanceof Date) {
+    // Date 的本质是时间戳包装，用 getTime() 创建独立副本
+    result = new Date(value.getTime());
+  } else if (value instanceof RegExp) {
+    result = new RegExp(value.source, value.flags);
+  } else if (value instanceof Map) {
+    result = new Map();
+  } else if (value instanceof Set) {
+    result = new Set();
+  } else if (Array.isArray(value)) {
+    result = [];
+  } else {
+    // 普通对象：用 Object.create 保留原型链（比 value.constructor 更安全）
+    result = Object.create(Object.getPrototypeOf(value));
+  }
+
+  // —— 4. 先登记，再递归 ——
+  // 这是关键：必须先放入 cache，否则循环引用会再次进入当前对象造成死循环
+  cache.set(value, result);
+
+  // —— 5. 复制 Map：key 和 value 都可能是引用类型 ——
+  if (value instanceof Map) {
+    for (const [k, v] of value) {
+      result.set(deepClone(k, cache), deepClone(v, cache));
+    }
+    return result;
+  }
+
+  // —— 6. 复制 Set ——
+  if (value instanceof Set) {
+    for (const v of value) {
+      result.add(deepClone(v, cache));
+    }
+    return result;
+  }
+
+  // —— 7. 遍历所有键：包括字符串键 + Symbol 键 ——
+  // Reflect.ownKeys 返回自身所有 key（不含继承的），比 for...in 更完整
+  for (const key of Reflect.ownKeys(value)) {
+    const desc = Object.getOwnPropertyDescriptor(value, key);
+
+    // 数据属性（普通值）：递归克隆
+    if (desc && 'value' in desc) {
+      result[key] = deepClone(value[key], cache);
+    }
+    // 访问器属性（getter/setter）：保留描述符原样拷贝
+    else if (desc) {
+      Object.defineProperty(result, key, desc);
+    }
+  }
+
+  return result;
+}
+
+// —— 测试 ——
+const obj: any = {
+  name: 'agent',
+  tags: ['a', 'b'],
+  meta: { createdAt: new Date() },
+  [Symbol('id')]: 123,
+};
+obj.self = obj; // 制造循环引用
+
+const cloned = deepClone(obj);
+
+console.log(cloned.self === cloned);        // true：循环引用被正确保留
+console.log(cloned.self === obj);           // false：不是同一个对象
+console.log(cloned.meta.createdAt === obj.meta.createdAt); // false：Date 已独立复制
+console.log(cloned.meta.createdAt instanceof Date);        // true：Date 类型保留
+```
+
+**关键点总结：**
+
+| 行 | 设计 | 原因 |
+|---|---|---|
+| 第 8 行 | 函数直接返回 | 函数共享引用是合理行为，无法复制闭包内部状态 |
+| 第 14 行 | `WeakMap` 缓存 | 处理循环引用的核心，弱引用不阻碍 GC |
+| 第 32 行 | `new Date(value.getTime())` | 抠出时间戳重建实例，而非共享引用 |
+| 第 53 行 | 先 `cache.set` 再遍历 | 防循环引用死循环的“先上户口，再走亲戚”策略 |
+| 第 57-65 行 | Map/Set 单独处理 | 它们是现代 JS 常用容器，业务代码中普遍存在 |
+| 第 70 行 | `Reflect.ownKeys` | 能遍历 Symbol 键，且不会误取原型链上的属性 |
+
+---
+
+### 边界与追问
+
+#### 异常 / 边界情况
+
+1. **不可克隆的类型**  
+   `Promise`、`WeakMap`、`WeakSet`、`Proxy`、DOM 节点等没有通用克隆语义。生产实践通常直接返回原引用或抛错，`structuredClone` 对不可克隆类型也会抛 `DataCloneError`。
+
+2. **getter / setter**  
+   上面的实现采用 `Object.defineProperty` 原样复制描述符，保留了访问器语义；但 getter 内部捕获的外部变量状态是无法复制的。另一种方案是执行 getter 取值后复制结果，两种都有道理，取决于业务语义。
+
+3. **原型链**  
+   `JSON.parse(JSON.stringify())` 会丢失原型；用 `Object.create(Object.getPrototypeOf(value))` 则保留原型。接口返回的纯数据对象通常不关心原型，但如果是自定义类实例（如 `class User`），保留原型是有意义的。
+
+4. **`Object.create(null)` 的对象**  
+   这种对象没有 `constructor` 也没有原型，用 `value.constructor` 创建容器会直接报错；上面的实现用 `Object.getPrototypeOf(value)` 获取 `null`，`Object.create(null)` 能正常处理。
+
+5. **性能 / 栈溢出**  
+   递归深拷贝在深度极大（数万层）时会爆栈。生产级实现需要改成**迭代 + 显式栈**：
+
+```ts
+// 迭代版核心思想：把要复制的对象放入显式栈，循环处理
+function deepCloneIterative<T>(root: T): T {
+  // 伪代码骨架：
+  // 1. 创建 root 的容器，缓存到 WeakMap
+  // 2. 维护一个工作栈 [{ source, target, key }]
+  // 3. while (栈非空)：
+  //    - 取出当前待克隆的值 value
+  //    - 若为引用类型且未缓存：创建容器并缓存，将其所有属性放入工作栈
+  //    - 若已缓存：把 target[key] 指向缓存中的克隆对象
+  // 4. 返回 root 的克隆
+  return structuredClone(root); // 浏览器原生在多数场景是最优解
+}
+```
+
+#### 安全
+
+- **原型污染攻击**：如果深层对象的 key 是 `__proto__`、`constructor`、`prototype`，直接赋值可能污染全局原型。安全做法是丢弃这些特殊 key，或只拷贝对象的“自身可枚举属性”，并对 key 做白名单校验。
+- **`constructor` 被劫持**：不要用 `new value.constructor()` 创建容器，因为来自不可信数据的对象的 `constructor` 可能被篡改。用 `Object.create(Object.getPrototypeOf(value))` 更安全。
+
+#### 兼容性 / 替代方案
+
+- **`JSON.parse(JSON.stringify(obj))`**：兼容所有环境，但丢失函数、`undefined`、`Symbol`、`BigInt`，`Date` 变字符串，循环引用直接抛错。只适用于“纯 JSON 数据”。
+- **`structuredClone(obj)`**：浏览器原生 API（Chrome 98+ / Node 17+），支持 `Date`、`Map`、`Set`、`ArrayBuffer`、`Blob` 等，效率远高于手写递归，但不支持函数和 Symbol 节点。**生产环境能用它就用它**。
+- **Lodash `_.cloneDeep`**：社区最成熟的实现，覆盖类型最全，自带循环引用处理，唯一的缺点是包体积（约 4KB+ gzip）。
+
+#### 面试官可能追问的 2-3 个问题
+
+**Q1：为什么用 WeakMap，不用 Map？**  
+A：`WeakMap` 对 key 是弱引用，不阻止原对象被垃圾回收。深拷贝完成后，缓存表失去外部引用即可被整体回收，避免大型对象内存滞留。而 `Map` 强引用 key 和 value，容易造成内存峰值。这是工程质量的加分项。
+
+**Q2：`JSON.parse(JSON.stringify(obj))` 到底有什么问题？**  
+A：三个硬伤：① 函数、`undefined`、`Symbol`、`BigInt` 会被丢弃或转成字符串；② `Date` 会变成 ISO 字符串，丢失 `Date` 类型；③ 循环引用直接抛 `TypeError`。此外它不能复制原型链、getter/setter，所以它不是“通用深拷贝”，只是“JSON 数据的序列化与反序列化”。
+
+**Q3：深拷贝在 React / AI Agent 前端应用里有什么实际价值？**  
+A：三条最能说明价值——  
+- **不可变状态更新**：React 的 diff 依赖“引用变化”判断更新，直接修改嵌套 state 不会触发渲染。深拷贝配合不可变更新模式，保证每次数据变更都是新引用。  
+- **AI Agent 对话快照与回滚**：Agent 多轮运行中产生大量中间状态（消息历史、工具调用参数、上下文 tokens），需要用深拷贝做快照，支持用户“重新生成”“回退到上一步重试”，避免修改历史记录污染后续生成。  
+- **状态管理 / 调试工具**：devtools 中展示的 store 状态、路由/表单的状态留痕，需要不可变快照来正确计算 diff 和回放。

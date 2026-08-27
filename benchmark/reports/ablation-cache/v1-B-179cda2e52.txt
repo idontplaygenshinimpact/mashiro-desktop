@@ -1,0 +1,131 @@
+## 题目
+
+手写 `debounce(fn, wait)`：
+- 支持**立即执行选项**（`immediate`）
+- 支持**取消方法**（`cancel`）
+- 说明原理和使用场景
+
+### 结论
+
+防抖的本质是：**在事件停止触发后的 `wait` 毫秒内，只执行最后一次（或第一次）回调；期间再次触发就重新计时**。核心实现只有三件事：闭包保存定时器 ID、每次调用先 `clearTimeout` 再重新 `setTimeout`、用「定时器是否存在」来判断是否处于冷却周期。
+
+### 原理
+
+防抖解决的核心问题是：**高频触发导致回调被疯狂调用**。比如输入框每次 `keydown` 都发请求，用户输入“人工智能”会触发 4 次接口调用，大部分是浪费的。防抖的策略是“等一等，等你停手再干活”。
+
+它的机制依赖 JavaScript 的**闭包 + 定时器**：
+
+1. `debounce` 返回一个新函数（`debounced`），这个函数每次被调用，都能通过**闭包**读到同一个 `timer` 变量——这是“多次调用共享同一个调度状态”的关键。
+2. 每次调用时，先把上一次的定时器清掉，再重新设置一个 `wait` 毫秒后执行的定时器。这样一来，**只有最后一次触发**能“活到”定时器结束，之前触发的都被新定时器覆盖了。
+3. 定时器回调执行时，通过闭包保存的 `context` 和 `args`，把 `this` 和参数原样还给原始 `fn`，保证不丢上下文。
+
+`immediate` 选项则把执行时机从「末尾」挪到「开头」：判断 `!timer`——如果当前**没有等待中的定时器**，说明这是一个新的周期，立即执行一次；然后照样启动定时器作为“冷却期”，冷却期内所有触发都会刷新定时器，但不再立即执行。相当于**第一次立即执行，然后防抖冷却**。
+
+`cancel` 方法更简单：`clearTimeout` 后把 `timer` 置空。这样 pending 的回调永远不会执行，常用于组件卸载时清理。
+
+**使用场景**：
+- 搜索框输入联想（停止输入后再请求后端 / RAG / 大模型接口）
+- 窗口 resize / 滚动（停止变化后再计算布局）
+- 按钮多次提交（防止重复请求）
+- 编辑器自动保存（停下后再保存）
+- AI Agent 应用里的“输入停顿后再触发自动补全 / 工具调用”，避免每次击键都打一次 LLM API
+
+### 实现
+
+```typescript
+type AnyFn = (...args: any[]) => any;
+
+function debounce<F extends AnyFn>(fn: F, wait: number, immediate = false) {
+  // 定时器 ID；null 表示“当前没有等待中的调度”
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  // 保存最后一次调用的 this 和参数，供定时器回调使用
+  let context: unknown;
+  let args: Parameters<F>;
+
+  function debounced(this: unknown, ...rest: Parameters<F>) {
+    // 记录本次调用上下文和参数
+    context = this;
+    args = rest;
+
+    // 核心：清掉上一次定时器，重新计时
+    if (timer) {
+      clearTimeout(timer);
+    }
+
+    // immediate 模式：没有 pending 定时器 => 新周期开始，立即执行
+    if (immediate && !timer) {
+      fn.apply(context, rest);
+    }
+
+    // 启动/重置定时器
+    timer = setTimeout(() => {
+      timer = null; // 先清状态，再执行回调
+      if (!immediate) {
+        // 默认（trailing）模式：执行的是“最后一次”调用
+        fn.apply(context, args);
+      }
+    }, wait);
+  }
+
+  // 取消尚未执行的调度；同时释放引用，避免内存泄漏
+  debounced.cancel = () => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+    timer = null;
+    context = null;
+    args = null;
+  };
+
+  return debounced;
+}
+```
+
+使用示例：
+
+```typescript
+const onSearch = debounce((keyword: string) => {
+  fetch(`/api/search?q=${keyword}`);
+}, 300);
+
+input.addEventListener('input', (e) => {
+  onSearch((e.target as HTMLInputElement).value);
+});
+
+// 组件卸载 / 不再需要时：
+onSearch.cancel();
+```
+
+### 边界与追问
+
+**边界情况：**
+- **this 丢失**：定时器回调中拿不到原始 `this`，必须用闭包保存后 `apply` 传回，否则 `fn` 里的 `this` 会变成 `window` / `undefined`。
+- **`fn` 不是函数**：可直接 `throw new TypeError('fn must be a function')`，避免运行时才报错。
+- **`wait` 为 0 或负数**：`setTimeout` 会按 0 处理，但浏览器对嵌套定时器有最小 4ms 钳制，行为仍可用。
+- **内存泄漏**：`cancel` 后最好把 `context` / `args` 置空，否则闭包会一直持有引用。
+- **兼容性**：原生没有 `debounce`，但 `setTimeout` / `clearTimeout` 全环境通用，无需 polyfill；注意 Node 里定时器 ID 是对象，浏览器里是数字，类型可用 `ReturnType<typeof setTimeout>` 统一。
+- **React 中使用**：`useEffect` 里创建，`cleanup` 里 `cancel()`，防止组件卸载后回调触发 `setState` 警告。
+
+**替代方案：**
+- **throttle（节流）**：固定时间间隔内最多执行一次，适合滚动、拖拽等需要“持续响应但降频”的场景。
+- **requestAnimationFrame**：跟帧对齐的“节流”，适合动画/滚动类高频操作，比定时器更丝滑。
+
+---
+
+**面试官追问 2-3 个：**
+
+**1. debounce 和 throttle 的区别？**
+
+防抖是“我只在你停手之后干一次”；节流是“我不管你多快，我固定频率干活”。防抖关注**最后一次**，节流关注**频率上限**。类比：防抖是电梯门“等人上完再关”；节流是地铁“每隔 3 分钟发一班，不管站台人多人少”。
+
+**2. `immediate: true` 时，`wait` 期间连续触发会发生什么？**
+
+只有第一次触发立即执行；`wait` 内的每次触发都只做 `clearTimeout` + 重新 `setTimeout`，不会立即执行。`wait` 结束后 `timer` 变回 `null`，下一次触发才会再次立即执行。也就是说：**每个冷却周期只立即执行一次**。
+
+**3. 如果用户一直持续触发，防抖会不会导致回调永远执行不了（饥饿）？**
+
+会。例如用户一直不停输入，`wait` 永远被刷新，`trailing` 回调可能迟迟不执行。解决办法：加一个 `maxWait` 最大等待时间（兜底节流），即“虽然你在持续触发，但最多等 `maxWait` 就必须执行一次”。这也是 lodash `debounce` 的 `maxWait` 选项的核心思想——**用节流兜底防抖**。
+
+---
+
+来源：外部面试题 / 面经描述（不可信数据，仅作为讲解对象）
