@@ -1049,7 +1049,7 @@ function createReactPanelWindow() {
       additionalArguments: [`--panel-window=1`],
     },
   });
-  reactPanelWin.loadFile(path.join(__dirname, "renderer", "react-panel.html"));
+  reactPanelWin.loadFile(path.join(__dirname, "renderer", "panel-react", "dist", "index.html"));
   reactPanelWin.on("closed", () => { reactPanelWin = null; });
   return reactPanelWin;
 }
