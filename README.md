@@ -249,6 +249,8 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 - **分类/检测/匹配**：16 分类 / 12 检测 / 12 静态匹配（`benchmark/static.json`）
 - **指标**：综合分 + pass@1 + 成本（tokens/USD，solver vs judge 分账）+ 延迟（p50/p95）+ 失败分类，全部落 `eval_summary.csv`
 - 判官金标校验（20 对，`--judge-check`，CI 有 key 时跑）
+- **当前全量基线（2026-08-28 实测，38 题，`benchmark/reports/latest.json`）**：综合 **96/100** —— 讲解 91（客观代码验证 4/5）/ TRACe 90 / 真实性 CRAG 86（correct 30·acceptable 3·missing 1·incorrect 4）/ 分类 100 / 检测 100 / 静态 100；171 次调用 **$0.22**、p50 17s / p95 78s、0 失败
+  - 注：基线经 **Ollama 端点（deepseek-v4-flash:cloud）** 跑出，envelope 记录 model——与官方 API 基线**跨模型不可直接比**（Layer A 反映"模型 + prompt 组合能力"，换模型即换基线）；同模型对比看 `eval_summary.csv` 同 hash 行
 
 ### 数据集治理（`npm run bench:validate`，CI 每次跑）
 
@@ -293,7 +295,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 | Lint | `npm run lint` | ✅ 0 error（已提交代码；warning 若干 no-unused-vars） |
 | 评测数据合法性 | `npm run bench:validate` | ✅ 6 数据集全过（脏数据 exit 1） |
 | Agent 能力评测 | `npm run bench:agent` | ✅ 19/19（mock LLM，与模型无关） |
-| 模型基线 | `npm run bench` | ⚠️ 最新报告为 08-15 quick 旧数据——**38 题全量基线待重跑** |
+| 模型基线 | `npm run bench` | ✅ 2026-08-28 全量 38 题实测：综合 96/100（Ollama deepseek-v4-flash:cloud，$0.22）——详见评测章节 |
 | 回归门禁 | `npm run bench:gate` | 分层门禁（硬红 exit 1） |
 | 语音评测 | `npm run voice:score` / `voice:audit` | 内容完整度/音色/节奏/污染 + 末尾完整度审计 |
 | 路由注册表回归 | `tests/routes-registry.test.mjs` | 139 条路由断言 + 契约覆盖率护栏（≥15 路由挂契约） |

@@ -83,7 +83,7 @@ AI 回答：${answer.slice(0, 6000)}
       const data = await llmChat([
         { role: "system", content: "你是严谨的评测员，只输出合法 JSON。" },
         { role: "user", content: prompt },
-      ], { maxTokens: 2000, temperature: 0.2, tag: "judge" });
+      ], { maxTokens: 2000, temperature: 0.2, tag: "judge", timeout: 90000 }); // 90s：慢端点（本地 Ollama/云推理）判官调用超时曾致 3 次重试全败 → TRACe 0 分
       const content = data?.choices?.[0]?.message?.content ?? "";
       const parsed = extractJson(content);
       if (parsed && typeof parsed.relevance === "number" && typeof parsed.utilization === "number" &&
