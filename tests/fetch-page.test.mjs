@@ -46,3 +46,15 @@ test("assertPublicUrl：内网/环回字面量拒绝（无需 DNS）", async () 
   await assert.rejects(() => assertPublicUrl("http://169.254.169.254/"), /内网|本机/);   // 云元数据
   await assert.rejects(() => assertPublicUrl("http://10.0.0.1/"), /内网|本机/);
 });
+
+// SSRF 旁路回归护栏：edge-session 复用 assertPublicUrl（含 DNS），rss 用静态 isPrivateHostname（配置源友好）
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const LIB = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "lib");
+test("SSRF 旁路护栏：edge-session 用 assertPublicUrl；rss 用 isPrivateHostname 拒绝内网", () => {
+  const edge = readFileSync(path.join(LIB, "edge-session.mjs"), "utf8");
+  const rss = readFileSync(path.join(LIB, "rss.mjs"), "utf8");
+  assert.ok(edge.includes('assertPublicUrl'), "edge-session 必须做 SSRF 校验（修复：此前直接 goto 任意 URL）");
+  assert.ok(rss.includes('isPrivateHostname'), "rss 必须做 SSRF 校验（修复：此前仅 https? 前缀）");
+});
