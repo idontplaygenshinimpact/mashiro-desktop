@@ -211,6 +211,16 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 └── .github/workflows/              # ci.yml（全量门禁）+ weekly-eval.yml（每周评测）+ release.yml（双源发布）
 ```
 
+### 渲染层选型（esbuild 主面板 + Vite 双框架子项目）
+
+| 层 | 技术 | 选型依据 |
+|---|---|---|
+| 主面板（原生） | 原生 JS + **esbuild** 单入口打包 | file:// 加载场景不需要 dev server/HMR；零依赖启动快（性能对照基线） |
+| 模拟面试（React 版） | **Vite 子项目**（`panel-react/`，vite 7） | 交互密集（状态机/评分可视化），HMR 开发效率；独立窗口（托盘一键切换） |
+| 复习卡（Vue 版） | **Vite 子项目**（`panel-vue-review/`，vite 6） | 数据可视化（FSRS 调度/遗忘曲线 SVG），Vue 响应式系统；独立窗口 |
+
+三套渲染层共用**同一 preload IPC 桥 + 同一业务层**（`lib/interview.mjs`/`lib/review.mjs` 零改动）——渲染层可替换性验证。子项目 `npm run build --prefix` 出静态产物（`base:'./'` 兼容 file://，CSP `'self'` 零修改）。
+
 ---
 
 ## 关键技术点

@@ -1,6 +1,6 @@
 // React 版模拟面试面板（渲染层可替换性验证的核心交互）
 // 全部交互经 window.kanban IPC 桥（同一 preload，74 方法）→ 业务层 lib/interview.mjs 零改动
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { renderMarkdown } from "./markdown.js";
 import { ScoreBars, ScoreRadar } from "./score.jsx";
 
@@ -84,6 +84,7 @@ export function InterviewPanel() {
         }));
       }
       addLog(`第 ${r.round} 轮【${r.roundType || "问答"}】完成` + (r.finished ? "（面试结束）" : ""));
+      if (r.comment) addLog(`💬 面试官点评：${r.comment}`);
       if (r.finished) {
         const end = await window.kanban.invEnd();
         if (end?.ok && end.report) {
@@ -113,7 +114,7 @@ export function InterviewPanel() {
   }
   if (phase === "active" && session) {
     return (
-      <SessionView session={session} scores={scores} busy={busy} onSubmit={submit} onExit={async () => {
+      <SessionView session={session} scores={scores} busy={busy} log={log} onSubmit={submit} onExit={async () => {
         try { await window.kanban.invEnd(); } catch { /* ignore */ }
         setPhase("setup");
       }} />
@@ -178,14 +179,67 @@ function SetupView({ config, setConfig, busy, onStart, resumable, onResume, hist
   );
 }
 
-function SessionView({ session, scores, busy, onSubmit, onExit }) {
+function SessionView({ session, scores, busy, log, onSubmit, onExit }) {
   const [answer, setAnswer] = useState("");
+  const [elapsed, setElapsed] = useState(0);   // 本回合计时（秒）
+  const [recording, setRecording] = useState(false);
+  const [micErr, setMicErr] = useState("");
+  const recRef = useRef(null);
   const avgRounds = Math.max(1, scores.rounds);
+
+  // 计时器：进入会话/切换轮次时启动
+  useEffect(() => {
+    setElapsed(0);
+    const iv = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(iv);
+  }, [session?.round]);
+
+  // 语音作答：录音（16k Float32Array）→ speechToText → 填入回答
+  async function toggleMic() {
+    if (recording) { stopAndTranscribe(); return; }
+    setMicErr("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000 } });
+      const ctx = new AudioContext({ sampleRate: 16000 });
+      const src = ctx.createMediaStreamSource(stream);
+      const proc = ctx.createScriptProcessor(4096, 1, 1);
+      const samples = [];
+      proc.onaudioprocess = (e) => samples.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      src.connect(proc); proc.connect(ctx.destination);
+      recRef.current = { stream, ctx, src, proc, samples };
+      setRecording(true);
+    } catch (e) {
+      setMicErr("麦克风不可用：" + String(e?.message || e).slice(0, 60));
+    }
+  }
+
+  async function stopAndTranscribe() {
+    const rec = recRef.current;
+    if (!rec) return;
+    const { stream, ctx, src, proc, samples } = rec;
+    src.disconnect(); proc.disconnect();
+    stream.getTracks().forEach((t) => t.stop());
+    await ctx.close().catch(() => {});
+    recRef.current = null;
+    setRecording(false);
+    const total = samples.reduce((n, a) => n + a.length, 0);
+    if (total < 8000) { setMicErr("语音太短，请再说一次"); return; }
+    const audio = new Float32Array(total);
+    let off = 0;
+    for (const a of samples) { audio.set(a, off); off += a.length; }
+    try {
+      const r = await window.kanban.speechToText(audio);
+      if (r?.ok && r.text) setAnswer((prev) => (prev ? prev + "\n" : "") + r.text);
+      else setMicErr(r?.error || "识别失败，请重试");
+    } catch (e) { setMicErr("识别调用失败：" + String(e?.message || e).slice(0, 60)); }
+  }
+
   return (
     <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14, maxWidth: 720, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 15, fontWeight: 700 }}>
           第 {session.round} 轮 <span style={{ fontSize: 12, color: "#8fc7ff" }}>· {session.roundType || "问答"} · 共 {session.totalRounds || "?"} 轮</span>
+          <span style={{ fontSize: 12, color: "#e8c04a", marginLeft: 10 }}>⏱ {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}</span>
         </div>
         <button onClick={onExit} style={{ background: "none", border: "1px solid #4a4568", color: "#a8a3c8", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>结束并返回</button>
       </div>
@@ -200,7 +254,16 @@ function SessionView({ session, scores, busy, onSubmit, onExit }) {
 
       <div style={{ display: "flex", gap: 14 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, color: "#a8a3c8", marginBottom: 6 }}>你的回答</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ fontSize: 12, color: "#a8a3c8" }}>你的回答{recording ? "（录音中…）" : ""}</div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {micErr && <span style={{ fontSize: 11, color: "#e5484d" }}>{micErr}</span>}
+              <button onClick={toggleMic} disabled={busy}
+                style={{ background: recording ? "#e5484d" : "#2a2540", color: "#fff", border: "1px solid #4a4568", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
+                {recording ? "⏹ 停止" : "🎤 语音作答"}
+              </button>
+            </div>
+          </div>
           <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={7}
             placeholder="组织你的回答（思路 → 代码/例子 → 边界）…" style={{ ...input, resize: "vertical", lineHeight: 1.5 }} />
           <button onClick={() => { onSubmit(answer); setAnswer(""); }} disabled={busy || !answer.trim()}
@@ -208,11 +271,20 @@ function SessionView({ session, scores, busy, onSubmit, onExit }) {
             {busy ? "评分中…" : "📤 提交回答"}
           </button>
         </div>
-        <div style={{ width: 240, flexShrink: 0, background: "#1f1a31", borderRadius: 10, padding: 14 }}>
-          <div style={{ fontSize: 12, color: "#a8a3c8", marginBottom: 8 }}>累计评分（{scores.rounds} 轮）</div>
-          <ScoreBars scores={scores} />
-          <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
-            <ScoreRadar scores={scores} rounds={avgRounds} />
+        <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ background: "#1f1a31", borderRadius: 10, padding: 14 }}>
+            <div style={{ fontSize: 12, color: "#a8a3c8", marginBottom: 8 }}>累计评分（{scores.rounds} 轮）</div>
+            <ScoreBars scores={scores} />
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
+              <ScoreRadar scores={scores} rounds={avgRounds} />
+            </div>
+          </div>
+          <div style={{ background: "#1f1a31", borderRadius: 10, padding: 10, maxHeight: 130, overflowY: "auto" }}>
+            <div style={{ fontSize: 11, color: "#a8a3c8", marginBottom: 6 }}>面试日志</div>
+            {log.length === 0 && <div style={{ fontSize: 11, color: "#6a6790" }}>（暂无记录）</div>}
+            {log.map((l, i) => (
+              <div key={i} style={{ fontSize: 11, color: "#c9c6dd", marginBottom: 4, lineHeight: 1.4 }}>{l.text}</div>
+            ))}
           </div>
         </div>
       </div>

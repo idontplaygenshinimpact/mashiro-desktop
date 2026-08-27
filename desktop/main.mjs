@@ -242,6 +242,7 @@ async function buildTrayMenu() {
     { label: "显示/隐藏", click: () => { if (win) { win.isVisible() ? win.hide() : win.show(); } } },
     { label: "打开面板", click: () => { createPanelWindow(); } },
     { label: "打开面板（React 版）", click: () => { createReactPanelWindow(); } },
+    { label: "打开复习卡（Vue 版）", click: () => { createVueReviewWindow(); } },
     { label: "✍️ 手写/算法题库", click: () => { openPanelChallenges(); } },
     { label: "🎀 换肤", submenu: mascotItems },
     await musicSubmenu(), // 🎵 樱花庄音乐（扫描 assets/music/）
@@ -1052,6 +1053,43 @@ function createReactPanelWindow() {
   reactPanelWin.loadFile(path.join(__dirname, "renderer", "panel-react", "dist", "index.html"));
   reactPanelWin.on("closed", () => { reactPanelWin = null; });
   return reactPanelWin;
+}
+
+// Vue 版复习卡窗口（渲染层可替换性验证 #2）：同一 preload IPC 桥 + 同一 API 层（reviewDue/reviewSubmit）
+// 与 React 版同模式：独立窗口 + 单例 + 托盘一键切换；主面板 tab-review 保持原生复习 UI 独占
+let vueReviewWin = null;
+function createVueReviewWindow() {
+  if (vueReviewWin && !vueReviewWin.isDestroyed()) {
+    vueReviewWin.show();
+    vueReviewWin.focus();
+    return vueReviewWin;
+  }
+  const { workArea } = screen.getPrimaryDisplay();
+  const W = Math.min(560, Math.round(workArea.width * 0.8));
+  const H = Math.min(720, Math.round(workArea.height * 0.85));
+  const x = Math.round(workArea.x + (workArea.width - W) / 2);
+  const y = Math.round(workArea.y + (workArea.height - H) / 2);
+  vueReviewWin = new BrowserWindow({
+    width: W,
+    height: H,
+    x,
+    y,
+    minWidth: 420,
+    minHeight: 520,
+    title: "真白 · 复习卡（Vue 版）",
+    backgroundColor: "#171322",
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"), // 同一 IPC 桥
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      additionalArguments: [`--panel-window=1`],
+    },
+  });
+  vueReviewWin.loadFile(path.join(__dirname, "renderer", "panel-vue-review", "dist", "index.html"));
+  vueReviewWin.on("closed", () => { vueReviewWin = null; });
+  return vueReviewWin;
 }
 
 function createPanelWindow() {
