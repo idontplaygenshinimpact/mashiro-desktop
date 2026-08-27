@@ -45,3 +45,13 @@ ui-shots/
 __pycache__/
 scripts/__pycache__/
 scripts/tmp-*.mjs
+
+# 内部评估/审计/战略文档——不上公开仓库（git rm --cached 保留本地）
+docs/秋招项目评估-源码拷问抗压报告.md
+docs/工程化现状台账.md
+docs/工程化升级与简历包装指南.md
+docs/项目愿景总结与路线图.md
+docs/audit-report.md
+docs/audit-ui-func-prompt.md
+docs/AI评测体系包装与升级.md
+docs/lingchat-借鉴分析.md
