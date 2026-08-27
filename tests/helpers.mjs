@@ -92,7 +92,23 @@ export async function mockLlmChat(messages, _opts = {}) {
   return { choices: [{ message: { content, role: "assistant" } }] };
 }
 export async function mockLlmChatStream(messages, _opts = {}, onChunk) {
+  lastMessages = messages; // 与 mockLlmChat 一致：prompt 断言可见
   const content = queue.shift() ?? "";
+  // 与 mockLlmChat 一致：TOOLCALL: 前缀 → 工具调用响应（流式 + 工具调用共存）
+  const m = content.match(/^TOOLCALL:(.+)$/s);
+  if (m) {
+    let fn = { name: "unknown", arguments: "{}" };
+    try { fn = JSON.parse(m[1]); } catch { /* ignore */ }
+    return {
+      choices: [{
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: [{ id: `call_${Date.now().toString(36)}`, type: "function", function: fn }],
+        },
+      }],
+    };
+  }
   for (let i = 0; i < content.length; i += 8) {
     if (onChunk) onChunk(content.slice(i, i + 8));
   }

@@ -250,10 +250,9 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 ### 消融基线（`npm run bench:ablation -- --sample N`，诚实版）
 
-- 同题 A/B：裸 prompt vs 全链路（结构化 prompt 工程），固定 seed 随机顺序；**solver 输出缓存**（重跑只判 judge，降本 30%）
-- **校准后 sample=20 实测（ablation-2026-08-26T10-17.json，$0.23，160 calls）**：A judge84/CRAG90/覆盖88% vs B judge91/CRAG73/覆盖93% → Δ judge +7pt · Δ cover +5pt · Δ CRAG -17pt
-- **诚实的方法论局限（2026-08-26 核查承认）**：① 同 hash 多次运行结果在 **+8 ~ -13 摆动**（solver 随机性 + 判官波动，小样本下结论不稳定——README 引用的 +7 只是其中一次 sample=20 报告，`ablation-latest.json` 为最近一次 sample=8 的 -8）；② 抽样实现是**前缀切片**（`slice(0, SAMPLE)` 非随机），已列入修复；③ 判官长文校准后仍有随机波动（持续校准项）
-- **判官长文校准**（实测驱动）：发现 CRAG 判官对 5000+ 字长文系统性误判 → 校准 prompt + judge-check 复用真实判官；同题 B q5 从 incorrect → correct，Δ CRAG 从 -43 → -17
+- 同题 A/B：裸 prompt vs 全链路（结构化 prompt 工程），固定 seed 随机顺序（**抽样已改 seededShuffle 随机**，非前缀切片）；**solver 输出缓存**（重跑只判 judge，降本 30%）
+- **结论（诚实口径）**：消融 Δ **不稳定**——同 hash 多次运行在 **+8 ~ -13 摆动**（solver 随机性 + 判官波动，小样本下结论不可靠）。实测记录：sample=20 某次 Δ judge +7pt / Δ cover +5pt / Δ CRAG -17pt（ablation-2026-08-26T10-17.json）；最近一次 sample=8 为 Δ judge -8（ablation-latest.json）。**当前不能下"全链路优于裸 prompt"的确定结论**——这本身就是方法论发现（小样本消融的统计陷阱），继续治理中
+- **判官长文校准**（实测驱动）：发现 CRAG 判官对 5000+ 字长文系统性误判 → 校准 prompt + judge-check 复用真实判官；同题 B q5 从 incorrect → correct，Δ CRAG 从 -43 → -17（校准方向有效，波动仍存）
 
 ### 为什么讲解链路不用 RAG（决策档案）
 

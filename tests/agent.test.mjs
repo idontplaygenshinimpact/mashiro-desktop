@@ -406,3 +406,30 @@ test("tool_error：工具执行抛异常 → 记录 decision=tool_error（不破
   assert.equal(err.reason, "模拟工具执行异常", "reason 为异常消息（截断 ≤200）");
   assert.equal(err.approved_by, null);
 });
+
+test("chatWithAgent 流式：delta 事件透传 + 工具事件共存（一套链路）", async () => {
+  const { chatWithAgent } = await import("../lib/agent.mjs");
+  const { setLlmResponses } = await import("./helpers.mjs");
+  // 先工具调用、后流式回复
+  setLlmResponses(
+    'TOOLCALL:{"name":"get_study_plan","arguments":"{}"}',
+    "这是流式回复内容，分段推送。",
+  );
+  const events = [];
+  const r = await chatWithAgent("我的学习计划", [], (ev) => events.push(ev), "stream-test");
+  const types = events.map((e) => e.type);
+  assert.ok(types.includes("tool_start"), "工具事件仍透传");
+  assert.ok(types.includes("tool_done"), "工具完成事件透传");
+  assert.ok(types.includes("delta"), "LLM 输出级 delta 事件已发出（对话流式化）");
+  const deltas = events.filter((e) => e.type === "delta").map((e) => e.delta).join("");
+  assert.ok(deltas.includes("流式回复内容"), `delta 内容完整（${deltas.slice(0, 30)}）`);
+  assert.ok(r.reply.includes("流式回复内容"), "回复完整返回");
+});
+
+test("chatWithAgent 无回调：行为零变化（一次性返回）", async () => {
+  const { chatWithAgent } = await import("../lib/agent.mjs");
+  const { setLlmResponses } = await import("./helpers.mjs");
+  setLlmResponses("普通回复内容。");
+  const r = await chatWithAgent("hi", [], null, "stream-test2");
+  assert.equal(r.reply, "普通回复内容。");
+});
