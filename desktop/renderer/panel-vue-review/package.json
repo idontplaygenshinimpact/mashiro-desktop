@@ -1,0 +1,20 @@
+{
+  "name": "panel-vue-review",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Vue 版复习卡面板（FSRS 调度可视化）——独立 Vite 项目，主项目 esbuild 零侵入",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "ts-fsrs": "^4.7.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.0",
+    "vite": "^6.0.0"
+  }
+}
