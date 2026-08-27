@@ -24,7 +24,7 @@
 | **爬取引擎** | 自动逛牛客/掘金/CSDN，抓取前端 & AI Agent 面经/笔试题，AI 筛选出**具体题目**并完整讲解（结论/原理/JS实现/边界），归档 Markdown |
 | **学习闭环** | 从产出提炼"优先学习清单" → 勾选完成 → 复盘出题 → 判分 → 错题自动进入**薄弱点**，下次优先学；FSRS 间隔复习 + 选择题自测 + 到期提醒 |
 | **学习计划引擎** | 任意"学一段长时间内容"→ 计划实体 + 学习事件流（唯一事实源）+ 趋势聚合 + 即时反馈（与判题/复习/清单解耦的通用引擎） |
-| **专项练习** | 牛客 TOP101 算法题 + **手写/算法题库 448 道**（337 道可自动判题，worker 沙箱隔离），答错回流薄弱点与复习卡 |
+| **专项练习** | 牛客 TOP101 算法题 + **手写/算法题库 448 道**（281 道带自动判题测试，worker 沙箱隔离；答错回流薄弱点与复习卡） |
 | **模拟面试** | **面试官 agent 化**（出题前可检索题库/项目源码/知识库/薄弱点）+ 五维评分 + 追问深挖 + **动态轮数**（薄弱点未考完自动加试）+ 复盘报告回流；**继续上一场**（关面板不丢进度）+ 历史复盘回看 |
 | **对话闭环** | 对话 agent（**37 个内置工具** + MCP 工具 + 技能工具，权限分级审批）——可反哺学习清单、建复习卡、挂学习任务；**多会话**隔离；上下文压缩 + 追问语义缓存 |
 | **求职闭环** | 简历 → 方向画像 → 岗位匹配/投递 → 笔试日程 → 面试邀约（邮箱自动识别）→ 全节点回流（规则引擎给"现在最该做什么"） |
@@ -100,7 +100,7 @@ start-kanban.bat
 node node_modules\electron\dist\electron.exe desktop\main.mjs
 ```
 
-**改代码后一键重启**：面板右上角「♻️」按钮（桌宠 + 后台服务一并重启，约 3-5 秒）。开机自启：注册表 Run 键 `mashiro-desktop` 项。
+**改代码后一键重启**：面板右上角「♻️」按钮（桌宠 + 后台服务一并重启，约 3-5 秒）。开机自启为「计划中」（当前启动脚本不写注册表，需手动添加或每次双击启动）。
 
 ---
 
@@ -162,7 +162,7 @@ Claude Code 配置（`.mcp.json`）：
 | 🏢 **company-intel** | "字节面什么" | 目标公司面经情报（TOP 考点+真题线索） |
 | 🐙 **github-repo** | "React 仓库多火" | GitHub 仓库信息（stars/语言/更新时间） |
 
-> 技能即插即用：新增 `skills/<名>/` 目录即可，`POST /api/skills/reload` 热加载；**场景装配**（P1）下 agent 只注入当前场景技能子集（面试中/CC 陪伴/学习），省 token、降幻觉面。
+> 技能即插即用：新增 `skills/<名>/` 目录即可（`lib/skills.mjs` 的 `reloadSkills` 支持热重载，HTTP 管理路由待补）；**场景装配**（P1）下 agent 只注入当前场景技能子集（面试中/CC 陪伴/学习），省 token、降幻觉面。
 
 ### 3. 命令行爬取 / 4. 学习闭环 / 5. 专注（番茄钟 + 陪伴）/ 6. 语音交互 / 7. 本地知识库
 
@@ -251,9 +251,9 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 ### 消融基线（`npm run bench:ablation -- --sample N`，诚实版）
 
 - 同题 A/B：裸 prompt vs 全链路（结构化 prompt 工程），固定 seed 随机顺序；**solver 输出缓存**（重跑只判 judge，降本 30%）
-- **校准后正式实测（sample=20，deepseek-v4-flash，$0.23，160 calls）**：A judge84/CRAG90/覆盖88% vs B judge91/CRAG73/覆盖93% → **Δ judge +7pt · Δ cover +5pt · Δ CRAG -17pt**
-- **判官长文校准**（实测驱动）：发现 CRAG 判官对 5000+ 字长文系统性误判（内容正确的讲解被判 incorrect）→ 校准 prompt + judge-check 复用真实判官；同题 B q5 从 incorrect → correct，Δ CRAG 从 -43 → -17
-- **诚实解读**：结构化模板收益实锤（质量 +7pt、覆盖 +5pt）；Δ CRAG 残余来自判官随机波动（持续校准项）；数值只写实测
+- **校准后 sample=20 实测（ablation-2026-08-26T10-17.json，$0.23，160 calls）**：A judge84/CRAG90/覆盖88% vs B judge91/CRAG73/覆盖93% → Δ judge +7pt · Δ cover +5pt · Δ CRAG -17pt
+- **诚实的方法论局限（2026-08-26 核查承认）**：① 同 hash 多次运行结果在 **+8 ~ -13 摆动**（solver 随机性 + 判官波动，小样本下结论不稳定——README 引用的 +7 只是其中一次 sample=20 报告，`ablation-latest.json` 为最近一次 sample=8 的 -8）；② 抽样实现是**前缀切片**（`slice(0, SAMPLE)` 非随机），已列入修复；③ 判官长文校准后仍有随机波动（持续校准项）
+- **判官长文校准**（实测驱动）：发现 CRAG 判官对 5000+ 字长文系统性误判 → 校准 prompt + judge-check 复用真实判官；同题 B q5 从 incorrect → correct，Δ CRAG 从 -43 → -17
 
 ### 为什么讲解链路不用 RAG（决策档案）
 
@@ -272,17 +272,20 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 ## 工程质量门禁
 
-> 数字为 2026-08-26 实测（全量重跑），非历史快照。
+> 数字为 2026-08-26 实测（已提交 HEAD）。**注意**：当前工作区含并行未提交开发（实时 TTS 流水线 / UI 审计脚本），
+> 全量 `npm run lint`（3 errors / 34 warnings）与 `npm run typecheck`（7 errors）会红——错误全部来自未提交新文件
+> （speech-queue / tts-gpt-sovits / ui-* 审计脚本），合入修复后恢复。以下为已提交代码的门禁状态：
 
 | 门禁 | 命令 | 当前状态 |
 |---|---|---|
 | 单元/集成测试 | `npm test` | ✅ **924/924 通过**（892 单元 + 32 集成，90 个测试文件，mock LLM 无 key 可跑） |
-| 类型检查 | `npm run typecheck`（tsc + checkJs） | ✅ 0 错误 |
-| 桌面端类型检查 | `npm run typecheck:desktop`（preload/main/api-client） | ✅ 0 错误（kanban-api.d.ts 74 方法一致） |
-| Lint | `npm run lint`（ESLint flat config） | ✅ 0 error |
+| 类型检查（lib） | `npm run typecheck` | ✅ 0 错误（已提交代码） |
+| 桌面端类型检查 | `npm run typecheck:desktop` | ✅ 0 错误（已提交代码；kanban-api.d.ts 74 方法一致） |
+| Lint | `npm run lint` | ✅ 0 error（已提交代码；warning 若干 no-unused-vars） |
 | 评测数据合法性 | `npm run bench:validate` | ✅ 6 数据集全过（脏数据 exit 1） |
 | Agent 能力评测 | `npm run bench:agent` | ✅ 19/19（mock LLM，与模型无关） |
-| 模型基线 + 回归门禁 | `npm run bench` + `bench:gate` | 以报告为准；分层门禁（硬红 exit 1） |
+| 模型基线 | `npm run bench` | ⚠️ 最新报告为 08-15 quick 旧数据——**38 题全量基线待重跑** |
+| 回归门禁 | `npm run bench:gate` | 分层门禁（硬红 exit 1） |
 | 语音评测 | `npm run voice:score` / `voice:audit` | 内容完整度/音色/节奏/污染 + 末尾完整度审计 |
 | 路由注册表回归 | `tests/routes-registry.test.mjs` | 139 条路由断言 + 契约覆盖率护栏（≥15 路由挂契约） |
 | CI | `.github/workflows/ci.yml` | push/PR：test + validate + judge-check + quick + typecheck×2 + lint + build/check:renderer + bench:agent |

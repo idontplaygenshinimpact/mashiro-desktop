@@ -99,7 +99,9 @@ console.log("========== 消融基线 A/B（prompt 工程消融） ==========");
 console.log(`样本 ${SAMPLE} 题（seed=${SEED}）| A=裸 prompt（无模板） vs B=全链路 solveQuestion`);
 
 const questions = load("questions.json").questions.filter((q) => q.type !== "trace");
-const picked = questions.slice(0, SAMPLE);
+// 随机抽样（修复：此前 slice(0, SAMPLE) 前缀切片——样本固定取前 N 题，覆盖偏斜且
+// 结果被前缀题集主导；改为固定 seed 的洗牌取前 N，可复现且覆盖全题集）
+const picked = seededShuffle(questions, SEED).slice(0, SAMPLE);
 const datasetHash = computeDatasetHash(2, load("questions.json").questions);
 
 // 洗牌后按顺序跑：[(题, 变体A), (题, 变体B), ...] 交错（同题不紧邻也可，随机化即可）
