@@ -241,6 +241,7 @@ async function buildTrayMenu() {
     { type: "separator" },
     { label: "显示/隐藏", click: () => { if (win) { win.isVisible() ? win.hide() : win.show(); } } },
     { label: "打开面板", click: () => { createPanelWindow(); } },
+    { label: "打开面板（React 版）", click: () => { createReactPanelWindow(); } },
     { label: "✍️ 手写/算法题库", click: () => { openPanelChallenges(); } },
     { label: "🎀 换肤", submenu: mascotItems },
     await musicSubmenu(), // 🎵 樱花庄音乐（扫描 assets/music/）
@@ -1016,6 +1017,43 @@ ipcMain.handle("window:fit", async () => {
 });
 
 // ---------- 独立面板窗口（学习清单/模拟面试/对话/产出） ----------
+// React 版面板（渲染层可替换性验证）：同一 preload IPC 桥 + 同一 API 层，只换渲染层
+// 原生版=性能对照（零依赖启动快）；React 版=产品化可维护性重写核心交互（模拟面试）
+let reactPanelWin = null;
+function createReactPanelWindow() {
+  if (reactPanelWin && !reactPanelWin.isDestroyed()) {
+    reactPanelWin.show();
+    reactPanelWin.focus();
+    return reactPanelWin;
+  }
+  const { workArea } = screen.getPrimaryDisplay();
+  const W = Math.min(720, Math.round(workArea.width * 0.9));
+  const H = Math.min(800, Math.round(workArea.height * 0.9));
+  const x = Math.round(workArea.x + (workArea.width - W) / 2);
+  const y = Math.round(workArea.y + (workArea.height - H) / 2);
+  reactPanelWin = new BrowserWindow({
+    width: W,
+    height: H,
+    x,
+    y,
+    minWidth: 480,
+    minHeight: 600,
+    title: "真白 · 模拟面试（React 版）",
+    backgroundColor: "#171322",
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"), // 同一 IPC 桥：74 方法 + SSE 流
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      additionalArguments: [`--panel-window=1`],
+    },
+  });
+  reactPanelWin.loadFile(path.join(__dirname, "renderer", "react-panel.html"));
+  reactPanelWin.on("closed", () => { reactPanelWin = null; });
+  return reactPanelWin;
+}
+
 function createPanelWindow() {
   if (panelWin && !panelWin.isDestroyed()) {
     panelWin.show();

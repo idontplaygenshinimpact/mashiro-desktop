@@ -48,6 +48,7 @@
     "dist": "electron-builder --win --publish never",
     "dist:portable": "electron-builder --win portable --publish never",
     "build:renderer": "esbuild desktop/renderer/app.js --bundle --format=esm --outfile=desktop/renderer/app.bundle.js --log-level=warning",
+    "build:react-panel": "esbuild desktop/renderer/react/main.jsx --bundle --jsx=automatic --outfile=desktop/renderer/react-panel.bundle.js --log-level=warning",
     "build:speech-queue": "esbuild desktop/renderer/speech-queue.mjs --format=iife --global-name=SpeechQueue --outfile=desktop/renderer/speech-queue.bundle.js --log-level=warning",
     "check:renderer": "node scripts/check-renderer.mjs",
     "voice:synth": "py -3.12 scripts/synth-mashiro-long.py",
@@ -115,6 +116,7 @@
     "rss-parser": "^3.13.0",
     "sherpa-onnx-node": "^1.13.5",
     "ts-fsrs": "^5.4.1",
+    "vue": "^3.5.42",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -124,6 +126,8 @@
     "esbuild": "^0.28.1",
     "eslint": "^10.8.0",
     "globals": "^17.9.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "typescript": "^5.9.3"
   },
   "overrides": {

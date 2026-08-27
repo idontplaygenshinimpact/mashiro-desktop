@@ -56,3 +56,4 @@ docs/audit-ui-func-prompt.md
 docs/AI评测体系包装与升级.md
 docs/lingchat-借鉴分析.md
 .env.bak
+desktop/renderer/react-panel.bundle.js

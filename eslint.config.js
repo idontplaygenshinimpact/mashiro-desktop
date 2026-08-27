@@ -64,7 +64,7 @@ const baseRules = {
 };
 
 export default [
-  { ignores: ["node_modules/**", "output/**", "data/**", "benchmark/reports/**", "desktop/renderer/app.bundle.js", "desktop/renderer/assets/**", "desktop/renderer/lib/**", "*.bak", "*.log"] },
+  { ignores: ["node_modules/**", "output/**", "data/**", "benchmark/reports/**", "desktop/renderer/app.bundle.js", "desktop/renderer/react-panel.bundle.js", "desktop/renderer/speech-queue.bundle.js", "desktop/renderer/assets/**", "desktop/renderer/lib/**", "*.bak", "*.log"] },
   {
     files: ["**/*.mjs", "**/*.js"],
     languageOptions: {
@@ -92,6 +92,20 @@ export default [
     rules: {
       ...baseRules,
       "no-redeclare": "off",
+    },
+  },
+  // React 版面板（jsx：模块化 + JSX 语法 + 浏览器全局；不装 react 插件，规则用基础集）
+  {
+    files: ["desktop/renderer/react/**/*.jsx"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      parserOptions: { ecmaFeatures: { jsx: true } },
+      globals: { ...globals.browser },
+    },
+    rules: {
+      ...baseRules,
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
 ];

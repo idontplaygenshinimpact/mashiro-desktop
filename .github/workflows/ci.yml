@@ -53,6 +53,8 @@ jobs:
         run: npm run lint
       - name: Build renderer bundle
         run: npm run build:renderer
+      - name: Build React panel bundle（React 版模拟面试面板）
+        run: npm run build:react-panel
       - name: Renderer bundle consistency (app.bundle.js 与源码一致)
         run: npm run check:renderer
       - name: Agent/Harness benchmark (Layer B, mock LLM, pass^3)
