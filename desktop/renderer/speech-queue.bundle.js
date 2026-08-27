@@ -42,7 +42,6 @@ var SpeechQueue = (() => {
         const idx = remaining.search(SENT_END);
         if (idx < 0) {
           buf += remaining;
-          remaining = "";
           break;
         }
         const seg = remaining.slice(0, idx + 1);
@@ -71,7 +70,7 @@ var SpeechQueue = (() => {
     if (r.length < minLen) return "";
     return r;
   }
-  function createSpeechQueue({ prepare, play, budget = 200 } = {}) {
+  function createSpeechQueue({ prepare, play, budget = 200 }) {
     let queue = [];
     let playing = false;
     let spokenToday = 0;

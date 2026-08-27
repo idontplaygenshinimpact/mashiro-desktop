@@ -78,7 +78,7 @@ const app = await _electron.launch({ args: [MAIN] });
 try {
   const pet = await app.firstWindow();
   await sleep(4000);
-  try { await pet.evaluate(() => window.kanban.togglePanel()); } catch { /* ignore */ }
+  try { await pet.evaluate(() => (/** @type {any} */ (window)).kanban.togglePanel()); } catch { /* ignore */ }
   await sleep(2500);
   let panel = null;
   for (const w of app.windows()) {
@@ -110,3 +110,4 @@ try {
 } finally {
   await app.close().catch(() => {});
 }
+

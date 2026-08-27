@@ -19,7 +19,7 @@ try {
   const pet = await app.firstWindow();
   await sleep(4000);
   // 打开面板
-  try { await pet.evaluate(() => window.kanban.togglePanel()); } catch { console.log("togglePanel 调用失败，尝试继续"); }
+  try { await pet.evaluate(() => (/** @type {any} */ (window)).kanban.togglePanel()); } catch { console.log("togglePanel 调用失败，尝试继续"); }
   await sleep(2500);
 
   // 找面板窗口（url 含 panel.html）
@@ -53,3 +53,4 @@ try {
 } finally {
   await app.close().catch(() => {});
 }
+

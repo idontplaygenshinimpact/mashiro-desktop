@@ -1,7 +1,7 @@
 <template>
   <div class="fc-wrap">
     <div class="fc-title">
-      <span>遗忘曲线 R(t) = e<sup>-t/S</sup></span>
+      <span>遗忘曲线 R(t) = (1+19/81·t/S)<sup>-0.5</sup></span>
       <span class="fc-s">S={{ stability }} 天</span>
     </div>
     <svg :viewBox="`0 0 ${W} ${H}`" class="fc-svg">
@@ -28,13 +28,13 @@ const props = defineProps({ stability: Number, history: Array });
 const W = 300, H = 96;
 const PAD_L = 34, PAD_R = 6, PAD_T = 6, PAD_B = 16;
 
-// R(t) = e^(-t/S)，横轴 0-30 天 → SVG path
+// R(t) = (1 + 19/81·t/S)^(-0.5)（FSRS-6 幂律遗忘曲线，与后端 calcMemPct/调度器同源），横轴 0-30 天 → SVG path
 function pathFor(S) {
   const s = Math.max(0.1, Number(S) || 0.1);
   const pts = [];
   for (let t = 0; t <= 30; t += 0.5) {
     const x = PAD_L + (t / 30) * (W - PAD_L - PAD_R);
-    const y = PAD_T + (1 - Math.exp(-t / s)) * (H - PAD_T - PAD_B);
+    const y = PAD_T + (1 - Math.pow(1 + (19 / 81) * (t / s), -0.5)) * (H - PAD_T - PAD_B);
     pts.push(`${t === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`);
   }
   return pts.join(" ");

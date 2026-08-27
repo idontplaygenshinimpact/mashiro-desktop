@@ -11,7 +11,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FFPLAY = "D:\\hfut\\file\\Videopro\\exp01\\exp01_ffmpeg\\ffmpeg\\ffmpeg\\bin\\ffplay.exe";
 
 const playWav = (p) => new Promise((resolve) => {
-  const c = execFile(FFPLAY, ["-nodisp", "-autoexit", "-volume", "80", p], { stdio: "ignore" }, () => resolve());
+  const c = execFile(FFPLAY, ["-nodisp", "-autoexit", "-volume", "80", p], /** @type {import("node:child_process").ExecFileOptions} */ ({ stdio: "ignore" }), () => resolve());
   c.on("error", () => resolve());
 });
 
@@ -45,3 +45,4 @@ await new Promise((resolve) => {
   const iv = setInterval(() => { if (!q.isSpeaking && q.size === 0) { clearInterval(iv); resolve(); } }, 50);
 });
 console.log(`总耗时 ${Date.now() - t0}ms / ${sentences.length} 句（含首句预热+合成+播放）`);
+

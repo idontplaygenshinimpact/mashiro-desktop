@@ -1,7 +1,7 @@
 // 复习卡业务状态（FSRS 调度可视化）
 // 数据源：面板环境走 window.kanban.reviewDue/reviewSubmit（真实 /api/review）；
 //         浏览器 dev 环境（无 kanban）用内置示例数据
-// 遗忘曲线公式与后端一致：R(t) = e^(-t/S)，S = stability（天）
+// 遗忘曲线与后端同源：FSRS-6 幂律 R(t) = (1+19/81·t/S)^(-0.5)（ts-fsrs forgetting_curve）
 import { ref, computed } from "vue";
 import { fsrs, Rating, createEmptyCard } from "ts-fsrs";
 

@@ -26,7 +26,7 @@ export function splitSentences(text) {
     let remaining = line;
     while (remaining.length > 0) {
       const idx = remaining.search(SENT_END);
-      if (idx < 0) { buf += remaining; remaining = ""; break; }
+      if (idx < 0) { buf += remaining; break; } // 尾部残句入 buf（无需清空 remaining，break 即出循环）
       const seg = remaining.slice(0, idx + 1); // 含终止符
       remaining = remaining.slice(idx + 1);
       if (buf) {
@@ -59,7 +59,7 @@ export function flushRest(rest, minLen = 2) {
  *  play：播放 audio，resolve 表示播完（队列才推下一句）
  *  预取：播放当前句期间，后台 prepare 下一句（合成与播放流水线重叠，掩盖合成延迟）
  */
-export function createSpeechQueue({ prepare, play, budget = 200 } = {}) {
+export function createSpeechQueue({ prepare, play, budget = 200 }) {
   let queue = [];
   let playing = false;
   let spokenToday = 0;

@@ -139,11 +139,10 @@ export function playClickLong() {
   return playVoicePack(file);
 }
 
-// ---------- ffplay 路径解析（可配置 + 自动探测 + 硬编码兜底，找不到则不崩溃） ----------
-const HARDCODED_FFPLAY = "D:\\hfut\\file\\Videopro\\exp01\\exp01_ffmpeg\\ffmpeg\\ffmpeg\\bin\\ffplay.exe";
+// ---------- ffplay 路径解析（可配置 + 自动探测，找不到则不崩溃） ----------
 let ffplayPath = null; // null=未探测；string=路径；false=不可用
 
-/** 解析 ffplay 可执行路径：FFPLAY_PATH 覆盖 → where 探测（缓存）→ 硬编码兜底 → 不可用 */
+/** 解析 ffplay 可执行路径：FFPLAY_PATH 覆盖 → where 探测（缓存）→ 不可用（无本机路径兜底，防泄露） */
 export function resolveFfplay() {
   if (ffplayPath !== null) return ffplayPath;
   // 1) 环境变量显式覆盖
@@ -159,9 +158,7 @@ export function resolveFfplay() {
       if (line) { ffplayPath = line; return ffplayPath; }
     }
   } catch { /* ignore */ }
-  // 3) 回退硬编码路径
-  if (existsSync(HARDCODED_FFPLAY)) { ffplayPath = HARDCODED_FFPLAY; return ffplayPath; }
-  ffplayPath = false; // 不可用
+  ffplayPath = false; // 不可用（调用方回退静默/提示，不崩溃）
   return ffplayPath;
 }
 

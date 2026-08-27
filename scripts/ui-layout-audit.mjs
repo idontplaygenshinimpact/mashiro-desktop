@@ -54,7 +54,7 @@ try {
   const pet = await app.firstWindow();
   for (const p of app.windows()) p.on("pageerror", (e) => consoleErrors.push(String(e.message || e).slice(0, 120)));
   await sleep(4000);
-  try { await pet.evaluate(() => window.kanban.togglePanel()); } catch { /* ignore */ }
+  try { await pet.evaluate(() => (/** @type {any} */ (window)).kanban.togglePanel()); } catch { /* ignore */ }
   await sleep(2500);
 
   let panel = null;
@@ -88,3 +88,4 @@ try {
 } finally {
   await app.close().catch(() => {});
 }
+

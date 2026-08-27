@@ -27,7 +27,7 @@ for (const scale of scales) {
   try {
     const pet = await app.firstWindow();
     await sleep(4000);
-    try { await pet.evaluate(() => window.kanban.togglePanel()); } catch { /* ignore */ }
+    try { await pet.evaluate(() => (/** @type {any} */ (window)).kanban.togglePanel()); } catch { /* ignore */ }
     await sleep(2500);
     let panel = null;
     for (const w of app.windows()) {
@@ -62,3 +62,4 @@ for (const scale of scales) {
   }
 }
 console.log("\nDPI 矩阵完成");
+

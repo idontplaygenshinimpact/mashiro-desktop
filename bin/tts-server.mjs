@@ -91,8 +91,9 @@ const server = createServer((req, res) => {
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", () => {
-      let text = "";
-      try { text = String(JSON.parse(body).text || "").trim(); } catch { text = ""; }
+      let parsed = null;
+      try { parsed = JSON.parse(body); } catch { /* 非 JSON body */ }
+      const text = String(parsed?.text || "").trim();
       if (!text) { res.writeHead(400); res.end(JSON.stringify({ error: "text required" })); return; }
       if (text.length > 60) { res.writeHead(400); res.end(JSON.stringify({ error: "text too long (>60)" })); return; }
       if (!ready) { res.writeHead(503); res.end(JSON.stringify({ error: "tts not ready", modelMs: readyMs })); return; }
