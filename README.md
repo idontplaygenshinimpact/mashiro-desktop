@@ -1,17 +1,21 @@
 # 真白 · Mashiro Desktop（mashiro-desktop）
 
-> 🎀 桌面 AI **宿主「真白」+ 第一个插件「秋招助手」**。真白是 Electron 桌宠宿主（Live2D / 语音 / 面板框架 / 设置中心），秋招助手是跑在宿主上的能力插件（面经采集 / 模拟面试 / 学习清单 / 复习卡 / 知识库 / 对话 agent）。
+> 🎀 桌面 AI **宿主「真白」+ 第一个插件「秋招助手」**。真白是 Electron 桌宠宿主（Live2D / 语音 / 面板框架 / 设置中心），秋招助手是跑在宿主上的能力插件（面经采集 / 模拟面试 / 学习清单 / 复习卡 / 知识库 / 对话 agent / 校招闭环）。
+> 2026-08 起升级为**事件驱动自主桌宠**：感知（Claude Code 会话 watcher）→ 决策（自主规则引擎）→ 装配（场景技能子集）→ 表达（气泡/语音），并落地 **API 契约层（zod）与双层 AI 评测体系（真实消融基线）**。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/mashiro-mcp?color=cb3837&label=mashiro-mcp)](https://www.npmjs.com/package/mashiro-mcp) ![Node](https://img.shields.io/badge/Node-%3E%3D22-5fa04e) ![Tests](https://img.shields.io/badge/tests-754%2B-8a5adc) ![Platform](https://img.shields.io/badge/Windows-10%2F11-0078d6)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/mashiro-mcp?color=cb3837&label=mashiro-mcp)](https://www.npmjs.com/package/mashiro-mcp) ![Node](https://img.shields.io/badge/Node-%3E%3D22-5fa04e) ![Tests](https://img.shields.io/badge/tests-924%2B-8a5adc) ![Platform](https://img.shields.io/badge/Windows-10%2F11-0078d6)
 
 ---
 
-## 架构：宿主 + 插件
+## 架构：宿主 + 插件 + 事件驱动内核
 
 | 层 | 内容 | 状态 |
 |---|---|---|
-| **真白（宿主）** | Electron 透明窗口 + Live2D 椎名真白、点击对话（短句语音反馈）、气泡提醒、全屏自动隐藏、开机自启、设置中心框架、语音播放/输入 | ✅ 核心 |
-| **秋招助手（插件①）** | 面经爬取 / 学习闭环 / 专项练习 / 模拟面试 / 求职闭环 / 知识库 / 对话 agent | ✅ 内置（当前为内置模块，正按插件协议拆分） |
+| **真白（宿主）** | Electron 透明窗口 + Live2D 真白、点击对话（短句日语语音）、气泡提醒、全屏自动隐藏、托盘常驻、开机自启、设置中心、本地 ASR 语音输入 | ✅ 核心 |
+| **秋招助手（插件①）** | 面经爬取 / 学习闭环 / 专项练习 / 模拟面试 / 求职闭环 / 知识库 / 对话 agent / 学习计划引擎（12 个业务路由域） | ✅ 内置（plugins/job-hunter） |
+| **事件驱动内核** | 事件总线 + 自主决策（off/notify/full 三级刹车）+ CC 会话 watcher（Claude Code 伴侣）+ 场景技能装配 | ✅ P0+P1 已接线 |
+| **契约层（Phase 2）** | zod 契约：15 个高频路由 input/output 校验 + SSE 事件 union + preload/renderer 类型化（kanban-api.d.ts，checkJs 校验 74 方法一致）+ 117 处硬编码收编 | ✅ |
+| **双层评测（Phase 评测）** | Layer A 真实模型基线 + Layer B mock agent 机制；数据集治理（sha256）/ 成本延迟指标 / 分层回归门禁 / 消融基线 / 每周徽章 | ✅ |
 
 **秋招助手（插件①）能力一览**：
 
@@ -19,26 +23,36 @@
 |---|---|
 | **爬取引擎** | 自动逛牛客/掘金/CSDN，抓取前端 & AI Agent 面经/笔试题，AI 筛选出**具体题目**并完整讲解（结论/原理/JS实现/边界），归档 Markdown |
 | **学习闭环** | 从产出提炼"优先学习清单" → 勾选完成 → 复盘出题 → 判分 → 错题自动进入**薄弱点**，下次优先学；FSRS 间隔复习 + 选择题自测 + 到期提醒 |
-| **专项练习** | 牛客 TOP101 算法题（免登录随时刷）+ **手写/算法题库 448 道**（92 道手写 + CodeTop 高频 400 去重合并；**337 道可自动判题**——高频题示例自动生成测试用例；写完直接跑测试，通过自动记进度，答错回流薄弱点与复习卡） |
-| **模拟面试** | 面试官按 STaR 五维评分、追问深挖、复盘报告 + 薄弱点回流；**优先考察清单自动聚合练习数据**（题库错题/复习错题/今日复习/到期卡/清单未完成，无需手动选重点）；设置中心上传简历自动接面试官项目拷打 |
-| **对话闭环** | 对话不只是问答——可**反哺学习清单**（add_study_items）、**建复习卡**（create_review_card）、**挂学习任务**（todo，面板可见进度）；提问语义相似的历史追问**自动命中缓存**（零 LLM 请求，省成本） |
-| **求职闭环** | 简历 → 方向画像 → 岗位匹配/投递 → 笔试日程 → 面试邀约（邮箱自动识别）→ 全节点回流（LORF 规则引擎给"现在最该做什么"） |
-| **本地知识库** | 面经/清单/复习卡/岗位/真题/个人项目源码 → 纯关键词检索（FTS5），对话与复习可引用 |
+| **学习计划引擎** | 任意"学一段长时间内容"→ 计划实体 + 学习事件流（唯一事实源）+ 趋势聚合 + 即时反馈（与判题/复习/清单解耦的通用引擎） |
+| **专项练习** | 牛客 TOP101 算法题 + **手写/算法题库 448 道**（337 道可自动判题，worker 沙箱隔离），答错回流薄弱点与复习卡 |
+| **模拟面试** | **面试官 agent 化**（出题前可检索题库/项目源码/知识库/薄弱点）+ 五维评分 + 追问深挖 + **动态轮数**（薄弱点未考完自动加试）+ 复盘报告回流；**继续上一场**（关面板不丢进度）+ 历史复盘回看 |
+| **对话闭环** | 对话 agent（**37 个内置工具** + MCP 工具 + 技能工具，权限分级审批）——可反哺学习清单、建复习卡、挂学习任务；**多会话**隔离；上下文压缩 + 追问语义缓存 |
+| **求职闭环** | 简历 → 方向画像 → 岗位匹配/投递 → 笔试日程 → 面试邀约（邮箱自动识别）→ 全节点回流（规则引擎给"现在最该做什么"） |
+| **本地知识库** | FTS5 关键词检索（零模型零内存），对话/复习/出题可引用 |
 
-对话式 agent：在桌宠输入框直接说"帮我搜 React 面经并讲讲事件循环"，它自己规划任务、调工具、给答案。
+**事件驱动自主（P0+P1，2026-08 落地）**：
 
-> **个人数据闭环**：简历/岗位/日程/学习进度 全链路互通，自动识别邮箱面试邀约（含"时间待定"条目）、投递状态实时同步、笔试进入统一日程表——不用手动搬数据。
+```
+感知（CC 会话 jsonl watcher / 内部 hooks / 定时任务）
+  → 事件总线（lib/events.mjs 统一事件模型）
+  → 自主决策（lib/autonomy.mjs：规则驱动，off/notify/full 三级，防抖/寂静期/每日预算刹车）
+  → 场景装配（lib/scenarios.mjs：interview/companion/study 场景 → 技能子集，agent 只注入当前场景技能）
+  → 表达（petSay 气泡 + 语音）
+```
 
-### 插件化（路线图）
+Claude Code 伴侣：桌宠能看到 CC 在干什么（会话开始/工具调用/回复/结束），用气泡陪伴播报——零侵入（只读 jsonl 会话文件元数据，不落正文内容）。
 
-真白按"宿主 + 插件"设计演进（参考 DeepSeek Harness 的分层 patch 模式：manifest 声明 + 层栈合并 + 按 id 增量 patch）：
+> **个人数据闭环**：简历/岗位/日程/学习进度 全链路互通，自动识别邮箱面试邀约、投递状态实时同步、笔试进入统一日程表——不用手动搬数据。
 
-- **阶段 0**：注册中心收敛（路由/定时任务集中声明，零行为变化）——规划中
-- **阶段 1**：✅ 插件协议落地（`manifest.json` + 加载器），秋招助手迁入 `plugins/job-hunter/`
+### 插件化（已完成三个阶段）
+
+真白按"宿主 + 插件"设计演进（manifest 声明 + 加载器 + 设置命名空间 + 健康检查 + 面板扩展点动态渲染 + 插件市场一键安装）：
+
+- **阶段 1**：✅ 插件协议落地（`manifest.json` + 加载器），秋招助手迁入 `plugins/job-hunter/`（12 业务域）
 - **阶段 2**：✅ 示例插件模板 `plugins/plugin-template/`（协议即文档）+ 加载器扩展（settings 命名空间 `plg_<id>_` 前缀 / init 钩子 / health 检查 / panel 声明校验）
-- **阶段 3**：✅ 插件管理（`lib/plugin-admin.mjs` + 面板设置→插件管理：已装插件列表 / 加载状态 / 健康检查 / 启停开关，重启生效）+ 面板扩展点动态渲染（manifest.panel.tabs/settings → 真实 tab + 设置表单）+ 插件市场（`data/plugin-market.json` 索引一键安装，`POST /api/plugins/install` 路径安全校验）
+- **阶段 3**：✅ 插件管理（已装插件列表 / 启停开关 / 市场一键安装 `POST /api/plugins/install`）
 
-完整方案见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)。未来插件方向：日语陪练、桌宠养成、番茄钟独立版……
+完整方案见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)。
 
 ---
 
@@ -62,93 +76,67 @@ npx playwright install chromium
 
 ### 配置
 
-**全部可在面板「⚙️ 设置」配置，无需改文件**（开源复用友好）：
+**全部可在面板「⚙️ 设置」配置，无需改文件**：
 
 | 配置项 | 面板入口 | 说明 |
 |---|---|---|
-| API Key / Base URL / 模型名 | 设置 → LLM 服务配置 | 接任意 OpenAI 兼容端点（含本地 Ollama/中转）；配了 Base URL 即单端点直连 |
-| 方向画像 / 知识树模板 | 设置 → 方向画像 / 知识树 | 转方向/开源复用改这里即可，全链路（面试/出题/巡检/分组）跟随 |
+| API Key / Base URL / 模型名 | 设置 → LLM 服务配置 | 接任意 OpenAI 兼容端点（含本地 Ollama）；配了 Base URL 即单端点直连 |
+| 方向画像 / 知识树模板 | 设置 → 方向画像 / 知识树 | 转方向/开源复用改这里即可，全链路跟随 |
 | 邮箱（自动检查开关） | 设置 → 邮箱 | 授权码仅存本机；每 30 分钟自动拉取识别面试邀约 |
 | 自动巡检 + 每日 token 预算 | 设置 → 自动化 | 关注点定时搜新面经 → 讲解 → 通知；token 上限防超支 |
-| 本地知识库（RAG） | 设置 → 本地知识库 | 默认关；**纯关键词检索（FTS5）零模型零内存**，秒级构建 |
+| 本地知识库（RAG） | 设置 → 本地知识库 | 默认关；**纯关键词检索（FTS5）零模型零内存** |
 | 招聘平台（BOSS） | 校招 Tab → 平台账号 | 启用/登录态/投递设置/招呼语 |
+| 自主模式（事件驱动） | 环境变量 `MIANSHI_AUTONOMY` | off / notify（默认）/ full 三级；`MIANSHI_AUTONOMY_BUDGET` 每日表达上限 |
 
-> 兜底：`.env` 仍生效（`DEEPSEEK_API_KEY`/`MIANSHI_MODEL`/`DEEPSEEK_BASE_URL`/`RAG_EMBED_MODEL` 等），面板配置优先。
+> 兜底：`.env` 仍生效（`DEEPSEEK_API_KEY`/`MIANSHI_MODEL`/`MIANSHI_PROVIDERS` 等），面板配置优先。
 
 ### 启动
 
 ```bash
-# 方式一：桌面快捷方式（首次运行 start-kanban.bat 会自动创建「真白桌宠」图标）
-# 方式二：一键启动脚本（无黑窗，重复双击会被单实例锁拦截并聚焦已运行窗口）
+# 一键启动脚本（无黑窗，重复双击会被单实例锁拦截并聚焦已运行窗口）
 start-kanban.bat
 
-# 方式三：直接命令（桌宠会自动拉起后台数据服务）
+# 或直接命令（桌宠会自动拉起后台数据服务）
 node node_modules\electron\dist\electron.exe desktop\main.mjs
 ```
 
-**改代码后一键重启**：面板右上角「♻️」按钮（确认后桌宠 + 后台服务一并重启，约 3-5 秒）；或托盘退出后重新运行启动脚本。开机自启：注册表 Run 键 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `mashiro-desktop` 项（指向启动脚本），如需取消删除该注册表项。
+**改代码后一键重启**：面板右上角「♻️」按钮（桌宠 + 后台服务一并重启，约 3-5 秒）。开机自启：注册表 Run 键 `mashiro-desktop` 项。
 
 ---
 
 ## MCP 接入其他 AI 工具（npm 安装）
 
-秋招助手的能力是标准 **MCP Server**（`npm i -g mashiro-mcp`），可以接入**任何支持 MCP 的 AI 工具**（Claude Code / Cline / 其他 agent）——不需要桌宠、不需要本项目代码：
+秋招助手的能力是标准 **MCP Server**（`npm i -g mashiro-mcp`），可接入任何支持 MCP 的 AI 工具（Claude Code / Cline / Cursor / OpenCode）：
 
 ```bash
-npm install -g mashiro-mcp   # Node >= 22（npmjs 官方源）
-```
-
-GitHub Packages 镜像（`@idontplaygenshinimpact/mashiro-mcp`，随 Release 自动发布；国内网络优先选它）：
-
-```bash
+npm install -g mashiro-mcp   # npmjs 官方源（Node >= 22）
+# 国内优先 GitHub Packages 镜像：
 npm install -g @idontplaygenshinimpact/mashiro-mcp --registry=https://npm.pkg.github.com/
 ```
 
-Claude Code 配置（`claude mcp add` 或 `.mcp.json`）：
+Claude Code 配置（`.mcp.json`）：
 
 ```json
-{
-  "mcpServers": {
-    "mashiro": { "command": "mashiro-mcp" }
-  }
-}
+{ "mcpServers": { "mashiro": { "command": "mashiro-mcp" } } }
 ```
 
-接入后你的 AI 助手获得 9 个秋招能力：
+**装包即连（实测）**：启动时**自动探测**你的桌宠数据目录（源码版 data/ / 打包版 Electron userData / ~/.mashiro 兜底）——已有桌宠数据的用户零配置，数据工具直接返回真实内容（学习清单/岗位/简历实测通过）；LLM key 随数据目录自动继承（设置中心配过的 key）。
+
+9 个工具（全部只读）：
 
 | 工具 | 能力 |
 |---|---|
 | `search_posts` | 搜索牛客/掘金/CSDN 前端 & AI Agent 面经帖 |
-| `solve_question` | 抓取题目并完整讲解（结论/原理/JS 实现/边界），存档到本地 |
+| `solve_question` | 完整讲解面试题（结论/原理/JS 实现/边界） |
 | `get_study_plan` / `get_study_progress` | 学习清单与进度 |
 | `start_interview` | 模拟面试官（项目拷打/八股穿插/手写收尾） |
 | `get_personal_profile` / `get_jobs_status` / `get_schedule_events` / `get_project_archives` | 个人数据环境（简历/岗位/日程/项目源码档案） |
 
-- **LLM Key**：`DEEPSEEK_API_KEY` 环境变量（或 opencode auth.json，与桌面版同源）
-- **数据目录**：默认 `~/.mashiro/`（data + output），可用 `MIANSHI_DATA_DIR`/`MIANSHI_OUTPUT_DIR` 覆盖
-- **隔离**：每个使用者独立数据目录，互不干扰；与桌宠版可共享同一份数据（指向同一目录即可）
+**诚实两档**：6 个数据工具零配置可用（空库优雅返回）；`solve_question`/`start_interview` 需 LLM Key（无 key 快速报错并给配置提示）。完整分发文档（工具清单/各客户端配置/使用示例/FAQ/数据权限）：**[docs/mcp.md](docs/mcp.md)**。
 
 ### 接入 DeepSeek Harness（DSH）
 
-本项目插件架构借鉴了 DSH（宿主 + 插件 / manifest 声明 + 加载器），反过来也可以把秋招能力接入 DSH：
-
-在 profile 的 `cordis.patch.yml` 加一个 `dsh-mcp-client` 实例：
-
-```yaml
-- insert:
-    - id: mcp-mashiro
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: mashiro
-        transport: stdio
-        command: cmd            # Linux/macOS 用 mashiro-mcp
-        args: ['/c', 'mashiro-mcp']
-        toolCallTimeoutMs: 120000
-```
-
-重启 DSH 后，agent 获得 `mcp__mashiro__*` 工具（search_posts / solve_question / get_study_plan / start_interview / 个人数据 5 件套），可让 DSH 直接"搜面经 → 讲解 → 建清单 → 模拟面试"。
-
-> 📦 完整分发文档（工具清单/各客户端配置/使用示例/FAQ）：[docs/mcp.md](docs/mcp.md)
+`dsh-mcp-client` 实例接入后，agent 获得 `mcp__mashiro__*` 工具（search_posts / solve_question / get_study_plan / start_interview / 个人数据 5 件套），可让 DSH 直接"搜面经 → 讲解 → 建清单 → 模拟面试"。
 
 ---
 
@@ -156,80 +144,35 @@ Claude Code 配置（`claude mcp add` 或 `.mcp.json`）：
 
 ### 1. 桌宠（推荐日常使用）
 
-- **点击真白** → 打开面板：学习清单（勾选/复盘）、爬取进度、最新产出
-- **面板底部输入框** → 对话："帮我找 React 面经"、"讲一下防抖节流"、"查字节秋招"
-- **拖动角色** → 移动桌宠位置
-- **气泡** → 爬取进度 / 新产出 / 学习提醒
-- **全屏（B站视频/游戏）** → 自动隐藏，回到桌面自动出现
-- **托盘图标** → 右键：显示/隐藏、打开面板、立即爬取、打开输出目录、退出
-- **形象切换** → 面板「💬 对话」Tab 顶部「🎀 桌宠形象」：真白·旅行装/水手服/私服 + 时雨，点击即换、重启记忆（本地模型扫描 `node_modules/live2d-widget-model-*`）
+- **点击真白** → 短句应答（摸头/戳脸等部位人设）；**空闲 5 分钟** → 长句独白（GPT-SoVITS 真白声线）
+- **面板**（9 个 Tab：🎤 面试 / 🔁 复习 / 📋 学习清单 / 💬 对话 / 🔍 爬取 / 🏢 校招 / 📊 驾驶舱 / 🧠 知识库 / ⚙️ 设置）
+- **气泡** → 爬取进度 / 新产出 / 学习提醒 / **CC 伴侣播报**（事件驱动）
+- **全屏（B站视频/游戏）** → 自动隐藏；**托盘** → 右键菜单（面板/换肤/音乐/爬取/邮箱/巡检/退出）
+- **形象切换** → 真白·旅行装/水手服/私服 + 时雨，点击即换、重启记忆
+- **语音输入** → 面板 🎤 说话自动转文字（本地 sherpa-onnx 离线识别，零 API key）
 
-### 2. 预设技能（对话直接触发，开箱即用）
+### 2. 预设技能（对话直接触发，6 个）
 
 | 技能 | 触发方式 | 能力 |
 |---|---|---|
-| 🧾 **frontend-cheatsheet** | "讲一下事件循环/闭包/浏览器缓存…" | 八股讲解自动按高频考点清单覆盖追问点，防漏讲 |
-| 🔥 **interview-warmup** | "明天面试怎么准备/面试前热身" | 5 分钟流程：摸底清单→搜目标公司面经→演练考点→收尾回流 |
-| ⚖️ **tech-compare** | "React 和 Vue 哪个好/Vite vs Webpack" | 统一对比框架（结论→差异表→机制本质→选型→追问） |
-| 📄 **resume-coach** | "帮我看看简历/简历怎么改"（贴简历） | 结构化优化：亮点/风险/量化改进示例/面试预设问题 |
-| 🏢 **company-intel** | "字节面什么/帮我查 XX 面经" | 搜该公司面经→抓正文→汇总 TOP 考点+真题线索+准备建议 |
+| 🧾 **frontend-cheatsheet** | "讲一下事件循环/闭包/浏览器缓存…" | 八股讲解按高频考点清单覆盖追问点 |
+| 🔥 **interview-warmup** | "明天面试怎么准备/面试前热身" | 5 分钟流程：摸底→搜面经→演练→收尾回流 |
+| ⚖️ **tech-compare** | "React 和 Vue 哪个好" | 统一对比框架（结论→差异→本质→选型） |
+| 📄 **resume-coach** | "帮我看看简历"（贴简历） | 结构化优化：亮点/风险/量化改进/面试预设问题 |
+| 🏢 **company-intel** | "字节面什么" | 目标公司面经情报（TOP 考点+真题线索） |
 | 🐙 **github-repo** | "React 仓库多火" | GitHub 仓库信息（stars/语言/更新时间） |
 
-> 技能即插即用：新增 `skills/<名>/` 目录即可，`POST /api/skills/reload` 热加载，开发文档见 `skills/README.md`。
+> 技能即插即用：新增 `skills/<名>/` 目录即可，`POST /api/skills/reload` 热加载；**场景装配**（P1）下 agent 只注入当前场景技能子集（面试中/CC 陪伴/学习），省 token、降幻觉面。
 
-### 3. 命令行爬取
+### 3. 命令行爬取 / 4. 学习闭环 / 5. 专注（番茄钟 + 陪伴）/ 6. 语音交互 / 7. 本地知识库
 
-```bash
-# AI 逛网模式：逛 7 个前端/Agent 源，每源挑 3 篇，筛选具体题目 → 完整讲解 → 归档
-node discover.mjs
+沿用既有能力（详见 git 历史版本与本仓库 `docs/`）：
 
-# 手动模式：处理 links.txt 里的指定链接
-node run.mjs
-
-# 自定义起始页 / 数量
-node discover.mjs "https://juejin.cn/search?query=React面经" 5
-```
-
-产出目录：`output\<日期>_discover\`，每题一个 Markdown（题目/结论/原理/JS实现/边界/追问）。
-
-### 4. 学习闭环（面板操作）
-
-1. 点 **✨生成** → 从最新产出提炼 5-8 个优先学习知识点（含"为什么学"）
-2. 逐条 **勾选** → 标记完成
-3. 点 **📝复盘** → 出验证题 → 输入你的回答 → 提交判分
-4. 判分结果自动回流：**错题 → 薄弱点**（下次生成清单优先覆盖）、答对 → 已掌握
-
-### 5. 专注（番茄钟 + 桌宠陪伴）
-
-- **开始专注**：选 25/45 分钟，可填**本次目标**（如"学事件循环"）——完成时目标自动回流学习进度
-- **番茄循环**：到点自动完成 → 自动进入 5 分钟休息 → 休息到点提示开始下一轮（可跳过休息）
-- **分心监督**：前台窗口命中黑名单（标题关键词 / `进程名:Xxx.exe` / `/正则/`）→ 真白气泡 + 日语语音提醒（3 分钟冷却）；**白名单**（IDE/浏览器）命中不报
-- **陪伴**：开始/完成/休息结束/中途鼓励（每 10 分钟）都有对应气泡与语音场景
-- **统计**：今日分钟/次数/分心 + 连续天数（streak）+ 近 7 天柱状图
-
-### 6. 语音交互（真白声线）
-
-- **单击桌宠** → 短句应答（2-8s 快速反馈，部位人设：摸头/戳脸/身体/手）
-- **空闲关怀**（5 分钟无交互）→ 长句独白（GPT-SoVITS 真白声线 20-30s，内容完整）
-- **修改/暂停播放器**：`desktop/voice-pack.mjs`（ffplay → SoundPlayer 兜底；长句播放中不被打断）
-- **合成长句**：`npm run voice:synth`（分句多采样最优拼接）
-- **质量评测**：`npm run voice:score`（内容完整度/音色/节奏/污染 → A-D 分 + 历史对比）；`npm run voice:audit`（含"话没说完"末尾完整度预警）
-- **训练新声线**：`npm run voice:train -- <step>`（详见 [`scripts/voice-train/README.md`](scripts/voice-train/README.md)：原始音频 → 数据准备 → GPT/SoVITS 训练 → 权重接入 → 合成 → 评测，全流程内置）
-
-**语音输入**（面板 🎤 说话 → 文字回填输入框，本地离线识别、零 API key）：
-
-- **引擎**：默认 sherpa-onnx paraformer-zh（中文 SOTA 级、CPU 实时率 5x+）；首次使用先下载模型：`npm run voice:model`（~230MB，国内镜像；直连失败时设 `HTTPS_PROXY` 重跑）
-- **不卡 UI**：识别在 worker 线程（`lib/speech-worker.mjs`）——推理是同步计算，放主进程会冻结整个桌宠（历史卡顿根因）
-- **识别质量**：录音端 VAD 自动裁头尾静音（防噪声被脑补成汉字）+ 16k 采样率兜底重采样；whisper fallback（`SPEECH_ENGINE=whisper` 可切，慢但免下载）
-
-> 🔊 **声音资产**：仓库包含自训练声线（GPT-SoVITS 合成，`assets/voice/`）。想换自己的声音，按 [`scripts/voice-train/README.md`](scripts/voice-train/README.md) 训练后替换对应 wav（目录结构见 `assets/voice/lines.json` 约定）。
-
-### 7. 本地知识库（RAG，可选）
-
-把面经/学习清单/复习卡/岗位/真题/文档做成可检索库，对话与复习选题可引用。**默认关闭**（评估使用率低 + 省资源），需要时在「⚙️ 设置」开启：
-
-- **纯关键词检索（FTS5 trigram）**：零模型、零内存、秒级构建——不再是 embedding 语义检索
-- 开启后自动重建索引；复习选择题生成时可选引用知识库真题素材（带"📚 引用知识库"标记）
+- **命令行**：`node discover.mjs`（AI 逛网模式）/ `node run.mjs`（手动处理 links.txt），产出归档 `output/<日期>_discover/`
+- **学习闭环**：✨生成清单 → 勾选 → 📝复盘判分 → 错题回流薄弱点/复习卡；**学习计划引擎**：对话说"建一个 XX 计划"即创建，做题/复习/面试自动归入并按趋势给即时反馈
+- **专注**：25/45 分钟番茄钟 + 黑名单分心监督（标题/进程/正则）+ 目标回流学习进度
+- **语音**：112 个短句 + 26 个长句日语声线资产；`voice:synth/score/audit/train` 全套合成-评测-训练流水线（实时 TTS 句子级流水线开发中）
+- **知识库**：设置开启后 FTS5 关键词检索，复习选择题可引用素材
 
 ---
 
@@ -238,168 +181,49 @@ node discover.mjs "https://juejin.cn/search?query=React面经" 5
 ```
 mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 docs/plugin-architecture.md）
 ├── desktop/                        # ── 真白宿主：桌宠（Electron）──
-│   ├── main.mjs                    # 主进程薄壳：窗口/托盘/生命周期/插件无关
-│   ├── lib/                        # 主进程拆出模块（无 electron 依赖可单测）
-│   │   ├── widget-server.mjs       # widget 服务守护（探测拉起/退出清理）
-│   │   ├── window-state.mjs        # 窗口位置持久化（防抖保存）
-│   │   └── restart.mjs             # 一键重启（bundle 防呆 + 杀进程）
-│   ├── voice-pack.mjs              # 语音包播放（短句/长句/场景，防抖+互斥+长句保护）
-│   ├── preload.js                  # IPC 桥接
-│   └── renderer/                   # 面板渲染层（Tab 拆 5 文件 + vad.js + pcm-worklet.js）
+│   ├── main.mjs                    # 主进程：窗口/托盘/守护/widget 数据注入/本地 ASR/语音播放
+│   ├── kanban-api.d.ts             # 渲染层 API 全量类型声明（74 方法，checkJs 校验）
+│   ├── preload.js                  # IPC 桥接（74 方法 + SSE 流封装）
+│   ├── lib/                        # 主进程模块（widget-server 守护 / companion-poller 等）
+│   ├── voice-pack.mjs / tts-edge.mjs  # 日语语音包播放（预设匹配 + ack 兜底）
+│   └── renderer/                   # 面板 9 Tab（panel-core/study/chat/jobs/rest + api-client + vad）
 ├── plugins/                        # ── 插件目录 ──
-│   ├── job-hunter/                 # 插件①：秋招助手（聚合 12 业务域，一个整体插件）
-│   │   ├── manifest.json           # 插件声明（id/name/version/server）
-│   │   ├── server.mjs              # 插件入口：register(api) 聚合注册
-│   │   └── routes/                 # 12 业务路由域：review/kb/practice/misc/study/
-│   │                               #   interview/jobs/zhenti/oj/focus/mail/rss
-│   └── plugin-template/            # 示例插件模板（协议即文档，新插件照抄即写）：
-│                                   #   manifest panel 声明 + server 演示 路由/设置/init/health
-├── lib/                            # ── 共享业务库（宿主与插件共用，单一数据源）──
-│   ├── plugin-loader.mjs           # 插件加载器（发现/校验/register/init/health/失败隔离 + settings 命名空间）
-│   ├── plugin-admin.mjs            # 插件管理（启停标记/列表/设置读写/市场安装，阶段 3）
-│   ├── agent.mjs                   # 对话 agent 核心：工具循环 + 权限 + 规划（可反哺清单/复习卡/todo）
-│   ├── tools/                      # agent 工具层（schemas/impl/exec-utils/mcp）
-│   ├── routes/core.mjs             # 核心基础设施域（health/patrol/run-discover…）
-│   ├── career.mjs                  # 方向画像中心（简历 → 方向 → 知识树联动）
-│   ├── knowledge.mjs               # 知识树模板（frontend/backend/algorithm 可配置）
-│   ├── patrol.mjs                  # 主动巡检（定时搜帖→讲解→存档→通知；避开 DS 峰时）
-│   ├── rag.mjs                     # 本地知识库（FTS5 关键词检索 + 开关）
-│   ├── followup-cache.mjs          # 追问语义缓存（历史追问去重命中，零 LLM 请求）
-│   ├── mail.mjs                    # 邮箱邀约识别日程（IMAP → LLM → schedule_events）
-│   ├── study.mjs / review.mjs / interview.mjs / quiz.mjs / recommend.mjs
-│   ├── personal-projects.mjs       # 个人项目源码档案（面试/讲解/对话全模块注入）
-│   ├── job-platforms.mjs / platform-accounts.mjs / platforms/
-│   ├── jobs.mjs + job-match.mjs + job-reminders.mjs  # 岗位数据层 / 画像匹配推荐 / 截止笔试提醒（职责拆分）
-│   ├── speech.mjs / speech-worker.mjs  # 本地 ASR（sherpa-onnx + worker 线程）
-│   ├── context-providers.mjs       # 个人数据注册表（MCP 单数据源）
-│   ├── skills.mjs / hooks.mjs / subagent.mjs / llm.mjs / ai.mjs
-│   └── db.mjs                      # node:sqlite 主存储（WAL）
-├── widget.mjs                      # 后台数据服务（HTTP :8899）：鉴权 + 核心路由 + 插件加载 + 定时任务
-├── data/plugin-market.json         # 插件市场注册表（一键安装索引，阶段 3）
-├── mcp-server.mjs                  # MCP Server（个人数据/项目档案/工具 → 外部 agent）
-├── desktop/ 之外还有：
-├── assets/voice/                   # 自训练声线（GPT-SoVITS，随仓库发布）
-├── docs/                           # 插件化架构方案 / 语音训练流程
-├── scripts/                        # 语音合成评测 / 模型下载 / 按模块测试等工具
-├── skills/                         # Skills 插件（即插即用）
-├── tests/                          # 730+ 用例（单元 + jsdom 面板交互 + 集成，mock LLM 无 key 可跑）
-├── .github/workflows/ci.yml        # CI：全量测试门禁
-├── config.mjs                      # 配置（API Key/模型）；面板设置 > 环境变量
-├── data/                           # 运行数据（不入库：db/token/日志）
-├── models/                         # 本地 ASR 模型（npm run voice:model 下载）
-└── output/                         # 产出：日期目录 + Markdown 题库（含手动导入）
+│   ├── job-hunter/                 # 插件①：秋招助手（manifest + server + 12 业务路由域）
+│   └── plugin-template/            # 示例插件模板（协议即文档）
+├── lib/                            # ── 共享业务库（76 模块，单一数据源）──
+│   ├── agent.mjs + tools/          # 对话 agent（37 内置工具，权限分级审批）
+│   ├── interview.mjs / study.mjs / review.mjs / learning-plan.mjs / memory.mjs
+│   ├── events.mjs / autonomy.mjs / scenarios.mjs / hooks.mjs   # 事件驱动内核（P0+P1）
+│   ├── adapters/cc-watcher.mjs     # CC 会话 watcher（jsonl 增量幂等解析）
+│   ├── contracts/                  # Phase 2 契约层（zod schema，前后端类型唯一事实源）
+│   ├── routes/                     # 路由域（core 30 条 + withContract 契约运行时）
+│   ├── eval-cost.mjs / eval-summary.mjs / eval-scoring.mjs  # 评测指标层
+│   ├── data-detect.mjs             # 桌宠数据目录自动探测（MCP 装包即连）
+│   └── db.mjs                      # node:sqlite 主存储（WAL，23 表 + settings KV）
+├── widget.mjs                      # 后台数据服务（HTTP :8899）：139 条路由 + 18 个后台任务 + 事件内核接线
+├── mcp-server.mjs                  # MCP Server（9 工具 → 外部 agent）
+├── skills/                         # 6 个技能（SKILL.md 声明 + skill.mjs 可编程）
+├── benchmark/                      # 双层评测数据集（38+16+12+20+12+19）+ 报告 + 趋势
+├── scripts/                        # 评测/导入/语音/发布工具（50+ 脚本）
+├── tests/                          # 924 用例（90 个测试文件，mock LLM 无 key 可跑）
+├── docs/                           # 20 份文档（架构/审计/评测/方案）
+├── assets/voice/                   # 自训练声线（112 短句 + 26 长句 + nanami 声线）
+└── .github/workflows/              # ci.yml（全量门禁）+ weekly-eval.yml（每周评测）+ release.yml（双源发布）
 ```
-
----
-
-## 工作流
-
-```
-自动巡检（7 源：牛客前端/Agent + 掘金 + CSDN）
-  ↓ Playwright 抓列表页 → AI 挑帖（前端/Agent 优先）
-  ↓ 抓正文 → 方向过滤（frontend/agent）→ 具体题目检测（攻略文跳过）
-  ↓ 完整讲解（结论→原理→JS实现→边界）→ 归档 Markdown
-  ↓ 学习清单生成（含"为什么学"+ 验证题）
-  ↓ 用户勾选完成 → 复盘出题 → 判分
-  ↓ 错题 → 薄弱点（记忆回流）→ 下次优先学
-```
-
-对话模式（桌宠输入框）：
-
-```
-用户："帮我搜 React 面经并讲解核心考点"
-  → agent 规划 → search_posts(牛客/掘金并行) → fetch_page
-  → detect_questions 提炼 → solve_question 讲解 → 基于记忆画像输出
-```
-
-投递闭环（多向驱动，非单向管道）：
-
-```
-                    ┌─────────────┐
-        ┌──────────▶│  ① 方向选择  │◀───────────┐
-        │           └──────┬──────┘            │
-        │    learnForDir   │  setTargetDir     │ 岗位市场反馈
-        │      (方向→学习)  │  (方向→岗位)       │ (岗位→方向)
-        ▼                  ▼                   │
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  ② 学习      │───▶│  ③ 岗位获取  │───▶│  ④ 面试      │
-│ 清单/复习/薄弱点│    │ 逛网/平台投递 │    │ 模拟/实录     │
-└──────┬──────┘    └──────┬──────┘    └──────┬──────┘
-       │  get_study_plan  │  按岗面试         │ 薄弱点回流
-       │  (学习→面试)      │  (岗位→面试)      │ (面试→学习)
-       │                  │ JD反推考点        │ 短板感知岗位
-       │                  │  (岗位→学习)      │ (学习→岗位)
-       └──────────────────┴──────────────────┘
-```
-
-- **方向 → 学习**：`learnForDirection` 按方向搜面经提炼考点入清单（知识库命中优先）
-- **方向 → 岗位**：目标方向驱动岗位匹配推荐（简历/方向权重）
-- **岗位 → 学习**：`deriveStudyFromJob` 岗位 JD 反推考点 → 学习清单（"投之前知道要补什么"）
-- **岗位 → 面试**：`startInterviewForJob` 按岗位 JD 出题（面试官 focus = 岗位技术栈考点）
-- **学习 → 面试**：面试官优先考清单未完成项；**学习 → 岗位**：`suggestJobsForWeakPoints` 短板感知（不要求短板的岗位可直接投 / 涉及短板的先补强）
-- **面试 → 学习**：薄弱点自动回流清单 + 复习卡
-- **行为数据全回流**：复习答错 → 薄弱点 failCount+1；真题错题 → 清单+复习卡+薄弱点；OJ 刷完 → 刷题进度；手写/算法题通过 → 学习进度 + 题库进度、答错 → 薄弱点；专注完成 → 学习进度；投递成功 → 备战公司记录
-- **全节点 → 下一步**：`loopSuggest` 规则引擎消费全部数据（面试日程 > 复习到期 > 薄弱点 > 清单 > 投递备战 > 岗位 > 刷题/专注 > 方向），给出"当前最该做的事"（面板「🔄 学习-求职闭环」区块 / 对话问"我现在该干什么"）
-- **专注目标推荐**：`suggestFocusGoal` 从到期复习卡/薄弱点/清单未完成推荐"现在最该专注学什么"（面板 ⏱️ 专注 Tab 一键填入）
 
 ---
 
 ## 关键技术点
 
-- **Live2D 渲染**：`pixi-live2d-display` + Cubism2 runtime，椎名真白模型（Sakurasou/mashiro·旅行装）。踩坑记录：必须 `sharedTicker: true`（否则 deltaTime 为 NaN 模型不渲染）、不能手动调 `model.update()`（会污染 deltaTime）
-- **透明窗口 + WebGL**：Windows 上透明窗口 WebGL 合成有坑，canvas 背景必须 `transparent`；`win.showInactive()` 避免抢焦点导致全屏检测失效
-- **全屏检测**：koffi FFI 直调 `GetForegroundWindow`/`GetWindowRect` 对比主屏尺寸（毫秒级，替代慢速 PowerShell）
-- **API 兼容**：DeepSeek 的 function calling 走 OpenAI 协议；Go 网关不支持 `response_format=json_object`（400），已改为提示词约束 + 提取
-
----
-
-## 架构总览
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  桌面层（Electron）                                       │
-│  ┌─────────────┐    ┌──────────────────────────────┐    │
-│  │ 桌宠窗口     │    │ 面板窗口（模拟面试/复习/清单/对话）│    │
-│  │ Live2D 真白  │    │ 学习弹层(SSE流式/追问/归并)     │    │
-│  │ 点击/拖拽/语音 │    │ 运行监控(LLM调用/token统计)    │    │
-│  └──────┬──────┘    └──────────────┬───────────────┘    │
-│         │ IPC(preload)             │ IPC                  │
-└─────────┼──────────────────────────┼──────────────────────┘
-          ▼                          ▼
-┌─────────────────────────────────────────────────────────┐
-│  widget.mjs（HTTP :8899 数据服务）                        │
-│  /api/chat /study-* /interview-* /review-* /observability│
-└──────────────┬──────────────────────────────────────────┘
-               ▼
-┌─────────────────────────────────────────────────────────┐
-│  Agent 核心（lib/）                                      │
-│  agent.mjs  工具循环（while + tool_calls + validateArgs） │
-│    ↓ 调用链可观测（trace_llm / trace_tools）              │
-│  llm.mjs    统一 LLM 客户端（failover / 重试 / SSE）      │
-│  ai.mjs     讲解/分类/挑帖/归并（solve/cluster/consolidate）│
-│  memory.mjs 记忆（SQLite + origin 溯源防污染）            │
-│  study.mjs  学习清单  review.mjs FSRS复习  knowledge.mjs │
-│  db.mjs     node:sqlite 主存储（WAL）                    │
-└─────────────────────────────────────────────────────────┘
-```
-
-## 技术选型（为什么这么做）
-
-| 决策 | 选择 | 理由 |
-|---|---|---|
-| **Agent 循环** | 自研工具循环（非 LangGraph/LangChain）| 与 Claude Code/OpenCode 同款范式：单 agent 线性循环用 while + tool_calls 最可控。LangGraph 是状态机编排框架，解决多分支/checkpoint/人工审批，与 coding agent 的核心矛盾（流式/上下文/权限/错误恢复）不重叠 |
-| **流式交互** | SSE + IPC 转发 | 面板直接 fetch 会撞 webSecurity，main 进程转发 SSE → 渲染层事件，逐 token 打字机渲染 |
-| **记忆存储** | node:sqlite（`mianshi.db`，WAL）| 内置零依赖（Electron 43 绑定 Node 24 免 rebuild），规范化小表 + origin 溯源列 + FSRS due 拆列索引，替代 4 个 JSON 文件 |
-| **LLM 客户端** | 统一 `llm.mjs`：failover + 重试 + SSE | 主端点（OpenCode Go）失败自动降级官方 API；3 次退避重试；流式/非流式统一入口 |
-| **记忆防污染** | origin 溯源（owner/agent/untrusted）| 模拟面试/爬虫提炼的伪知识点（"综合能力"）不注入 prompt，只保留可信源（对标 OpenClaw 溯源模型）|
-| **MCP 双向** | Server（暴露 8 工具给 Claude Code/Cursor/OpenCode）+ Client（消费外部 MCP 工具）| server 让外部 agent 调用真白能力；client 让真白调用外部工具（`data/mcp-servers.json` 配置，`mcp__server__tool` 命名空间，失败隔离）|
-| **Skills 插件** | 目录约定 `skills/<name>/`：SKILL.md 声明（frontmatter 元信息 + 正文使用说明，注入 agent system prompt）+ skill.mjs 可编程（tools 动态工具 / system 角色说明 / hooks 事件监听）；`skill__<skill>__<tool>` 命名空间，权限分级 auto/confirm，加载/执行失败隔离；**热重载**（`POST /api/skills/reload`，开发不重启）+ **运行时查询**（`GET /api/skills` / agent `skill_inspect`，先查接口再写代码） | 参考 DeepSeek Harness / OpenClaw / Claude Code 插件体系：SKILL.md 声明式让 LLM 知道技能何时用，skill.mjs 提供真实能力，目录即插即用；内置示例 `skills/github-repo`，开发文档见 `skills/README.md` |
-| **Subagent 编排** | `spawn_subagent` 工具 → 独立子执行器（自身消息上下文、90s 超时、结果截断回填）；一次消息多个 tool_calls 天然并行 | 多篇面经/多知识点/多公司情报并行处理（对标 Claude Code Task）|
-| **Hooks 事件** | 轻量注册表（`lib/hooks.mjs`）：before_tool（可拦截）/after_tool/llm_done/chat_done；监听器失败隔离 | 工具策略插件、失败通知、可观测扩展点（对标 Claude Code hooks）|
-| **人机交互** | `ask_user`（结构化提问：面板选项按钮点选）/ `plan_mode`（执行计划先确认再动手）/ `todo_init`+`todo_done`（多步任务可见清单）/ 上下文实时计量（面板运行监控显示当前对话 token 用量与压缩阈值） | 对标 DSH ask_user_question / plan mode / todo / tokenMeter：有副作用的任务先过用户关卡，长任务进度可见 |
-| **多 Provider** | `config.providers` 路由（`.env` `MIANSHI_PROVIDERS` JSON 数组，任意 OpenAI 兼容端点）；默认主+备双端点 failover | 可同时接 DeepSeek/OpenAI/本地 Ollama，按需切换 |
-| **评测闭环** | 五维评分 + 复盘判分回流 + FSRS | 面试→评分→薄弱点→复习卡→再面试，自研遗忘曲线调度 |
-| **可观测性** | `trace_llm` / `trace_tools` 表 | 每次 LLM 调用记录 token/耗时/成败，面板"运行监控"实时可见 |
+- **事件驱动自主内核**：`events.mjs`（统一事件模型 + 表达队列）→ `autonomy.mjs`（规则决策，三级模式 off/notify/full，防抖 5s/寂静期 60s/每日预算 20 条，审计 decision_ledger）→ `scenarios.mjs`（事件→技能子集，scene.json 持久化）→ `adapters/cc-watcher.mjs`（Claude Code jsonl 增量幂等解析，字节偏移，只读元数据不落正文）
+- **API 契约层（Phase 2）**：`lib/contracts/` zod schema 唯一事实源——withContract 包装器（input 校验 400 VALIDATION_ERROR / output 校验 500 SCHEMA_MISMATCH）、SSE 事件 discriminated union（4 处散装 push 统一）、preload 74 方法 `kanban-api.d.ts` + checkJs 校验、117 处硬编码 8899 收编为单一 `API_BASE`
+- **双层评测（Phase 评测）**：Layer A 真实模型（客观代码验证 + LLM-as-Judge 双评 + CRAG 事实判官，数据集 sha256 治理，`eval_summary.csv` 19 列回归底座）+ Layer B mock agent（pass³，故障注入）；分层门禁（硬红/黄牌）；**消融基线**（裸 prompt vs 全链路，实测 Δ judge +7pt / cover +5pt / CRAG -17pt，含判官长文校准）
+- **Live2D 渲染**：pixi-live2d-display + Cubism2（`sharedTicker: true` 必须）；透明窗口 WebGL（canvas `transparent` + `showInactive`）
+- **全屏检测**：koffi FFI 直调 `GetForegroundWindow`（毫秒级，替代慢速 PowerShell）
+- **LLM 客户端**：统一 `llm.mjs`——failover 主+备双端点 + 3 次重试 + 空响应翻倍重试 + SSE；多 Provider 路由（`MIANSHI_PROVIDERS`）；上下文压缩（token 估算触发，70%+ 缩减实测）
+- **记忆防污染**：origin 溯源（owner/agent/untrusted）——爬虫提炼的伪知识点不注入 prompt
+- **Skills 插件 + 场景装配**：SKILL.md 声明式 + skill.mjs 可编程（tools/hooks/权限），`skill__<skill>__<tool>` 命名空间，热重载；P1 场景激活子集（agent 只注入当前场景技能）
+- **可观测性**：`trace_llm`/`trace_tools` 每次调用记录 token/耗时/成败；面板运行监控实时可见
 
 ---
 
@@ -407,149 +231,112 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 <!-- EVAL_BADGE -->
 
-两层评测体系 + 指标/门禁/消融/可视化，报告存 `benchmark/reports/`（`eval_summary.csv` 为回归底座）：
+双层评测体系 + 指标/门禁/消融/可视化，报告存 `benchmark/reports/`（`eval_summary.csv` 为回归底座）：
 
-### Layer A：模型基线（`npm run bench` / `npm run bench:quick` / `npm run bench:ablation`）
+### Layer A：模型基线（`npm run bench` / `bench:quick` / `bench:ablation`）
 
-- **讲解质量**：14+ 道真实面试题（code/predict/coverage/trace 四型），客观判定为主：
-  - `code` 型：提取讲解中的 JS 代码注入测试断言，node 子进程跑（过了就是过了）
-  - `predict` 型：跑讲解代码块，stdout 与期望输出比对（如事件循环输出顺序）
-  - `coverage` 型：讲解文本命中必考要点覆盖率
-  - LLM-as-Judge 双评打分（辅助分，带空响应重试）+ CRAG 事实判官（correct/acceptable/missing/incorrect）
-- **分类/检测/匹配准确率**：面经/招聘/笔试/闲聊分类、题目检测、知识点匹配（静态用例在 `benchmark/static.json`）
+- **讲解质量**：**38 道**真实面试题（code/predict/coverage/trace 四型），客观判定为主（代码测试断言 / stdout 比对 / 必考要点覆盖率）+ LLM-as-Judge 双评 + CRAG 事实判官
+- **分类/检测/匹配**：16 分类 / 12 检测 / 12 静态匹配（`benchmark/static.json`）
 - **指标**：综合分 + pass@1 + 成本（tokens/USD，solver vs judge 分账）+ 延迟（p50/p95）+ 失败分类，全部落 `eval_summary.csv`
-- 注意：本层反映「模型 + prompt」组合能力，用于**回归监控**（改 prompt/换模型前后对比），不体现 harness
+- 判官金标校验（20 对，`--judge-check`，CI 有 key 时跑）
 
 ### 数据集治理（`npm run bench:validate`，CI 每次跑）
 
-- 统一 envelope：`version` / `meta`（生成方+更新时间）/ 每样本 `source`（来源可追溯——面试被问"样本哪来的"能答）
-- schema 校验（type 枚举/must_cover/judge 标签/web judge 类型）+ `datasetHash`（sha256）——回归对比**同 hash 才可比**
+- 统一 envelope：`version` / `meta` / 每样本 `source`（来源可追溯）+ schema 校验 + `datasetHash`（sha256）——回归对比**同 hash 才可比**
 
-### 回归门禁（`npm run bench:compare` / `npm run bench:gate`）
+### 回归门禁（`npm run bench:compare` / `bench:gate`）
 
-- 同 layer ∧ 同 datasetHash 的最近两次 Δ 表；分层门禁：
-  - **硬红**（--gate exit 1）：分类/检测/静态任一降 >3pt（确定性高、样本大）
-  - **黄牌**：讲解/真实性降 3~5pt（波动大，连续两次同向才升级红）
-- 数据集变更（hash 不同）不跨集对比，不拿不同样本数当回归
+- 同 layer ∧ 同 hash 最近两次 Δ 表；硬红（分类/检测/静态降 >3pt exit 1）+ 黄牌（讲解/真实性降 3~5pt，连续两次同向升级红）；hash 不同不跨集对比
 
 ### 消融基线（`npm run bench:ablation -- --sample N`，诚实版）
 
-- 同题 A/B：**裸 prompt（无模板）vs 全链路**（结构化 prompt 工程），固定 seed 随机顺序消除判官偏差
-- **校准后正式实测（sample=20，deepseek-v4-flash，$0.23，题集与校准前相同）**：A judge84/CRAG90/覆盖88% vs B judge91/CRAG73/覆盖93% → **Δ judge +7pt（+8%）· Δ cover +5pt · Δ CRAG -17pt**
-- **判官校准（Phase 评测 W5，已验证有效）**：抽检发现 CRAG 判官对 5000+ 字长文系统性误判（内容完全正确的讲解被判 incorrect）→ 校准判官 prompt（篇幅不影响标签 / incorrect 只用于可指认的事实错误）+ judge-check 金标校验复用真实评测判官（此前校验的不是实际判官，失去意义）。校准效果：同题 B q5 Promise.all 从 incorrect → correct；Δ judge 从校准前 **-3pt → +7pt**（判官长文偏差曾拖累全链路评分，校准后结构化 prompt 的真实质量优势显现）；Δ CRAG 从 **-43pt → -17pt**（大幅收窄）
-- **诚实解读**：结构化模板的收益实锤——讲解质量（judge +7pt）与覆盖完整度（+5pt）；Δ CRAG 残余 -17pt 部分来自判官对长文的**随机波动**（同题 B q7 在两次运行分别判 acceptable/incorrect，内容不变）——判官校准是持续迭代项，方向是长文判官方差控制（金标回归 + 更多抽检）
-- 数值只写实测，不预填；校准前 sample=4（+6pt）/sample=20（-3pt）方向相反是小样本+判官偏差的实例——正式口径以校准后全量报告为准
+- 同题 A/B：裸 prompt vs 全链路（结构化 prompt 工程），固定 seed 随机顺序；**solver 输出缓存**（重跑只判 judge，降本 30%）
+- **校准后正式实测（sample=20，deepseek-v4-flash，$0.23，160 calls）**：A judge84/CRAG90/覆盖88% vs B judge91/CRAG73/覆盖93% → **Δ judge +7pt · Δ cover +5pt · Δ CRAG -17pt**
+- **判官长文校准**（实测驱动）：发现 CRAG 判官对 5000+ 字长文系统性误判（内容正确的讲解被判 incorrect）→ 校准 prompt + judge-check 复用真实判官；同题 B q5 从 incorrect → correct，Δ CRAG 从 -43 → -17
+- **诚实解读**：结构化模板收益实锤（质量 +7pt、覆盖 +5pt）；Δ CRAG 残余来自判官随机波动（持续校准项）；数值只写实测
 
-### 为什么讲解链路不用 RAG（决策档案，有据可依）
+### 为什么讲解链路不用 RAG（决策档案）
 
-讲解链路刻意**不引入 RAG**，这是工程决策而非缺失：
-
-- **黑箱 vs 可解释**：RAG 检索来源不可见；讲解要求"每一点可讲出来源"，结构化 prompt + 模型固有知识 + 可回溯检索更可控
-- **任务匹配**：讲解是"把已知讲清楚"（固有知识 + 结构化输出足够），不是"检索罕见事实"（那才是 RAG 主场）
-- **按任务分流，不是全有或全无**：出题/刷题/agent 搜索仍用 `searchKnowledge`（RAG 保留于检索型任务）
-- 消融 2（RAG on/off 同题 A/B）为可选验证项——若实测 RAG 有增益则如实修正决策
+讲解刻意不引入 RAG（黑箱 vs 可解释 / 任务匹配 / 按任务分流——出题、刷题、agent 搜索仍用 `searchKnowledge`），消融 2（RAG on/off）为可选验证项。
 
 ### Layer B：Agent/Harness 能力（`npm run bench:agent`）
 
-- mock LLM 故障注入，**与模型水平无关**（换任何模型结果一致）
-- 覆盖：工具循环执行、参数校验拦截、幻觉工具容错、上下文压缩触发、语音稿分离、学习闭环数据流（面试实录→清单/复习卡、复盘→薄弱点、面试→报告回流）、搜索方向过滤/去重
-- 当前结果：**10/10 通过**
+- mock LLM 故障注入，**与模型无关**（CI 零成本）；覆盖工具循环/参数校验/幻觉容错/上下文压缩/学习闭环数据流
+- 当前结果：**19/19 通过**（首次通过口径，3 次全过一致率）
 
-### 空响应容错（生产级修复）
+### 空响应容错 / 上下文压缩
 
-网关偶发返回 `HTTP 200 + 空 content`（不报错）——`llm.mjs` 已检测并视为可重试错误，自动走重试/failover 链，避免对话静默空白。
-
-### 上下文压缩（compaction）
-
-生产级实现：token 估算触发（中文 1:1 / 英文 4:1 字符粗估）→ 保留最近 `keepRecent` token 的完整消息 → 中间压缩为带时间戳的摘要注入 → 3 次重试 + 失败降级（丢弃最旧 tool 结果）。参数可配：
-
-```bash
-# .env
-COMPACT_BUDGET=18000       # body 估算 token 超此值触发压缩（默认窗口 ~30%）
-COMPACT_KEEP_RECENT=4000   # 保留最近 N token 的完整消息
-```
-
-量化验证（`tests/ai.test.mjs`）：构造超预算对话 → 压缩后 token 减少 70%+ 且保留最近上下文。
+`llm.mjs` 检测网关 `HTTP 200 + 空 content` → 自动重试/failover；上下文压缩 token 估算触发（`COMPACT_BUDGET`/`COMPACT_KEEP_RECENT` 可配），量化验证 70%+ 缩减。
 
 ---
 
 ## 工程质量门禁
 
-> 数字为 2026-08-17 实测（全量重跑），非历史快照。
+> 数字为 2026-08-26 实测（全量重跑），非历史快照。
 
 | 门禁 | 命令 | 当前状态 |
 |---|---|---|
-| 单元/集成测试 | `npm test` | ✅ **593/593 通过**（含多轮回环审计修复、语音长句保护、邮箱日程、待定邀约、desktop 模块） |
-| 类型检查 | `npm run typecheck`（tsc --noEmit + checkJs） | ✅ 0 错误（注意：tsconfig 未开 strict/noImplicitAny） |
-| Lint | `npm run lint`（ESLint flat config） | ✅ 0 error / 52 warning（no-unused-vars 为主） |
-| 覆盖率 | `npm run coverage` | 测试文件外圈全绿；12 个核心模块 93–100%；agent.mjs 86.4%；llm.mjs 被 mock 隔离（单测失真）；fetch-page 人工验证域 |
-| 按模块测试 | `npm run test:module -- <模块>` | 升级单模块只跑它及依赖，不用全量 |
-| Agent 能力评测 | `npm run bench:agent` | ✅ 13/13（mock LLM 故障注入，与模型无关） |
-| 模型基线 | `npm run bench` | 以 `benchmark/reports/latest.json` 为准 |
-| 语音评测 | `npm run voice:score` / `voice:audit` | 内容完整度/音色/节奏/污染 综合评分 + "话没说完"末尾完整度审计（长句合成质量回归监控） |
-| 闭环审计 | scripts/_verify-route-parity.mjs 等 | 路由注册表回归测试（`tests/routes-registry.test.mjs`）防拆分丢路由；多轮 workflow 闭环复查已修 30+ 断裂点 |
-| CI | `.github/workflows/ci.yml` | push/PR 自动跑：typecheck + lint + test + bench:agent |
+| 单元/集成测试 | `npm test` | ✅ **924/924 通过**（892 单元 + 32 集成，90 个测试文件，mock LLM 无 key 可跑） |
+| 类型检查 | `npm run typecheck`（tsc + checkJs） | ✅ 0 错误 |
+| 桌面端类型检查 | `npm run typecheck:desktop`（preload/main/api-client） | ✅ 0 错误（kanban-api.d.ts 74 方法一致） |
+| Lint | `npm run lint`（ESLint flat config） | ✅ 0 error |
+| 评测数据合法性 | `npm run bench:validate` | ✅ 6 数据集全过（脏数据 exit 1） |
+| Agent 能力评测 | `npm run bench:agent` | ✅ 19/19（mock LLM，与模型无关） |
+| 模型基线 + 回归门禁 | `npm run bench` + `bench:gate` | 以报告为准；分层门禁（硬红 exit 1） |
+| 语音评测 | `npm run voice:score` / `voice:audit` | 内容完整度/音色/节奏/污染 + 末尾完整度审计 |
+| 路由注册表回归 | `tests/routes-registry.test.mjs` | 139 条路由断言 + 契约覆盖率护栏（≥15 路由挂契约） |
+| CI | `.github/workflows/ci.yml` | push/PR：test + validate + judge-check + quick + typecheck×2 + lint + build/check:renderer + bench:agent |
+| 每周评测 | `.github/workflows/weekly-eval.yml` | 全量 Layer A + web 任务 + 消融 + 门禁 + 徽章/趋势提交 |
 
 ---
 
 ## 常见问题
 
 **Q：每次怎么启动？**
-双击 `start-kanban.bat`（最小化启动 Electron 桌宠）。桌宠主进程会自动拉起后台数据服务（widget，端口 8899）并守护它，**不需要单独启动 widget**。若设置了开机自启（注册表 Run 键 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `mashiro-desktop` 项），平时开机即自动运行，无需手动操作；重复双击启动会被单实例锁拦截，聚焦到已运行窗口。
+双击 `start-kanban.bat`（桌宠主进程自动拉起并守护后台数据服务，端口 8899，**不需要单独启动 widget**）。重复双击被单实例锁拦截。
 
-**Q：改完代码后功能没生效 / 面板报 "Not Found" / "is not valid JSON"？**
-运行中的 widget 是旧代码进程（桌宠一直没重启）。**每次代码改动后请重启桌宠**：托盘退出或 `Get-Process electron | Stop-Process -Force`，再双击 `start-kanban.bat`。验证是否新版：浏览器打开 `http://127.0.0.1:8899/api/learning`——返回 JSON 文档清单 = 新版；返回 `Not Found` = 旧进程，重启桌宠即可。
-
-**Q：桌宠不显示？**
-杀掉 electron 进程重启：`Get-Process electron | Stop-Process -Force`，再运行启动命令。
-
-**Q：爬取很多 404？**
-牛客部分帖子被删/需登录，属正常。已内置无效页检测（自动跳过），多源覆盖降低影响。
+**Q：改完代码后功能没生效？**
+运行中的 widget 是旧代码进程——**每次代码改动后重启桌宠**（托盘退出或 `Get-Process electron | Stop-Process -Force`）。验证新版：浏览器打开 `http://127.0.0.1:8899/api/health` 看 version 字段。
 
 **Q：对话很慢？**
-首次调用要启动 Chromium（几秒），搜索 2 站并行约 15 秒，完整"搜索+讲解"约 1 分钟属正常。简单问题直接问（不触发搜索）会快很多。
+首次调用要启动 Chromium（几秒），搜索 2 站并行约 15 秒，完整"搜索+讲解"约 1 分钟属正常。简单问题直接问会快很多。
 
 **Q：想换模型/端点？**
-面板「⚙️ 设置 → LLM 服务配置」直接填 API Key / Base URL / 模型名（含本地 Ollama `http://127.0.0.1:11434/v1`，配了 Base URL 即单端点直连）。也可改 `.env` 或用 `MIANSHI_PROVIDERS=[{"name":"deepseek","baseUrl":"...","apiKey":"...","model":"deepseek-chat"},{"name":"local","baseUrl":"http://127.0.0.1:11434/v1","apiKey":"ollama","model":"qwen2.5"}]`（按顺序 failover）。面板配置 > .env。
+面板「⚙️ 设置 → LLM 服务配置」直接填；或 `.env` / `MIANSHI_PROVIDERS`（多 Provider 路由，按顺序 failover）。
 
 **Q：怎么打安装包？**
 ```bash
-npm i -D electron-builder   # 已加入 devDependencies
-# 国内网络需镜像（下载 electron/nsis 二进制）：
 $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
 $env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"
-npm run dist                # 生成 release/ 下 NSIS 安装包 + 便携版（约 750MB，含 Chromium）
+npm run dist    # release/ 下 NSIS 安装包 + 便携版
 ```
 
 ---
 
 ## 路线图
 
-- [x] 爬取引擎（前端/Agent 聚焦 + 题目检测 + JS 答案）
-- [x] 学习闭环（清单/勾选/复盘/薄弱点回流）
-- [x] 对话 agent（工具循环 + 任务规划 + 记忆画像）
-- [x] 桌宠（Live2D 真白 / 气泡 / 全屏隐藏 / 开机自启）
-- [x] Repair：失败自动重试/换源降级（withRetry + LLM failover）
-- [x] 主动推送：按关注点定时巡检新内容（多站搜索 + 全量爬取兜底）
-- [x] 讲解增强：流式生成 / 追问补充 / 多条目归并（主题簇 + 关联扩展）
-- [x] 面试实录：被问住的知识点一键入清单 + 复习卡
-- [x] 可观测性：LLM 调用/token/耗时监控（面板实时可见）
-- [x] 系统自检：启动 + 每 6h 自动扫隐患（表堆积自动清理 / 产出污染 / 巡检停摆 / LLM 失败率 / 错误日志 / DB 体积），问题自动修复或弹通知（面板「爬取产出」Tab 可手动检查）
-- [x] 产品化基础：多 Provider 路由 / Hooks 事件系统 / Skills 插件机制 / Subagent 编排 / 对话历史恢复 / 面板 CSP + 渲染沙箱 / CI 修复 / 安装包配置
-- [x] 纵向拆分（工程质量）：widget → 核心域 + 插件加载器、agent → tools 分层、面板 5 文件、13 域路由 → 12 业务域迁入 plugins/job-hunter + core 基础设施域lib/tools、main → desktop/lib、panel → 5 文件，全部可独立测试；`test:module` 按模块跑
-- [x] 多轮回环审计（workflow 并行 + 修复 50+ 断裂点）：简历→面试官、岗位投递状态、邮箱自动检查+待定邀约、笔试进日程、复习答错回流、LLM 配置互清等
-- [x] 语音系统：GPT-SoVITS 长句合成（防"话没说完"分块优化）+ 评测/审计（score/audit）+ 训练流程内置（voice-train）+ 交互重设计（单击短句/空闲长句/长句播放保护）
-- [x] 设置中心可配：API Key/Base URL/模型、方向画像/知识树模板、邮箱自动检查、巡检 token 预算、本地知识库开关、招聘平台账号——全部免改代码
-- [ ] 进化闭环：内置评测集（LLM-as-Judge）+ 自动改进 prompt（bench 评分与 must_cover 已解耦，下一步：在线评测进 CI + 自动改进）
+- [x] 爬取引擎 / 学习闭环 / 对话 agent / 桌宠（Live2D/气泡/全屏隐藏/自启）
+- [x] 面试实录、多轮回环审计（修复 50+ 断裂点）、设置中心全可配
+- [x] 语音系统：GPT-SoVITS 合成 + 评测/审计 + 训练流水线 + 交互重设计
+- [x] 纵向拆分（工程质量）：139 路由插件化、agent→tools 分层、面板 5 文件、契约层（Phase 2）
+- [x] 事件驱动内核（P0）：事件总线 + 自主决策 + CC 伴侣 watcher + 场景装配（P1）
+- [x] 双层评测体系：数据集治理/指标/门禁/消融基线/判官校准/每周徽章
+- [x] MCP 分发闭环：9 工具 + 数据自动探测 + 发布瘦身（7 deps）+ 完整分发文档
+- [ ] 实时 TTS 句子级流水线（开发中：speech-queue + GPT-SoVITS 本地引擎）
+- [ ] companion-poller 主进程接线（事件驱动表达 → 桌宠气泡的 1-2 行 `startCompanionPoller` 启动接线，模块已就绪；待实时 TTS 合入后一并接）
+- [ ] 判官长官方差控制（金标回归 + 更多抽检）
+- [ ] 评测集全量扩容（questions → 60+，渐进积累）
+- [ ] P2 动作层（情绪→Live2D 动作映射）、P3 反思闭环（trace 失败模式 → 调整技能/提示词）
+- [ ] Monorepo / PKCE / 受信任面板宿主（放后可选）
 
 ---
 
 ## 📦 开源说明
 
 - **许可证**：MIT（见 [LICENSE](LICENSE)）
-- **仓库不含**：本地数据（`data/`）、ASR 模型（`models/`，`npm run voice:model` 下载）、`.env`（密钥）——clone 后按上文配置即可运行；**含**自训练声线（`assets/voice/`，随仓库发布开箱即用）
-- **插件化路线**：宿主（真白）+ 插件（秋招助手）架构方案见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)
-- **测试**：`npm test`（全量，含 jsdom 面板交互与集成测试）；CI 在 GitHub Actions 全量执行
+- **仓库不含**：本地数据（`data/`）、ASR 模型（`models/`）、`.env`（密钥）；**含**自训练声线（`assets/voice/`，开箱即用）
+- **测试**：`npm test` 924 用例全绿（mock LLM，CI 零成本）；评测体系见上文
+- **插件化路线**：宿主（真白）+ 插件（秋招助手）架构见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)
 
 ---
 
