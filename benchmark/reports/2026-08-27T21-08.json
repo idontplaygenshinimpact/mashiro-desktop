@@ -1,0 +1,374 @@
+{
+  "ts": "2026-08-27T21:08:13.540Z",
+  "mode": "quick",
+  "composite": 99,
+  "envelope": {
+    "model": "deepseek-v4-flash",
+    "datasetHash": "bd52f5204fe01906",
+    "node": "v22.19.0",
+    "params": {
+      "judgeTemperature": 0.2,
+      "solverTemperature": 0.5
+    },
+    "mocked": false
+  },
+  "metrics": {
+    "costTokens": 57752,
+    "costUsd": 0.0173,
+    "calls": 39,
+    "failCount": 2,
+    "p50Ms": 1708,
+    "p95Ms": 43796,
+    "byTag": {
+      "misc": {
+        "calls": 31,
+        "tokens": 36536,
+        "ms": 213595,
+        "fails": 0
+      },
+      "judge": {
+        "calls": 8,
+        "tokens": 21216,
+        "ms": 218244,
+        "fails": 2
+      }
+    },
+    "pass1": 100
+  },
+  "dims": {
+    "solve": 97,
+    "codePass": "2/2",
+    "classify": 100,
+    "detect": 100,
+    "static": 100
+  },
+  "truthfulness": 100,
+  "trace": {
+    "relevance": 0,
+    "utilization": 0,
+    "adherence": 0,
+    "completeness": 0
+  },
+  "judgeAgreement": null,
+  "details": {
+    "questions": [
+      {
+        "id": "q1",
+        "title": "事件循环输出顺序预测",
+        "type": "predict",
+        "score": 94,
+        "objective": 50,
+        "covRate": 80,
+        "covHit": [
+          "微任务",
+          "宏任务",
+          "Promise",
+          "setTimeout"
+        ],
+        "covMissing": [
+          "执行顺序"
+        ],
+        "judge": 100,
+        "judgeOk": true,
+        "detail": "文本明确给出输出序列",
+        "answerLen": 3257,
+        "truth": {
+          "label": "correct",
+          "score": 100,
+          "source": "objective"
+        }
+      },
+      {
+        "id": "q2",
+        "title": "手写防抖 debounce",
+        "type": "code",
+        "score": 100,
+        "objective": 50,
+        "covRate": 100,
+        "covHit": [
+          "防抖",
+          "定时器",
+          "this",
+          "取消"
+        ],
+        "covMissing": [],
+        "judge": 100,
+        "judgeOk": true,
+        "detail": "",
+        "answerLen": 4948,
+        "truth": {
+          "label": "correct",
+          "score": 100,
+          "source": "objective"
+        }
+      }
+    ],
+    "trace": [
+      {
+        "id": "t1",
+        "title": "事件循环（材料题）",
+        "type": "trace",
+        "score": 0,
+        "trace": {
+          "relevance": 0,
+          "utilization": 0,
+          "adherence": 0,
+          "completeness": 0
+        },
+        "truth": {
+          "label": "correct",
+          "score": 100,
+          "source": "judge"
+        },
+        "detail": "",
+        "answerLen": 4081
+      }
+    ],
+    "classify": [
+      {
+        "id": "c1",
+        "expected": "mianshi",
+        "actual": "mianshi",
+        "ok": true
+      },
+      {
+        "id": "c2",
+        "expected": "zhaopin",
+        "actual": "zhaopin",
+        "ok": true
+      },
+      {
+        "id": "c3",
+        "expected": "bishi",
+        "actual": "bishi",
+        "ok": true
+      },
+      {
+        "id": "c4",
+        "expected": "other",
+        "actual": "other",
+        "ok": true
+      },
+      {
+        "id": "c5",
+        "expected": "mianshi",
+        "actual": "mianshi",
+        "ok": true
+      },
+      {
+        "id": "c6",
+        "expected": "zhaopin",
+        "actual": "zhaopin",
+        "ok": true
+      },
+      {
+        "id": "c7",
+        "expected": "bishi",
+        "actual": "bishi",
+        "ok": true
+      },
+      {
+        "id": "c8",
+        "expected": "other",
+        "actual": "other",
+        "ok": true
+      },
+      {
+        "id": "c9",
+        "expected": "bishi",
+        "actual": "bishi",
+        "ok": true
+      },
+      {
+        "id": "c10",
+        "expected": "zhaopin",
+        "actual": "zhaopin",
+        "ok": true
+      },
+      {
+        "id": "c11",
+        "expected": "mianshi",
+        "actual": "mianshi",
+        "ok": true
+      },
+      {
+        "id": "c12",
+        "expected": "bishi",
+        "actual": "bishi",
+        "ok": true
+      },
+      {
+        "id": "c13",
+        "expected": "other",
+        "actual": "other",
+        "ok": true
+      },
+      {
+        "id": "c14",
+        "expected": "mianshi",
+        "actual": "mianshi",
+        "ok": true
+      },
+      {
+        "id": "c15",
+        "expected": "zhaopin",
+        "actual": "zhaopin",
+        "ok": true
+      },
+      {
+        "id": "c16",
+        "expected": "mianshi",
+        "actual": "mianshi",
+        "ok": true
+      }
+    ],
+    "detect": [
+      {
+        "id": "d1",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d2",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d3",
+        "expected": false,
+        "actual": false,
+        "ok": true
+      },
+      {
+        "id": "d4",
+        "expected": false,
+        "actual": false,
+        "ok": true
+      },
+      {
+        "id": "d5",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d6",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d7",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d8",
+        "expected": false,
+        "actual": false,
+        "ok": true
+      },
+      {
+        "id": "d9",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d10",
+        "expected": false,
+        "actual": false,
+        "ok": true
+      },
+      {
+        "id": "d11",
+        "expected": true,
+        "actual": true,
+        "ok": true
+      },
+      {
+        "id": "d12",
+        "expected": false,
+        "actual": false,
+        "ok": true
+      }
+    ],
+    "static": [
+      {
+        "text": "事件循环与微任务",
+        "expected": "js-event-loop",
+        "actual": "js-event-loop",
+        "ok": true
+      },
+      {
+        "text": "React Hooks 原理",
+        "expected": "rc-hooks",
+        "actual": "rc-hooks",
+        "ok": true
+      },
+      {
+        "text": "原型链",
+        "expected": "js-prototype",
+        "actual": "js-prototype",
+        "ok": true
+      },
+      {
+        "text": "Webpack 配置",
+        "expected": "eng-build",
+        "actual": "eng-build",
+        "ok": true
+      },
+      {
+        "text": "XSS 跨域 CORS",
+        "expected": "br-security",
+        "actual": "br-security",
+        "ok": true
+      },
+      {
+        "text": "完全不相关内容",
+        "expected": null,
+        "actual": "完全不相关内容",
+        "ok": true
+      },
+      {
+        "text": "事件循环",
+        "expected": "js-event-loop",
+        "actual": "js-event-loop",
+        "ok": true
+      },
+      {
+        "text": "HTTP 强缓存与协商缓存",
+        "expected": "br-cache",
+        "actual": "br-cache",
+        "ok": true
+      },
+      {
+        "text": "JS 事件循环输出顺序",
+        "expected": "js-event-loop",
+        "actual": "js-event-loop",
+        "ok": true
+      },
+      {
+        "text": "React Fiber 调度",
+        "expected": "rc-render",
+        "actual": "rc-render",
+        "ok": true
+      },
+      {
+        "text": "随便一句话没有知识点",
+        "expected": null,
+        "actual": "随便一句话没有知识点",
+        "ok": true
+      },
+      {
+        "text": "深拷贝与浅拷贝",
+        "expected": null,
+        "actual": "深拷贝与浅拷贝",
+        "ok": true
+      }
+    ]
+  }
+}

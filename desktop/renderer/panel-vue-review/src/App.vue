@@ -41,11 +41,10 @@ function onRate(key) {
   flipped.value = false;
   rate(key);
 }
-// 曲线展示当前卡稳定性（评分后 history 最后一条为准）
-const curveStability = computed(() => {
-  if (history.value.length) return history.value[history.value.length - 1].stability;
-  return current.value?.fsrs?.stability || 1;
-});
+// 曲线展示当前卡稳定性（修复：此前优先取 history 末条 = 上一张已评卡的 S，与"当前卡"标题不一致。
+// 现改为当前卡：评分后 rate() 先更新 current 为新状态 → 曲线即时重绘展示调度结果，随后 next() 切下一张卡。
+// history 仍传给 ForgettingCurve 画虚线历史曲线对比 + ScheduleTimeline 展示调度时间线。）
+const curveStability = computed(() => current.value?.fsrs?.stability || 1);
 </script>
 
 <style scoped>

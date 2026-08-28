@@ -17,7 +17,7 @@ export function InterviewPanel() {
   const [phase, setPhase] = useState("setup"); // setup | active | finished
   const [busy, setBusy] = useState(false);
   // 配置
-  const [config, setConfig] = useState({ position: "前端实习生", role: "技术深挖型", focus: "" });
+  const [config, setConfig] = useState({ position: "前端实习生", role: "技术深挖型", focus: "", resume: "" });
   // 会话
   const [session, setSession] = useState(null); // {round, roundType, question, dimension, basis, criteria, boundary, depth, totalRounds}
   const [scores, setScores] = useState({ tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0, rounds: 0 });
@@ -156,11 +156,16 @@ function SetupView({ config, setConfig, busy, onStart, resumable, onResume, hist
         </select>
         <label style={lbl}>重点方向（可选）</label>
         <input value={config.focus} onChange={set("focus")} placeholder="如：React / 事件循环 / 项目拷打" style={input} />
+        <label style={lbl}>简历（可选——面试官基于真实项目拷打）</label>
+        <textarea value={config.resume || ""} onChange={set("resume")} rows={4}
+          placeholder="粘贴简历（至少 40 字；留空自动使用设置中心存档简历）"
+          style={{ ...input, resize: "vertical", lineHeight: 1.5 }} />
       </div>
 
       <button onClick={onStart} disabled={busy} style={{ ...btnPrimary, padding: "12px 0", fontSize: 15 }}>
         {busy ? "启动中…" : "🚀 开始面试"}
       </button>
+      <div style={{ fontSize: 11, color: "#6a6790", marginTop: -8 }}>💡 会话中 Ctrl/Cmd + Enter 快速提交回答</div>
 
       {history.length > 0 && (
         <div style={{ marginTop: 8 }}>
@@ -265,7 +270,14 @@ function SessionView({ session, scores, busy, log, onSubmit, onExit }) {
             </div>
           </div>
           <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={7}
-            placeholder="组织你的回答（思路 → 代码/例子 → 边界）…" style={{ ...input, resize: "vertical", lineHeight: 1.5 }} />
+            placeholder="组织你的回答（思路 → 代码/例子 → 边界）…" style={{ ...input, resize: "vertical", lineHeight: 1.5 }}
+            onKeyDown={(e) => {
+              // Ctrl/Cmd+Enter 快速提交（isComposing 防中文输入法选字误触）
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                if (answer.trim() && !busy) { onSubmit(answer); setAnswer(""); }
+              }
+            }} />
           <button onClick={() => { onSubmit(answer); setAnswer(""); }} disabled={busy || !answer.trim()}
             style={{ ...btnPrimary, width: "100%", marginTop: 10, padding: "10px 0" }}>
             {busy ? "评分中…" : "📤 提交回答"}
