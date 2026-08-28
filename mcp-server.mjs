@@ -218,6 +218,39 @@ server.tool(
   }
 );
 
+// ---------- 工具 10/11: project-guide（v2 追加：MCP 桥接——外部 agent 也能生成讲解指南） ----------
+// 复用 skills/project-guide/skill.mjs 的实现（read_project_file 路径白名单 + generate map-reduce）
+async function runProjectGuideTool(toolName, args) {
+  try {
+    const { tools } = await import("./skills/project-guide/skill.mjs");
+    const tool = (Array.isArray(tools) ? tools : []).find((t) => t?.name === toolName);
+    if (!tool) return { content: [{ type: "text", text: `⚠️ skill 工具 ${toolName} 未注册` }], isError: true };
+    const r = await tool.run(args || {});
+    return { content: [{ type: "text", text: JSON.stringify(r, null, 2).slice(0, 8000) }] };
+  } catch (e) {
+    console.error(`[mcp] ${toolName} 失败: ${e && e.message ? e.message : String(e)}`);
+    return { content: [{ type: "text", text: `⚠️ ${toolName} 失败: ${e && e.message ? e.message : String(e)}` }], isError: true };
+  }
+}
+
+server.tool(
+  "generate_project_guide",
+  "生成项目面试讲解指南（7 段：定位/选型/架构/亮点/问题清单/防御/简历 bullet）——基于真实源码（分层读取 + subagent 并行深读 + 覆盖范围透明），存档 output/project-guides/<项目名>.md。用户问'生成 XX 项目的面试讲解指南/我的项目怎么讲'时使用",
+  { project: z.string().describe("项目名（personal_projects 配置中的 name）") },
+  async ({ project }) => runProjectGuideTool("generate_project_guide", { project })
+);
+
+server.tool(
+  "read_project_file",
+  "读取已配置个人项目目录内的源码文件（路径白名单防穿越 + 50KB 上限；mode: head 前 200 行 / export 签名清单 / full 全文）。生成讲解指南时按需读关键文件、反馈修正时读对应源码",
+  {
+    project: z.string().describe("项目名（personal_projects 配置中的 name）"),
+    file: z.string().describe("项目内相对路径，如 package.json / src/main.mjs"),
+    mode: z.enum(["head", "export", "full"]).optional().describe("读取模式（默认 head）"),
+  },
+  async ({ project, file, mode }) => runProjectGuideTool("read_project_file", { project, file, mode })
+);
+
 // ---------- 启动（stdio 传输，供 MCP 客户端连接） ----------
 const transport = new StdioServerTransport();
 await server.connect(transport);
