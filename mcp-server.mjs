@@ -224,12 +224,12 @@ async function runProjectGuideTool(toolName, args) {
   try {
     const { tools } = await import("./skills/project-guide/skill.mjs");
     const tool = (Array.isArray(tools) ? tools : []).find((t) => t?.name === toolName);
-    if (!tool) return { content: [{ type: "text", text: `⚠️ skill 工具 ${toolName} 未注册` }], isError: true };
+    if (!tool) return { content: [/** @type {{ type: "text", text: string }} */({ type: "text", text: `⚠️ skill 工具 ${toolName} 未注册` })], isError: true };
     const r = await tool.run(args || {});
-    return { content: [{ type: "text", text: JSON.stringify(r, null, 2).slice(0, 8000) }] };
+    return { content: [/** @type {{ type: "text", text: string }} */({ type: "text", text: JSON.stringify(r, null, 2).slice(0, 8000) })] };
   } catch (e) {
     console.error(`[mcp] ${toolName} 失败: ${e && e.message ? e.message : String(e)}`);
-    return { content: [{ type: "text", text: `⚠️ ${toolName} 失败: ${e && e.message ? e.message : String(e)}` }], isError: true };
+    return { content: [/** @type {{ type: "text", text: string }} */({ type: "text", text: `⚠️ ${toolName} 失败: ${e && e.message ? e.message : String(e)}` })], isError: true };
   }
 }
 

@@ -122,7 +122,7 @@ Claude Code 配置（`.mcp.json`）：
 
 **装包即连（实测）**：启动时**自动探测**你的桌宠数据目录（源码版 data/ / 打包版 Electron userData / ~/.mashiro 兜底）——已有桌宠数据的用户零配置，数据工具直接返回真实内容（学习清单/岗位/简历实测通过）；LLM key 随数据目录自动继承（设置中心配过的 key）。
 
-9 个工具（全部只读）：
+11 个工具（数据工具只读；`generate_project_guide` 写入 `output/project-guides/`）：
 
 | 工具 | 能力 |
 |---|---|
@@ -131,8 +131,9 @@ Claude Code 配置（`.mcp.json`）：
 | `get_study_plan` / `get_study_progress` | 学习清单与进度 |
 | `start_interview` | 模拟面试官（项目拷打/八股穿插/手写收尾） |
 | `get_personal_profile` / `get_jobs_status` / `get_schedule_events` / `get_project_archives` | 个人数据环境（简历/岗位/日程/项目源码档案） |
+| `generate_project_guide` / `read_project_file` | 项目面试讲解指南（基于真实源码 7 段生成：分层读取 + subagent 并行深读 + 覆盖范围透明）；可移植 skill 包见 `project-guide-skill/` |
 
-**诚实两档**：6 个数据工具零配置可用（空库优雅返回）；`solve_question`/`start_interview` 需 LLM Key（无 key 快速报错并给配置提示）。完整分发文档（工具清单/各客户端配置/使用示例/FAQ/数据权限）：**[docs/mcp.md](docs/mcp.md)**。
+**诚实两档**：数据工具零配置可用（空库优雅返回）；`solve_question`/`start_interview`/`generate_project_guide` 需 LLM Key（无 key 快速报错并给配置提示）。完整分发文档（工具清单/各客户端配置/使用示例/FAQ/数据权限）：**[docs/mcp.md](docs/mcp.md)**。
 
 ### 接入 DeepSeek Harness（DSH）
 
@@ -151,7 +152,7 @@ Claude Code 配置（`.mcp.json`）：
 - **形象切换** → 真白·旅行装/水手服/私服 + 时雨，点击即换、重启记忆
 - **语音输入** → 面板 🎤 说话自动转文字（本地 sherpa-onnx 离线识别，零 API key）
 
-### 2. 预设技能（对话直接触发，6 个）
+### 2. 预设技能（对话直接触发，7 个）
 
 | 技能 | 触发方式 | 能力 |
 |---|---|---|
@@ -161,6 +162,7 @@ Claude Code 配置（`.mcp.json`）：
 | 📄 **resume-coach** | "帮我看看简历"（贴简历） | 结构化优化：亮点/风险/量化改进/面试预设问题 |
 | 🏢 **company-intel** | "字节面什么" | 目标公司面经情报（TOP 考点+真题线索） |
 | 🐙 **github-repo** | "React 仓库多火" | GitHub 仓库信息（stars/语言/更新时间） |
+| 📖 **project-guide** | "生成 XX 项目的面试讲解指南/我的项目怎么讲" | 基于真实源码生成 7 段讲解指南（定位/选型/架构/亮点/问题清单/防御/简历 bullet）——分层读取 + subagent 并行深读 + 覆盖范围透明，多轮反馈可细化；可移植 skill 包（`project-guide-skill/`，纯提示词）可加载到任意 agent（Claude Code/DSH/Codex），MCP 桥接见上表 |
 
 > 技能即插即用：新增 `skills/<名>/` 目录即可（`lib/skills.mjs` 的 `reloadSkills` 支持热重载，HTTP 管理路由待补）；**场景装配**（P1）下 agent 只注入当前场景技能子集（面试中/CC 陪伴/学习），省 token、降幻觉面。
 
@@ -201,8 +203,9 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 │   ├── data-detect.mjs             # 桌宠数据目录自动探测（MCP 装包即连）
 │   └── db.mjs                      # node:sqlite 主存储（WAL，23 表 + settings KV）
 ├── widget.mjs                      # 后台数据服务（HTTP :8899）：139 条路由 + 18 个后台任务 + 事件内核接线
-├── mcp-server.mjs                  # MCP Server（9 工具 → 外部 agent）
-├── skills/                         # 6 个技能（SKILL.md 声明 + skill.mjs 可编程）
+├── mcp-server.mjs                  # MCP Server（11 工具 → 外部 agent）
+├── skills/                         # 7 个技能（SKILL.md 声明 + skill.mjs 可编程；含 project-guide 讲解指南）
+├── project-guide-skill/            # 可移植 skill 包（纯提示词，任意 agent 加载即用）
 ├── benchmark/                      # 双层评测数据集（38+16+12+20+12+19）+ 报告 + 趋势
 ├── scripts/                        # 评测/导入/语音/发布工具（50+ 脚本）
 ├── tests/                          # 924 用例（90 个测试文件，mock LLM 无 key 可跑）
@@ -335,7 +338,7 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 - [x] 纵向拆分（工程质量）：139 路由插件化、agent→tools 分层、面板 5 文件、契约层（Phase 2）
 - [x] 事件驱动内核（P0）：事件总线 + 自主决策 + CC 伴侣 watcher + 场景装配（P1）
 - [x] 双层评测体系：数据集治理/指标/门禁/消融基线/判官校准/每周徽章
-- [x] MCP 分发闭环：9 工具 + 数据自动探测 + 发布瘦身（7 deps）+ 完整分发文档
+- [x] MCP 分发闭环：11 工具（含 project-guide 讲解指南）+ 数据自动探测 + 发布瘦身（7 deps）+ 完整分发文档
 - [ ] 实时 TTS 句子级流水线（开发中：speech-queue + GPT-SoVITS 本地引擎）
 - [ ] companion-poller 主进程接线（事件驱动表达 → 桌宠气泡的 1-2 行 `startCompanionPoller` 启动接线，模块已就绪；待实时 TTS 合入后一并接）
 - [ ] 判官长官方差控制（金标回归 + 更多抽检）
