@@ -154,3 +154,11 @@ test("isValidTree：结构校验函数", () => {
   assert.equal(kp.isValidTree([{ id: "a", title: "A", points: [{ id: "p", title: "P", kws: "不是数组" }] }]), false, "kws 非数组拒绝");
   assert.equal(kp.isValidTree(KNOWLEDGE_TREE), true);
 });
+
+test("isDefaultTree：深比较判定（引用比较 bug 修复——文件模板/缓存数组非同引用）", () => {
+  assert.equal(kp.isDefaultTree(), true, "未自定义 → 默认树");
+  kp.saveKnowledgeTree([{ id: "custom", title: "自定义树", points: [{ id: "c1", title: "自定义点", kws: ["x"] }] }]);
+  assert.equal(kp.isDefaultTree(), false, "保存自定义后 → 非默认");
+  kp.resetKnowledgeTree();
+  assert.equal(kp.isDefaultTree(), true, "重置后回默认");
+});

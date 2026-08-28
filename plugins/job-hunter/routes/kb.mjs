@@ -31,7 +31,7 @@ export function registerKbRoutes(router) {
   // ---------- 可配置知识树 ----------
   router.route("/api/knowledge/tree", "GET", (req, res) => {
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ ok: true, tree: knowledgeApi.getKnowledgeTree(), isDefault: knowledgeApi.getKnowledgeTree() === knowledgeApi.KNOWLEDGE_TREE }));
+    res.end(JSON.stringify({ ok: true, tree: knowledgeApi.getKnowledgeTree(), isDefault: knowledgeApi.isDefaultTree() }));
   });
   router.route("/api/knowledge/tree", "POST", (req, res) => {
     readBody(req, res, (body) => {

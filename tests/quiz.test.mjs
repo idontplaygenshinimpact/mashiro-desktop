@@ -102,7 +102,9 @@ test("drawQuiz：随机抽 3 题 + 选项洗牌（集合不变、正确项在选
   for (const q of d.questions) {
     assert.equal(q.options.length, 4, "4 个选项");
     assert.deepEqual([...q.options].sort(), ["选项A", "选项B", "选项C", "选项D"].sort(), "选项集合不变（仅顺序洗牌）");
-    assert.ok(q.answer >= 0 && q.answer < 4, "正确项位置合法");
+    assert.equal(q.answer, undefined, "不返回正确项下标（服务端判分声称成立）");
+    assert.ok(Array.isArray(q.map) && q.map.length === 4, "map 映射存在（判分坐标系还原用）");
+    assert.ok(!JSON.stringify(q).includes('"answer"'), "响应不含 answer 字段");
   }
   // 无题库返回空不崩溃
   const empty = drawQuiz("no-such-card");

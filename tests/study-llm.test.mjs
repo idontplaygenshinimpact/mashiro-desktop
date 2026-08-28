@@ -194,3 +194,13 @@ test("回归：mock 响应是对象形态（与真实 llmChat 契约一致）", 
   // 对象上调用 replace 必然抛 TypeError——上次 bug（study.mjs 对 llmChat 返回值 .replace）的形态
   assert.throws(() => data.replace(/x/g, ""), TypeError, "忘了 getReplyText 会炸");
 });
+
+test("answerReview：树外主题不写入 kp_mastery（matchKp 恒兜底修复——动态伪知识点不再污染掌握度表）", async () => {
+  addPlanItems([{ topic: "动态伪知识点XYZ", why: "w", source: "s", verify_question: "q", level: "必会" }]);
+  const item = getPlan().items[0];
+  setLlmResponses('{"results":[{"topic":"动态伪知识点XYZ","verdict":"错","comment":"浅","reference":"要点"}]}');
+  await answerReview([{ id: item.id, answer: "回答" }]);
+  const { db } = await import("../lib/db.mjs");
+  const n = db.prepare("SELECT COUNT(*) n FROM kp_mastery").get().n;
+  assert.equal(n, 0, "树外主题（matchKp 兜底动态主题）不写入 kp_mastery");
+});
