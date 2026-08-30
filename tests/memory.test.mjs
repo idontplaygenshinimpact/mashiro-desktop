@@ -26,6 +26,14 @@ test("isSimilarTopicForArchive：不同题目不复用讲解（共享'数组中'
   assert.equal(isSimilarTopicForArchive("手撕LRU缓存", "HTTP强缓存与协商缓存"), false);
 });
 
+test("isSimilarTopicForArchive：数据结构词不同不复用（链表 vs 数组解法不同）", () => {
+  // 2026-08 修复：共享"合并有序"前缀（2-gram 重叠 0.6 达标）→ 链表题复用了数组题讲解
+  assert.equal(isSimilarTopicForArchive("合并有序链表", "合并有序数组"), false, "链表 vs 数组");
+  assert.equal(isSimilarTopicForArchive("合并两个有序链表", "合并两个有序数组"), false, "变体同样区分");
+  // 同结构仍可复用（不误伤）
+  assert.equal(isSimilarTopicForArchive("合并两个有序链表", "合并K个有序链表"), true, "同结构（链表）");
+});
+
 test("isSimilarTopicForArchive：同一知识点的不同表述仍可复用", () => {
   // 合法复用保留（词序不同/同簇知识点）：
   assert.equal(isSimilarTopicForArchive("版本号比较", "比较版本号"), true, "倒序表述");
