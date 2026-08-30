@@ -112,6 +112,25 @@ test("solveQuestion 空响应不崩溃", async () => {
   assert.equal(typeof md, "string");
 });
 
+test("题目域自适应：Agent 工具调用题用 AI Agent 方向（不再硬套前端）", async () => {
+  // 2026-08 修复：Agent 工具调用是模型侧通用机制，与前端运行时无必然关系——
+  // 此前全局注入"前端"方向，LLM 被引导硬往前端套（如"前端场景比后端多了两个特殊约束"）
+  setLlmResponses("## 结论\n工具调用机制\n## 原理\n...\n## 实现JS\n```js\n```\n## 边界\n...");
+  await ai.solveQuestion({ title: "Agent 工具调用错误处理与重试策略", text: "错误回填与重试区分", company: "c", position: "前端", sourceUrl: "" });
+  const { getLastMessages } = await import("./helpers.mjs");
+  const system = getLastMessages()[0]?.content || "";
+  assert.ok(system.includes("AI Agent 应用开发"), `Agent 题用 AI Agent 方向（实际: ${system.slice(0, 60)}）`);
+  assert.ok(!system.includes("聚焦前端"), "不再硬套前端方向");
+});
+
+test("题目域自适应：纯前端题保持前端方向（默认不回归）", async () => {
+  setLlmResponses("## 结论\n事件循环\n## 原理\n...\n## 实现JS\n```js\n```\n## 边界\n...");
+  await ai.solveQuestion({ title: "事件循环", text: "宏任务微任务", company: "c", position: "前端", sourceUrl: "" });
+  const { getLastMessages } = await import("./helpers.mjs");
+  const system = getLastMessages()[0]?.content || "";
+  assert.ok(system.includes("前端"), `前端题保持前端方向（实际: ${system.slice(0, 60)}）`);
+});
+
 // ---------- 代码按需（概念题不硬凑代码） ----------
 test("solveQuestion prompt：概念类知识点不强制代码（代码按需指令）", async () => {
   setLlmResponses("## 结论\nok");
