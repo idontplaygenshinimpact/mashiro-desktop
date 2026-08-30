@@ -131,6 +131,25 @@ test("题目域自适应：纯前端题保持前端方向（默认不回归）",
   assert.ok(system.includes("前端"), `前端题保持前端方向（实际: ${system.slice(0, 60)}）`);
 });
 
+test("算法题专属约束：算法/手写题 prompt 注入完整可运行/复杂度/边界/演进要求", async () => {
+  setLlmResponses("## 结论\n合并有序链表\n## 原理\n...\n## 实现JS\n```js\n```\n## 边界\n...");
+  await ai.solveQuestion({ title: "合并有序链表", text: "两个有序链表合并", company: "c", position: "前端", sourceUrl: "" });
+  const { getLastMessages } = await import("./helpers.mjs");
+  const userPrompt = getLastMessages().map((m) => String(m.content || "")).join("\n");
+  assert.ok(userPrompt.includes("算法/手写题专属要求"), "算法题注入专属要求");
+  assert.ok(userPrompt.includes("时间/空间复杂度"), "复杂度分析要求");
+  assert.ok(userPrompt.includes("暴力解 → 优化解"), "暴力→优化演进要求");
+  assert.ok(userPrompt.includes("边界条件"), "边界覆盖要求");
+});
+
+test("算法题专属约束：非算法题不注入（概念题不硬凑代码）", async () => {
+  setLlmResponses("## 结论\nHTTP 缓存\n## 原理\n...\n## 实现JS\n无代码，纯概念\n## 边界\n...");
+  await ai.solveQuestion({ title: "HTTP 缓存原理", text: "强缓存协商缓存", company: "c", position: "前端", sourceUrl: "" });
+  const { getLastMessages } = await import("./helpers.mjs");
+  const userPrompt = getLastMessages().map((m) => String(m.content || "")).join("\n");
+  assert.ok(!userPrompt.includes("算法/手写题专属要求"), "概念题不注入算法约束");
+});
+
 // ---------- 代码按需（概念题不硬凑代码） ----------
 test("solveQuestion prompt：概念类知识点不强制代码（代码按需指令）", async () => {
   setLlmResponses("## 结论\nok");
