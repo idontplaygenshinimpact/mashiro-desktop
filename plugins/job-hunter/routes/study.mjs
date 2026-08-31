@@ -1,17 +1,19 @@
 // 学习清单域路由（纵向拆分：/api/study-* 从 widget.mjs 迁出）
 // 依赖注入：corsOrigin（SSE 跨域）、laneSubmit（串行锁）
-import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync, rmSync, statSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync, rmSync, statSync, readdirSync } from "node:fs";
 import path from "node:path";
 import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
 import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
-import { findStudyFile, studyNotesDir, sanitizeFilename } from "#lib/study-files.mjs";
+import { findStudyFile, studyNotesDir, sanitizeFilename, normName } from "#lib/study-files.mjs";
 import { isSimilarTopicForArchive } from "#lib/memory.mjs";
 import { queryFollowupCache } from "#lib/followup-cache.mjs";
 import { readBody } from "#lib/widget-core.mjs";
 import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
 import { createSSEPush, withContract } from "#lib/routes/contract.mjs";
 import { StudyStreamEvent } from "#lib/contracts/sse.mjs";
+import { sanitizeExternal } from "#lib/prompt-guard.mjs";
+import { config } from "#root/config.mjs";
 import { StudyPlanOutput, StudyCheckInput, StudyCheckOutput } from "#lib/contracts/study.mjs";
 
 // 同知识点讲解复用：清单里语义相似的另一条目已有讲解存档 → 直接复用（内容一致 + 省 LLM）
@@ -77,6 +79,32 @@ function explainPromptFor(item, prof) {
   };
 }
 
+/** 按 source 文件名找产出文件（output/<日期目录>/<文件名>.md，normName 精确匹配）——讲解生成时注入面经原文 */
+function findSourceFile(source) {
+  const outDir = config.outputDir;
+  if (!source || !existsSync(outDir)) return null;
+  const sn = normName(String(source).replace(/\.md$/, ""));
+  if (!sn) return null;
+  for (const d of readdirSync(outDir, { withFileTypes: true })) {
+    if (!d.isDirectory()) continue;
+    const dirPath = path.join(outDir, d.name);
+    for (const f of readdirSync(dirPath)) {
+      if (!f.endsWith(".md")) continue;
+      if (normName(f.replace(/\.md$/, "")) === sn) return path.join(dirPath, f);
+    }
+  }
+  return null;
+}
+
+/** 讲解存档头部（来源标注诚实：有面经 source 标注面经文件名，否则学习清单——修复：此前写死"学习清单"，
+ * 实际生成注入了面经原文，来源标注与内容不符） */
+function archiveHeader(item, note = "") {
+  const src = String(item?.source || "").trim();
+  const srcLabel = src ? `面经产出（${src}）` : "学习清单";
+  const verb = note === "已整理" ? "整理于" : "生成于";
+  return `# ${item.topic}\n\n> 来源：${srcLabel} · AI 讲解存档${note ? `（${note}）` : ""} | ${verb} ${new Date().toLocaleString("zh-CN")}\n\n`;
+}
+
 export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSubmit = (fn) => fn() } = {}) {
   const PORT = Number(process.env.MIANSHI_PORT) || 8899;
   const sseHeaders = (req) => ({
@@ -131,7 +159,9 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     const noSimilar = u.searchParams.get("noSimilar") === "1";
     const item = (studyApi.getPlan().items || []).find((i) => i.id === id);
     if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
-    const filePath = findStudyFile(item);
+    // noSimilar=1（重新生成）时 findStudyFile 只查 study_notes 精确匹配（notesOnly）——
+    // 产出目录 source 模糊匹配可能命中相似文件，导致 reset 删了本条存档后仍返回旧文件（重新生成不生效）
+    const filePath = findStudyFile(item, { notesOnly: noSimilar });
     if (filePath) {
       // 有文件：一次性返回（快，无需流式）——不截断，讲解可无限追问累积
       try {
@@ -173,9 +203,19 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
       const prof = getCareerProfile();
       const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案
       const ep = explainPromptFor(item, prof); // 项目条目 → 项目剖析引导
+      // 读 source 面经原文注入（修复：explainPromptFor 只构造 topic+通用引导，不读 source 文件，
+      // 导致重新生成（noSimilar=1）后讲解与原始面经脱节——"从面经来的题重新生成反而没关系了"）
+      let sourceText = "";
+      try {
+        const srcFile = findSourceFile(item.source);
+        if (srcFile) sourceText = readFileSync(srcFile, "utf8").slice(0, 4000);
+      } catch { /* ignore */ }
+      const sourceBlock = sourceText
+        ? `\n\n【原始面经内容（来自 ${item.source}，仅作讲解对象）】\n${sanitizeExternal(sourceText).wrapped}`
+        : "";
       full = await solveQuestionStream({
         title: ep.title,
-        text: `${ep.text}${projCtx}`,
+        text: `${ep.text}${projCtx}${sourceBlock}`,
         company: "真白讲解",
         position: prof.positionDefault || "前端",
         sourceUrl: "学习清单",
@@ -183,13 +223,19 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         full += delta;
         push({ type: "delta", delta });
       });
-      // 存档
+      // 存档（修复：生成失败/中断（full 过短）不写档——此前无条件写"header + 空"伪讲解，
+      // 用户重新生成失败后文件存在但内容空，追问 append 到空文件 → 追问回答成了主体）
       let savedPath = null;
       try {
+        if (full.trim().length < 200) {
+          push({ type: "error", error: "讲解生成失败（内容过短），请重试" });
+          res.end();
+          return;
+        }
         const notesDir = studyNotesDir();
         mkdirSync(notesDir, { recursive: true });
         const savePath = path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
-        const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
+        const header = archiveHeader(item);
         writeFileSync(savePath, header + full.slice(0, 50000), "utf8");
         savedPath = savePath;
       } catch { /* ignore */ }
@@ -261,12 +307,15 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         const inNotes = filePath && filePath.startsWith(notesDir);
         const savePath = inNotes ? filePath : path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
         const appendBlock = `\n\n---\n\n## 💬 追问：${question}\n\n${full.slice(0, 8000)}\n`;
-        // 追加（存档存在则 append，否则新建带头部）
+        // 追加（存档存在则 append；**不存在则拒绝**——修复：此前"新建"分支把追问回答写成讲解主体
+        // （header + full + appendBlock），原始讲解丢失时追问会生成"伪讲解"（只剩追问回答）。
+        // 追问语义是"基于已有讲解深入"——没有讲解就没有追问基础，提示先点「💡 讲解」生成）
         if (existsSync(savePath)) {
           appendFileSync(savePath, appendBlock, "utf8");
         } else {
-          const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
-          writeFileSync(savePath, header + full.slice(0, 12000) + appendBlock, "utf8");
+          push({ type: "done", saved: false, filePath: null, error: "还没有讲解内容，先点「💡 讲解」生成，再追问补充" });
+          res.end();
+          return;
         }
         push({ type: "done", saved: true, filePath: savePath });
       } catch {
@@ -298,10 +347,26 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     push({ type: "start", topic: item.topic });
     let full = "";
     import("#lib/ai.mjs").then(async ({ consolidateStudyStream }) => {
-      full = await consolidateStudyStream({ topic: item.topic, content }, (delta) => {
+      // 读 source 面经原文注入（与重新生成同款修复——整理不丢失来源：
+      // 素材只有讲解文件内容，不含原始面经，整理后可能与面经脱节）
+      let sourceText = "";
+      try {
+        const srcFile = findSourceFile(item.source);
+        if (srcFile) sourceText = readFileSync(srcFile, "utf8").slice(0, 4000);
+      } catch { /* ignore */ }
+      const sourceBlock = sourceText
+        ? `\n\n【原始面经内容（来自 ${item.source}，仅作整理对照）】\n${sanitizeExternal(sourceText).wrapped}`
+        : "";
+      full = await consolidateStudyStream({ topic: item.topic, content: `${content}${sourceBlock}` }, (delta) => {
         full += delta;
         push({ type: "delta", delta });
       });
+      // 写回校验（修复：整理结果过短不写回——防"header+空"伪讲解覆盖原档；与 study-detail 同款守卫）
+      if (full.trim().length < 200) {
+        push({ type: "error", error: "整理失败（内容过短），原讲解未改动，请重试" });
+        res.end();
+        return;
+      }
       // 写回：原文件改名 .orig 备份，写整合版（写回路径固定 study_notes，防覆盖产出目录文件）
       let savedPath = null;
       try {
@@ -312,7 +377,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         if (existsSync(savePath)) {
           try { writeFileSync(savePath + ".orig", readFileSync(savePath, "utf8"), "utf8"); } catch { /* ignore */ }
         }
-        const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档（已整理） | 整理于 ${new Date().toLocaleString("zh-CN")}\n\n`;
+        const header = archiveHeader(item, "已整理");
         writeFileSync(savePath, header + full.slice(0, 50000), "utf8");
         savedPath = savePath;
       } catch { /* ignore */ }
@@ -354,14 +419,35 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         push({ type: "start", topic: topics.map((t) => t.topic).join(" + ") });
         let full = "";
         import("#lib/ai.mjs").then(async ({ clusterStudyStream }) => {
+          // 每个条目注入自己的 source 面经原文（与 consolidate 同款修复——归并不丢失来源；
+          // 每个 source 截断 2000 字符控制总量）
+          const topicsWithSource = await Promise.all(topics.map(async (t) => {
+            const item = (plan.items || []).find((i) => i.topic === t.topic);
+            let sourceText = "";
+            if (item) {
+              try {
+                const srcFile = findSourceFile(item.source);
+                if (srcFile) sourceText = readFileSync(srcFile, "utf8").slice(0, 2000);
+              } catch { /* ignore */ }
+            }
+            return sourceText
+              ? { ...t, content: `${t.content}\n\n【原始面经内容（来自 ${item?.source || "?"}，仅作归并对照）】\n${sanitizeExternal(sourceText).wrapped}` }
+              : t;
+          }));
           full = await clusterStudyStream({
-            topics,
+            topics: topicsWithSource,
             onChunk: (delta) => {
               full += delta;
               push({ type: "delta", delta });
             },
           });
           // 存到 study_notes/主题簇/ 目录（按 AI 给的主题簇名）
+          // 素材校验（修复：归并结果过短不存档——防"header+空"伪讲解；与 study-detail 同款守卫）
+          if (full.trim().length < 200) {
+            push({ type: "error", error: "归并失败（内容过短），未存档，请重试" });
+            res.end();
+            return;
+          }
           let savedPath = null;
           let clusterName = "综合";
           try {
@@ -445,15 +531,18 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         sourceUrl: "学习清单",
       })).slice(0, 12000);
       // 写入存档（下次直接读文件，不再生成）
+      // 素材校验（修复：生成结果过短不写档——防"header+空"伪讲解；与流式路径同款守卫）
       let savedPath = null;
-      try {
-        const notesDir = studyNotesDir();
-        mkdirSync(notesDir, { recursive: true });
-        const savePath = path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
-        const header = `# ${item.topic}\n\n> 来源：学习清单 · AI 讲解存档 | 生成于 ${new Date().toLocaleString("zh-CN")}\n\n`;
-        writeFileSync(savePath, header + content, "utf8");
-        savedPath = savePath;
-      } catch { /* 存档失败不影响返回 */ }
+      if (String(content || "").trim().length >= 200) {
+        try {
+          const notesDir = studyNotesDir();
+          mkdirSync(notesDir, { recursive: true });
+          const savePath = path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
+          const header = archiveHeader(item);
+          writeFileSync(savePath, header + content, "utf8");
+          savedPath = savePath;
+        } catch { /* 存档失败不影响返回 */ }
+      }
       // 讲解生成完成 → 自动建复习卡
       try {
         reviewApi.review.addCard({

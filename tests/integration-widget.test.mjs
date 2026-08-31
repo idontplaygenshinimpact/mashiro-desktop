@@ -4,10 +4,11 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 18000 + Math.floor(Math.random() * 1000);
@@ -287,3 +288,56 @@ test("未知路由 → 非 500（服务不崩）", async () => {
   const r = await api("/api/不存在的路由");
   assert.notEqual(r.status, 500);
 });
+
+// ---------- 讲解存档链路（工单 3b：detail/append/reset——假 key 天然测失败路径） ----------
+// 策略说明：integration 用假 DEEPSEEK_API_KEY（不花钱）→ LLM 调用必失败 → 正好覆盖"生成失败不写档"；
+// 正常生成路径在 tests/study-routes.test.mjs（mock LLM）覆盖。⑧⑪ 合并、⑨⑫ 合并（同场景）。
+
+function insertPlanItem(dbPath, { id = "it1", topic = "事件循环", date = "2026-08-31" } = {}) {
+  
+  const db = new DatabaseSync(dbPath);
+  try {
+    db.prepare(`INSERT OR REPLACE INTO study_plan_items (id, date, topic, why, source, verify_question, done, reviewed, level, from_interview, grp, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 0, '必会', 0, 'JavaScript 核心', ?)`)
+      .run(id, date, topic, "w", "s", `请简述：${topic}`, Date.now());
+  } finally { db.close(); }
+}
+
+test("⑧⑪ study-detail-stream：参数错误路径（id 不存在 → 404；生成失败注入在单测层 study-routes ① 覆盖）", async () => {
+  const r = await api(`/api/study-detail-stream?id=no-such-id&noSimilar=1`, { signal: AbortSignal.timeout(10000) });
+  assert.equal(r.status, 404, "条目不存在 → 404");
+  const text = await r.text();
+  assert.ok(text.includes("条目不存在"), "错误提示");
+});
+
+test("⑨⑫ study-append：文件不存在 → 拒绝追问（提示先生成讲解）", async () => {
+  insertPlanItem(path.join(dbDir, "test.db"), { id: "it9", topic: "zzz测试专用知识点2" });
+  const r = await api(`/api/study-append-stream?id=it9&question=追问`, { signal: AbortSignal.timeout(30000) });
+  const text = await r.text();
+  assert.ok(text.includes('"saved":false'), "不保存");
+  assert.ok(text.includes("先点"), "提示先生成讲解");
+});
+
+test("⑩ study-note/reset：删除存档（幂等）", async () => {
+  insertPlanItem(path.join(dbDir, "test.db"), { id: "it10", topic: "zzz测试专用知识点" });
+  // 造存档到 widget 的 study_notes（真实 output 目录——独特文件名不冲突，测试后清理）
+  const notesDir = path.join(ROOT, "output", "study_notes");
+  mkdirSync(notesDir, { recursive: true });
+  const f = path.join(notesDir, "zzz测试专用知识点.md");
+  writeFileSync(f, "# zzz测试专用知识点\n\n## 题目\n讲解内容\n### 结论\n结论\n", "utf8");
+  assert.equal(existsSync(f), true, "存档存在");
+  try {
+    const r = await api(`/api/study-note/reset`, {
+      method: "POST",
+      headers: { ...AUTH, "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "it10" }),
+      signal: AbortSignal.timeout(10000),
+    });
+    assert.equal(r.ok, true, "reset 成功");
+    assert.equal(existsSync(f), false, "reset 删除存档");
+  } finally {
+    try { rmSync(f, { force: true }); } catch { /* ignore */ }
+  }
+});
+
+
