@@ -62,3 +62,29 @@ test("generate_dev_history_guide：编排生成 + 存档 + 覆盖范围段（moc
   assert.ok(Array.isArray(r.sections) && r.sections.length > 0, "章节列表");
 });
 
+
+test("read_dev_history：codex 源（~/.codex/sessions 只读，type 序列提炼）", async () => {
+  const { readDevHistory } = await import("../skills/dev-history-guide/skill.mjs");
+  const r = await readDevHistory({ source: "codex", limit: 3 });
+  assert.equal(r.ok, true);
+  assert.ok(r.codex, "codex 字段存在");
+  if (r.codex.ok) {
+    assert.ok(Array.isArray(r.codex.sessions), "sessions 数组");
+    for (const s of r.codex.sessions) {
+      assert.ok(s.file && s.types, "file + types 字段");
+    }
+  }
+});
+
+test("read_dev_history：cc 源（~/.claude/projects 只读，type 序列提炼）", async () => {
+  const { readDevHistory } = await import("../skills/dev-history-guide/skill.mjs");
+  const r = await readDevHistory({ source: "cc", limit: 3 });
+  assert.equal(r.ok, true);
+  assert.ok(r.cc, "cc 字段存在");
+  if (r.cc.ok) {
+    assert.ok(Array.isArray(r.cc.sessions), "sessions 数组");
+    for (const s of r.cc.sessions) {
+      assert.ok(s.file && s.types, "file + types 字段");
+    }
+  }
+});

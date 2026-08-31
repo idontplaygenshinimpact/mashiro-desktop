@@ -81,3 +81,16 @@ test("findStudyFile：source 为空 → 不误命中任意产出文件（回归�
   assert.equal(findStudyFile({ topic: "库中无此讲解", source: "" }), null, "空 source 不匹配任何文件");
   assert.equal(findStudyFile({ topic: "库中无此讲解" }), null, "缺 source 同理");
 });
+
+test("findStudyFile notesOnly：跳过产出目录 source 模糊匹配（重新生成不命中相似文件）", () => {
+  // 场景：条目 source 短（如"合并有序"），产出目录有"合并有序数组.md"——模糊匹配会命中
+  mkdirSync(path.join(tmpOut, "2026-08-01_discover"), { recursive: true });
+  writeFileSync(path.join(tmpOut, "2026-08-01_discover", "合并有序数组.md"), "旧讲解内容");
+  const item = { topic: "合并有序链表", source: "合并有序" };
+  // 正常模式：产出目录模糊匹配命中（key.includes(sn)）
+  const hit = findStudyFile(item);
+  assert.ok(hit && hit.endsWith("合并有序数组.md"), `正常模式应命中产出文件（实际 ${hit}）`);
+  // notesOnly（重新生成）：跳过产出目录 → 返回 null（走流式重新生成）
+  const strict = findStudyFile(item, { notesOnly: true });
+  assert.equal(strict, null, "notesOnly 模式不命中产出目录（重新生成不返回旧文件）");
+});

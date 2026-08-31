@@ -201,6 +201,16 @@ ipcMain.handle("panel:goto-tab", (e, { tab }) => {
   return { ok: true };
 });
 
+// 渲染层切换（方案 B：面板内下拉入口）——复用独立窗口创建（React 模拟面试 / Vue 复习卡）
+ipcMain.handle("panel:open-react", () => {
+  createReactPanelWindow();
+  return { ok: true };
+});
+ipcMain.handle("panel:open-vue", () => {
+  createVueReviewWindow();
+  return { ok: true };
+});
+
 // 打开面板并定位到「手写/算法题库」区块（panel.js 监听 panel:goto-challenges）
 function openPanelChallenges() {
   createPanelWindow();

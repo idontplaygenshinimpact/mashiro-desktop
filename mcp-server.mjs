@@ -251,6 +251,41 @@ server.tool(
   async ({ project, file, mode }) => runProjectGuideTool("read_project_file", { project, file, mode })
 );
 
+// ---------- 工具 12/13: dev-history-guide（MCP 桥接——外部 agent（Claude Code/Codex/DSH）也能生成开发历史面试文档） ----------
+// 复用 skills/dev-history-guide/skill.mjs 的实现（read_dev_history 三源只读 + generate 编排）
+async function runDevHistoryTool(toolName, args) {
+  try {
+    const { tools } = await import("./skills/dev-history-guide/skill.mjs");
+    const tool = (Array.isArray(tools) ? tools : []).find((t) => t?.name === toolName);
+    if (!tool) return { content: [/** @type {{ type: "text", text: string }} */({ type: "text", text: `⚠️ skill 工具 ${toolName} 未注册` })], isError: true };
+    const r = await tool.run(args || {});
+    return { content: [/** @type {{ type: "text", text: string }} */({ type: "text", text: JSON.stringify(r, null, 2).slice(0, 8000) })] };
+  } catch (e) {
+    console.error(`[mcp] ${toolName} 失败: ${e && e.message ? e.message : String(e)}`);
+    return { content: [/** @type {{ type: "text", text: string }} */({ type: "text", text: `⚠️ ${toolName} 失败: ${e && e.message ? e.message : String(e)}` })], isError: true };
+  }
+}
+
+server.tool(
+  "read_dev_history",
+  "读取开发历史（三源只读）：git 时间线（git log 只读命令）/ opencode 会话库（~/.local/share/opencode/opencode.db readOnly，session/message/part 表）/ DSH 会话（~/.dsh/sessions/）。红线：不读凭据（credential/account 表、.credentials.yaml 排除）；大结果 truncated 标记",
+  {
+    source: z.enum(["git", "opencode", "dsh", "codex", "cc"]).describe("数据源：git 时间线 / opencode 会话 / DSH 会话 / Codex 会话 / Claude Code 会话"),
+    limit: z.number().int().min(1).max(50).optional().describe("返回条数上限（默认 20）"),
+  },
+  async ({ source, limit }) => runDevHistoryTool("read_dev_history", { source, limit })
+);
+
+server.tool(
+  "generate_dev_history_guide",
+  "生成开发历史面试文档（5 段：时间线/关键决策/技术拷打点/八股/踩坑）——基于 git 时间线 + opencode/DSH 会话，存档 output/dev-history-guides/开发历史面试文档.md。用户问'生成开发历史面试文档/开发过程有什么坑'时使用",
+  {
+    project: z.string().optional().describe("项目名（默认当前仓库）"),
+    focus: z.string().optional().describe("聚焦主题（如'权限系统'/'评测体系'）"),
+  },
+  async ({ project, focus }) => runDevHistoryTool("generate_dev_history_guide", { project, focus })
+);
+
 // ---------- 启动（stdio 传输，供 MCP 客户端连接） ----------
 const transport = new StdioServerTransport();
 await server.connect(transport);

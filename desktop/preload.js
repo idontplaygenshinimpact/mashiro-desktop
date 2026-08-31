@@ -103,6 +103,9 @@ contextBridge.exposeInMainWorld("kanban", /** @type {import("./kanban-api").Kanb
   openOutput: () => ipcRenderer.invoke("window:open-output"),
   openFile: (filePath) => ipcRenderer.invoke("window:open-file", { filePath }),
   togglePanel: () => ipcRenderer.invoke("window:toggle-panel"),
+  // 渲染层切换（方案 B：面板内下拉入口）——打开 React 模拟面试 / Vue 复习卡独立窗口
+  openReactPanel: () => ipcRenderer.invoke("panel:open-react"),
+  openVuePanel: () => ipcRenderer.invoke("panel:open-vue"),
   setIgnoreMouse: (ignore) => ipcRenderer.invoke("window:set-ignore", { ignore }),
   speak: (text) => ipcRenderer.invoke("window:speak", { text }),
   // 实时语音两阶段（渲染层 speech-queue 预取流水线）：ttsSynth 准备 → ttsPlayFile 播放（播完 resolve）

@@ -389,8 +389,15 @@ export async function solveStage(ctx) {
         sourceUrl: it.url,
       });
       const fname = `${String(items.indexOf(it) + 1).padStart(2, "0")}_${(it.cls.company || it.cls.type).replace(/[\\/:*?"<>|]/g, "_")}_${it.title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 30)}.md`;
-      writeFileSync(path.join(outDir, fname), `# ${it.title}\n\n> 来源: ${it.url}\n\n${md}\n`, "utf8");
-      summary.push(`- [${it.cls.company || it.cls.type}] ${it.title} → ${fname}`);
+      // 产出文件 = 原始面经（题目/正文）——修复：此前产出 = 标题 + 来源 + AI 讲解（discover 把讲解写进
+      // 面经产出，源头污染——后续讲解基于"已改编的面经"再改编（二次改编失真），面经原文丢失。
+      // 现在：产出保持面经形态（题目/正文），讲解单独存"讲解"子目录（与面经分离，源头纯净）
+      const mianshiContent = `# ${it.title}\n\n> 来源: ${it.url}\n\n${questionText}\n`;
+      writeFileSync(path.join(outDir, fname), mianshiContent, "utf8");
+      const explainDir = path.join(outDir, "讲解");
+      mkdirSync(explainDir, { recursive: true });
+      writeFileSync(path.join(explainDir, fname), `# ${it.title}\n\n> 来源: ${it.url}\n\n${md}\n`, "utf8");
+      summary.push(`- [${it.cls.company || it.cls.type}] ${it.title} → ${fname}（讲解：讲解/${fname}）`);
     } catch (e) {
       console.log(`  [讲解失败] ${e.message}`);
       summary.push(`- [失败] ${it.title}: ${e.message}`);

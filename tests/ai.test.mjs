@@ -258,3 +258,55 @@ test("extractResumeProjects 空/非法返回空数组", async () => {
 });
 
 // ---------- compactMessages（纵向拆分第 1 刀：已平移至 tests/ai-compact.test.mjs） ----------
+
+test("topicDirection：宽泛词不误命中——前端性能优化（LLM 流式输出/token）不走 Agent 方向", async () => {
+  const { topicDirection } = await import("../lib/ai.mjs");
+  const prof = { roleLabel: "前端面试辅导老师", scopeNote: "前端" };
+  // 前端对接 LLM 流式输出的场景（含 LLM/token 单字）→ 前端方向
+  const d1 = topicDirection("前端性能优化方案", "LLM 流式输出每帧携带 1-10 个 token，不能每 token 触发 setState", prof);
+  assert.equal(d1.scopeNote, "前端", `前端性能优化应走前端方向（实际 ${d1.scopeNote}）`);
+  // Agent 领域题 → Agent 方向
+  const d2 = topicDirection("Agent 调用工具的本质", "大模型生成结构化参数 → 工具执行 → 结果回填", prof);
+  assert.equal(d2.scopeNote, "AI Agent 应用开发（工具调用/LLM 机制/Agent 架构）", "Agent 题走 Agent 方向");
+  // LLM 基础（组合词）→ Agent 方向
+  const d3 = topicDirection("LLM 基础", "Transformer 原理与推理", prof);
+  assert.equal(d3.scopeNote, "AI Agent 应用开发（工具调用/LLM 机制/Agent 架构）", "LLM 基础走 Agent 方向");
+});
+
+test("topicDirection：双方向判定——浏览器渲染题（text 含工具调用/Agent 场景词）双视角覆盖", async () => {
+  const { topicDirection } = await import("../lib/ai.mjs");
+  const prof = { roleLabel: "前端面试辅导老师", scopeNote: "前端" };
+  // 题目主体是前端（渲染/性能优化），text 提到 Agent 场景（工具调用状态）→ 双视角（不丢任何一侧）
+  const d1 = topicDirection("浏览器渲染机制与性能优化", "在 AI Agent 应用开发中，前端需要实时渲染 LLM 流式输出、工具调用状态、长对话历史", prof);
+  assert.equal(d1.dual, true, `双命中应返回 dual（实际 ${JSON.stringify(d1.scopeNote)}）——前端机制 + Agent 场景双视角`);
+  assert.ok(d1.scopeNote.includes("双视角"), "scopeNote 标注双视角");
+  // Agent 题（title 无前端词）→ Agent 方向
+  const d2 = topicDirection("Agent 调用工具的本质", "大模型生成结构化参数 → 工具执行 → 结果回填", prof);
+  assert.equal(d2.dual, false, "纯 Agent 题不双视角");
+  assert.equal(d2.scopeNote, "AI Agent 应用开发（工具调用/LLM 机制/Agent 架构）", "Agent 题走 Agent 方向");
+  // 纯前端题 → 前端方向
+  const d3 = topicDirection("前端事件循环与宏任务微任务", "浏览器执行机制", prof);
+  assert.equal(d3.dual, false, "纯前端题不双视角");
+  assert.equal(d3.scopeNote, "前端", "纯前端题走前端方向");
+});
+
+test("改编约束：solveQuestion prompt 含原题范围/改编说明要求（防改编失真）", async () => {
+  const ai = await import("../lib/ai.mjs");
+  await ai.solveQuestion({ title: "TraceParser 与 RiskReasoner 拆分", text: "多源安全日志 Schema 与实体身份不一致", company: "阿里云", position: "AI 应用开发", sourceUrl: "test" });
+  const { getLastMessages } = await import("./helpers.mjs");
+  const joined = getLastMessages().map((m) => String(m.content || "")).join("\n");
+  assert.ok(joined.includes("改编约束"), "prompt 含改编约束");
+  assert.ok(joined.includes("原题范围"), "prompt 要求还原原题范围");
+  assert.ok(joined.includes("改编说明"), "prompt 要求标注改编说明");
+  assert.ok(joined.includes("不把类比当本质"), "prompt 约束不把类比当本质");
+});
+
+test("一致性约束：solveAppendStream prompt 含一致性约束（防多视角矛盾）", async () => {
+  const ai = await import("../lib/ai.mjs");
+  await ai.solveAppendStream({ topic: "TraceParser 与 RiskReasoner 拆分", existing: "已有讲解内容", question: "原始面经的范围是什么" }, () => {});
+  const { getLastMessages } = await import("./helpers.mjs");
+  const joined = getLastMessages().map((m) => String(m.content || "")).join("\n");
+  assert.ok(joined.includes("一致性约束"), "prompt 含一致性约束");
+  assert.ok(joined.includes("与已有讲解的立场一致"), "约束与已有讲解立场一致");
+  assert.ok(joined.includes("标注视角"), "约束多视角标注");
+});
