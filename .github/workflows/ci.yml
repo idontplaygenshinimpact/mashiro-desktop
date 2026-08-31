@@ -23,7 +23,9 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       - name: Build React panel bundle（React 版模拟面试面板；渲染测试依赖产物）
-        run: npm run build:react-panel
+        run: |
+          npm ci --prefix desktop/renderer/panel-react
+          npm run build:react-panel
       - name: Unit + integration tests
         run: npm test
       - name: Eval dataset validation (schema/source/datasetHash, 零 LLM)
