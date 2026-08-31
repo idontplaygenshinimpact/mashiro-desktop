@@ -55,6 +55,9 @@ docs/audit-report.md
 docs/audit-ui-func-prompt.md
 docs/AI评测体系包装与升级.md
 docs/lingchat-借鉴分析.md
+# 面试材料（内部，不上公开仓库）
+docs/开发历史面试文档.md
+docs/开发历史关键问题与决策-提炼.md
 .env.bak
 desktop/renderer/react-panel.bundle.js
 desktop/renderer/panel-react/dist/
