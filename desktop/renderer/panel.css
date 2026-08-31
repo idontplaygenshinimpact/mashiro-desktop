@@ -1239,3 +1239,11 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 .renderer-switch-btn { font-size: 11px; padding: 2px 10px; border-radius: 6px; border: 1px solid rgba(109,79,216,.25); background: rgba(255,255,255,.7); color: #5d48b8; cursor: pointer; }
 .renderer-switch-btn.active { background: rgba(109,79,216,.15); border-color: rgba(109,79,216,.5); font-weight: 700; }
 .renderer-switch-btn:hover { filter: brightness(1.05); }
+
+/* 渲染层容器（同窗内嵌：React/Vue 版挂载点——布局约束防内容溢出错位） */
+#interview-react, #review-vue {
+  height: 100%;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 8px;
+}

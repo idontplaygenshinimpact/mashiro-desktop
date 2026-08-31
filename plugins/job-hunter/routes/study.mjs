@@ -100,7 +100,8 @@ function findSourceFile(source) {
  * 实际生成注入了面经原文，来源标注与内容不符） */
 function archiveHeader(item, note = "") {
   const src = String(item?.source || "").trim();
-  const srcLabel = src ? `面经产出（${src}）` : "学习清单";
+  // 修复：只有 .md 结尾的 source 才是面经产出文件——"学习清单(复习卡恢复)"等非文件 source 标注"学习清单"
+  const srcLabel = src && /\.md$/i.test(src) ? `面经产出（${src}）` : "学习清单";
   const verb = note === "已整理" ? "整理于" : "生成于";
   return `# ${item.topic}\n\n> 来源：${srcLabel} · AI 讲解存档${note ? `（${note}）` : ""} | ${verb} ${new Date().toLocaleString("zh-CN")}\n\n`;
 }
@@ -208,16 +209,22 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
       let sourceText = "";
       try {
         const srcFile = findSourceFile(item.source);
-        if (srcFile) sourceText = readFileSync(srcFile, "utf8").slice(0, 4000);
+        if (srcFile) {
+          const raw = readFileSync(srcFile, "utf8");
+          // 只注入"题目"段（原题）——产出文件可能是旧讲解（discover 产出分离修复前：产出 = 标题+来源+讲解），
+          // 全文注入会二次讲解污染（旧讲解的"前端场景"表述被继承）；题目段是原题，可信
+          const m = raw.match(/## 题目[\s\S]*?(?=\n---|\n## |$)/);
+          sourceText = (m ? m[0] : raw).slice(0, 4000);
+        }
       } catch { /* ignore */ }
       const sourceBlock = sourceText
-        ? `\n\n【原始面经内容（来自 ${item.source}，仅作讲解对象）】\n${sanitizeExternal(sourceText).wrapped}`
+        ? `\n\n【原始面经内容（来自 ${item.source}，仅作讲解对象；原文可能含来源表述的方向词，不按它改编方向——从知识本身讲）】\n${sanitizeExternal(sourceText).wrapped}`
         : "";
       full = await solveQuestionStream({
         title: ep.title,
         text: `${ep.text}${projCtx}${sourceBlock}`,
         company: "真白讲解",
-        position: prof.positionDefault || "前端",
+        position: "面试", // 修复：position 硬编码"前端"诱导 LLM 硬套前端视角（"前端场景的特殊约束"）——通用"面试"，从知识本身讲
         sourceUrl: "学习清单",
       }, (delta) => {
         full += delta;
@@ -352,7 +359,13 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
       let sourceText = "";
       try {
         const srcFile = findSourceFile(item.source);
-        if (srcFile) sourceText = readFileSync(srcFile, "utf8").slice(0, 4000);
+        if (srcFile) {
+          const raw = readFileSync(srcFile, "utf8");
+          // 只注入"题目"段（原题）——产出文件可能是旧讲解（discover 产出分离修复前：产出 = 标题+来源+讲解），
+          // 全文注入会二次讲解污染（旧讲解的"前端场景"表述被继承）；题目段是原题，可信
+          const m = raw.match(/## 题目[\s\S]*?(?=\n---|\n## |$)/);
+          sourceText = (m ? m[0] : raw).slice(0, 4000);
+        }
       } catch { /* ignore */ }
       const sourceBlock = sourceText
         ? `\n\n【原始面经内容（来自 ${item.source}，仅作整理对照）】\n${sanitizeExternal(sourceText).wrapped}`
@@ -527,7 +540,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         title: ep.title,
         text: `${ep.text}${projCtx}`,
         company: "真白讲解",
-        position: prof.positionDefault || "前端",
+        position: "面试", // 修复：position 硬编码"前端"诱导 LLM 硬套前端视角（"前端场景的特殊约束"）——通用"面试"，从知识本身讲
         sourceUrl: "学习清单",
       })).slice(0, 12000);
       // 写入存档（下次直接读文件，不再生成）

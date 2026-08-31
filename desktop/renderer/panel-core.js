@@ -56,13 +56,20 @@ function switchRenderer(tab, mode) {
     const react = document.getElementById("interview-react");
     if (!native || !react) return;
     if (mode === "react") {
+      if (!window.__mountReactPanel) { window.kanban?.notify?.("🎨 渲染层", "React 版未就绪（bundle 加载中），稍后再试"); return; }
       native.style.display = "none";
       react.style.display = "";
-      if (!reactRoot.current && window.__mountReactPanel) reactRoot.current = window.__mountReactPanel(react);
+      if (!reactRoot.current) {
+        try { reactRoot.current = window.__mountReactPanel(react); }
+        catch (e) { window.kanban?.notify?.("🎨 渲染层", "React 版挂载失败: " + (e?.message || e)); }
+      }
     } else {
       react.style.display = "none";
       native.style.display = "";
-      if (reactRoot.current) { reactRoot.current.unmount(); reactRoot.current = null; } // 对称卸载
+      if (reactRoot.current) {
+        try { reactRoot.current.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
+        reactRoot.current = null; // 无论卸载成败都清引用（防"切不回来"：引用残留 → 再切 React 不重新挂载）
+      }
     }
     rendererState.interview = mode;
   } else if (tab === "review") {
@@ -70,13 +77,20 @@ function switchRenderer(tab, mode) {
     const vue = document.getElementById("review-vue");
     if (!native || !vue) return;
     if (mode === "vue") {
+      if (!window.__mountVueReview) { window.kanban?.notify?.("🎨 渲染层", "Vue 版未就绪（bundle 加载中），稍后再试"); return; }
       native.style.display = "none";
       vue.style.display = "";
-      if (!vueApp.current && window.__mountVueReview) vueApp.current = window.__mountVueReview(vue);
+      if (!vueApp.current) {
+        try { vueApp.current = window.__mountVueReview(vue); }
+        catch (e) { window.kanban?.notify?.("🎨 渲染层", "Vue 版挂载失败: " + (e?.message || e)); }
+      }
     } else {
       vue.style.display = "none";
       native.style.display = "";
-      if (vueApp.current) { vueApp.current.unmount(); vueApp.current = null; } // 对称卸载
+      if (vueApp.current) {
+        try { vueApp.current.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
+        vueApp.current = null; // 无论卸载成败都清引用（防"切不回来"）
+      }
     }
     rendererState.review = mode;
   }

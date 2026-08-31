@@ -112,23 +112,24 @@ test("solveQuestion 空响应不崩溃", async () => {
   assert.equal(typeof md, "string");
 });
 
-test("题目域自适应：Agent 工具调用题用 AI Agent 方向（不再硬套前端）", async () => {
-  // 2026-08 修复：Agent 工具调用是模型侧通用机制，与前端运行时无必然关系——
-  // 此前全局注入"前端"方向，LLM 被引导硬往前端套（如"前端场景比后端多了两个特殊约束"）
+test("从知识本身：Agent 工具调用题统一面试辅导老师（不再按方向定制）", async () => {
+  // 2026-08 简化：不再按方向定制（前端/Agent/双方向判定引入"前端场景硬塞"等问题）——
+  // 从知识本身讲（机制/原理/边界/追问），统一"面试辅导老师"
   setLlmResponses("## 结论\n工具调用机制\n## 原理\n...\n## 实现JS\n```js\n```\n## 边界\n...");
   await ai.solveQuestion({ title: "Agent 工具调用错误处理与重试策略", text: "错误回填与重试区分", company: "c", position: "前端", sourceUrl: "" });
   const { getLastMessages } = await import("./helpers.mjs");
   const system = getLastMessages()[0]?.content || "";
-  assert.ok(system.includes("AI Agent 应用开发"), `Agent 题用 AI Agent 方向（实际: ${system.slice(0, 60)}）`);
+  assert.ok(system.includes("面试辅导老师"), `统一面试辅导老师（实际: ${system.slice(0, 60)}）`);
+  assert.ok(!system.includes("AI Agent 应用开发"), "不再按 Agent 方向定制");
   assert.ok(!system.includes("聚焦前端"), "不再硬套前端方向");
 });
 
-test("题目域自适应：纯前端题保持前端方向（默认不回归）", async () => {
+test("从知识本身：纯前端题同样统一面试辅导老师（不按方向定制）", async () => {
   setLlmResponses("## 结论\n事件循环\n## 原理\n...\n## 实现JS\n```js\n```\n## 边界\n...");
   await ai.solveQuestion({ title: "事件循环", text: "宏任务微任务", company: "c", position: "前端", sourceUrl: "" });
   const { getLastMessages } = await import("./helpers.mjs");
   const system = getLastMessages()[0]?.content || "";
-  assert.ok(system.includes("前端"), `前端题保持前端方向（实际: ${system.slice(0, 60)}）`);
+  assert.ok(system.includes("面试辅导老师"), `统一面试辅导老师（实际: ${system.slice(0, 60)}）`);
 });
 
 test("算法题专属约束：算法/手写题 prompt 注入完整可运行/复杂度/边界/演进要求", async () => {
@@ -156,8 +157,8 @@ test("solveQuestion prompt：概念类知识点不强制代码（代码按需指
   await ai.solveQuestion({ title: "HTTP 缓存原理", text: "强缓存协商缓存", company: "c", position: "前端", sourceUrl: "" });
   const { getLastMessages } = await import("./helpers.mjs");
   const userPrompt = getLastMessages().map((m) => m.content).join("\n");
-  assert.ok(userPrompt.includes("不要硬凑代码"), "概念题不硬凑代码");
-  assert.ok(userPrompt.includes("纯概念/机制/流程/协议类知识点"), "明确概念类场景");
+  assert.ok(userPrompt.includes("无代码，纯概念"), "概念题写无代码并深入原理");
+  assert.ok(userPrompt.includes("纯概念/机制/流程/协议/原理类知识点"), "明确概念类场景");
   assert.ok(!userPrompt.includes("**必须用"), "不再强制必须写代码");
 });
 
@@ -177,8 +178,7 @@ test("solveQuestion prompt 跟随方向画像（改画像后角色/语言/范围
     await ai.solveQuestion({ title: "数据库索引", text: "B+树", company: "某公司", position: "后端开发实习生", sourceUrl: "" });
     const { getLastMessages } = await import("./helpers.mjs");
     const userPrompt = getLastMessages().map((m) => m.content).join("\n");
-    assert.ok(userPrompt.includes("资深后端开发面试辅导老师"), "角色名跟随画像");
-    assert.ok(userPrompt.includes("后端 / 微服务 / 数据库"), "讲解范围跟随画像");
+    assert.ok(userPrompt.includes("资深面试辅导老师"), "角色统一（从知识本身，不按方向定制）");
     assert.ok(userPrompt.includes("Python / Go"), "代码语言跟随画像");
     assert.ok(userPrompt.includes("社招"), "求职场景跟随画像");
     assert.ok(!userPrompt.includes("资深前端面试辅导老师"), "不再硬编码前端角色");
@@ -259,46 +259,29 @@ test("extractResumeProjects 空/非法返回空数组", async () => {
 
 // ---------- compactMessages（纵向拆分第 1 刀：已平移至 tests/ai-compact.test.mjs） ----------
 
-test("topicDirection：宽泛词不误命中——前端性能优化（LLM 流式输出/token）不走 Agent 方向", async () => {
+test("topicDirection：从知识本身——统一面试辅导老师（不再按方向定制/双方向）", async () => {
   const { topicDirection } = await import("../lib/ai.mjs");
   const prof = { roleLabel: "前端面试辅导老师", scopeNote: "前端" };
-  // 前端对接 LLM 流式输出的场景（含 LLM/token 单字）→ 前端方向
+  // 2026-08 简化：不再按方向定制（前端/Agent/双方向判定引入"前端场景硬塞"等问题）——统一"面试辅导老师"
   const d1 = topicDirection("前端性能优化方案", "LLM 流式输出每帧携带 1-10 个 token，不能每 token 触发 setState", prof);
-  assert.equal(d1.scopeNote, "前端", `前端性能优化应走前端方向（实际 ${d1.scopeNote}）`);
-  // Agent 领域题 → Agent 方向
+  assert.equal(d1.scopeNote, "面试相关（从知识本身讲，不按方向定制）", "统一从知识本身");
+  assert.equal(d1.dual, false, "无双方向");
   const d2 = topicDirection("Agent 调用工具的本质", "大模型生成结构化参数 → 工具执行 → 结果回填", prof);
-  assert.equal(d2.scopeNote, "AI Agent 应用开发（工具调用/LLM 机制/Agent 架构）", "Agent 题走 Agent 方向");
-  // LLM 基础（组合词）→ Agent 方向
-  const d3 = topicDirection("LLM 基础", "Transformer 原理与推理", prof);
-  assert.equal(d3.scopeNote, "AI Agent 应用开发（工具调用/LLM 机制/Agent 架构）", "LLM 基础走 Agent 方向");
+  assert.equal(d2.scopeNote, "面试相关（从知识本身讲，不按方向定制）", "Agent 题同样统一");
+  const d3 = topicDirection("浏览器渲染机制与性能优化", "在 AI Agent 应用开发中，前端需要实时渲染 LLM 流式输出、工具调用状态", prof);
+  assert.equal(d3.dual, false, "不再双方向判定");
+  assert.equal(d3.scopeNote, "面试相关（从知识本身讲，不按方向定制）", "双命中题同样统一");
 });
 
-test("topicDirection：双方向判定——浏览器渲染题（text 含工具调用/Agent 场景词）双视角覆盖", async () => {
-  const { topicDirection } = await import("../lib/ai.mjs");
-  const prof = { roleLabel: "前端面试辅导老师", scopeNote: "前端" };
-  // 题目主体是前端（渲染/性能优化），text 提到 Agent 场景（工具调用状态）→ 双视角（不丢任何一侧）
-  const d1 = topicDirection("浏览器渲染机制与性能优化", "在 AI Agent 应用开发中，前端需要实时渲染 LLM 流式输出、工具调用状态、长对话历史", prof);
-  assert.equal(d1.dual, true, `双命中应返回 dual（实际 ${JSON.stringify(d1.scopeNote)}）——前端机制 + Agent 场景双视角`);
-  assert.ok(d1.scopeNote.includes("双视角"), "scopeNote 标注双视角");
-  // Agent 题（title 无前端词）→ Agent 方向
-  const d2 = topicDirection("Agent 调用工具的本质", "大模型生成结构化参数 → 工具执行 → 结果回填", prof);
-  assert.equal(d2.dual, false, "纯 Agent 题不双视角");
-  assert.equal(d2.scopeNote, "AI Agent 应用开发（工具调用/LLM 机制/Agent 架构）", "Agent 题走 Agent 方向");
-  // 纯前端题 → 前端方向
-  const d3 = topicDirection("前端事件循环与宏任务微任务", "浏览器执行机制", prof);
-  assert.equal(d3.dual, false, "纯前端题不双视角");
-  assert.equal(d3.scopeNote, "前端", "纯前端题走前端方向");
-});
-
-test("改编约束：solveQuestion prompt 含原题范围/改编说明要求（防改编失真）", async () => {
+test("讲解范围约束：solveQuestion prompt 从知识本身讲（不改编方向）", async () => {
   const ai = await import("../lib/ai.mjs");
   await ai.solveQuestion({ title: "TraceParser 与 RiskReasoner 拆分", text: "多源安全日志 Schema 与实体身份不一致", company: "阿里云", position: "AI 应用开发", sourceUrl: "test" });
   const { getLastMessages } = await import("./helpers.mjs");
   const joined = getLastMessages().map((m) => String(m.content || "")).join("\n");
-  assert.ok(joined.includes("改编约束"), "prompt 含改编约束");
+  assert.ok(joined.includes("讲解范围"), "prompt 含讲解范围约束");
   assert.ok(joined.includes("原题范围"), "prompt 要求还原原题范围");
-  assert.ok(joined.includes("改编说明"), "prompt 要求标注改编说明");
-  assert.ok(joined.includes("不把类比当本质"), "prompt 约束不把类比当本质");
+  assert.ok(joined.includes("不改编方向"), "prompt 不改编方向（从知识本身讲）");
+  assert.ok(!joined.includes("改编说明"), "不再要求改编说明（防诱导前端改编）");
 });
 
 test("一致性约束：solveAppendStream prompt 含一致性约束（防多视角矛盾）", async () => {
@@ -308,5 +291,16 @@ test("一致性约束：solveAppendStream prompt 含一致性约束（防多视�
   const joined = getLastMessages().map((m) => String(m.content || "")).join("\n");
   assert.ok(joined.includes("一致性约束"), "prompt 含一致性约束");
   assert.ok(joined.includes("与已有讲解的立场一致"), "约束与已有讲解立场一致");
-  assert.ok(joined.includes("标注视角"), "约束多视角标注");
+  assert.ok(joined.includes("从知识本身讲"), "约束从知识本身讲（不改编方向）");
+});
+
+test("讲解重点约束：solveQuestion prompt 含代码行数限制 + 纯理解性写无代码", async () => {
+  const ai = await import("../lib/ai.mjs");
+  await ai.solveQuestion({ title: "React Hooks 原理", text: "链表与闭包机制", company: "c", position: "前端", sourceUrl: "test" });
+  const { getLastMessages } = await import("./helpers.mjs");
+  const joined = getLastMessages().map((m) => String(m.content || "")).join("\n");
+  assert.ok(joined.includes("≤15 行关键片段"), "prompt 限制代码行数");
+  assert.ok(joined.includes("无代码，纯概念"), "prompt 要求纯理解性写无代码");
+  assert.ok(joined.includes("讲解重点"), "prompt 含讲解重点约束");
+  assert.ok(joined.includes("不是手写 useState"), "prompt 明确重点不是手写实现");
 });
