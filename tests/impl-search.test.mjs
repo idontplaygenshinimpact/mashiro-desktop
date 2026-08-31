@@ -9,10 +9,9 @@ mockLLM();
 mockFetchPage();
 const { toolSearchPosts } = await import("../lib/tools/impl-search.mjs");
 
-// 构造 3 站页面（auto 模式依次调用 fetchPage：nowcoder → juejin → bing）
-function pagesFor({ ncLinks = [], jjArticles = [], bingLinks = [] }) {
+// 构造 2 站页面（auto 模式依次调用 fetchPage：juejin → bing——牛客已去掉（搜索页改版 + fetchPage 卡死））
+function pagesFor({ jjArticles = [], bingLinks = [] }) {
   return [
-    { links: ncLinks }, // nowcoder
     { apiResponses: [{ data: jjArticles }] }, // juejin（apiPattern 拦截）
     { links: bingLinks }, // bing
   ];
@@ -21,8 +20,8 @@ const link = (text, href) => ({ text, href });
 
 test("toolSearchPosts 去重：同 URL 跨站只留一条 + 标题归一化去重", async () => {
   setMockPages(pagesFor({
-    ncLinks: [link("事件循环详解", "https://www.nowcoder.com/discuss/111")],
     bingLinks: [
+      link("事件循环详解", "https://www.nowcoder.com/discuss/111"),
       link("事件循环详解", "https://www.nowcoder.com/discuss/111"), // 同 URL 跨站（bing 白名单命中）
       link("事件循环（转载）", "https://www.nowcoder.com/discuss/222"), // 标题归一化后与 333 同键（去括号）
     ],
@@ -37,8 +36,7 @@ test("toolSearchPosts 去重：同 URL 跨站只留一条 + 标题归一化去�
 
 test("toolSearchPosts 方向过滤：ignoreNote 噪音词标题被排除", async () => {
   setMockPages(pagesFor({
-    ncLinks: [link("嵌入式开发经验分享", "https://www.nowcoder.com/discuss/1"), link("前端面试高频", "https://www.nowcoder.com/discuss/2")],
-    bingLinks: [link("前端面经", "https://juejin.cn/post/9")],
+    bingLinks: [link("嵌入式开发经验分享", "https://www.nowcoder.com/discuss/1"), link("前端面试高频", "https://www.nowcoder.com/discuss/2"), link("前端面经", "https://juejin.cn/post/9")],
   }));
   const r = await toolSearchPosts("前端 面经");
   const titles = (r.results || []).map((p) => p.title).join("|");
@@ -48,7 +46,7 @@ test("toolSearchPosts 方向过滤：ignoreNote 噪音词标题被排除", async
 
 test("toolSearchPosts AI 挑帖：候选 >4 时按 LLM 挑选结果", async () => {
   const mk = (i) => link(`React 面试题变体${i}`, `https://www.nowcoder.com/discuss/3${i}0`);
-  setMockPages(pagesFor({ ncLinks: [mk(1), mk(2), mk(3)], bingLinks: [mk(4), mk(5), mk(6)] }));
+  setMockPages(pagesFor({ bingLinks: [mk(1), mk(2), mk(3), mk(4), mk(5), mk(6)] }));
   // pickPosts 期望 {picks:[{text,href,reason}]} 对象格式
   setLlmResponses(JSON.stringify({
     picks: [

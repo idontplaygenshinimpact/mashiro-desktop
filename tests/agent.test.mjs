@@ -224,19 +224,12 @@ test("chatWithAgent web_search 工具：联网搜索后基于结果回答", asyn
 
 test("toolSearchPosts 空页面返回空结果", async () => {
   setMockPages([{ links: [] }, { links: [] }]); // nowcoder + juejin 两个站
-  const r = await toolSearchPosts("React 面经");
+  const r = await toolSearchPosts("React 面经", "nowcoder");
   assert.ok(Array.isArray(r.results));
 });
 
 test("toolSearchPosts 标题过滤（嵌入式方向排除）+ 去重", async () => {
   setMockPages([
-    {
-      links: [
-        { href: "https://www.nowcoder.com/discuss/111", text: "字节前端一面面经" },
-        { href: "https://www.nowcoder.com/discuss/222", text: "嵌入式开发求职记录" },
-        { href: "https://www.nowcoder.com/discuss/333", text: "拼多多笔试真题回忆" },
-      ],
-    },
     {
       // 掘金站：走 API 拦截分支
       links: [],
@@ -249,7 +242,14 @@ test("toolSearchPosts 标题过滤（嵌入式方向排除）+ 去重", async ()
         },
       ],
     },
-    { links: [] }, // bing 站（mock 空）
+    {
+      // Bing 站（mock：嵌入式过滤 + 转载去重）
+      links: [
+        { href: "https://www.nowcoder.com/discuss/111", text: "字节前端一面面经" },
+        { href: "https://www.nowcoder.com/discuss/222", text: "嵌入式开发求职记录" },
+        { href: "https://www.nowcoder.com/discuss/333", text: "拼多多笔试真题回忆" },
+      ],
+    },
   ]);
   const r = await toolSearchPosts("前端面经");
   const titles = r.results.map((p) => p.title);
@@ -313,7 +313,7 @@ test("toolSearchPosts 候选>4 触发 AI 挑帖路径", async () => {
   for (let i = 0; i < 6; i++) links.push({ href: `https://www.nowcoder.com/discuss/10${i}`, text: `前端面经${i}条` });
   setMockPages([{ links }, { links: [] }]);
   setLlmResponses('{"picks":[{"text":"前端面经0条","href":"https://www.nowcoder.com/discuss/100","reason":"好"},{"text":"前端面经3条","href":"https://www.nowcoder.com/discuss/103","reason":"好"}]}');
-  const r = await toolSearchPosts("前端面经");
+  const r = await toolSearchPosts("前端面经", "nowcoder");
   assert.ok(r.results.length > 0, "挑帖后有结果");
   const urls = r.results.map((p) => p.url);
   assert.ok(urls.every((u) => urls.indexOf(u) === urls.lastIndexOf(u)), "结果无重复");
@@ -433,3 +433,4 @@ test("chatWithAgent 无回调：行为零变化（一次性返回）", async () 
   const r = await chatWithAgent("hi", [], null, "stream-test2");
   assert.equal(r.reply, "普通回复内容。");
 });
+

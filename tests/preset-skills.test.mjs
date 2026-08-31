@@ -58,15 +58,15 @@ test("review_resume：简历太短 → error 不抛", async () => {
 
 test("collect_company_intel：公司面经情报 mock 链路跑通（搜索→抓页→汇总）", async () => {
   const { callSkillTool } = await import("../lib/skills.mjs");
-  // mock 页面序列：牛客搜索页(3 条链接，<4 不触发 AI 挑帖) → 掘金搜索页(空) → Bing 搜索页(空) → 正文页
+  // mock 页面序列：掘金搜索页(空) → Bing 搜索页(3 条链接，<4 不触发 AI 挑帖) → 正文页
+  // （牛客已从 toolSearchPosts 去掉——搜索页改版 + fetchPage 卡死）
   setMockPages([
+    { apiResponses: [{ data: [] }] },
     { links: [
       { text: "字节前端一面面经", href: "https://www.nowcoder.com/discuss/1001" },
       { text: "字节前端二面面经", href: "https://www.nowcoder.com/discuss/1002" },
       { text: "字节前端笔试", href: "https://www.nowcoder.com/discuss/1003" },
     ] },
-    { links: [] },
-    { links: [] },
     { text: "面试问了事件循环、React Hooks、手写防抖。".repeat(20), title: "字节前端面经" },
   ]);
   setLlmResponses('{"topTopics":["事件循环","React Hooks","手写防抖"],"patterns":["重手写"],"advice":["优先补手写"]}');
