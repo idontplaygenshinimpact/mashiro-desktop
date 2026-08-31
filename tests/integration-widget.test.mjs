@@ -312,8 +312,9 @@ test("⑧⑪ study-detail-stream：参数错误路径（id 不存在 → 404；�
 
 test("⑨⑫ study-append：文件不存在 → 拒绝追问（提示先生成讲解）", async () => {
   insertPlanItem(path.join(dbDir, "test.db"), { id: "it9", topic: "zzz测试专用知识点2" });
-  // 前置清理：确保"文件不存在"前提（CI 上 study_notes 目录可能被并发测试/残留污染——修复：CI 失败 saved=true）
-  try { rmSync(path.join(config.outputDir, "study_notes", "zzz测试专用知识点2.md"), { force: true }); } catch { /* ignore */ }
+  // 前置清理：确保"文件不存在"前提（CI 上 study_notes 目录可能被并发测试/残留污染——修复：CI 失败 saved=true；
+  // 注意：integration 测试用真实 output 目录（ROOT/output/study_notes），config 未定义——用 ROOT 路径）
+  try { rmSync(path.join(ROOT, "output", "study_notes", "zzz测试专用知识点2.md"), { force: true }); } catch { /* ignore */ }
   const r = await api(`/api/study-append-stream?id=it9&question=追问`, { signal: AbortSignal.timeout(30000) });
   const text = await r.text();
   assert.ok(text.includes('"saved":false'), "不保存");
