@@ -43,12 +43,13 @@ test("detectDataDir：env 指向含库目录 → 命中（env 优先于源码 da
   }
 });
 
-test("detectDataDir：env 指向空目录 → 跳过，回落探测其他候选（开发机命中源码 data/）", () => {
+test("detectDataDir：env 指向空目录 → 跳过，回落探测其他候选（mock 候选目录，不依赖开发机 data/——CI 无源码 data/）", () => {
   const empty = tmp(false);
+  const mockCandidate = tmp(true); // mock 候选目录（含 mianshi.db）——CI 上源码 data/ 不存在（gitignore），测试不依赖开发机路径
   const old = process.env.MIANSHI_DATA_DIR;
   process.env.MIANSHI_DATA_DIR = empty;
   try {
-    const hit = detectDataDir();
+    const hit = detectDataDir([mockCandidate]);
     assert.ok(hit && hit !== empty, `跳过空 env 目录，命中其他候选: ${hit}`);
     assert.ok(existsSync(path.join(hit, "mianshi.db")), "命中目录含库");
   } finally {

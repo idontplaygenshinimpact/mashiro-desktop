@@ -30,7 +30,8 @@ export async function rebuildRendererBundle(root) {
       bundle: true,
       format: "esm",
       outfile: path.join(root, "desktop", "renderer", "app.bundle.js"),
-      logLevel: "warning",
+      logLevel: "silent", // 修复：warning 日志输出到 stderr，node:test 并发下 esbuild 全局日志与 Subtest 交错
+      // （rb3- 无入口文件的错误日志被归到 rb2- 的 Subtest 下 → CI 误判成功路径失败）；错误由 catch 处理
     });
     console.log("[renderer] 自动重建 bundle 成功");
     return true;
