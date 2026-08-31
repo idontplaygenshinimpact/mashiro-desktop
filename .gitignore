@@ -63,3 +63,4 @@ desktop/renderer/react-panel.bundle.js
 desktop/renderer/panel-react/dist/
 desktop/renderer/speech-queue.bundle.js
 desktop/renderer/vue-review/review-app.bundle.js
+docs/对话历史清查-DSH-全量.md
