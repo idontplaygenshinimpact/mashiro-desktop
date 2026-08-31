@@ -27,7 +27,9 @@ test("matchKp 关键词命中", () => {
   assert.equal(matchKp("事件循环与微任务"), "js-event-loop");
   assert.equal(matchKp("讲讲 setTimeout 和宏任务"), "js-event-loop");
   assert.equal(matchKp("React Hooks 原理"), "rc-hooks");
-  assert.equal(matchKp("原型链"), "js-prototype");
+  // 特异性门槛（2026-08 统一层）："原型"是 2 字短泛词不可信 → 不再命中 js-prototype，
+  // 走动态兜底（与"手撕LRU被缓存吸走"同款问题的治理）
+  assert.equal(matchKp("原型链"), "原型链");
   assert.equal(matchKp("Webpack 配置"), "eng-build");
   assert.equal(matchKp("XSS 跨域 CORS"), "br-security");
   // 兜底：无静态知识点命中 → 返回归一化后的主题自身（动态知识点）
