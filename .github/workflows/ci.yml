@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # 修复：secrets 上下文不可用于 step 级 if（GitHub 限制）——job 级 env 传 secrets，step if 用 env 判断
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,12 +29,12 @@ jobs:
       - name: Eval dataset validation (schema/source/datasetHash, 零 LLM)
         run: npm run bench:validate
       - name: Judge reliability check (--judge-check, 金标判官一致性; 有 key 才跑)
-        if: ${{ secrets.DEEPSEEK_API_KEY != '' }}
+        if: ${{ env.DEEPSEEK_API_KEY != '' }}
         run: npm run bench -- --judge-check
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       - name: Quick eval (2 题+1 材料, ~15 次调用; 有 key 才跑)
-        if: ${{ secrets.DEEPSEEK_API_KEY != '' }}
+        if: ${{ env.DEEPSEEK_API_KEY != '' }}
         run: npm run bench:quick
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}

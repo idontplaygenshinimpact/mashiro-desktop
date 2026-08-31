@@ -10,7 +10,10 @@ on:
 jobs:
   eval:
     runs-on: ubuntu-latest
-    if: ${{ secrets.DEEPSEEK_API_KEY != '' }}
+    # 修复：schedule 触发时 secrets 上下文不可用（GitHub 限制）——job 级 env 传 secrets，if 用 env 判断
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+    if: ${{ env.DEEPSEEK_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
