@@ -1,4 +1,5 @@
 // React 版面板入口（渲染层可替换性验证）：同一 preload IPC 桥（window.kanban），只换渲染层
+// 入口参数化（方案 D 同窗内嵌）：有 #root 挂 #root（独立窗口）；panel-core 调 __mountReactPanel 挂指定容器
 import { createRoot } from "react-dom/client";
 import { InterviewPanel } from "./panel.jsx";
 
@@ -16,4 +17,16 @@ if (!globalThis.window.kanban && import.meta.env.DEV) {
   console.log("[react-panel] dev mock IPC 桥已注入（浏览器开发模式）");
 }
 
-createRoot(document.getElementById("root")).render(<InterviewPanel />);
+/** 挂载面试面板到指定容器（同窗内嵌用；返回 root 供对称卸载） */
+export function mountInterviewPanel(container) {
+  const root = createRoot(container);
+  root.render(<InterviewPanel />);
+  return root;
+}
+
+// 独立窗口模式：有 #root 自动挂载（vite dev 的 index.html 容器）
+const autoEl = document.getElementById("root");
+if (autoEl) mountInterviewPanel(autoEl);
+
+// 同窗内嵌：暴露全局挂载函数（panel-core 的 switchRenderer 调用；卸载用返回的 root.unmount()）
+globalThis.__mountReactPanel = mountInterviewPanel;

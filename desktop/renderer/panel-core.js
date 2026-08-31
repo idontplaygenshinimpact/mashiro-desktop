@@ -45,6 +45,64 @@ document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
 });
 
+// ---------- 渲染层同窗切换（方案 D：互斥容器，不叠加；挂载/卸载对称防事件泄漏） ----------
+const rendererState = { interview: "native", review: "native" };
+const reactRoot = { current: null }; // React root 引用（对称卸载）
+const vueApp = { current: null };    // Vue app 引用（对称卸载）
+
+function switchRenderer(tab, mode) {
+  if (tab === "interview") {
+    const native = document.getElementById("interview-native");
+    const react = document.getElementById("interview-react");
+    if (!native || !react) return;
+    if (mode === "react") {
+      native.style.display = "none";
+      react.style.display = "";
+      if (!reactRoot.current && window.__mountReactPanel) reactRoot.current = window.__mountReactPanel(react);
+    } else {
+      react.style.display = "none";
+      native.style.display = "";
+      if (reactRoot.current) { reactRoot.current.unmount(); reactRoot.current = null; } // 对称卸载
+    }
+    rendererState.interview = mode;
+  } else if (tab === "review") {
+    const native = document.getElementById("review-native");
+    const vue = document.getElementById("review-vue");
+    if (!native || !vue) return;
+    if (mode === "vue") {
+      native.style.display = "none";
+      vue.style.display = "";
+      if (!vueApp.current && window.__mountVueReview) vueApp.current = window.__mountVueReview(vue);
+    } else {
+      vue.style.display = "none";
+      native.style.display = "";
+      if (vueApp.current) { vueApp.current.unmount(); vueApp.current = null; } // 对称卸载
+    }
+    rendererState.review = mode;
+  }
+  // 按钮高亮同步
+  document.querySelectorAll(`#tab-${tab} .renderer-switch-btn`).forEach((b) => {
+    b.classList.toggle("active", b.dataset.mode === mode);
+  });
+}
+
+// 切换按钮绑定（面试 Tab：原生/React；复习 Tab：原生/Vue）
+document.getElementById("iv-renderer-switch")?.addEventListener("click", () => switchRenderer("interview", "native"));
+document.getElementById("iv-renderer-react")?.addEventListener("click", () => switchRenderer("interview", "react"));
+document.getElementById("rv-renderer-switch")?.addEventListener("click", () => switchRenderer("review", "native"));
+document.getElementById("rv-renderer-vue")?.addEventListener("click", () => switchRenderer("review", "vue"));
+
+// 渲染层切换下拉（方案 B 入口，D 合入后语义调整为同窗切换）——选 React → 面试 Tab 切 React；选 Vue → 复习 Tab 切 Vue
+const rendererSwitch = document.getElementById("renderer-switch");
+if (rendererSwitch) {
+  rendererSwitch.addEventListener("change", () => {
+    const v = rendererSwitch.value;
+    if (v === "react") { switchRenderer("interview", "react"); switchTab("interview"); }
+    else if (v === "vue") { switchRenderer("review", "vue"); switchTab("review"); }
+    rendererSwitch.value = "native"; // 切回原生（下拉是"跳转+切换"入口，不持久化）
+  });
+}
+
 // 主进程菜单「✍️ 手写/算法题库」→ 切到校招 Tab 并滚动到题库区块
 window.kanban?.onPanelGotoChallenges?.(() => {
   switchTab("jobs");

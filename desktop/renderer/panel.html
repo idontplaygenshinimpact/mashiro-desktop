@@ -15,6 +15,11 @@
       <button id="restart-btn" title="重启桌宠（后台服务一并重启，改代码后生效）">♻️</button>
       <button id="voice-btn" title="语音开关">🔊</button>
       <button id="refresh-btn" title="刷新">🔄</button>
+      <select id="renderer-switch" title="切换渲染层（原生面板 / React 模拟面试 / Vue 复习卡）" style="background:rgba(109,79,216,.10);color:#5d48b8;border:1px solid rgba(109,79,216,.25);border-radius:6px;font-size:11px;padding:2px 4px;cursor:pointer;">
+        <option value="native">🎨 原生</option>
+        <option value="react">⚛️ React 版</option>
+        <option value="vue">🔁 Vue 版</option>
+      </select>
     </div>
   </header>
 
@@ -60,6 +65,12 @@
   <main>
     <!-- ========== 模拟面试 Tab ========== -->
     <section id="tab-interview" class="tab-panel active">
+      <div class="renderer-switch-bar">
+        <span class="renderer-switch-label">渲染层：</span>
+        <button id="iv-renderer-switch" class="renderer-switch-btn" data-mode="native">🎨 原生</button>
+        <button id="iv-renderer-react" class="renderer-switch-btn" data-mode="react">⚛️ React 版</button>
+      </div>
+      <div id="interview-native">
       <div class="interview-setup" id="interview-setup">
         <div class="form-row">
           <label>目标岗位</label>
@@ -126,10 +137,18 @@
         <div id="iv-summary" class="iv-summary hidden"></div>
         <div class="iv-review hidden" id="iv-review"></div>
       </div>
+      </div>
+      <div id="interview-react" style="display:none"></div>
     </section>
 
     <!-- ========== 复习 Tab ========== -->
     <section id="tab-review" class="tab-panel">
+      <div class="renderer-switch-bar">
+        <span class="renderer-switch-label">渲染层：</span>
+        <button id="rv-renderer-switch" class="renderer-switch-btn" data-mode="native">🎨 原生</button>
+        <button id="rv-renderer-vue" class="renderer-switch-btn" data-mode="vue">🔁 Vue 版</button>
+      </div>
+      <div id="review-native">
       <div class="review-method-hint">🧠 复习采用 <b>FSRS 记忆算法</b>（艾宾浩斯遗忘曲线的自适应版）：答得越差间隔越短、答得好自动拉长，记忆强度实时可见</div>
       <div class="review-stats" id="review-stats"></div>
       <div id="review-batch" class="review-batch"></div>
@@ -179,6 +198,8 @@
           <div id="wrong-book-list"></div>
         </div>
       </div>
+      </div>
+      <div id="review-vue" style="display:none"></div>
     </section>
 
     <!-- ========== 学习清单 Tab（含专注监督：学什么 + 专注去做） ========== -->
@@ -857,6 +878,9 @@
   <script src="panel-jobs.js"></script>
   <script src="vad.js"></script>
   <script src="panel-rest.js"></script>
+  <!-- 同窗内嵌（方案 D）：React/Vue bundle 参数化入口——有 #root/#app 挂独立窗口，panel-core 调 __mount* 挂同窗容器 -->
+  <script type="module" src="panel-react/dist/assets/react-panel.js"></script>
+  <script type="module" src="panel-vue-review/dist/assets/vue-review.js"></script>
   </body>
 </html>
 
