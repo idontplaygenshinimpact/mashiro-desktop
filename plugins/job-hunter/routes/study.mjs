@@ -205,7 +205,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     import("#lib/ai.mjs").then(async ({ solveQuestionStream }) => {
       const { getCareerProfile } = await import("#lib/career.mjs");
       const prof = getCareerProfile();
-      const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案
+      const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（缓存；重新生成才重新搜集）
       const ep = explainPromptFor(item, prof); // 项目条目 → 项目剖析引导
       // 读 source 面经原文注入（修复：explainPromptFor 只构造 topic+通用引导，不读 source 文件，
       // 导致重新生成（noSimilar=1）后讲解与原始面经脱节——"从面经来的题重新生成反而没关系了"）
@@ -315,7 +315,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     push({ type: "start", topic: item.topic });
     let full = "";
     import("#lib/ai.mjs").then(async ({ solveAppendStream }) => {
-      const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（追问也基于真实代码）
+      const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（追问也基于真实代码；缓存）
       full = await solveAppendStream({
         topic: item.topic,
         existing: (existing || `（暂无已有讲解，围绕知识点直接回答）${item.verify_question || item.topic}`) + projCtx,
@@ -552,7 +552,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     import("#lib/ai.mjs").then(async ({ solveQuestion }) => {
       const { getCareerProfile } = await import("#lib/career.mjs");
       const prof = getCareerProfile();
-      const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案
+      const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（缓存；重新生成才重新搜集）
       const ep = explainPromptFor(item, prof); // 项目条目 → 项目剖析引导
       const content = String(await solveQuestion({
         title: ep.title,
