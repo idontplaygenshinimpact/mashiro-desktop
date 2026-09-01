@@ -6,6 +6,8 @@
 <!-- CSP：仅同源脚本/样式（面板无内联脚本），API 只允许本机 widget；防注入内容外联 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src http://127.0.0.1:8899 http://localhost:8899; font-src 'self' data:;">
 <link rel="stylesheet" href="panel.css">
+<!-- Vue 复习卡 scoped 样式（Vite 产物提取到 index.css——不引入则组件裸奔：白背景/布局乱/图表异常） -->
+<link rel="stylesheet" href="panel-vue-review/dist/assets/index.css">
 </head>
 <body>
   <header class="topbar">

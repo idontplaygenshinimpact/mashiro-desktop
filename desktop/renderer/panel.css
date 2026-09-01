@@ -1247,3 +1247,8 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
   background: #fff;
   border-radius: 8px;
 }
+
+/* 同窗内嵌容器背景协调（方案 D）：Vue 浅色系与面板一致；React 深色主题自成区域（圆角卡片化，不割裂） */
+#interview-react, #review-vue { border-radius: 12px; margin-top: 6px; padding: 10px; }
+#review-vue { background: linear-gradient(180deg, rgba(242,239,251,.55), rgba(255,255,255,.88)); border: 1px solid rgba(109,79,216,.14); }
+#interview-react { background: linear-gradient(180deg, rgba(26,22,45,.96), rgba(23,19,34,.96)); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 2px 10px rgba(23,19,34,.15); }
