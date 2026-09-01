@@ -50,13 +50,25 @@ const rendererState = { interview: "native", review: "native" };
 const reactRoot = { current: null }; // React root 引用（对称卸载）
 const vueApp = { current: null };    // Vue app 引用（对称卸载）
 
-function switchRenderer(tab, mode) {
+// 等待框架 bundle 就绪（module script 是 deferred——点击可能早于 bundle 执行；轮询 ≤5s 自动挂载）
+function waitBundle(kind, timeout = 5000) {
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      const ready = kind === "react" ? window.__mountReactPanel : window.__mountVueReview;
+      if (ready || Date.now() - t0 > timeout) { clearInterval(iv); resolve(!!ready); }
+    }, 100);
+  });
+}
+
+async function switchRenderer(tab, mode) {
   if (tab === "interview") {
     const native = document.getElementById("interview-native");
     const react = document.getElementById("interview-react");
     if (!native || !react) return;
     if (mode === "react") {
-      if (!window.__mountReactPanel) { window.kanban?.notify?.("🎨 渲染层", "React 版未就绪（bundle 加载中），稍后再试"); return; }
+      const ready = await waitBundle("react"); // 等待 bundle 就绪（首次 204KB 加载）
+      if (!ready) { window.kanban?.notify?.("🎨 渲染层", "React 版加载超时，请刷新面板重试"); return; }
       native.style.display = "none";
       react.style.display = "";
       if (!reactRoot.current) {
@@ -77,7 +89,8 @@ function switchRenderer(tab, mode) {
     const vue = document.getElementById("review-vue");
     if (!native || !vue) return;
     if (mode === "vue") {
-      if (!window.__mountVueReview) { window.kanban?.notify?.("🎨 渲染层", "Vue 版未就绪（bundle 加载中），稍后再试"); return; }
+      const ready = await waitBundle("vue");
+      if (!ready) { window.kanban?.notify?.("🎨 渲染层", "Vue 版加载超时，请刷新面板重试"); return; }
       native.style.display = "none";
       vue.style.display = "";
       if (!vueApp.current) {

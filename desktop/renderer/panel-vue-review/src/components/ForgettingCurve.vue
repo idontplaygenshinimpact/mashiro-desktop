@@ -14,7 +14,7 @@
       <path :d="pathFor(stability)" class="fc-cur" />
       <!-- 轴标签 -->
       <text x="34" :y="H - 4" class="fc-axis">0</text>
-      <text x="W - 22" :y="H - 4" class="fc-axis">30天</text>
+      <text :x="W - 34" :y="H - 4" class="fc-axis">30天</text>
       <text x="6" y="12" class="fc-axis">100%</text>
     </svg>
     <div class="fc-note">评分后稳定性 S 变化 → 曲线重绘（FSRS 调度机制可视化）</div>
