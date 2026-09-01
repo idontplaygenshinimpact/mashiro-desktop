@@ -9,8 +9,8 @@
     <div v-else-if="error" class="vr-hint vr-err">{{ error }}</div>
 
     <template v-else-if="current">
-      <!-- 卡片翻转 -->
-      <ReviewCard :card="current" :flipped="flipped" @flip="flipped = !flipped" />
+      <!-- 卡片：算法题 → 手写模式（手写区+对照关键点）；概念题 → 翻转看答案 -->
+      <ReviewCard :card="current" :flipped="flipped" :card-type="current.type" @flip="flipped = !flipped" />
 
       <!-- 遗忘曲线（评分后即时重绘） -->
       <ForgettingCurve :stability="curveStability" :history="history" />
@@ -18,8 +18,8 @@
       <!-- 调度时间线 -->
       <ScheduleTimeline :history="history" />
 
-      <!-- 评分按钮 -->
-      <RatingButtons :flipped="flipped" @rate="onRate" />
+      <!-- 评分：算法题 → 多维自评映射四级；概念题 → 四级按钮 -->
+      <RatingButtons :flipped="flipped" :card-type="current.type" @rate="onRate" />
     </template>
 
     <div v-else class="vr-hint vr-done">🎉 本组复习完成（{{ history.length }} 张已调度）</div>
