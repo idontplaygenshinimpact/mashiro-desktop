@@ -131,7 +131,7 @@ export const tools = [
       const matLimit = Number(materialLimit) || MATERIAL_LIMIT;
       try {
         // ① 档案（技术栈/结构树/README/核心预览）——直接构建，不依赖知识库索引状态
-        const archive = buildProjectArchive(proj);
+        const archive = await buildProjectArchive(proj); // async（2026-08 改造——await 修复回归）
         const archiveText = archive?.content ? String(archive.content).slice(0, matLimit) : "";
         if (!archiveText) return { ok: false, error: `项目「${proj.name}」档案为空（目录可能已移动）` };
         // ② 关键文件：package.json（技术栈）+ README（定位）——完整读取（小文件）

@@ -201,13 +201,12 @@ server.tool(
       if (!projects.length) {
         return { content: [{ type: "text", text: "未配置个人项目源码。请在设置中心「🎯 简历项目源码」填 项目名=本地目录，配置后模拟面试/清单讲解/对话都能基于真实代码。" }] };
       }
-      const text = projects
-        .map((p) => {
-          try {
-            const a = buildProjectArchive(p);
-            return `【${p.name}】\n${String(a.content || "").slice(0, 4000)}`;
-          } catch { return `【${p.name}】\n（档案生成失败，目录可能已移动）`; }
-        })
+      const text = (await Promise.all(projects.map(async (p) => {
+        try {
+          const a = await buildProjectArchive(p); // async（2026-08 改造——await 修复回归）
+          return `【${p.name}】\n${String(a.content || "").slice(0, 4000)}`;
+        } catch { return `【${p.name}】\n（档案生成失败，目录可能已移动）`; }
+      })))
         .join("\n\n=====\n\n")
         .slice(0, 14000);
       return { content: [{ type: "text", text: text || "项目档案为空" }] };
