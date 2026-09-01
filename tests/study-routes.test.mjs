@@ -93,8 +93,8 @@ test("② study-append：文件不存在 → 拒绝追问（提示先生成讲�
   const evs = events(res);
   const done = evs.find((e) => e.type === "done");
   assert.ok(done, "done 事件存在");
-  assert.equal(done.saved, false, "文件不存在 → 不保存");
-  assert.ok(String(done.error || "").includes("先点"), "提示先生成讲解");
+  assert.equal(done.saved, false, "文件不存在 → 不保存（回答已流式推给用户，但不写伪讲解）");
+  assert.ok(String(done.note || "").includes("先点"), "提示先生成讲解");
   const f = path.join(notesDir(), "事件循环.md");
   assert.equal(existsSync(f), false, "不创建伪讲解文件");
 });

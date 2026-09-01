@@ -287,7 +287,22 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
       push({ type: "start", topic: item.topic });
       push({ type: "delta", delta: cached.answer });
       push({ type: "cache", hit: true, similarity: cached.similarity, cachedQuestion: cached.question });
-      push({ type: "done", saved: false, fromCache: true });
+      // 缓存命中也追加存档（修复：此前 saved:false 不追加——回答不落讲解文件，用户看讲解没有追问段，
+      // 觉得"追问不起效果"；缓存回答零成本，追加进讲解用户可见）
+      let savedPath = null;
+      try {
+        const notesDir = studyNotesDir();
+        mkdirSync(notesDir, { recursive: true });
+        const f2 = findStudyFile(item);
+        const inNotes = f2 && f2.startsWith(notesDir);
+        const savePath = inNotes ? f2 : path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
+        const appendBlock = `\n\n---\n\n## 💬 追问：${question}\n\n${String(cached.answer || "").slice(0, 8000)}\n`;
+        if (existsSync(savePath)) {
+          appendFileSync(savePath, appendBlock, "utf8");
+          savedPath = savePath;
+        }
+      } catch { /* 追加失败不影响回答 */ }
+      push({ type: "done", saved: !!savedPath, fromCache: true });
       res.end();
       return;
     }
@@ -314,13 +329,13 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
         const inNotes = filePath && filePath.startsWith(notesDir);
         const savePath = inNotes ? filePath : path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
         const appendBlock = `\n\n---\n\n## 💬 追问：${question}\n\n${full.slice(0, 8000)}\n`;
-        // 追加（存档存在则 append；**不存在则拒绝**——修复：此前"新建"分支把追问回答写成讲解主体
-        // （header + full + appendBlock），原始讲解丢失时追问会生成"伪讲解"（只剩追问回答）。
-        // 追问语义是"基于已有讲解深入"——没有讲解就没有追问基础，提示先点「💡 讲解」生成）
+        // 追加（存档存在则 append；不存在则**直接回答但不存档**——修复：此前"拒绝追问"让用户觉得
+        // "追问不起效果"；直接流式回答已推给用户（delta），但不写"伪讲解"（header + 追问回答当主体——
+        // 原始讲解丢失时污染），提示先点「💡 讲解」生成后再追问会追加存档）
         if (existsSync(savePath)) {
           appendFileSync(savePath, appendBlock, "utf8");
         } else {
-          push({ type: "done", saved: false, filePath: null, error: "还没有讲解内容，先点「💡 讲解」生成，再追问补充" });
+          push({ type: "done", saved: false, filePath: null, note: "还没有讲解存档——本次回答不保存；先点「💡 讲解」生成，之后的追问会追加进讲解" });
           res.end();
           return;
         }
