@@ -75,7 +75,10 @@ function explainPromptFor(item, prof) {
   }
   return {
     title: item?.verify_question || `请完整讲解：${item.topic}`,
-    text: `这是一道${prof.scopeNote || "面试"}相关面试题，请完整讲解：${item.topic}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
+    // text 用 verify_question（修复：仅用 topic 有歧义——"NSP 与 MLM 的区别"被 LLM 理解成数据库树形建模
+    // （嵌套集/物化路径）而非预训练任务；verify_question 有明确表述（如"NSP（Next Sentence Prediction）…"），
+    // 注入 text 消除歧义）
+    text: `这是一道${prof.scopeNote || "面试"}相关面试题，请完整讲解：${item?.verify_question || item.topic}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
   };
 }
 
