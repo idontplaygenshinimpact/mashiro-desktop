@@ -1251,4 +1251,13 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 /* 同窗内嵌容器背景协调（方案 D）：Vue 浅色系与面板一致；React 深色主题自成区域（圆角卡片化，不割裂） */
 #interview-react, #review-vue { border-radius: 12px; margin-top: 6px; padding: 10px; }
 #review-vue { background: linear-gradient(180deg, rgba(242,239,251,.55), rgba(255,255,255,.88)); border: 1px solid rgba(109,79,216,.14); }
-#interview-react { background: linear-gradient(180deg, rgba(26,22,45,.96), rgba(23,19,34,.96)); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 2px 10px rgba(23,19,34,.15); }
+#interview-react { background: linear-gradient(180deg, rgba(242,239,251,.55), rgba(255,255,255,.88)); border: 1px solid rgba(109,79,216,.14); }
+
+/* React 内嵌浅色适配：组件样式全内联深色（React 输出 rgb 格式——#241f3a 底 / #a8a3c8 文 / #8fc7ff 高亮 / #e8c04a 金色 / #e8e6f5 白字），
+   !important 覆盖为面板浅色系（与 Vue 同款协调；不改组件代码——独立窗口模式仍深色沉浸） */
+#interview-react [style*="rgb(36, 31, 58)"] { background: linear-gradient(135deg, rgba(109,79,216,.08), rgba(109,79,216,.03)) !important; border-color: rgba(109,79,216,.18) !important; }
+#interview-react [style*="rgb(168, 163, 200)"] { color: #5a5678 !important; }
+#interview-react [style*="rgb(143, 199, 255)"] { color: #6d4fd8 !important; }
+#interview-react [style*="rgb(232, 192, 74)"] { color: #9a7b1a !important; }
+#interview-react [style*="rgb(232, 230, 245)"] { color: #2d2a45 !important; }
+#interview-react [style*="rgb(74, 69, 104)"] { border-color: rgba(109,79,216,.30) !important; }

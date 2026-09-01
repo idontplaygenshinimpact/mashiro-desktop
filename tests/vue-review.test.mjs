@@ -52,7 +52,7 @@ test("③ demo 卡绝不提交后端（无 kanban/加载失败回退示例数据
   };
   const rv = useReview();
   await rv.load();
-  assert.equal(rv.cards.value.length, 3, "demo 卡回退");
+  assert.equal(rv.cards.value.length, 4, "demo 卡回退（DEMO_CARDS 4 张：事件循环/Vue响应式/浏览器缓存/防抖节流）");
   assert.ok(rv.cards.value.every((c) => c.demo === true), "全部标记 demo");
   await rv.rate("good");
   assert.equal(submits.length, 0, "demo 卡不调 reviewSubmit（防 id 污染后端）");
