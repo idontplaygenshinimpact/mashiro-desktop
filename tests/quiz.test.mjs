@@ -150,7 +150,7 @@ test("submitQuiz：换批后抽题优先新批", () => {
 });
 
 // ---------- 方向画像驱动：改画像后选择题 prompt 跟随（转后端出后端题） ----------
-test("generateQuiz prompt 跟随方向画像（角色/范围/代码语言）", async () => {
+test("generateQuiz prompt 不注入方向（2026-08 清查修复：出题基于知识点本身；代码语言仍跟随画像）", async () => {
   const { saveCareerProfile, resetCareerProfile, invalidateCareerProfile } = await import("../lib/career.mjs");
   const { getLastMessages, setLlmResponses } = await import("./helpers.mjs");
   const card = review.addCard({ topic: "数据库索引", question: "讲讲 B+树" });
@@ -163,10 +163,13 @@ test("generateQuiz prompt 跟随方向画像（角色/范围/代码语言）", a
     setLlmResponses(VALID_JSON);
     await generateQuiz(card);
     const promptText = getLastMessages().map((m) => m.content).join("\n");
-    assert.ok(promptText.includes("资深后端开发面试辅导老师"), "角色跟随画像");
-    assert.ok(promptText.includes("后端 / 微服务 / 数据库"), "方向范围跟随画像");
-    assert.ok(promptText.includes("Python / Go"), "代码语言跟随画像");
-    assert.ok(!promptText.includes("资深前端面试辅导老师"), "不再硬编码前端角色");
+    // 修复：出题不再注入方向（此前"题目内容必须与前端方向一致"把数据库/算法题硬套前端）
+    assert.ok(promptText.includes("出题老师"), "统一出题角色");
+    assert.ok(!promptText.includes("资深后端开发面试辅导老师"), "不注入方向角色");
+    assert.ok(!promptText.includes("后端 / 微服务 / 数据库"), "不注入方向范围");
+    assert.ok(promptText.includes("Python / Go"), "代码语言仍跟随画像");
+    // 出题基于知识点本身（数据库索引 → B+树），不是方向
+    assert.ok(promptText.includes("数据库索引"), "题目内容绑定知识点本身");
   } finally {
     resetCareerProfile();
     invalidateCareerProfile();
