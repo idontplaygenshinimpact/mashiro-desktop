@@ -182,11 +182,11 @@ export function registerMiscRoutes(router) {
     }
   });
   router.route("/api/settings/personal-projects", "POST", (req, res) => {
-    readBody(req, res, (body) => {
+    readBody(req, res, async (body) => {
       try {
         const { projects } = JSON.parse(body || "{}"); // [{name, dir}]
         const r = personalProjectsApi.savePersonalProjects(projects);
-        const idx = r.ok ? personalProjectsApi.indexPersonalProjects() : { ok: 0, fail: 0 };
+        const idx = r.ok ? await personalProjectsApi.indexPersonalProjects() : { ok: 0, fail: 0 };
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ok: true, ...r, indexed: idx, message: `✅ 已保存 ${r.projects.length} 个项目并生成源码档案（面试官拷打用）` }));
       } catch (e) {
