@@ -426,3 +426,10 @@ test("表述漂移合并后的复习卡用合并键（答对复习可清薄弱�
   const weak = db.prepare("SELECT topic FROM weak_points").all();
   assert.equal(weak.length, 0, "答对复习后薄弱点已清除");
 });
+
+
+test("泛词 3-gram 不触发相似——'的区别'共享不误判（NSP vs LangChain 讲解不复用）", async () => {
+  const { isSimilarTopicForArchive } = await import("../lib/memory.mjs");
+  assert.equal(isSimilarTopicForArchive("NSP 与 MLM 的区别", "LangChain 和 LangGraph 的区别和应用"), false, "泛词'的区别'共享不算相似");
+  assert.equal(isSimilarTopicForArchive("事件循环与微任务", "事件循环宏任务微任务"), true, "同知识点仍相似");
+});
