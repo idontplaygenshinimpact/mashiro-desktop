@@ -26,6 +26,8 @@ test("detectAlgoTopic：算法关键词命中（复用 study-groups 词表）", 
 test("detectAlgoTopic：概念题不误判", () => {
   assert.equal(detectAlgoTopic("事件循环：宏任务与微任务"), false, "概念题");
   assert.equal(detectAlgoTopic("Vue 响应式原理"), false, "概念题");
+  assert.equal(detectAlgoTopic("B树B+树二叉树区别"), false, "含算法词但概念比较 → 概念题");
+  assert.equal(detectAlgoTopic("防抖与节流的区别"), false, "含算法词但'区别' → 概念题");
   assert.equal(detectAlgoTopic(""), false, "空串");
 });
 
