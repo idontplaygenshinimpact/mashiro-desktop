@@ -135,7 +135,7 @@ ${BASE_RULES}`,
     });
     parts.push(srcRes);
     // 4.3 八股（详细可背）
-    parts.push(await runSubagent({
+    const baRes = await runSubagent({
       name: "八股生成",
       task: `基于以下项目源码要点与八股清单，生成**八股部分**（详细——8000 字以上——覆盖项目所有技术点）：
 ## 涉及的全部八股
@@ -146,7 +146,8 @@ ${BASE_RULES}`,
 - 追问 2-3 个（每个带完整答案——可背）
 ${BASE_RULES}`,
       context: ctx,
-    })).then((r) => r?.ok ? r : null);
+    });
+    parts.push(baRes?.ok ? baRes : null);
     // 4.4 模拟面试问答（全覆盖拷打）
     parts.push(await runSubagent({
       name: "拷打问答生成",
