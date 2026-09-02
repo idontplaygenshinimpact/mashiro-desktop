@@ -30,7 +30,22 @@ const QUALITY_CHECKLIST = `□ 背诵路线图（1 天/3 天/1 周）
 // 工单 v2：多轮打磨循环（生成 → 评审 → 修正 → 再评审——最多 3 轮修正）
 // 角色分离：评审者（严格质量评审员——对照清单找差距）/ 修正者（资深辅导老师——带全文+差距打磨）
 // 上下文累积：修正轮带上次完整文档 + 评审结论（不是盲改）
-async function polishDocument(projName, docText) {
+// 工单 v3 修复（缩水）：修正者**补差距模式**——context 不截断（带全文）+ 只改差距部分
+// （其他原样保留）+ 缩水校验（输出 ≥ 输入 80%——低于则保留草稿）+ 打磨后结构检查（缺的补）
+
+// 结构检查：质量标准对应章节标题（缺的部分 → 补缺 subagent 生成插入）
+const STRUCTURE_SECTIONS = [
+  { key: "背诵路线图", markers: ["背诵路线图"] },
+  { key: "一句话定位", markers: ["一句话定位"] },
+  { key: "关键设计决策", markers: ["关键设计决策"] },
+  { key: "源码要点", markers: ["源码要点"] },
+  { key: "八股", markers: ["## 涉及的全部八股", "八股"] },
+  { key: "模拟面试问答", markers: ["模拟面试问答"] },
+  { key: "可能的追问", markers: ["可能的追问"] },
+  { key: "怎么讲", markers: ["怎么讲", "讲述"] },
+];
+
+async function polishDocument(projName, docText, materials = {}) {
   const rounds = [];
   let current = docText;
   for (let round = 0; round < 3; round++) {
@@ -44,29 +59,55 @@ ${QUALITY_CHECKLIST}
 1) 达标结论：全部达标 → 输出 PASS；否则输出 FAIL
 2) 差距清单（仅 FAIL 时）：每条——【问题】简述 → 位置（章节） → 怎么补（具体）`,
       context: current,
-      maxContext: 16000, maxResult: 4000, maxTokens: 3000,
+      maxContext: 30000, maxResult: 4000, maxTokens: 3000,
     });
     const reviewText = review?.ok ? review.result : "";
     rounds.push({ round: round + 1, passed: reviewText.includes("PASS") && !reviewText.includes("FAIL"), review: reviewText.slice(0, 400) });
     if (reviewText.includes("PASS") && !reviewText.includes("FAIL")) break; // 达标
     if (!reviewText) break; // 评审失败——停止（保留现状）
-    // 修正者（round 2/4）——带上次完整文档 + 评审差距清单 + few-shot
+    // 修正者（round 2/4）——工单 v3：**补差距模式**——context 不截断（带全文）+
+    // 只改差距部分（其他原样保留——不重写整篇——防缩水）+ 缩水校验
+    const prevLen = current.length;
     const revised = await runSubagent({
       name: "文档修正",
-      system: "你是资深面试辅导老师（打磨者）。带【上次完整文档 + 评审差距清单】——逐项补全/深化/打磨——输出**完整修正版**（整篇——不是增量。上下文累积：看得到原文和差距）。",
-      task: `逐项解决以下评审差距，输出**完整修正版**（整篇打磨后的版本）：
+      system: "你是资深面试辅导老师（打磨者）。带【上次完整文档（全文）+ 评审差距清单】——**只修改差距清单涉及的部分——其他部分原样保留（不重写/不删除）**——输出修正后的完整文档（全部分都在）。上下文累积：看得到原文和差距。",
+      task: `逐项解决以下评审差距——**只改差距部分**（差距清单外的内容原文保留——不要重写整篇——不要删任何已有章节——字符数不得少于输入草稿的 80%——缩水即失败）：
 【评审差距清单】
 ${reviewText.slice(0, 2500)}
 【风格参考】（标杆示例——模仿其深度/讲人话——不照搬内容）：
 ${FEWSHOT.slice(0, 2500)}
 红线：基于真实源码（不编造文件名/代码）；八股准确（不幻觉）。`,
-      context: `【上次完整文档】\n${current.slice(0, 14000)}`,
-      maxContext: 20000, maxResult: 20000, maxTokens: 8000,
+      context: `【上次完整文档（全文——不截断）】\n${current}`,
+      maxContext: 40000, maxResult: 40000, maxTokens: 16000,
     });
-    if (revised?.ok && revised.result && revised.result.length > 3000) {
-      current = revised.result;
+    if (revised?.ok && revised.result && revised.result.length >= prevLen * 0.8) {
+      current = revised.result; // 缩水校验通过（≥80%）
       rounds[rounds.length - 1].revisedLength = current.length;
+    } else if (revised?.ok && revised.result && revised.result.length >= 3000) {
+      // 缩水但仍可用——记录缩水（不替换——保留草稿更安全）
+      rounds[rounds.length - 1].shrink = true;
+      rounds[rounds.length - 1].revisedLength = revised.result.length;
     } else break; // 修正失败——停止
+  }
+  // 任务 3：打磨后结构检查——缺的部分自动补（不删已有——只加缺的）
+  const missing = STRUCTURE_SECTIONS.filter((s) => !s.markers.some((m) => current.includes(m)));
+  if (missing.length) {
+    const missingNames = missing.map((s) => s.key).join("、");
+    const patch = await runSubagent({
+      name: "结构补缺",
+      system: "你是资深面试辅导老师。文档缺了部分章节——生成缺失部分（内容基于素材——不编造文件名/代码）。",
+      task: `以下文档缺失章节：**${missingNames}**。请生成这些缺失部分（每部分完整展开——参照现有文档的风格深度）：
+【文档素材】
+${String(materials.fullSummary || "").slice(0, 6000)}
+${String(materials.baSection || "").slice(0, 4000)}
+输出格式：直接输出缺失章节的完整 Markdown（## 标题开头——不重复已有内容）。`,
+      context: `【现有文档片段】\n${current.slice(0, 6000)}`,
+      maxContext: 20000, maxResult: 12000, maxTokens: 6000,
+    });
+    if (patch?.ok && patch.result && patch.result.length > 500) {
+      current = `${current}\n\n---\n\n${patch.result}`; // 只加缺的——不删已有
+      rounds.push({ round: "structure", patched: missingNames, patchLength: patch.result.length });
+    }
   }
   return { docText: current, rounds };
 }
@@ -244,7 +285,7 @@ ${BASE_RULES}`,
     const docText = parts.filter((p) => p?.ok && p.result).map((p) => p.result).join("\n\n---\n\n");
     if (!docText || docText.length < 3000) return { ok: false, error: "面试准备文档生成失败（分步输出过短）" };
     // 5. 多轮打磨（工单 v2：生成 → 评审 → 修正 → 再评审——角色分离/上下文累积/few-shot）
-    const { docText: polished, rounds } = await polishDocument(name, docText);
+    const { docText: polished, rounds } = await polishDocument(name, docText, { fullSummary, baSection });
     const doc = { ok: true, result: polished };
     // 6. 存档
     mkdirSync(PREP_DIR, { recursive: true });
