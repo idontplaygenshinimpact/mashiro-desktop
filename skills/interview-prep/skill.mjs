@@ -115,8 +115,8 @@ const IGNORE_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", "
 const SRC_EXT = new Set([".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs", ".vue", ".py", ".go", ".java", ".rs", ".cpp", ".c", ".h", ".css", ".scss", ".sql", ".sh"]);
 const EXCLUDE = /(^|\/)(e2e|__tests__|test|tests)(\/|$)|\.(spec|test)\.|next-env|playwright\.config|vitest\.config|jest\.config|\.d\.ts$/;
 const CORE_DIR = /(^|\/)(stores?|lib|hooks|components|core|services|app|backend)(\/|$)/;
-const GROUP_BUDGET = 24000;
-const FILE_CAP = 30000;
+// 技术债 L15：GROUP_BUDGET/FILE_CAP 收敛到 lib/skill-constants.mjs 单点
+import { GROUP_BUDGET, FILE_CAP } from "../../lib/skill-constants.mjs";
 
 /** 项目白名单匹配（personal_projects 配置；dir 必须存在） */
 function matchProject(project) {

@@ -109,6 +109,9 @@ export const config = {
   // 上下文压缩参数（.env 可覆盖：COMPACT_BUDGET / COMPACT_KEEP_RECENT）
   compactBudget: Number(process.env.COMPACT_BUDGET) || 18000,
   compactKeepRecent: Number(process.env.COMPACT_KEEP_RECENT) || 4000,
+  // widget 服务端口（技术债 L4 收编：widget.mjs/study.mjs/jobs.mjs/core.mjs/widget-auth.mjs
+  // 各自定义/硬编码 8899 → config 单点；.env 可覆盖 MIANSHI_PORT）
+  widgetPort: Number(process.env.MIANSHI_PORT) || 8899,
 };
 
 // 启动自检：key 缺失时明确报错（避免静默失败）

@@ -3,9 +3,10 @@ import { readBody } from "#lib/widget-core.mjs";
 import * as jobsApi from "#lib/jobs.mjs";
 import * as jobMatchApi from "#lib/job-match.mjs";
 import * as studyApi from "#lib/study.mjs";
+import { config } from "#root/config.mjs"; // 技术债 L4：端口收编 config 单点
 
 export function registerJobsRoutes(router) {
-  const PORT = Number(process.env.MIANSHI_PORT) || 8899;
+  const PORT = config.widgetPort; // 技术债 L4：端口收编 config 单点
 
 router.route("/api/jobs/profile", "GET", (req, res) => {  // 查询简历状态（画像 + 原文是否已保存）
   try {

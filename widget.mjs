@@ -86,7 +86,7 @@ await loadEnabledPlugins({ router, db, getCorsOrigin, laneSubmit, log: (...a) =>
   }
 });
 
-const PORT = Number(process.env.MIANSHI_PORT) || 8899;
+const PORT = config.widgetPort; // 技术债 L4：端口收编 config 单点（MIANSHI_PORT 可覆盖）
 const NO_NOTIFY = process.argv.includes("--no-notify");
 // 测试隔离：集成测试起实例时禁用巡检定时器（生产不设置则正常巡检）
 const DISABLE_PATROL = process.env.MIANSHI_DISABLE_PATROL === "1";

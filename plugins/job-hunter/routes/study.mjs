@@ -121,7 +121,7 @@ function archiveHeader(item, note = "") {
 }
 
 export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", laneSubmit = (fn) => fn() } = {}) {
-  const PORT = Number(process.env.MIANSHI_PORT) || 8899;
+  const PORT = config.widgetPort; // 技术债 L4：端口收编 config 单点
   const sseHeaders = (req) => ({
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache",

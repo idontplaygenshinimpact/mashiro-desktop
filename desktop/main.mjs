@@ -92,7 +92,12 @@ const widgetServer = createWidgetServer({
 });
 // 持续守护：每 30 秒探测，挂了自动重启
 if (gotSingleInstanceLock) setInterval(() => widgetServer.ensure(), 30000);
-app.on("before-quit", () => { widgetServer.cleanup(); });
+// 技术债 L13：退出清理——widget 服务 + ASR worker（此前只 cleanup widget——asrWorker
+// 残留进程不 terminate——退出后语音识别进程仍占资源）
+app.on("before-quit", () => {
+  widgetServer.cleanup();
+  try { if (asrWorker) asrWorker.terminate().catch(() => {}); } catch { /* ignore */ }
+});
 
 // ---------- 托盘图标（用字符画生成简单图标） ----------
 function createTrayIcon() {
