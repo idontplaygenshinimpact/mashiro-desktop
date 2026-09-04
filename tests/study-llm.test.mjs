@@ -178,13 +178,15 @@ test("answerReview：无答案 → 错误", async () => {
   assert.equal(r.ok, false);
 });
 
-test("answerReview：LLM 返回非法 JSON → 空结果不崩溃", async () => {
+test("answerReview：LLM 返回非法 JSON → 判分失败可见（S5：ok:false + 不标记 reviewed）", async () => {
   addPlanItems([{ topic: "事件循环", why: "w", source: "s", verify_question: "q", level: "必会" }]);
   const item = getPlan().items[0];
   setLlmResponses("完全不是 JSON");
   const r = await answerReview([{ id: item.id, answer: "回答" }]);
-  assert.equal(r.ok, true);
-  assert.equal(r.results.length, 0);
+  assert.equal(r.ok, false, "判分失败返回 ok:false（不再静默空结果）");
+  assert.ok(String(r.error || "").includes("解析失败"), "错误信息明确");
+  const after = getPlan().items.find((i) => i.id === item.id);
+  assert.equal(after.reviewed, false, "不标记 reviewed（错题回流）");
 });
 
 // 回归防线：getReplyText 是真实实现，若被测代码忘了用它（直接对响应对象操作）会抛错
