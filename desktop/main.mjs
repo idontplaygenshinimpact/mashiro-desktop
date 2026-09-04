@@ -153,6 +153,8 @@ function createWindow() {
     frame: false,
     resizable: false,
     alwaysOnTop: true,
+    // 窗口/任务栏图标（椎名真白——assets/mashiro-icon.ico；缺失时回退默认）
+    icon: path.join(ROOT, "assets", "mashiro-icon.ico"),
     skipTaskbar: true,
     hasShadow: false,
     fullscreenable: false,
