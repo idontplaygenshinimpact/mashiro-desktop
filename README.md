@@ -357,7 +357,8 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 
 ---
 
-*由 Mashiro 驱动 · 真白陪你上岸*
+*由真白驱动 · 真白陪你上岸*
+
 
 
 
