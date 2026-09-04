@@ -267,7 +267,7 @@ const { config } = await import("../config.mjs");
 if (!config.apiKey || !/^(sk-|deepseek-)/.test(config.apiKey)) {
   console.error(
     "\n❌ 未找到有效的 DeepSeek API Key，无法运行真实评测。\n" +
-    "  请在 D:\\mianshi-agent\\.env 配置 DEEPSEEK_API_KEY=sk-xxx\n" +
+    "  请在项目根目录 .env 配置 DEEPSEEK_API_KEY=sk-xxx\n" +
     "  或设置环境变量 DEEPSEEK_API_KEY（也可复用 opencode 的 key）。\n" +
     "  提示：可用 node scripts/web-task-bench.mjs --dry-run 先校验任务集（无需 key）。\n"
   );

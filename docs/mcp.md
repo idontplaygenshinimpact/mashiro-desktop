@@ -5,7 +5,7 @@
 
 ## 0. 诚实前置说明（两档可用性，先读这个）
 
-本包是**个人秋招数据助手**的分发，不是通用工具。9 个工具全部围绕秋招场景定制（面经/清单/面试/个人数据），
+本包是**个人秋招数据助手**的分发，不是通用工具。13 个工具全部围绕秋招场景定制（面经/清单/面试/个人数据），
 实测（干净环境，无数据无 key）的可用性分两档：
 
 | 档位 | 工具 | 条件 | 实测结果 |
@@ -139,3 +139,4 @@ Windows（npm 全局脚本是 `.cmd`，需经 cmd 转发）：
 - 包名：`mashiro-mcp`（npmjs）/ `@idontplaygenshinimpact/mashiro-mcp`（GitHub Packages）
 - 发布：GitHub Release 自动发布双源（workflow `release.yml`）
 - 源码：`mcp-server.mjs`（MCP SDK + zod 参数校验，9 工具全部只读）
+

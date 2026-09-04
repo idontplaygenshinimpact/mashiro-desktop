@@ -1,11 +1,15 @@
-// 导入 D:\ai-career 的手写/算法题库到 mianshi-agent（challenges 表）
-// 用法: node scripts/import-ai-career.mjs [ai-career 路径]
+// 导入 ai-career 的手写/算法题库到 mianshi-agent（challenges 表）
+// 用法: node scripts/import-ai-career.mjs <ai-career 路径>（必传——不硬编码默认路径）
 // 依赖: esbuild（devDependency）转译 TS 数据文件
 import { readFileSync, existsSync } from "node:fs";
 import { transform } from "esbuild";
 import { importChallengesData } from "../lib/ai-career.mjs";
 
-const CAREER_DIR = process.argv[2] || "D:/ai-career";
+const CAREER_DIR = process.argv[2];
+if (!CAREER_DIR) {
+  console.error("❌ 缺少参数：请传入 ai-career 项目路径（如 node scripts/import-ai-career.mjs D:/ai-career）");
+  process.exit(1);
+}
 const DATA_FILE = `${CAREER_DIR}/src/data/coding-challenges.ts`;
 
 if (!existsSync(DATA_FILE)) {

@@ -1,5 +1,5 @@
 // 项目面试准备技能：基于真实源码生成完整面试准备文档（源码要点 + 全部八股 + 全覆盖拷打问答——可背）
-// 工具（skill__interview_prep__* 命名空间）：
+// 工具（skill__interview-prep__* 命名空间）：
 //   prepare_project_interview：读项目全部核心源码 → subagent 分析（源码要点+八股）→
 //     LLM 生成完整面试准备文档（项目概览/源码要点/全部八股（详细可背）/全覆盖拷打问答）→
 //     存档 output/interview-prep/项目·xxx-面试准备.md
@@ -315,10 +315,11 @@ export const tools = [
   },
 ];
 
-/** 工具路由（skill__interview_prep__* 命名空间） */
+/** 工具路由（skill__interview-prep__* 命名空间） */
 export async function callSkillTool(name, args) {
-  if (name === "skill__interview_prep__prepare_project_interview") {
+  if (name === "skill__interview-prep__prepare_project_interview") {
     return await prepareProjectInterview(args || {});
   }
   return { error: `未知工具: ${name}` };
 }
+

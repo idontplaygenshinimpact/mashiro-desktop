@@ -3,7 +3,7 @@
 > 🎀 桌面 AI **宿主「真白」+ 第一个插件「秋招助手」**。真白是 Electron 桌宠宿主（Live2D / 语音 / 面板框架 / 设置中心），秋招助手是跑在宿主上的能力插件（面经采集 / 模拟面试 / 学习清单 / 复习卡 / 知识库 / 对话 agent / 校招闭环）。
 > 2026-08 起升级为**事件驱动自主桌宠**：感知（Claude Code 会话 watcher）→ 决策（自主规则引擎）→ 装配（场景技能子集）→ 表达（气泡/语音），并落地 **API 契约层（zod）与双层 AI 评测体系（真实消融基线）**。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/mashiro-mcp?color=cb3837&label=mashiro-mcp)](https://www.npmjs.com/package/mashiro-mcp) ![Node](https://img.shields.io/badge/Node-%3E%3D22-5fa04e) ![Tests](https://img.shields.io/badge/tests-924%2B-8a5adc) ![Platform](https://img.shields.io/badge/Windows-10%2F11-0078d6)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/mashiro-mcp?color=cb3837&label=mashiro-mcp)](https://www.npmjs.com/package/mashiro-mcp) ![Node](https://img.shields.io/badge/Node-%3E%3D22-5fa04e) ![Tests](https://img.shields.io/badge/tests-1033%2B-8a5adc) ![Platform](https://img.shields.io/badge/Windows-10%2F11-0078d6)
 
 ---
 
@@ -208,7 +208,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 ├── project-guide-skill/            # 可移植 skill 包（纯提示词，任意 agent 加载即用）
 ├── benchmark/                      # 双层评测数据集（38+16+12+20+12+19）+ 报告 + 趋势
 ├── scripts/                        # 评测/导入/语音/发布工具（50+ 脚本）
-├── tests/                          # 924 用例（90 个测试文件，mock LLM 无 key 可跑）
+├── tests/                          # 1033 用例（108 个测试文件，mock LLM 无 key 可跑；截至 2026-09-04 实测）
 ├── docs/                           # 公开文档（mcp 分发/CC 伴侣/插件架构/技术方案；内部评估审计文档本地留存不上仓库）
 ├── assets/voice/                   # 自训练声线（112 短句 + 26 长句 + nanami 声线）
 └── .github/workflows/              # ci.yml（全量门禁）+ weekly-eval.yml（每周评测）+ release.yml（双源发布）
@@ -292,7 +292,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 | 门禁 | 命令 | 当前状态 |
 |---|---|---|
-| 单元/集成测试 | `npm test` | ✅ **924/924 通过**（892 单元 + 32 集成，90 个测试文件，mock LLM 无 key 可跑） |
+| 单元/集成测试 | `npm test` | ✅ **1033/1033 通过**（998 单元 + 35 集成，108 个测试文件，mock LLM 无 key 可跑） |
 | 类型检查（lib） | `npm run typecheck` | ✅ 0 错误（已提交代码） |
 | 桌面端类型检查 | `npm run typecheck:desktop` | ✅ 0 错误（已提交代码；kanban-api.d.ts 74 方法一致） |
 | Lint | `npm run lint` | ✅ 0 error（已提交代码；warning 若干 no-unused-vars） |
@@ -352,9 +352,12 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 
 - **许可证**：MIT（见 [LICENSE](LICENSE)）
 - **仓库不含**：本地数据（`data/`）、ASR 模型（`models/`）、`.env`（密钥）；**含**自训练声线（`assets/voice/`，开箱即用）
-- **测试**：`npm test` 924 用例全绿（mock LLM，CI 零成本）；评测体系见上文
+- **测试**：`npm test` 1033 用例全绿（mock LLM，CI 零成本）；评测体系见上文
 - **插件化路线**：宿主（真白）+ 插件（秋招助手）架构见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)
 
 ---
 
 *由 Mashiro 驱动 · 真白陪你上岸*
+
+
+

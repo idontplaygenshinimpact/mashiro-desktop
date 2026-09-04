@@ -10,7 +10,7 @@
 | 项 | 现状 | 证据 |
 |---|---|---|
 | Layer A 真实模型 | 讲解质量（客观代码验证 + LLM-as-Judge 四维双评）+ TRACe 材料题 + classify/detect/静态 + CRAG 真实判官 + 判官金标校验（judge-check） | benchmark.mjs（:456 综合分 = solve*0.5+classify*0.15+detect*0.2+static*0.15） |
-| 数据集规模 | questions **14**（code4/coverage5/predict1/trace4）、classify **8**、detect **6**、静态 6（硬编码）、judge-gold **10**、web-tasks **1** | benchmark/*.json |
+| 数据集规模 | questions **38**（code4/coverage5/predict1/trace4）、classify **8**、detect **6**、静态 6（硬编码）、judge-gold **10**、web-tasks **1** | benchmark/*.json |
 | Layer B mock | 10 legacy + 3 面试场景，pass^k、goalState、taxonomy；CI 已接（pass1 全过才绿） | benchmark-agent.mjs、ci.yml |
 | 指标缺口 | 无成本/延迟、无 pass@k、无 EM、无回归对比、无趋势 | 报告只有 json 堆在 reports/ |
 | ⚠️ 关键事实（已核实） | **讲解链路刻意不用 RAG**（主动决策，非缺失）；**RAG 按任务分流保留**：出题/刷题/agent 搜索仍用 `searchKnowledge`，且 agent.mjs 有 `ragEnabled` 开关 | lib/ai.mjs:401-447；lib/interview.mjs:119、lib/quiz.mjs:61、lib/agent.mjs:254 |
@@ -214,3 +214,4 @@ costTokens, costUsd, p50Ms, p95Ms, pass1, failCount, exitCode
 - 若消融 2 结果反直觉（RAG 有提升）：如实修正决策（承认并考虑引入），**不要为了叙事掩盖实验**
 - 门禁分层不是"让 CI 变红"的手段，是让小样本波动不误杀、同 hash 才可比——面试被问"样本这么少怎么统计"就直接答"分层门禁 + 同哈希才比 + 连续两次才升级"
 - 指标是"能讲机制的工程资产"：成本分账（solver vs judge）值得专门讲——证明你清楚评测自己花钱花在哪
+

@@ -1,8 +1,11 @@
 // 验证桌宠快捷菜单 + 手势（Playwright 模拟指针事件）
 import { _electron } from "playwright";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), ".."); // 相对推导（换机器可运行）
 const app = await _electron.launch({
-  executablePath: "D:/mianshi-agent/node_modules/electron/dist/electron.exe",
-  args: ["desktop/main.mjs"], cwd: "D:/mianshi-agent",
+  executablePath: path.join(ROOT, "node_modules", "electron", "dist", "electron.exe"),
+  args: ["desktop/main.mjs"], cwd: ROOT,
 });
 try {
   let win = null;

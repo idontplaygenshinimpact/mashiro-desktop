@@ -1,5 +1,5 @@
 // 项目全面评估技能：基于真实源码生成全面评估报告（8 维度 + 问题清单 + Top 5 改进——强化：分步评估 + 打磨循环）
-// 工具（skill__project_eval__* 命名空间）：
+// 工具（skill__project-eval__* 命名空间）：
 //   evaluate_project：读项目全部核心源码 → subagent 分步评估（8 维度）→ 汇总 →
 //     打磨循环（评审/修正——上下文累积）→ 存档 output/project-evals/项目·xxx-评估报告.md
 import { readFileSync, readdirSync, statSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -207,10 +207,11 @@ export const tools = [
   },
 ];
 
-/** 工具路由（skill__project_eval__* 命名空间） */
+/** 工具路由（skill__project-eval__* 命名空间） */
 export async function callSkillTool(name, args) {
-  if (name === "skill__project_eval__evaluate_project") {
+  if (name === "skill__project-eval__evaluate_project") {
     return await evaluateProject(args || {});
   }
   return { error: `未知工具: ${name}` };
 }
+

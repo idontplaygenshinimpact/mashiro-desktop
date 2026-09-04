@@ -1,5 +1,5 @@
 // 项目面试讲解指南技能：基于真实源码生成 7 段结构化指南（工单 docs/project-guide功能工单.md）
-// 两个动态工具（skill__project_guide__* 命名空间，不改核心工具注册表）：
+// 两个动态工具（skill__project-guide__* 命名空间，不改核心工具注册表）：
 //   read_project_file：白名单项目目录内读源码（路径穿越防护 + 50KB 上限）——多轮反馈用
 //   generate_project_guide：编排（档案 + 关键文件 → LLM 7 段 → 存档 output/project-guides/）
 import { readFileSync, statSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -225,3 +225,4 @@ export const tools = [
     },
   },
 ];
+
