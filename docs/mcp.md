@@ -1,6 +1,6 @@
 # Mashiro MCP 分发文档（npm 包使用指南）
 
-> 真白秋招助手是标准 **MCP Server**：`npm i -g mashiro-mcp` 后，任何支持 MCP 的 AI 工具
+> 真白 · 秋招助手是标准 **MCP Server**：`npm i -g mashiro-mcp` 后，任何支持 MCP 的 AI 工具
 > （Claude Code / Cline / Cursor / OpenCode）都能调用真白的能力——不需要桌宠、不需要本项目代码。
 
 ## 0. 诚实前置说明（两档可用性，先读这个）
@@ -139,5 +139,6 @@ Windows（npm 全局脚本是 `.cmd`，需经 cmd 转发）：
 - 包名：`mashiro-mcp`（npmjs）/ `@idontplaygenshinimpact/mashiro-mcp`（GitHub Packages）
 - 发布：GitHub Release 自动发布双源（workflow `release.yml`）
 - 源码：`mcp-server.mjs`（MCP SDK + zod 参数校验，13 工具全部只读）
+
 
 
