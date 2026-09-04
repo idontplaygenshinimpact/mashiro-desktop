@@ -89,3 +89,17 @@ docs/前端框架版验收标准.md
 docs/强化复习卡片工单.md
 
 docs/项目学习文档工单.md
+
+# 工单/评估报告（内部，不上公开仓库——2026-09 追加）
+docs/项目全面评估报告-2026-09.md
+docs/安全加固工单.md
+docs/数据完整性工单.md
+docs/测试与CI工单.md
+docs/发布与文档工单.md
+docs/性能工单.md
+docs/技术债清理工单.md
+docs/TS升级工单.md
+docs/工单分发总览.md
+docs/收尾工单.md
+docs/subagent打磨质量工单.md
+docs/打磨轮缩水修复工单.md
