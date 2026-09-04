@@ -200,18 +200,24 @@ function SessionView({ session, scores, busy, log, onSubmit, onExit }) {
   }, [session?.round]);
 
   // 语音作答：录音（16k Float32Array）→ speechToText → 填入回答
+  // M10：createScriptProcessor（废弃，Electron 43 下可能录不到声音）→ AudioWorklet（与原生面板同款）
   async function toggleMic() {
     if (recording) { stopAndTranscribe(); return; }
     setMicErr("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000 } });
       const ctx = new AudioContext({ sampleRate: 16000 });
+      // M10②：AudioContext 可能 suspended（浏览器自动暂停策略）——用户手势（点击）后必须 resume 才能出音频
+      if (ctx.state === "suspended") await ctx.resume();
+      // worklet 模块路径：同窗内嵌（面板 panel.html）→ panel-react/dist/；独立窗口 → 本目录
+      const base = window.location.href.includes("panel.html") ? "./panel-react/dist/" : "./";
+      await ctx.audioWorklet.addModule(base + "mic-worklet.js");
       const src = ctx.createMediaStreamSource(stream);
-      const proc = ctx.createScriptProcessor(4096, 1, 1);
+      const node = new AudioWorkletNode(ctx, "mashiro-mic");
       const samples = [];
-      proc.onaudioprocess = (e) => samples.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-      src.connect(proc); proc.connect(ctx.destination);
-      recRef.current = { stream, ctx, src, proc, samples };
+      node.port.onmessage = (e) => samples.push(/** @type {Float32Array} */ (e.data));
+      src.connect(node);
+      recRef.current = { stream, ctx, src, node, samples };
       setRecording(true);
     } catch (e) {
       setMicErr("麦克风不可用：" + String(e?.message || e).slice(0, 60));
@@ -221,8 +227,8 @@ function SessionView({ session, scores, busy, log, onSubmit, onExit }) {
   async function stopAndTranscribe() {
     const rec = recRef.current;
     if (!rec) return;
-    const { stream, ctx, src, proc, samples } = rec;
-    src.disconnect(); proc.disconnect();
+    const { stream, ctx, src, node, samples } = rec;
+    src.disconnect(); node.disconnect();
     stream.getTracks().forEach((t) => t.stop());
     await ctx.close().catch(() => {});
     recRef.current = null;

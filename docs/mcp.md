@@ -82,7 +82,7 @@ Windows（npm 全局脚本是 `.cmd`，需经 cmd 转发）：
 
 `opencode.json` 的 `mcp` 段添加 `{ "type": "stdio", "command": "mashiro-mcp" }` 或按客户端文档配置。
 
-## 3. 工具清单（9 个，全部只读）
+## 3. 工具清单（13 个，全部只读）
 
 | 工具 | 参数 | 用途 |
 |---|---|---|
@@ -138,5 +138,6 @@ Windows（npm 全局脚本是 `.cmd`，需经 cmd 转发）：
 
 - 包名：`mashiro-mcp`（npmjs）/ `@idontplaygenshinimpact/mashiro-mcp`（GitHub Packages）
 - 发布：GitHub Release 自动发布双源（workflow `release.yml`）
-- 源码：`mcp-server.mjs`（MCP SDK + zod 参数校验，9 工具全部只读）
+- 源码：`mcp-server.mjs`（MCP SDK + zod 参数校验，13 工具全部只读）
+
 

@@ -176,7 +176,13 @@ async function runDiscoverHidden() {
     try {
       const { spawn } = await import("node:child_process");
       const { openSync, closeSync } = await import("node:fs");
-      const logFd = openSync(path.join(config.outputDir, "..", "widget-run.log"), "a");
+      const logPath = path.join(config.outputDir, "..", "widget-run.log");
+      // M7：写前轮转（10MB × 5 份）
+      try {
+        const { rotateIfBig } = await import("./lib/log-rotate.mjs");
+        rotateIfBig(logPath, 10);
+      } catch { /* ignore */ }
+      const logFd = openSync(logPath, "a");
       const child = spawn("node", ["discover.mjs"], {
         cwd: import.meta.dirname,
         windowsHide: true,
@@ -455,6 +461,23 @@ server.on("error", (/** @type {NodeJS.ErrnoException} */ err) => {
 
 tryListen();
 
+// M7：tool_results 清理（保留最近 7 天——启动时清一次，防文件无限累积）
+try {
+  const { readdirSync, statSync, rmSync } = await import("node:fs");
+  const trDir = path.join(import.meta.dirname, "data", "tool_results");
+  const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+  let removed = 0;
+  for (const f of readdirSync(trDir)) {
+    try {
+      if (statSync(path.join(trDir, f)).mtimeMs < cutoff) {
+        rmSync(path.join(trDir, f), { force: true });
+        removed++;
+      }
+    } catch { /* ignore */ }
+  }
+  if (removed) console.log(`[widget] tool_results 清理：删除 ${removed} 个过期文件（>7 天）`);
+} catch { /* 目录不存在/权限问题忽略 */ }
+
 // ============ 主动推送：按关注点定时巡检新内容（纵向拆分：逻辑在 lib/patrol.mjs，可独立测试） ============
 const patrol = createPatrol({
   disabled: DISABLE_PATROL,
@@ -585,7 +608,7 @@ const runWeakMerge = async () => {
 };
 if (!DISABLE_BACKGROUND) {
   registerTimer(runWeakMerge, 15 * 1000);           // 启动 15s 后整理一次
-  registerInterval(runWeakMerge, 12 * 3600 * 1000); // 每 12 小时（防累积）
+  registerInterval(runWeakMerge, 24 * 3600 * 1000); // 每 24 小时（性能工单：12h→24h 降频，相似度 O(N²) 随数据量退化）
 }
 // 学习清单分组回填（幂等自愈：修复前写入的条目 grp 全空——按知识树/规则自动归类一次）
 const runPlanGroupBackfill = async () => {

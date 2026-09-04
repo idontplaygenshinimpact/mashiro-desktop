@@ -1,4 +1,26 @@
 // 真白面板 · 个人/题库/专注/初始化域（纵向拆分）
+// ============ 轮询门控（M9：面板隐藏暂停全部 + 重轮询按 Tab 门控；声明必须先于任何 _gatedInterval 调用） ============
+const _pollers = new Map(); // key -> { fn, ms, tab, id }
+let _pollVisible = document.visibilityState !== "hidden";
+let _pollTab = "chat";
+function _gatedInterval(fn, ms, tab = null) {
+  _pollers.set(String(fn.name || fn), { fn, ms, tab, id: null });
+  _syncPollers();
+}
+function _syncPollers() {
+  for (const p of _pollers.values()) {
+    if (p.id) { clearInterval(p.id); p.id = null; }
+    if (_pollVisible && (!p.tab || p.tab === _pollTab)) p.id = setInterval(p.fn, p.ms);
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  _pollVisible = document.visibilityState !== "hidden";
+  _syncPollers();
+});
+window.addEventListener("mianshi:tabchange", (e) => {
+  _pollTab = (e.detail && e.detail.tab) || "chat";
+  _syncPollers();
+});
 // ============ 个人主页（简历存档中心：上传/粘贴/保存/拷打清单） ============
 const profileStatus = $("profile-status");
 const profileResume = $("profile-resume");
@@ -1258,7 +1280,7 @@ async function loadFocusGoalSuggest() {
   } catch { /* ignore */ }
 }
 loadFocusGoalSuggest();
-setInterval(loadFocusGoalSuggest, 60 * 1000); // 每分钟刷新推荐（清单/复习变化后更新）
+setInterval(loadFocusGoalSuggest, 60 * 1000); // 每分钟刷新推荐（清单/复习变化后更新）——M9 门控见文件尾
 
 // 分心黑名单/白名单编辑（清单 Tab 的「🚫 名单」→ 跳设置 Tab；设置 Tab 内直接编辑）
 $("focus-blacklist-toggle")?.addEventListener("click", () => {
@@ -1428,7 +1450,7 @@ checkServiceVersion(); // 检测后台服务是否旧版（防"改完不生效"�
 loadChatHistory(); // 恢复最近对话（刷新不丢）
 loadMascotModels(); // 桌宠形象列表
 loadLoopBar(); // 全局闭环状态条（顶栏下，所有 Tab 可见）
-setInterval(loadLoopBar, 60 * 1000); // 状态条自动刷新
+// 状态条自动刷新（M9 门控见文件顶部）
 loadStudyPlan();
 loadJobs(); // 校招推荐列表
 loadLoop(); // 闭环状态（方向/学习/岗位/面试多向驱动）
@@ -1441,14 +1463,17 @@ loadKbStats(); // 知识库统计
 loadZhenti(); // 笔试真题
 loadOj(); // 专项练习 TOP101
 loadChallenges(); // 手写/算法题库（本地判题闭环）
-// 轮询爬取进度
-setInterval(loadCrawlData, 5000);
-// 轮询审批请求（agent 请求敏感操作时弹出确认条）
-setInterval(checkApprovals, 2000);
-// 轮询提问（agent 的 ask_user / plan_mode 等待点选）
-setInterval(checkAsks, 2000);
-// 轮询任务清单（agent todo 进度）
-setInterval(loadTodo, 3000);
+// 轮询爬取进度（M9：改为门控注册——见文件尾）
+_gatedInterval(loadCrawlData, 5000, "crawl");
+// 轮询审批请求（agent 请求敏感操作时弹出确认条；只受面板可见性门控——审批不可延迟）
+_gatedInterval(checkApprovals, 2000, null);
+// 轮询提问（agent 的 ask_user / plan_mode 等待点选；同上只受可见性门控）
+_gatedInterval(checkAsks, 2000, null);
+// 轮询任务清单（agent todo 进度；仅 study Tab 激活时跑）
+_gatedInterval(loadTodo, 3000, "study");
+// 状态条自动刷新（M9 门控见文件顶端）
+_gatedInterval(loadLoopBar, 60 * 1000, null);
+
 
 
 

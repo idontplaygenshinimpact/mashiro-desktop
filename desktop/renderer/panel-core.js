@@ -29,6 +29,8 @@ function switchTab(name) {
   if (btn) btn.classList.add("active");
   const panel = document.getElementById("tab-" + name);
   if (panel) panel.classList.add("active");
+  // 广播 tab 切换（M9：panel-rest 轮询按 Tab 门控——非当前 Tab 的轮询暂停）
+  window.dispatchEvent(new CustomEvent("mianshi:tabchange", { detail: { tab: name } }));
   if (name === "interview") { loadIvWeakChips(); loadIvResumeAuto(); loadIvResume(); loadIvHistory(); }
   if (name === "study") { loadStudyPlan(); loadFocus(); }
   if (name === "crawl") { loadCrawlData(); loadRss(); }
@@ -50,15 +52,19 @@ const rendererState = { interview: "native", review: "native" };
 const reactRoot = { current: null }; // React root 引用（对称卸载）
 const vueApp = { current: null };    // Vue app 引用（对称卸载）
 
-// 等待框架 bundle 就绪（module script 是 deferred——点击可能早于 bundle 执行；轮询 ≤5s 自动挂载）
-function waitBundle(kind, timeout = 5000) {
-  return new Promise((resolve) => {
-    const t0 = Date.now();
-    const iv = setInterval(() => {
-      const ready = kind === "react" ? window.__mountReactPanel : window.__mountVueReview;
-      if (ready || Date.now() - t0 > timeout) { clearInterval(iv); resolve(!!ready); }
-    }, 100);
-  });
+// 按需加载框架 bundle（M9：首屏不加载——切到对应面板才 import；动态 import 是 module 脚本，同源 CSP OK）
+async function ensureBundle(kind) {
+  if (kind === "react") {
+    if (window.__mountReactPanel) return true;
+    try { await import("./panel-react/dist/assets/react-panel.js"); return !!window.__mountReactPanel; }
+    catch (e) { console.warn("[panel] React bundle 加载失败:", e); return false; }
+  }
+  if (kind === "vue") {
+    if (window.__mountVueReview) return true;
+    try { await import("./panel-vue-review/dist/assets/vue-review.js"); return !!window.__mountVueReview; }
+    catch (e) { console.warn("[panel] Vue bundle 加载失败:", e); return false; }
+  }
+  return false;
 }
 
 async function switchRenderer(tab, mode) {
@@ -67,8 +73,8 @@ async function switchRenderer(tab, mode) {
     const react = document.getElementById("interview-react");
     if (!native || !react) return;
     if (mode === "react") {
-      const ready = await waitBundle("react"); // 等待 bundle 就绪（首次 204KB 加载）
-      if (!ready) { window.kanban?.notify?.("🎨 渲染层", "React 版加载超时，请刷新面板重试"); return; }
+      const ready = await ensureBundle("react");
+      if (!ready) { window.kanban?.notify?.("🎨 渲染层", "React 版加载失败，请刷新面板重试"); return; }
       native.style.display = "none";
       react.style.display = "";
       if (!reactRoot.current) {
@@ -89,8 +95,8 @@ async function switchRenderer(tab, mode) {
     const vue = document.getElementById("review-vue");
     if (!native || !vue) return;
     if (mode === "vue") {
-      const ready = await waitBundle("vue");
-      if (!ready) { window.kanban?.notify?.("🎨 渲染层", "Vue 版加载超时，请刷新面板重试"); return; }
+      const ready = await ensureBundle("vue");
+      if (!ready) { window.kanban?.notify?.("🎨 渲染层", "Vue 版加载失败，请刷新面板重试"); return; }
       native.style.display = "none";
       vue.style.display = "";
       if (!vueApp.current) {

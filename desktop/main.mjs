@@ -46,6 +46,13 @@ try {
   const origErr = console.error.bind(console);
   console.log = (...a) => { origLog(...a); logStream.write(`[${ts()}] ${a.map(String).join(" ")}\n`); };
   console.error = (...a) => { origErr(...a); logStream.write(`[${ts()}] [ERR] ${a.map(String).join(" ")}\n`); };
+  // M7：日志轮转（10MB × 5 份——每小时检查，防 append 无轮转磁盘膨胀）
+  const LOG_PATH = path.join(process.env.MIANSHI_DATA_DIR || path.join(ROOT, "data"), "desktop-main.log");
+  setInterval(() => {
+    import("../lib/log-rotate.mjs").then(({ rotateIfBig }) => {
+      if (rotateIfBig(LOG_PATH, 10)) console.log("[main] desktop-main.log 已轮转");
+    }).catch(() => {});
+  }, 3600 * 1000);
 } catch { /* 日志失败不影响运行 */ }
 
 // 启动时读取上次保存的桌宠形象（默认真白·旅行装；面板可切换并持久化）

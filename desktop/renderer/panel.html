@@ -881,8 +881,7 @@
   <script src="vad.js"></script>
   <script src="panel-rest.js"></script>
   <!-- 同窗内嵌（方案 D）：React/Vue bundle 参数化入口——有 #root/#app 挂独立窗口，panel-core 调 __mount* 挂同窗容器 -->
-  <script type="module" src="panel-react/dist/assets/react-panel.js"></script>
-  <script type="module" src="panel-vue-review/dist/assets/vue-review.js"></script>
+  <!-- 同窗内嵌（方案 D）：React/Vue bundle 动态 import（M9——首屏不加载，切到对应面板才按需加载） -->
   </body>
 </html>
 
