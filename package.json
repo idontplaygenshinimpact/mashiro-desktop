@@ -135,7 +135,7 @@
     "globals": "^17.9.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "sharp": "^0.35.3",
