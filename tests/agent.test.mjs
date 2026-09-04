@@ -9,6 +9,16 @@ const dbDir = setupTempDb("agent");
 process.env.MIANSHI_OUTPUT_DIR = path.join(dbDir, "output");
 mockLLM();
 mockFetchPage();
+// toolFetchPage 用 Node fetch 直连（不走 fetchPage mock）——mock 全局 fetch 拦截测试域名 x.com
+// 返回 404，让 fetch_page 工具稳定走"页面无效"路径（修复：此前依赖真实网络——
+// 本地被墙请求失败碰巧过、CI 有外网返回 200 导致 trace 记为成功 → CI 挂）
+const origFetch = globalThis.fetch;
+globalThis.fetch = async (url, opts) => {
+  if (String(url).startsWith("http://x.com/")) {
+    return { ok: false, status: 404, statusText: "Not Found", url: String(url), text: async () => "Not Found" };
+  }
+  return origFetch(url, opts);
+};
 // mock web-search：正常 query 委托真实实现（其内部 fetchPage 已被 mockFetchPage 接管），
 // 含 "TOOL_ERROR" 的 sentinel query 抛异常 → 用于验证 tool_error 决策路径（ledger 记账）
 const realWebSearch = await import("../lib/web-search.mjs");
