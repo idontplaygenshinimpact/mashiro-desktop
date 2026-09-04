@@ -201,18 +201,6 @@ async function runDiscoverHidden() {
   });
 }
 
-// Windows toast 备用（node-notifier 在某些环境 silent）
-function _toastFallback(title, message) {  const ps = `
-[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
-$template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-$textNodes = $template.GetElementsByTagName('text')
-$textNodes.Item(0).AppendChild($template.CreateTextNode('${title}')) > $null
-$textNodes.Item(1).AppendChild($template.CreateTextNode('${message}')) > $null
-$toast = [Windows.UI.Notifications.ToastNotification]::new($template)
-[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Mashiro').Show($toast)`;
-  exec(`powershell -NoProfile -Command "${ps.replace(/"/g, '\\"')}"`, { windowsHide: true }, () => {});
-}
-
 // ============ 状态跟踪（检测新趋势） ============
 
 const state = { lastScan: null, seenFiles: new Set() };

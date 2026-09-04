@@ -88,6 +88,36 @@ test("③b 逃逸反例：Promise.constructor 链触达 worker 但拿不到危�
   assert.equal(rOk.success, true, "正常判题链路不受逃逸防护影响");
 });
 
+test("③c 逃逸反例：process.getBuiltinModule 不可用（安全工单 S2——Node≥22.3 逃逸路径）", async () => {
+  // Node ≥22.3 的 process.getBuiltinModule 可绕过 require 限制读宿主文件/执行命令——
+  // 与 exit/kill 同列表遮蔽（worker 入口 defineProperty undefined）
+  const r = await runInSandbox(code({
+    userCode: `function solution() {
+      try {
+        const p = Promise.constructor("return process")();
+        const fs = p.getBuiltinModule ? p.getBuiltinModule("fs") : null;
+        return fs ? "GOT_FS" : "NO_FS";
+      } catch (e) { return "ERR:" + e.message; }
+    }`,
+    body: `__mashiroAssert9f3a__(solution() === "NO_FS", "getBuiltinModule 不可用（遮蔽为 undefined）");`,
+  }));
+  assert.equal(r.ok, true);
+  assert.equal(r.success, true, `getBuiltinModule 拿不到 fs（实际: ${r.error || "success"}）`);
+});
+
+test("③d 逃逸反例：断言不可伪造（安全工单 S3——覆盖断言抛 TypeError 而非静默失效）", async () => {
+  // 此前 __mashiroAssert9f3a__ 是 sandbox 全局可写属性——userCode 可覆盖为 (c,l)=>{} 使断言
+  // 静默失效（伪造通过）。修复：defineProperty writable:false + configurable:false——
+  // 严格模式（"use strict"）下赋值抛 TypeError——伪造尝试导致报错而非静默成功
+  const r = await runInSandbox(code({
+    userCode: "function solution(x) { return x; }\n__mashiroAssert9f3a__ = (c, l) => {};", // 伪造尝试
+    body: `__mashiroAssert9f3a__(solution(1) === 1, "真断言仍执行");`,
+  }));
+  assert.equal(r.ok, true);
+  assert.equal(r.success, false, "伪造导致报错（断言不可伪造——不是静默通过）");
+  assert.ok(/TypeError|not writable|Cannot assign|read only|Cannot redefine/i.test(r.error || ""), `报错信息（实际: ${r.error}）`);
+});
+
 test("④ 死循环：while(true) → 超时强制终止（不挂死）", async () => {
   const t0 = Date.now();
   const r = await runInSandbox({

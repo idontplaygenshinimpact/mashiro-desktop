@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Vue 复习卡（开发）</title>
+  <!-- 安全工单 M4：CSP 与其他窗口一致（default-src 'self'——防注入脚本/外链加载） -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src http://127.0.0.1:8899 http://localhost:8899; font-src 'self' data:;">
 </head>
 <body>
   <div id="app"></div>

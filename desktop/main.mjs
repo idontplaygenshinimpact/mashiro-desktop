@@ -166,6 +166,7 @@ function createWindow() {
   // 创建即锁死尺寸（min=max=初始值），杜绝任何窗口尺寸变化
   win.setMinimumSize(W, H);
   win.setMaximumSize(W, H);
+  registerWindow(win); // 安全工单 S4：登记已知窗口 + 外链走系统浏览器 + 导航限制
 
   win.setAlwaysOnTop(true, "screen-saver");
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -194,7 +195,36 @@ function createWindow() {
 
 // ---------- 托盘 ----------
 // 桌宠快捷菜单 → 面板指定 Tab（chat/settings 等）
-ipcMain.handle("panel:goto-tab", (e, { tab }) => {
+// ---------- IPC 来源校验（安全工单 S4：全部 IPC handler 校验 sender 是已知窗口） ----------
+// 此前所有 ipcMain.handle 无 e.sender 校验——任意渲染进程（含被 XSS 的窗口/外部加载的页面）
+// 都能调用主进程能力（读文件/执行命令/访问 widget）。修复：KNOWN_WINDOWS 登记所有
+// 本应用创建的窗口 webContents.id——safeHandle 包装器统一校验（伪造 sender 的调用被拒）
+const KNOWN_WINDOWS = new Set();
+function registerWindow(win) {
+  if (!win || win.isDestroyed()) return;
+  KNOWN_WINDOWS.add(win.webContents.id);
+  win.webContents.on("destroyed", () => KNOWN_WINDOWS.delete(win.webContents.id));
+  // 外链一律走系统浏览器（安全工单 S4：不新开 Electron 窗口——防 window.open 逃逸）
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    try { if (/^https?:/i.test(url)) shell.openExternal(url); } catch { /* ignore */ }
+    return { action: "deny" };
+  });
+  // 页面导航限制：只允许本应用页面（file:// 或本地 dev server）——外链导航拦截
+  win.webContents.on("will-navigate", (e, url) => {
+    const ok = url.startsWith("file://") || url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost");
+    if (!ok) { e.preventDefault(); try { if (/^https?:/i.test(url)) shell.openExternal(url); } catch { /* ignore */ } }
+  });
+}
+function safeHandle(channel, fn) {
+  ipcMain.handle(channel, (e, ...args) => {
+    if (!KNOWN_WINDOWS.has(e.sender.id)) {
+      console.warn(`[ipc] 拒绝非法来源调用 ${channel}（sender ${e.sender.id} 非已知窗口）`);
+      throw new Error("IPC 来源非法");
+    }
+    return fn(e, ...args);
+  });
+}
+safeHandle("panel:goto-tab", (e, { tab }) => {
   if (panelWin && !panelWin.isDestroyed()) {
     panelWin.webContents.send("panel:goto-tab", { tab: String(tab || "") });
   }
@@ -202,11 +232,11 @@ ipcMain.handle("panel:goto-tab", (e, { tab }) => {
 });
 
 // 渲染层切换（方案 B：面板内下拉入口）——复用独立窗口创建（React 模拟面试 / Vue 复习卡）
-ipcMain.handle("panel:open-react", () => {
+safeHandle("panel:open-react", () => {
   createReactPanelWindow();
   return { ok: true };
 });
-ipcMain.handle("panel:open-vue", () => {
+safeHandle("panel:open-vue", () => {
   createVueReviewWindow();
   return { ok: true };
 });
@@ -320,14 +350,14 @@ function createTray() {
 }
 
 // 桌宠右键 → 弹出换肤菜单（与托盘同一菜单）
-ipcMain.handle("mascot:menu", async () => {
+safeHandle("mascot:menu", async () => {
   await buildTrayMenu();
   tray?.popUpContextMenu();
   return { ok: true };
 });
 
 // ---------- IPC ----------
-ipcMain.handle("widget:data", async () => {
+safeHandle("widget:data", async () => {
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/widget-data`);
     return await res.json();
@@ -336,7 +366,7 @@ ipcMain.handle("widget:data", async () => {
   }
 });
 
-ipcMain.handle("widget:run-discover", async () => {
+safeHandle("widget:run-discover", async () => {
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/run-discover`);
     return await res.json();
@@ -345,7 +375,7 @@ ipcMain.handle("widget:run-discover", async () => {
   }
 });
 
-ipcMain.handle("widget:progress", async () => {
+safeHandle("widget:progress", async () => {
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/progress`);
     return await res.json();
@@ -375,9 +405,9 @@ async function widgetGet(pathname) {
     return { error: "widget 服务未启动" };
   }
 }
-ipcMain.handle("widget:chat", (e, { message, history, sessionId }) => widgetPost("/api/chat", { message, history, sessionId }));
+safeHandle("widget:chat", (e, { message, history, sessionId }) => widgetPost("/api/chat", { message, history, sessionId }));
 // 对话（流式过程版）：agent 工具事件实时转发（token 定向，复用流式隔离模式）
-ipcMain.handle("widget:chat-stream", async (e, { message, history, sessionId, __streamToken: token }) => {
+safeHandle("widget:chat-stream", async (e, { message, history, sessionId, __streamToken: token }) => {
   const chan = token ? `chat-chunk:${token}` : "chat-chunk";
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/chat-stream`, {
@@ -410,30 +440,30 @@ ipcMain.handle("widget:chat-stream", async (e, { message, history, sessionId, __
     return { ok: false, error: err.message };
   }
 });
-ipcMain.handle("widget:chat-history", () => widgetGet("/api/chat-history"));
-ipcMain.handle("widget:chat-sessions", () => widgetGet("/api/chat/sessions"));
-ipcMain.handle("widget:chat-messages", (_e, { sessionId }) => widgetGet(`/api/chat/messages?session=${encodeURIComponent(sessionId || "default")}`));
-ipcMain.handle("widget:chat-session-delete", (_e, { id }) => {
+safeHandle("widget:chat-history", () => widgetGet("/api/chat-history"));
+safeHandle("widget:chat-sessions", () => widgetGet("/api/chat/sessions"));
+safeHandle("widget:chat-messages", (_e, { sessionId }) => widgetGet(`/api/chat/messages?session=${encodeURIComponent(sessionId || "default")}`));
+safeHandle("widget:chat-session-delete", (_e, { id }) => {
   return widgetFetch(`${WIDGET_URL}/api/chat/session`, {
     method: "DELETE", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id }),
   }).then((r) => r.json());
 });
-ipcMain.handle("widget:study-plan", () => widgetGet("/api/study-plan"));
-ipcMain.handle("widget:interview-history", () => widgetGet("/api/interview/history"));
-ipcMain.handle("interview:status", () => widgetGet("/api/interview/status"));
-ipcMain.handle("widget:stats", () => widgetGet("/api/stats"));
-ipcMain.handle("widget:observability", () => widgetGet("/api/observability"));
+safeHandle("widget:study-plan", () => widgetGet("/api/study-plan"));
+safeHandle("widget:interview-history", () => widgetGet("/api/interview/history"));
+safeHandle("interview:status", () => widgetGet("/api/interview/status"));
+safeHandle("widget:stats", () => widgetGet("/api/stats"));
+safeHandle("widget:observability", () => widgetGet("/api/observability"));
 // 自动巡检配置：无参数 GET 读取，有参数 POST 修改（即时重排定时器）
-ipcMain.handle("widget:patrol-config", (e, cfg) => (cfg && Object.keys(cfg).length ? widgetPost("/api/patrol-config", cfg) : widgetGet("/api/patrol-config")));
-ipcMain.handle("widget:patrol-run", () => widgetPost("/api/patrol-run", {}));
+safeHandle("widget:patrol-config", (e, cfg) => (cfg && Object.keys(cfg).length ? widgetPost("/api/patrol-config", cfg) : widgetGet("/api/patrol-config")));
+safeHandle("widget:patrol-run", () => widgetPost("/api/patrol-run", {}));
 // 本地知识库（RAG）开关：无参数 GET 读取，有参数 POST 修改
-ipcMain.handle("widget:settings-rag", (e, cfg) => (cfg && Object.keys(cfg).length ? widgetPost("/api/settings/rag", cfg) : widgetGet("/api/settings/rag")));
-ipcMain.handle("widget:interview-notes", (e, { topics }) => widgetPost("/api/interview-notes", { topics }));
-ipcMain.handle("widget:study-detail", (e, { id }) => widgetGet(`/api/study-detail?id=${encodeURIComponent(id)}`));
+safeHandle("widget:settings-rag", (e, cfg) => (cfg && Object.keys(cfg).length ? widgetPost("/api/settings/rag", cfg) : widgetGet("/api/settings/rag")));
+safeHandle("widget:interview-notes", (e, { topics }) => widgetPost("/api/interview-notes", { topics }));
+safeHandle("widget:study-detail", (e, { id }) => widgetGet(`/api/study-detail?id=${encodeURIComponent(id)}`));
 // 流式讲解：main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）
 // 并发隔离：preload 每次调用带 __streamToken，chunk 定向发送到 `channel:token`（曾广播串流）
-ipcMain.handle("widget:study-detail-stream", async (e, { id, noSimilar, __streamToken: token }) => {
+safeHandle("widget:study-detail-stream", async (e, { id, noSimilar, __streamToken: token }) => {
   const chan = token ? `study-detail-chunk:${token}` : "study-detail-chunk";
   try {
     // noSimilar=1（重新生成）：跳过相似条目存档复用，强制生成本条自己的讲解
@@ -467,7 +497,7 @@ ipcMain.handle("widget:study-detail-stream", async (e, { id, noSimilar, __stream
   }
 });
 // 讲解追问补充：main 转发 widget append-stream SSE → 渲染层（独立事件通道）
-ipcMain.handle("widget:study-append-stream", async (e, { id, question, __streamToken: token }) => {
+safeHandle("widget:study-append-stream", async (e, { id, question, __streamToken: token }) => {
   const chan = token ? `study-append-chunk:${token}` : "study-append-chunk";
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/study-append-stream?id=${encodeURIComponent(id)}&question=${encodeURIComponent(question)}`);
@@ -497,7 +527,7 @@ ipcMain.handle("widget:study-append-stream", async (e, { id, question, __streamT
   }
 });
 // 整理讲解全文：main 转发 widget consolidate-stream SSE → 渲染层（独立事件通道）
-ipcMain.handle("widget:study-consolidate-stream", async (e, { id, __streamToken: token }) => {
+safeHandle("widget:study-consolidate-stream", async (e, { id, __streamToken: token }) => {
   const chan = token ? `study-consolidate-chunk:${token}` : "study-consolidate-chunk";
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/study-consolidate-stream?id=${encodeURIComponent(id)}`);
@@ -527,7 +557,7 @@ ipcMain.handle("widget:study-consolidate-stream", async (e, { id, __streamToken:
   }
 });
 // 多条目归并：main 转发 widget cluster-stream SSE → 渲染层（独立事件通道）
-ipcMain.handle("widget:study-cluster-stream", async (e, { ids, __streamToken: token }) => {
+safeHandle("widget:study-cluster-stream", async (e, { ids, __streamToken: token }) => {
   const chan = token ? `study-cluster-chunk:${token}` : "study-cluster-chunk";
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/study-cluster-stream`, {
@@ -560,22 +590,22 @@ ipcMain.handle("widget:study-cluster-stream", async (e, { ids, __streamToken: to
     return { ok: false, error: err.message };
   }
 });
-ipcMain.handle("widget:study-generate", () => widgetPost("/api/study-generate"));
-ipcMain.handle("widget:study-check", (e, { id, done }) => widgetGet(`/api/study-check?id=${encodeURIComponent(id)}&done=${done ? "1" : "0"}`));
-ipcMain.handle("widget:study-review", () => widgetPost("/api/study-review"));
-ipcMain.handle("widget:study-answer", (e, { answers }) => widgetPost("/api/study-answer", { answers }));
+safeHandle("widget:study-generate", () => widgetPost("/api/study-generate"));
+safeHandle("widget:study-check", (e, { id, done }) => widgetGet(`/api/study-check?id=${encodeURIComponent(id)}&done=${done ? "1" : "0"}`));
+safeHandle("widget:study-review", () => widgetPost("/api/study-review"));
+safeHandle("widget:study-answer", (e, { answers }) => widgetPost("/api/study-answer", { answers }));
 
 // 模拟面试转发
-ipcMain.handle("interview:start", (e, cfg) => widgetPost("/api/interview/start", cfg || {}));
-ipcMain.handle("interview:answer", (e, { answer }) => widgetPost("/api/interview/answer", { answer }));
-ipcMain.handle("interview:end", () => widgetPost("/api/interview/end", {}));
+safeHandle("interview:start", (e, cfg) => widgetPost("/api/interview/start", cfg || {}));
+safeHandle("interview:answer", (e, { answer }) => widgetPost("/api/interview/answer", { answer }));
+safeHandle("interview:end", () => widgetPost("/api/interview/end", {}));
 
 // 复习转发
-        ipcMain.handle("review:due", () => widgetGet("/api/review/due"));
-        ipcMain.handle("review:submit", (e, { id, rating }) => widgetPost("/api/review/submit", { id, rating }));
-        ipcMain.handle("widget:mastery", () => widgetGet("/api/mastery"));
+        safeHandle("review:due", () => widgetGet("/api/review/due"));
+        safeHandle("review:submit", (e, { id, rating }) => widgetPost("/api/review/submit", { id, rating }));
+        safeHandle("widget:mastery", () => widgetGet("/api/mastery"));
 
-ipcMain.handle("widget:notify", async (e, { title, message }) => {
+safeHandle("widget:notify", async (e, { title, message }) => {
   // 系统通知（复用 node-notifier 同款 toast）
   // 安全：参数经 base64 + -EncodedCommand 传递（旧实现直接拼 PS 字符串有注入面）
   console.log(`[kanban] 通知: ${title} — ${String(message || "").slice(0, 40)}`);
@@ -587,14 +617,14 @@ ipcMain.handle("widget:notify", async (e, { title, message }) => {
   return { ok: true };
 });
 
-ipcMain.handle("window:quit", () => app.quit());
+safeHandle("window:quit", () => app.quit());
 
 // 一键重启（面板按钮）：杀全部 widget 子进程（含外部残留）→ relaunch 自身
 // 渲染产物防呆 / 杀进程逻辑在 desktop/lib/restart.mjs（可单测）
 const RENDERER_DIR = path.join(__dirname, "renderer");
 const RENDERER_SRC = ["app.js", "index.html", "style.css"];
 
-ipcMain.handle("app:restart", async () => {
+safeHandle("app:restart", async () => {
   // 任何一步失败都不静默：返回错误让面板提示（此前重建步骤 EINVAL 抛错被吞 → 按钮卡死无重启）
   try {
     // 渲染源码比 bundle 新 → 先自动重建（改代码后点面板重启即生效，无需手动构建）
@@ -615,7 +645,7 @@ ipcMain.handle("app:restart", async () => {
 });
 
 // 打开指定文件（用系统默认程序，如 md 编辑器/浏览器）
-ipcMain.handle("window:open-file", (e, { filePath }) => {
+safeHandle("window:open-file", (e, { filePath }) => {
   if (!filePath) return { ok: false, error: "no path" };
   // 白名单：仅允许打开 ROOT/output 与 ROOT/data 内的文件（防任意路径打开/执行）
   // Windows 路径大小写不敏感 → 比较前统一 toLowerCase（分隔符处理保持）
@@ -632,7 +662,7 @@ ipcMain.handle("window:open-file", (e, { filePath }) => {
 });
 
 // 打开输出目录（explorer）
-ipcMain.handle("window:open-output", () => {
+safeHandle("window:open-output", () => {
   safeSpawn("explorer", [path.join(ROOT, "output")]);
   return { ok: true };
 });
@@ -647,7 +677,7 @@ async function getTtsEdge() {
   return ttsEdge;
 }
 // 固定语音包场景播放（无文本事件：点击/托盘等 → 直接播预设日语台词，零延迟）
-ipcMain.handle("window:play-scene", async (e, { scene }) => {
+safeHandle("window:play-scene", async (e, { scene }) => {
   try {
     const vp = await import("./voice-pack.mjs");
     const r = vp.playScene(String(scene || ""));
@@ -657,7 +687,7 @@ ipcMain.handle("window:play-scene", async (e, { scene }) => {
   }
 });
 // 长句场景播放（GPT-SoVITS 真白声线长句：日常关怀/完成庆祝等；无长句回退短句）
-ipcMain.handle("window:play-long-scene", async (e, { scene }) => {
+safeHandle("window:play-long-scene", async (e, { scene }) => {
   try {
     const vp = await import("./voice-pack.mjs");
     const r = vp.playLongScene(String(scene || ""));
@@ -667,7 +697,7 @@ ipcMain.handle("window:play-long-scene", async (e, { scene }) => {
   }
 });
 // 单击应答：随机播一条短句（2-8s 快速反馈；长句留给空闲关怀/庆祝）
-ipcMain.handle("window:play-click-short", async () => {
+safeHandle("window:play-click-short", async () => {
   try {
     const vp = await import("./voice-pack.mjs");
     const r = vp.playClickShort();
@@ -677,7 +707,7 @@ ipcMain.handle("window:play-click-short", async () => {
   }
 });
 // 长句应答：随机播一条新合成长句（GPT-SoVITS 27-36s；空闲关怀/庆祝等"说一段话"场合）
-ipcMain.handle("window:play-click-long", async () => {
+safeHandle("window:play-click-long", async () => {
   try {
     const vp = await import("./voice-pack.mjs");
     const r = vp.playClickLong();
@@ -703,29 +733,29 @@ function saveMusicState(extra = {}) {
 async function musicApi() {
   return await import("../lib/music.mjs");
 }
-ipcMain.handle("music:play", async (e, { file, loop } = {}) => {
+safeHandle("music:play", async (e, { file, loop } = {}) => {
   const m = await musicApi();
   return m.playMusic(file || "", { loop });
 });
-ipcMain.handle("music:stop", async () => {
+safeHandle("music:stop", async () => {
   const m = await musicApi();
   return m.stopMusic();
 });
-ipcMain.handle("music:next", async () => {
+safeHandle("music:next", async () => {
   const m = await musicApi();
   return m.nextMusic();
 });
-ipcMain.handle("music:state", async () => {
+safeHandle("music:state", async () => {
   const m = await musicApi();
   return m.getMusicState();
 });
-ipcMain.handle("music:volume", async (e, { volume } = {}) => {
+safeHandle("music:volume", async (e, { volume } = {}) => {
   const m = await musicApi();
   const r = m.setMusicVolume(volume);
   if (r.ok) saveMusicState({ volume: m.getMusicState().volume });
   return r;
 });
-ipcMain.handle("music:autoplay", async (e, { on } = {}) => {
+safeHandle("music:autoplay", async (e, { on } = {}) => {
   const m = await musicApi();
   const r = m.setMusicAutoplay(on);
   if (r.ok) saveMusicState({ autoplay: !!on });
@@ -745,7 +775,7 @@ async function initMusic() {
   } catch { /* ignore */ }
 }
 // 语音全局开关：面板 🔊 切换 → 广播到所有窗口（桌宠 app.js 订阅同步静音/恢复）
-ipcMain.handle("voice:set", (e, enabled) => {
+safeHandle("voice:set", (e, enabled) => {
   const on = !!enabled;
   for (const w of BrowserWindow.getAllWindows()) {
     if (w && !w.isDestroyed()) w.webContents.send("voice-changed", on);
@@ -788,7 +818,7 @@ function failAllPending(msg) {
   asrPending.clear();
 }
 
-ipcMain.handle("speech:transcribe", async (e, { audio }) => {
+safeHandle("speech:transcribe", async (e, { audio }) => {
   try {
     if (!audio || !(audio instanceof Float32Array) || audio.length < 1600) {
       console.log("[speech] 拒绝音频:", audio ? `${audio.constructor?.name} len=${audio.length}` : "null");
@@ -867,7 +897,7 @@ async function parseDocFile(ext, data) {
 }
 
 // 简历文件解析（PDF/docx）：Node 端本地解析
-ipcMain.handle("resume:parse-file", async (e, { name, data }) => {
+safeHandle("resume:parse-file", async (e, { name, data }) => {
   const n = String(name || "");
   const ext = n.slice(n.lastIndexOf(".")).toLowerCase();
   try {
@@ -878,7 +908,7 @@ ipcMain.handle("resume:parse-file", async (e, { name, data }) => {
 });
 
 // 面经导入文档解析：md/txt/html/docx/pdf → 纯文本（面板「📥 导入面经」用）
-ipcMain.handle("import:parse-file", async (e, { name, data }) => {
+safeHandle("import:parse-file", async (e, { name, data }) => {
   const n = String(name || "");
   const ext = n.slice(n.lastIndexOf(".")).toLowerCase();
   try {
@@ -908,7 +938,7 @@ ipcMain.handle("import:parse-file", async (e, { name, data }) => {
   }
 });
 
-ipcMain.handle("window:speak", async (e, { text }) => {
+safeHandle("window:speak", async (e, { text }) => {
   if (!text || !String(text).trim()) return { ok: false };
   // 全部日语预设：按文本关键词匹配语音包场景 → 播日语 wav；未命中播 ack 通用应答
   // 不做任何实时 TTS 合成（内容对不上且开销大）
@@ -927,7 +957,7 @@ ipcMain.handle("window:speak", async (e, { text }) => {
 // 两阶段流水线：tts:synth 准备音频（预设命中→返回资产路径；未命中→合成写临时文件）→ tts:play-file 播放（播完 resolve）
 // 渲染层在播放当前句时预取下一句（合成与播放重叠，掩盖合成延迟）
 let ttsPlayingProc = null;
-ipcMain.handle("tts:synth", async (_e, { text }) => {
+safeHandle("tts:synth", async (_e, { text }) => {
   const clean = String(text || "").trim().slice(0, 60);
   if (!clean) return { ok: false, error: "empty" };
   try {
@@ -953,7 +983,7 @@ ipcMain.handle("tts:synth", async (_e, { text }) => {
     return { ok: false, error: String(err?.message || err).slice(0, 120) };
   }
 });
-ipcMain.handle("tts:play-file", async (_e, { path: wavPath }) => {
+safeHandle("tts:play-file", async (_e, { path: wavPath }) => {
   if (!wavPath || !String(wavPath).trim()) return { ok: false, error: "no path" };
   try {
     const { resolveFfplay } = await import("./voice-pack.mjs");
@@ -974,20 +1004,20 @@ ipcMain.handle("tts:play-file", async (_e, { path: wavPath }) => {
     return { ok: false, error: String(err?.message || err).slice(0, 120) };
   }
 });
-ipcMain.handle("tts:speak-stop", () => {
+safeHandle("tts:speak-stop", () => {
   if (ttsPlayingProc) { try { ttsPlayingProc.kill(); } catch { /* ignore */ } ttsPlayingProc = null; }
   return { ok: true };
 });
 
 // ---------- 桌宠形象（Live2D 模型切换） ----------
 // 模型枚举/持久化在 lib/mascot-models.mjs（纯函数可测）；主进程只做 IPC 与广播
-ipcMain.handle("mascot:models", async () => {
+safeHandle("mascot:models", async () => {
   const { scanMascotModels, getCurrentModel } = await import("../lib/mascot-models.mjs");
   const list = scanMascotModels();
   return { ok: true, models: list, current: getCurrentModel(list) };
 });
 
-ipcMain.handle("mascot:set-model", async (e, { path: modelPath }) => {
+safeHandle("mascot:set-model", async (e, { path: modelPath }) => {
   try {
     const { scanMascotModels, saveCurrentModel } = await import("../lib/mascot-models.mjs");
     const list = scanMascotModels();
@@ -1006,7 +1036,7 @@ ipcMain.handle("mascot:set-model", async (e, { path: modelPath }) => {
 });
 
 // 渲染层模型加载完成后，通知主进程显示桌宠窗口（尺寸已固定锁定）
-ipcMain.handle("window:fit", async () => {
+safeHandle("window:fit", async () => {
   if (!win) return { ok: false };
   if (mascotHidden) return { ok: true }; // 面板打开中，不显示桌宠
   const firstShow = !fitReceived;
@@ -1063,6 +1093,7 @@ function createReactPanelWindow() {
     },
   });
   reactPanelWin.loadFile(path.join(__dirname, "renderer", "panel-react", "dist", "index.html"));
+  registerWindow(reactPanelWin); // 安全工单 S4
   reactPanelWin.on("closed", () => { reactPanelWin = null; });
   return reactPanelWin;
 }
@@ -1100,6 +1131,7 @@ function createVueReviewWindow() {
     },
   });
   vueReviewWin.loadFile(path.join(__dirname, "renderer", "panel-vue-review", "dist", "index.html"));
+  registerWindow(vueReviewWin); // 安全工单 S4
   vueReviewWin.on("closed", () => { vueReviewWin = null; });
   return vueReviewWin;
 }
@@ -1152,6 +1184,7 @@ function createPanelWindow() {
     },
   });
   panelWin.loadFile(path.join(__dirname, "renderer", "panel.html"));
+  registerWindow(panelWin); // 安全工单 S4
   panelWin.webContents.on("console-message", (e, level, message) => {
     console.log(`[panel] ${message}`);
   });
@@ -1199,7 +1232,7 @@ function showMascot() {
 }
 
 // 面板窗口开关（角色点击/托盘触发）
-ipcMain.handle("window:toggle-panel", () => {
+safeHandle("window:toggle-panel", () => {
   if (panelWin && !panelWin.isDestroyed() && panelWin.isVisible()) {
     panelWin.hide();
     showMascot(); // 面板关闭 → 恢复桌宠
@@ -1211,7 +1244,7 @@ ipcMain.handle("window:toggle-panel", () => {
 
 // 鼠标穿透：透明区域不拦截点击，角色区域可交互
 // ignore=true → 窗口忽略鼠标事件（forward 让 renderer 仍能收到 mousemove 用于检测）
-ipcMain.handle("window:set-ignore", (e, { ignore }) => {
+safeHandle("window:set-ignore", (e, { ignore }) => {
   if (!win || win.isDestroyed()) return { ok: false };
   win.setIgnoreMouseEvents(!!ignore, { forward: true });
   return { ok: true };
@@ -1219,7 +1252,7 @@ ipcMain.handle("window:set-ignore", (e, { ignore }) => {
 
 // 拖拽：用 setBounds 同时指定固定尺寸（setPosition 只给位置会让 DWM 重新计算尺寸导致漂移；
 // setBounds 完整指定位置+尺寸，从根源避免透明窗口漂移）
-ipcMain.handle("window:move", (e, { x, y }) => {
+safeHandle("window:move", (e, { x, y }) => {
   if (!win) return { ok: false };
   win.setBounds({ x: Math.round(x), y: Math.round(y), width: 220, height: 360 });
   return { ok: true };
@@ -1236,7 +1269,7 @@ function detectForeground() {
 }
 
 let _panelOpen = false; // 渲染层上报：面板是否打开（打开时强制显示）
-ipcMain.handle("window:panel-state", (e, { open }) => {
+safeHandle("window:panel-state", (e, { open }) => {
   _panelOpen = !!open;
   return { ok: true };
 });
