@@ -49,6 +49,7 @@ before(async () => {
       MIANSHI_OUTPUT_DIR: path.join(dbDir, "output"), // M8：产出/存档全临时（不写真实 output 目录）
       MIANSHI_DISABLE_PATROL: "1",
       MIANSHI_DISABLE_BACKGROUND: "1", // 关闭 RAG 构建/每日搜集等后台任务（防测试触发真实网络/模型下载）
+      MIANSHI_MOCK_LLM: "1", // LLM 路由测试用固定响应（CI 无真实 LLM——dummy key 必失败，此前 study-append 测试依赖 LLM 成功：本地 Ollama 过、CI 挂）
       MIANSHI_TOKEN: TOKEN,
       DEEPSEEK_API_KEY: "sk-test-dummy",
     },
