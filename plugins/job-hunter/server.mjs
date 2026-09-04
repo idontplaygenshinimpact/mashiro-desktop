@@ -25,11 +25,11 @@ export function register(api) {
   registerMiscRoutes(router);
   registerStudyRoutes(router, { getCorsOrigin, laneSubmit });
   registerInterviewRoutes(router, { laneSubmit });
-  registerJobsRoutes(router, { getCorsOrigin });
-  registerZhentiRoutes(router, { getCorsOrigin });
+  registerJobsRoutes(router);
+  registerZhentiRoutes(router);
   registerOjRoutes(router, { getCorsOrigin });
-  registerFocusRoutes(router, { getCorsOrigin });
-  registerMailRoutes(router, { getCorsOrigin });
-  registerRssRoutes(router, { getCorsOrigin });
+  registerFocusRoutes(router);
+  registerMailRoutes(router);
+  registerRssRoutes(router);
   return { ok: true };
 }

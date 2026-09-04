@@ -110,7 +110,7 @@ export function registerMiscRoutes(router) {
       const row = db.prepare("SELECT value FROM settings WHERE key='rag_enabled'").get();
       const enabled = row ? String(row.value) === "1" : false;
       let assets = 0;
-      try { assets = db.prepare("SELECT COUNT(*) n FROM knowledge_items").get().n; } catch { /* 表未建 */ }
+      try { assets = Number(db.prepare("SELECT COUNT(*) n FROM knowledge_items").get()?.n || 0); } catch { /* 表未建 */ }
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({
         ok: true,
@@ -156,7 +156,7 @@ export function registerMiscRoutes(router) {
   router.route("/api/settings/reminders", "POST", (req, res) => {
     readBody(req, res, (body) => {
       try {
-        const input = body || {};
+        const input = /** @type {any} */ (body || {});
         const has = (k) => Object.prototype.hasOwnProperty.call(input, k);
         const set = (k, v) => db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(k, v ? "1" : "0", Date.now());
         if (has("reviewReminder")) set("notify_review_reminder", !!input.reviewReminder);

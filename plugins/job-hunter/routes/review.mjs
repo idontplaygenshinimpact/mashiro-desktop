@@ -11,7 +11,7 @@ import { ReviewAddInput, ReviewAddOutput, ReviewSubmitInput, ReviewSubmitOutput,
 
 /**
  * 注册复习域路由
- * @param {import("./router.mjs").createRouter().resolve extends never ? never : any} router
+ * @param {any} router 路由注册器（lib/routes/router.mjs 的 createRouter 产物）
  * @param {{ getCorsOrigin: (req: any) => string }} ctx
  */
 export function registerReviewRoutes(router, ctx) {
@@ -148,7 +148,7 @@ ${kbContext ? `本地知识库相关段落（仅作补充素材）：\n${kbConte
 请重点讲解：核心原理（不只背 API）、常见追问、记忆口诀或易错点、一页纸总结。`;
         let full = "";
         await solveQuestionStream({
-          title: card.topic,
+          title: String(card.topic),
           text,
           company: "复习错题讲解",
           position: prof.positionDefault || "前端",
@@ -160,10 +160,10 @@ ${kbContext ? `本地知识库相关段落（仅作补充素材）：\n${kbConte
         // 讲解完成 → 更新卡答案（下次复习有完整参考）
         try {
           reviewApi.review.addCard({
-            topic: card.topic,
-            question: card.question || `请完整回答并讲清原理：${card.topic}`,
+            topic: String(card.topic),
+            question: String(card.question || `请完整回答并讲清原理：${card.topic}`),
             answer: full.slice(0, 800),
-            source: card.source || "复习错题讲解",
+            source: String(card.source || "复习错题讲解"),
           });
         } catch { /* ignore */ }
         send({ type: "done", saved: true });

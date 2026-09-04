@@ -3,7 +3,7 @@ import * as ojApi from "#lib/oj.mjs";
 import { createSSEPush } from "#lib/routes/contract.mjs";
 import { StudyStreamEvent } from "#lib/contracts/sse.mjs";
 
-export function registerOjRoutes(router, { getCorsOrigin = () => "*" } = {}) {
+export function registerOjRoutes(router, { getCorsOrigin = (_req) => "*" } = {}) {
 router.route("/api/oj/problems", (req, res) => {  // 牛客专项练习 TOP101 题目清单（GET；?category=&difficulty= 过滤）
   try {
     const { searchParams } = new URL(req.url, "http://x");

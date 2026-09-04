@@ -11,5 +11,6 @@
     "skipLibCheck": true,
     "noImplicitAny": false
   },
-  "include": ["lib/**/*.mjs", "config.mjs", "widget.mjs", "scripts/**/*.mjs", "mcp-server.mjs"]
+  "include": ["lib/**/*.mjs", "plugins/**/*.mjs", "config.mjs", "widget.mjs", "scripts/**/*.mjs", "mcp-server.mjs"]
 }
+

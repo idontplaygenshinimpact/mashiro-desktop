@@ -24,6 +24,12 @@ import { StudyPlanOutput, StudyCheckInput, StudyCheckOutput } from "#lib/contrac
 // 修复：复用判据用 isSimilarTopicForArchive（isSimilarWeakTopic 加 2-gram 重叠率门槛）——
 //       isSimilarWeakTopic 是薄弱点去重的宽松 3-gram 判定，直接用于讲解复用会把
 //       "数组中第K个最大元素"误配到"1-n数组中未出现数"（共享"数组中"），讲解张冠李戴
+/**
+ * 找语义相似条目的已有讲解（同知识点不重复生成）
+ * @param {string} topic 主题
+ * @param {{ excludeId?: string, items?: Array<{id: string, topic: string}> }} [opts] 排除项/条目列表
+ * @returns {{ topic: string, id: string, content: string, filePath: string } | null} 相似存档
+ */
 function findSimilarArchive(topic, { excludeId, items } = {}) {
   const list = items || (studyApi.getPlan().items || []);
   let best = null;
@@ -43,7 +49,12 @@ function findSimilarArchive(topic, { excludeId, items } = {}) {
   return best ? { topic: best.topic, id: best.id, filePath: best.filePath, content: best.content } : null;
 }
 
-/** 找相似条目中创建更早的存档（供"有自身存档但相似更早"时提示），返回 null 表示没有更早的 */
+/** 找相似条目中创建更早的存档（供"有自身存档但相似更早"时提示），返回 null 表示没有更早的
+ * @param {string} topic 主题
+ * @param {number} ownBirth 自身存档创建时间（ms）
+ * @param {{ excludeId?: string, items?: Array<{id: string, topic: string}> }} [opts] 排除项/条目列表
+ * @returns {{ topic: string, id: string, birth: number } | null} 更早存档
+ */
 function findEarlierArchive(topic, ownBirth, { excludeId, items } = {}) {
   const list = items || (studyApi.getPlan().items || []);
   let best = null;
@@ -109,7 +120,7 @@ function archiveHeader(item, note = "") {
   return `# ${item.topic}\n\n> 来源：${srcLabel} · AI 讲解存档${note ? `（${note}）` : ""} | ${verb} ${new Date().toLocaleString("zh-CN")}\n\n`;
 }
 
-export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSubmit = (fn) => fn() } = {}) {
+export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", laneSubmit = (fn) => fn() } = {}) {
   const PORT = Number(process.env.MIANSHI_PORT) || 8899;
   const sseHeaders = (req) => ({
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -653,4 +664,6 @@ export function registerStudyRoutes(router, { getCorsOrigin = () => "*", laneSub
     });
   });
 }
+
+
 
