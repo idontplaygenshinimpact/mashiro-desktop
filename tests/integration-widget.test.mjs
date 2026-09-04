@@ -25,7 +25,7 @@ function api(pathname, opts = {}) {
   return fetch(`${BASE}${pathname}`, { ...opts, headers });
 }
 
-async function waitReady(timeoutMs = 90000) {
+async function waitReady(timeoutMs = 120000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
