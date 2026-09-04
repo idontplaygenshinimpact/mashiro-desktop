@@ -46,6 +46,7 @@ before(async () => {
       ...process.env,
       MIANSHI_PORT: String(PORT),
       MIANSHI_DB_PATH: path.join(dbDir, "test.db"),
+      MIANSHI_OUTPUT_DIR: path.join(dbDir, "output"), // M8：产出/存档全临时（不写真实 output 目录）
       MIANSHI_DISABLE_PATROL: "1",
       MIANSHI_DISABLE_BACKGROUND: "1", // 关闭 RAG 构建/每日搜集等后台任务（防测试触发真实网络/模型下载）
       MIANSHI_TOKEN: TOKEN,
@@ -323,8 +324,8 @@ test("⑨⑫ study-append：文件不存在 → 拒绝追问（提示先生成�
 
 test("⑩ study-note/reset：删除存档（幂等）", async () => {
   insertPlanItem(path.join(dbDir, "test.db"), { id: "it10", topic: "zzz测试专用知识点" });
-  // 造存档到 widget 的 study_notes（真实 output 目录——独特文件名不冲突，测试后清理）
-  const notesDir = path.join(ROOT, "output", "study_notes");
+  // 造存档到 widget 的 study_notes（临时 output 目录——M8：不写真实 output）
+  const notesDir = path.join(dbDir, "output", "study_notes");
   mkdirSync(notesDir, { recursive: true });
   const f = path.join(notesDir, "zzz测试专用知识点.md");
   writeFileSync(f, "# zzz测试专用知识点\n\n## 题目\n讲解内容\n### 结论\n结论\n", "utf8");

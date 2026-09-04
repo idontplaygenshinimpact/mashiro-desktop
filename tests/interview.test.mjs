@@ -402,7 +402,7 @@ test("轮次推进到底 → 八股轮必然到达（ROUND_SEQ[3] 是八股穿�
 test("endInterview：复习卡 answer 回填候选人回答 + 薄弱点 failCount 单记（Bug#2/#3 回归）", async () => {
   setLlmResponses(FIRST_Q);
   await startInterview({ position: "前端" });
-  setLlmResponses('{"scores":{"tech":30,"expr":30,"depth":30,"edge":30,"reflect":30},"comment":"差","finish":true,"next_kind":"stage","weak_topic":"事件循环"}');
+  setLlmResponses('{"scores":{"tech":30,"expr":30,"depth":30,"edge":30,"reflect":30},"comment":"差","finish":true,"next_kind":"stage","weak_topic":"事件循环"}', "补充内容"); // submitAnswer 内部 2 次 LLM 调用（防 mock 队列空假绿）
   const r = await submitAnswer("宏任务先执行，微任务后执行，这是我的回答");
   assert.equal(r.ok, true);
   // submit 时已建卡（answer 空）

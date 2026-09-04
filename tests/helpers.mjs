@@ -74,7 +74,12 @@ export function setLlmResponses(...contents) { queue = contents.map((c) => Strin
 export function llmQueueLen() { return queue.length; }
 export async function mockLlmChat(messages, _opts = {}) {
   lastMessages = messages;
-  const content = queue.shift() ?? "";
+  // 防假绿（测试与 CI 工单）：队列空时抛错——mock 消费数 > 设置数说明测试少设了响应，
+  // 静默返回空串会让断言"假绿"（如生成失败路径没被真正触发）
+  if (!queue.length) {
+    throw new Error(`mock LLM 队列已空（第 ${lastMessages.length} 条消息）——测试少设了 setLlmResponses，静默空响应会假绿`);
+  }
+  const content = queue.shift();
   const m = content.match(/^TOOLCALL:(.+)$/s);
   if (m) {
     let fn = { name: "unknown", arguments: "{}" };

@@ -275,6 +275,7 @@ test("topicDirection：从知识本身——统一面试辅导老师（不再按
 
 test("讲解范围约束：solveQuestion prompt 从知识本身讲（不改编方向）", async () => {
   const ai = await import("../lib/ai.mjs");
+  setLlmResponses("讲解内容", "补充内容"); // solveQuestion 内部 2 次 LLM 调用（防 mock 队列空假绿）
   await ai.solveQuestion({ title: "TraceParser 与 RiskReasoner 拆分", text: "多源安全日志 Schema 与实体身份不一致", company: "阿里云", position: "AI 应用开发", sourceUrl: "test" });
   const { getLastMessages } = await import("./helpers.mjs");
   const joined = getLastMessages().map((m) => String(m.content || "")).join("\n");
@@ -296,6 +297,7 @@ test("一致性约束：solveAppendStream prompt 含一致性约束（防多视�
 
 test("讲解重点约束：solveQuestion prompt 含代码行数限制 + 纯理解性写无代码", async () => {
   const ai = await import("../lib/ai.mjs");
+  setLlmResponses("讲解内容", "补充内容"); // solveQuestion 内部 2 次 LLM 调用
   await ai.solveQuestion({ title: "React Hooks 原理", text: "链表与闭包机制", company: "c", position: "前端", sourceUrl: "test" });
   const { getLastMessages } = await import("./helpers.mjs");
   const joined = getLastMessages().map((m) => String(m.content || "")).join("\n");

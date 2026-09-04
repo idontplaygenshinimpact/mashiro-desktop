@@ -62,7 +62,7 @@ function groupFiles(dir, coreFiles) {
   const groups = [];
   let cur = [], curLen = 0;
   for (const f of coreFiles) {
-    let len = 0;
+    let len;
     try { len = Math.min(statSync(path.join(dir, f)).size, FILE_CAP); } catch { len = 0; }
     if (curLen + len > GROUP_BUDGET && cur.length) { groups.push(cur); cur = []; curLen = 0; }
     cur.push(f); curLen += len;
