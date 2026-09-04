@@ -27,7 +27,7 @@ const MODULES = {
   voice: ["voice-pack", "speech-sherpa", "speech-whisper", "vad"],
   mascot: ["mascot-models", "emotions"],
   mcp: ["mcp-client"],
-  widget: ["widget-core", "widget-auth", "path-all", "integration-widget"],
+  widget: ["widget-core", "widget-auth", "path-all", "integration/integration-widget"],
   routes: ["routes-registry"],
   panel: ["panel-dom-consistency", "panel-focus-jsdom", "panel-interview-jsdom", "panel-study-jsdom"],
   desktop: ["desktop-utils"],
@@ -56,8 +56,14 @@ if (!wanted.length) {
   process.exit(1);
 }
 
-// 解析模块 → 实际测试文件（存在才加）
-const allTests = readdirSync(testsDir).filter((f) => f.endsWith(".test.mjs"));
+// 解析模块 → 实际测试文件（存在才加；递归扫子目录——integration/ 子目录测试也纳入）
+const allTests = [];
+(function walk(dir, prefix = "") {
+  for (const f of readdirSync(dir, { withFileTypes: true })) {
+    if (f.isDirectory()) walk(path.join(dir, f.name), prefix + f.name + "/");
+    else if (f.name.endsWith(".test.mjs")) allTests.push(prefix + f.name);
+  }
+})(testsDir);
 const files = new Set();
 for (const m of wanted) {
   const prefixes = MODULES[m];

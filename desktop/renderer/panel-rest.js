@@ -1280,7 +1280,8 @@ async function loadFocusGoalSuggest() {
   } catch { /* ignore */ }
 }
 loadFocusGoalSuggest();
-setInterval(loadFocusGoalSuggest, 60 * 1000); // 每分钟刷新推荐（清单/复习变化后更新）——M9 门控见文件尾
+// 每分钟刷新推荐（清单/复习变化后更新）——M9 门控：仅面板可见时轮询（60s 低频，不绑 Tab）
+_gatedInterval(loadFocusGoalSuggest, 60 * 1000, null);
 
 // 分心黑名单/白名单编辑（清单 Tab 的「🚫 名单」→ 跳设置 Tab；设置 Tab 内直接编辑）
 $("focus-blacklist-toggle")?.addEventListener("click", () => {
