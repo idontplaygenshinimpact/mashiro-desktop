@@ -1090,7 +1090,7 @@ function createReactPanelWindow() {
     y,
     minWidth: 480,
     minHeight: 600,
-    title: "真白 · 模拟面试（React 版）",
+    title: "真白",
     backgroundColor: "#171322",
     autoHideMenuBar: true,
     webPreferences: {
@@ -1128,7 +1128,7 @@ function createVueReviewWindow() {
     y,
     minWidth: 420,
     minHeight: 520,
-    title: "真白 · 复习卡（Vue 版）",
+    title: "真白",
     backgroundColor: "#171322",
     autoHideMenuBar: true,
     webPreferences: {
@@ -1178,7 +1178,7 @@ function createPanelWindow() {
     y,
     minWidth: 420,
     minHeight: 560,
-    title: "真白 · 前端秋招助手",
+    title: "真白",
     backgroundColor: "#171322",
     autoHideMenuBar: true,
     webPreferences: {
@@ -1475,3 +1475,4 @@ app.whenReady().then(() => {
 app.on("window-all-closed", (_e) => {
   // 看板娘关窗口不退出（托盘常驻）
 });
+
