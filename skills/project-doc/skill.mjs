@@ -153,7 +153,11 @@ export async function generateProjectDoc({ project, force = false }) {
   // ③ 组装草稿
   const docText = `# 项目·${proj.name} 学习文档（强化版：分步生成 + 打磨 + 覆盖校验）\n\n${overview}\n\n## 源码要点\n${srcPoints}\n\n## 涉及的全部八股\n${baSection}\n\n## 模拟面试拷打问答\n${qaSections.join("\n\n")}\n\n## 讲述方法论\n${talkMethod || "（生成失败）"}\n`;
 
-  // ④ 多轮打磨循环（评审 → 修正 → 再评审——最多 3 轮；缩水保护 ≥80%）
+  // ④ 草稿先落盘（Subagent v2 修正者用 read_file/edit_file 编辑文件——必须先写入才能被编辑）
+  try { mkdirSync(DOC_DIR, { recursive: true }); } catch { /* ignore */ }
+  writeFileSync(docPath, docText, "utf8");
+
+  // ⑤ 多轮打磨循环（评审 → 修正 → 再评审——最多 3 轮；缩水保护 ≥80%）
   const rounds = [];
   let current = docText;
   for (let round = 0; round < 3; round++) {
