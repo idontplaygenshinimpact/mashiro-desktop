@@ -40,17 +40,20 @@ router.route("/api/jobs/profile", "POST", (req, res) => {  // 简历技能画像
     }
   });
   });
-router.route("/api/jobs/direction", (req, res) => {  // 设置意向方向 + 简历驱动闭环联动（知识树模板/方向画像自动跟随，手动配过的不覆盖）+ 调整建议
+router.route("/api/jobs/direction", (req, res) => {  // 设置意向方向（多选）+ 简历驱动闭环联动（知识树模板/方向画像自动跟随，手动配过的不覆盖）+ 调整建议
   readBody(req, res, async (body) => {
     try {
-      const { direction } = JSON.parse(body || "{}");
-      const set = jobMatchApi.setTargetDirection(direction);
+      const b = JSON.parse(body || "{}");
+      // 2026-09 多选：directions 数组（兼容旧单值 direction）
+      const directions = Array.isArray(b.directions) ? b.directions : (b.direction ? [b.direction] : []);
+      const set = jobMatchApi.setTargetDirection(directions);
       if (!set.ok) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify(set)); return; }
-      const { applyDirectionAuto } = await import("#lib/career.mjs");
-      const auto = applyDirectionAuto(String(direction || ""));
+      const { applyDirectionAuto, applyDirectionsProfile } = await import("#lib/career.mjs");
+      const auto = applyDirectionAuto(String(set.directions[0] || ""));
+      const profileAuto = applyDirectionsProfile(set.directions); // 多方向画像合并（无手动画像时）
       const advice = await jobMatchApi.generateDirectionAdvice();
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, ...advice, auto }));
+      res.end(JSON.stringify({ ok: true, ...advice, auto, profileAuto }));
     } catch (e) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));

@@ -429,15 +429,13 @@
     <section id="tab-jobs" class="tab-panel">
       <div class="jobs-setup">
         <div class="form-row">
-          <label>🎯 想做的方向（用于岗位匹配 + 调整建议）</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <select id="jobs-direction">
-              <option value="">未设置</option>
-              <option value="frontend">前端</option>
-              <option value="agent">AI Agent</option>
-              <option value="fullstack">全栈</option>
-              <option value="backend">后端</option>
-            </select>
+          <label>🎯 想做的方向（可多选，用于岗位匹配 + 调整建议）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <label style="display:flex;align-items:center;gap:3px;"><input type="checkbox" name="jobs-direction" value="frontend"> 前端</label>
+            <label style="display:flex;align-items:center;gap:3px;"><input type="checkbox" name="jobs-direction" value="agent"> AI Agent</label>
+            <label style="display:flex;align-items:center;gap:3px;"><input type="checkbox" name="jobs-direction" value="fullstack"> 全栈</label>
+            <label style="display:flex;align-items:center;gap:3px;"><input type="checkbox" name="jobs-direction" value="backend"> 后端</label>
+            <label style="display:flex;align-items:center;gap:3px;"><input type="checkbox" name="jobs-direction" value="algorithm"> 算法</label>
             <button id="jobs-direction-btn" class="secondary">设置方向 + 生成建议</button>
             <button id="jobs-collect-btn" class="secondary">🔍 搜集校招</button>
           </div>

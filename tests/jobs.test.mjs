@@ -220,7 +220,7 @@ test("setTargetDirection + generateDirectionAdvice", async () => {
   await jobMatch.setResumeProfile("简历：Vue 前端");
   assert.equal(jobMatch.setTargetDirection("nope").ok, false, "非法方向拒绝");
   assert.equal(jobMatch.setTargetDirection("agent").ok, true);
-  assert.equal(jobMatch.getTargetDirection(), "agent");
+  assert.deepEqual(jobMatch.getTargetDirection(), ["agent"], "多选格式：返回数组");
 
   setLlmResponses("## 差距分析\n当前偏传统前端，需补充 LLM/Agent 相关技能\n## 简历调整建议\n突出 Agent 项目\n## 需补充\n1. LangChain 2. MCP");
   const advice = await jobMatch.generateDirectionAdvice();
@@ -285,15 +285,15 @@ test("target_direction 手动优先：手动设置后简历上传不覆盖（app
   db.prepare("DELETE FROM settings WHERE key='target_direction'").run();
   setLlmResponses('{"skills":["React"],"directions":["agent"]}');
   await jobMatch.setResumeProfile("简历一");
-  assert.equal(jobMatch.getTargetDirection(), "agent", "首次简历自动设置 agent");
+  assert.deepEqual(jobMatch.getTargetDirection(), ["agent"], "首次简历自动设置 agent");
   // 场景2：用户手动改 backend → 再传 agent 简历 → 不覆盖
   jobMatch.setTargetDirection("backend");
   setLlmResponses('{"skills":["React"],"directions":["agent"]}');
   await jobMatch.setResumeProfile("简历二");
-  assert.equal(jobMatch.getTargetDirection(), "backend", "手动设置的 backend 不被简历覆盖");
+  assert.deepEqual(jobMatch.getTargetDirection(), ["backend"], "手动设置的 backend 不被简历覆盖");
   // 场景3：手动清除后简历可重新自动设置
   db.prepare("DELETE FROM settings WHERE key='target_direction'").run();
   setLlmResponses('{"skills":["React"],"directions":["frontend"]}');
   await jobMatch.setResumeProfile("简历三");
-  assert.equal(jobMatch.getTargetDirection(), "frontend", "清除后简历自动设置生效");
+  assert.deepEqual(jobMatch.getTargetDirection(), ["frontend"], "清除后简历自动设置生效");
 });

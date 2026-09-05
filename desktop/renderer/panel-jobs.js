@@ -389,16 +389,16 @@ document.querySelectorAll("#jobs-filter .job-chip").forEach((chip) => {
   });
 });
 
-// 设置方向 + 生成建议
+// 设置方向（多选）+ 生成建议
 document.getElementById("jobs-direction-btn")?.addEventListener("click", async () => {
-  const direction = document.getElementById("jobs-direction").value;
+  const dirs = [...document.querySelectorAll('input[name="jobs-direction"]:checked')].map((c) => c.value);
   const statusEl = document.getElementById("jobs-status");
-  if (!direction) { statusEl.textContent = "⚠️ 请先选择想做的方向"; return; }
+  if (!dirs.length) { statusEl.textContent = "⚠️ 请先选择想做的方向"; return; }
   statusEl.textContent = "⏳ 生成方向建议中…";
   try {
     const res = await fetch(API_BASE + "/api/jobs/direction", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ direction }),
+      body: JSON.stringify({ directions: dirs }),
     });
     const j = await res.json();
     if (!j.ok) { statusEl.textContent = j.error || "设置失败"; return; }
