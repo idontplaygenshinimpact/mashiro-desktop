@@ -324,8 +324,13 @@ test("激活②：addPlanItems 后自动触发补卡（新条目 → 卡）", as
   setAutoPlanCoverage(true); // 测试环境默认关闭（防测试间干扰）——本测试显式开启验证接线
   setLlmResponses(JSON.stringify([{ i: 0, question: "原理：为什么；边界：异常；场景：实际" }]));
   addPlanItems([{ topic: "手写防抖", why: "w", source: "s", verify_question: "q", level: "必会" }]);
-  await new Promise((r) => setTimeout(r, 100)); // 等 fire-and-forget 补卡
-  const card = review.loadCards().cards.find((c) => c.topic === "手写防抖");
+  // 等 fire-and-forget 补卡完成（轮询——修复：固定 100ms 在 CI 慢时不够，补卡延迟到后续测试
+  // 执行期间调 LLM，消费后续测试的 mock 队列 → 激活③ 的 generateMultiAngle 拿到空响应）
+  let card = null;
+  for (let i = 0; i < 40 && !card; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    card = review.loadCards().cards.find((c) => c.topic === "手写防抖");
+  }
   assert.ok(card, "新条目自动补卡");
   assert.equal(card.priority, "必会", "优先级从 level");
 });
@@ -334,12 +339,13 @@ test("激活③：ensurePlanCoverage 存量升级（占位 question → 多角�
   const { ensurePlanCoverage } = await import("../lib/review.mjs");
   const { addPlanItems } = await import("../lib/study.mjs");
   // 旧形态卡：占位 question + 默认优先级（拓展）——模拟存量数据（工单任务 2① 的 117 张旧卡）
-  review.addCard({ topic: "HTTP 缓存", question: "请简述：HTTP 缓存", answer: "强缓存/协商缓存", source: "学习清单" });
-  addPlanItems([{ topic: "HTTP 缓存", why: "w", source: "s", verify_question: "q", level: "必会" }]);
+  // topic 用独立名（修复：此前用"HTTP 缓存"——强化② 已建同 topic 卡，测试间状态依赖 + mock 队列竞争）
+  review.addCard({ topic: "HTTP 缓存策略", question: "请简述：HTTP 缓存策略", answer: "强缓存/协商缓存", source: "学习清单" });
+  addPlanItems([{ topic: "HTTP 缓存策略", why: "w", source: "s", verify_question: "q", level: "必会" }]);
   setLlmResponses(JSON.stringify([{ i: 0, question: "原理：缓存命中；边界：协商失效；场景：静态资源" }]));
   const r = await ensurePlanCoverage();
   assert.ok(r.upgraded >= 2, "优先级回填 + question 重生成");
-  const card = review.loadCards().cards.find((c) => c.topic === "HTTP 缓存");
+  const card = review.loadCards().cards.find((c) => c.topic === "HTTP 缓存策略");
   assert.equal(card.priority, "必会", "优先级从清单 level 回填");
   assert.ok(card.question.includes("原理"), "占位 question 升级为多角度");
   // 幂等：再跑不再动、不再调 LLM
