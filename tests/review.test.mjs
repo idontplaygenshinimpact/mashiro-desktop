@@ -1,7 +1,7 @@
 // review.mjs 单测：FSRS 复习卡调度（临时 DB 隔离）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { setupTempDb, cleanupTempDb, clearAllTables, resetMemoryState, mockLLM, setLlmResponses } from "./helpers.mjs";
+import { setupTempDb, cleanupTempDb, clearAllTables, resetMemoryState, mockLLM, setLlmResponses, getLastMessages } from "./helpers.mjs";
 
 const dbDir = setupTempDb("review");
 mockLLM();
@@ -311,4 +311,14 @@ test("激活③：ensurePlanCoverage 存量升级（占位 question → 多角�
   const r2 = await ensurePlanCoverage();
   assert.equal(r2.added, 0);
   assert.equal(r2.upgraded, 0, "升级完不再动");
+});
+
+test("激活④：generateMultiAngle prompt 必须携带条目列表（防 mock 盲区回归）", async () => {
+  const { ensurePlanCoverage } = await import("../lib/review.mjs");
+  const { addPlanItems } = await import("../lib/study.mjs");
+  addPlanItems([{ topic: "事件循环", why: "w", source: "s", verify_question: "q", level: "必会" }]);
+  setLlmResponses(JSON.stringify([{ i: 0, question: "原理：为什么；边界：异常；场景：实际" }]));
+  await ensurePlanCoverage();
+  const user = getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(user.includes("事件循环"), "prompt 携带条目列表（此前漏拼 list——真实 LLM 不知道提炼什么，全 fallback 成占位卡）");
 });
