@@ -752,6 +752,24 @@ async function loadIvWeakChips() {
         window.kanban.notify("🎯 优先考察", `已加入重点方向：${t}（也可不选——面试自动聚合全部练习数据）`);
       });
     });
+    // 薄弱点闭环补全工单任务 1②：一键入清单按钮（只处理薄弱点来源的项；无薄弱点则隐藏）
+    const toPlanBtn = $("iv-weak-to-plan");
+    if (toPlanBtn) {
+      const weakTopics = items.filter((w) => (w.reason || "").includes("薄弱点")).map((w) => w.topic);
+      toPlanBtn.classList.toggle("hidden", !weakTopics.length);
+      toPlanBtn.onclick = async () => {
+        try {
+          const rr = await fetch(API_BASE + "/api/weak-points/to-plan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ topics: weakTopics }),
+          });
+          const jj = await rr.json();
+          window.kanban.notify("📥 薄弱点入清单", jj.message || `已加入 ${jj.added ?? 0} 条`);
+          loadIvWeakChips(); // 刷新（已入清单的薄弱点从"清单未完成"源消失）
+        } catch { window.kanban.notify("📥 薄弱点入清单", "入清单失败，请稍后重试"); }
+      };
+    }
   } catch { /* ignore */ }
 }
 

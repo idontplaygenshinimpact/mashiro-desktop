@@ -182,3 +182,16 @@ test("regenerateStudyPlan keeps old items' done/reviewed state", async () => {
   assert.equal(kept.done, true, "done 状态保留");
   assert.equal(kept.reviewed, true, "reviewed 状态保留");
 });
+
+// ---------- 薄弱点闭环补全工单任务 2①：清单勾选完成 → 自动清除薄弱点 ----------
+test("checkItem 勾选完成 → 对应薄弱点自动清除（学掉即消灭）", async () => {
+  const { memory } = await import("../lib/memory.mjs");
+  const { db } = await import("../lib/db.mjs");
+  addPlanItems([{ topic: "事件循环", why: "w", source: "薄弱点", level: "必会" }]);
+  memory.addWeakPoint("事件循环", "模拟面试");
+  assert.ok(memory.getWeakPoints().some((w) => w.topic === "事件循环"), "薄弱点存在");
+  const item = getPlan().items.find((i) => i.topic === "事件循环");
+  await checkItem(item.id, true);
+  assert.equal(memory.getWeakPoints().some((w) => w.topic === "事件循环"), false, "勾选完成清除薄弱点");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM weak_points WHERE topic='事件循环'").get().n, 0, "DB 同步删除");
+});

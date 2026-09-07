@@ -434,3 +434,42 @@ test("泛词 3-gram 不触发相似——'的区别'共享不误判（NSP vs Lan
   assert.equal(isSimilarTopicForArchive("事件循环与微任务", "事件循环宏任务微任务"), true, "同知识点仍相似");
 });
 
+// ---------- 薄弱点闭环补全工单：自动入清单 + 存量伪知识点清理 ----------
+test("薄弱点闭环①：fail_count≥2 自动入清单（source=薄弱点，level 必会）", async () => {
+  const { setWeakToPlanAuto } = await import("../lib/memory.mjs");
+  const { getPlan } = await import("../lib/study.mjs");
+  setWeakToPlanAuto(true); // 测试环境默认关（防 fire-and-forget 泄漏）——本测试显式开启验证接线
+  try {
+    memory.addWeakPoint("事件循环", "模拟面试"); // fail_count=1 → 不入清单
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(getPlan().items.some((i) => i.topic === "事件循环"), false, "首次答错不入清单");
+    memory.addWeakPoint("事件循环", "模拟面试"); // fail_count=2 → 自动入清单
+    await new Promise((r) => setTimeout(r, 50));
+    const item = getPlan().items.find((i) => i.topic === "事件循环");
+    assert.ok(item, "反复答错自动入清单");
+    assert.equal(item.source, "薄弱点", "source 标记");
+    assert.equal(item.level, "必会", "level 必会（优先补强）");
+  } finally {
+    setWeakToPlanAuto(false);
+  }
+});
+
+test("薄弱点闭环②：mergeSimilarWeakPoints 存量伪知识点删除（题目占位符/测试残留）", () => {
+  // 模拟存量脏数据（绕过 addWeakPoint 的 _cleanTopic 过滤——历史遗留直接入库）
+  const ins = db.prepare("INSERT INTO weak_points (id, topic, fail_count, last_failed_at, source, origin, updated_at) VALUES (?,?,?,?,?,?,?)");
+  ins.run("wp_d1", "题1【二叉树遍历（DFS/BFS）】", 3, null, "复习答错", "agent", 1);
+  ins.run("wp_d2", "到期新卡", 2, null, "复习答错", "agent", 1);
+  ins.run("wp_a", "事件循环-微任务/宏任务顺序", 5, null, "复习答错", "agent", 1);
+  ins.run("wp_b", "事件循环与微任务", 2, null, "复习答错", "agent", 1);
+  const r = memory.mergeSimilarWeakPoints();
+  assert.equal(r.removed, 3, "伪知识点 2 条删除 + 相似合并删除 1 条");
+  assert.equal(r.merged, 1, "相似表述合并");
+  const rows = db.prepare("SELECT topic, fail_count FROM weak_points").all();
+  assert.equal(rows.length, 1, "清理后仅保留 1 条");
+  assert.equal(rows[0].topic, "事件循环-微任务/宏任务顺序", "保留 fail_count 高的条目");
+  assert.equal(Number(rows[0].fail_count), 7, "fail_count 累加（5+2）");
+  // 幂等：再跑无变化
+  const r2 = memory.mergeSimilarWeakPoints();
+  assert.equal(r2.removed + r2.merged, 0, "幂等");
+});
+

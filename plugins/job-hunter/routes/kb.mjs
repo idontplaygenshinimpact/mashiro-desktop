@@ -3,6 +3,7 @@
 import * as knowledgeApi from "#lib/knowledge.mjs";
 import * as ragApi from "#lib/rag.mjs";
 import * as learningApi from "#lib/learning.mjs";
+import * as studyApi from "#lib/study.mjs";
 import { getCareerProfile, saveCareerProfile, resetCareerProfile } from "#lib/career.mjs";
 import { memory } from "#lib/memory.mjs";
 import { db } from "#lib/db.mjs";
@@ -85,6 +86,31 @@ export function registerKbRoutes(router) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
     }
+  });
+
+  // 薄弱点闭环补全工单任务 1②：薄弱点一键入清单（批量；topics 空 = 全部薄弱点）
+  // 入清单后走"学完勾选 → 自动清除薄弱点"闭环（checkItem 任务 2①）
+  router.route("/api/weak-points/to-plan", "POST", (req, res) => {
+    readBody(req, res, (body) => {
+      try {
+        const { topics } = JSON.parse(body || "{}");
+        const all = memory.getTrustedWeakPoints(100);
+        const targets = Array.isArray(topics) && topics.length
+          ? topics.map((t) => String(t || "").trim()).filter(Boolean)
+          : all.map((w) => w.topic);
+        const r = studyApi.addPlanItems(targets.map((t) => ({
+          topic: t,
+          why: "薄弱点一键入清单，优先补强",
+          source: "薄弱点",
+          level: "必会",
+        })));
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, added: r.added, total: targets.length, message: `已加入学习清单 ${r.added} 条（学完勾选即自动清除薄弱点）` }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
   });
 
   router.route("/api/iv-focus-sources", async (req, res) => {

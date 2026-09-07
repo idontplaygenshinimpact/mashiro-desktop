@@ -131,6 +131,27 @@ test("GET /api/weak-points 结构：topic + failCount（与面试薄弱点队列
   }
 });
 
+// 薄弱点闭环补全工单任务 1②：一键入清单（批量）
+test("POST /api/weak-points/to-plan：薄弱点批量入清单（source=薄弱点，level 必会）", async () => {
+  const r = await post("/api/weak-points/to-plan", { topics: ["事件循环", "闭包"] });
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.ok, true);
+  assert.equal(j.added, 2, "两条薄弱点入清单");
+  // 校验清单（同一临时库）
+  const { db } = await import("../lib/db.mjs");
+  const rows = db.prepare("SELECT topic, source, level FROM study_plan_items WHERE topic IN ('事件循环','闭包')").all();
+  assert.equal(rows.length, 2, "清单落库");
+  for (const row of rows) {
+    assert.equal(row.source, "薄弱点", "source 标记");
+    assert.equal(row.level, "必会", "level 必会");
+  }
+  // 幂等：重复入清单不重复加
+  const r2 = await post("/api/weak-points/to-plan", { topics: ["事件循环"] });
+  const j2 = await r2.json();
+  assert.equal(j2.added, 0, "已存在条目跳过");
+});
+
 // ============ 2) 写路由（无 LLM）：关键闭环路径 ============
 const post = (p, body) => api(p, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
