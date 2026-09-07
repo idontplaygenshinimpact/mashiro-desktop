@@ -218,8 +218,11 @@ function createWindow() {
 const KNOWN_WINDOWS = new Set();
 function registerWindow(win) {
   if (!win || win.isDestroyed()) return;
-  KNOWN_WINDOWS.add(win.webContents.id);
-  win.webContents.on("destroyed", () => KNOWN_WINDOWS.delete(win.webContents.id));
+  // 注册时保存 webContents.id（修复：destroyed 回调里访问 win.webContents.id 报
+  // "Object has been destroyed"——事件触发时 webContents 已销毁，属性访问即抛错）
+  const wcId = win.webContents.id;
+  KNOWN_WINDOWS.add(wcId);
+  win.webContents.on("destroyed", () => KNOWN_WINDOWS.delete(wcId));
   // 外链一律走系统浏览器（安全工单 S4：不新开 Electron 窗口——防 window.open 逃逸）
   win.webContents.setWindowOpenHandler(({ url }) => {
     try { if (/^https?:/i.test(url)) shell.openExternal(url); } catch { /* ignore */ }
