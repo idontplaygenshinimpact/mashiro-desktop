@@ -238,10 +238,18 @@ function safeHandle(channel, fn) {
     return fn(e, ...args);
   });
 }
+/** 安全发送到窗口（webContents 销毁竞态防护——修复 "Object has been destroyed"：
+ * win.isDestroyed() 检查的是 BrowserWindow，窗口销毁时 webContents 先销毁
+ * （短暂窗口期 isDestroyed 仍 false）→ send 报错。统一封装：webContents.isDestroyed + try/catch） */
+function safeSend(win, channel, payload) {
+  try {
+    if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+      win.webContents.send(channel, payload);
+    }
+  } catch { /* 窗口销毁竞态——忽略（重启/关闭时常见） */ }
+}
 safeHandle("panel:goto-tab", (e, { tab }) => {
-  if (panelWin && !panelWin.isDestroyed()) {
-    panelWin.webContents.send("panel:goto-tab", { tab: String(tab || "") });
-  }
+  safeSend(panelWin, "panel:goto-tab", { tab: String(tab || "") });
   return { ok: true };
 });
 
@@ -259,11 +267,7 @@ safeHandle("panel:open-vue", () => {
 function openPanelChallenges() {
   createPanelWindow();
   setTimeout(() => {
-    try {
-      if (panelWin && !panelWin.isDestroyed()) {
-        panelWin.webContents.send("panel:goto-challenges");
-      }
-    } catch { /* ignore */ }
+    safeSend(panelWin, "panel:goto-challenges");
   }, 600); // 等面板加载
 }
 
@@ -282,9 +286,7 @@ async function buildTrayMenu() {
           checked: m.path === cur,
           click: async () => {
             saveCurrentModel(m.path);
-            if (win && !win.isDestroyed()) {
-              win.webContents.send("mascot-model-changed", { path: m.path, name: m.name });
-            }
+            safeSend(win, "mascot-model-changed", { path: m.path, name: m.name });
             buildTrayMenu(); // 刷新勾选
           },
         }))
@@ -747,7 +749,7 @@ function saveMusicState(extra = {}) {
 async function musicApi() {
   return await import("../lib/music.mjs");
 }
-safeHandle("music:play", async (e, { file, loop } = {}) => {
+safeHandle("music:play", async (e, { file, loop } = /** @type {any} */ ({})) => {
   const m = await musicApi();
   return m.playMusic(file || "", { loop });
 });
@@ -763,13 +765,13 @@ safeHandle("music:state", async () => {
   const m = await musicApi();
   return m.getMusicState();
 });
-safeHandle("music:volume", async (e, { volume } = {}) => {
+safeHandle("music:volume", async (e, { volume } = /** @type {any} */ ({})) => {
   const m = await musicApi();
   const r = m.setMusicVolume(volume);
   if (r.ok) saveMusicState({ volume: m.getMusicState().volume });
   return r;
 });
-safeHandle("music:autoplay", async (e, { on } = {}) => {
+safeHandle("music:autoplay", async (e, { on } = /** @type {any} */ ({})) => {
   const m = await musicApi();
   const r = m.setMusicAutoplay(on);
   if (r.ok) saveMusicState({ autoplay: !!on });
@@ -792,7 +794,7 @@ async function initMusic() {
 safeHandle("voice:set", (e, enabled) => {
   const on = !!enabled;
   for (const w of BrowserWindow.getAllWindows()) {
-    if (w && !w.isDestroyed()) w.webContents.send("voice-changed", on);
+    safeSend(w, "voice-changed", on);
   }
   return { ok: true, enabled: on };
 });
@@ -1039,9 +1041,7 @@ safeHandle("mascot:set-model", async (e, { path: modelPath }) => {
     if (!match) return { ok: false, error: "模型不在本地列表中" };
     saveCurrentModel(match.path);
     // 广播到桌宠窗口 → app.js 重载模型（面板切换后立即生效）
-    if (win && !win.isDestroyed()) {
-      win.webContents.send("mascot-model-changed", { path: match.path, name: match.name });
-    }
+    safeSend(win, "mascot-model-changed", { path: match.path, name: match.name });
     buildTrayMenu(); // 同步托盘换肤菜单勾选
     return { ok: true, model: match };
   } catch (err) {
@@ -1336,9 +1336,7 @@ let focusLastEncourage = 0;       // 上次中途鼓励时间戳
 // 广播 pet-say 到所有窗口（桌宠 app.js 订阅显示气泡 + 播语音；面板未订阅则忽略）
 function petSay(text, scene) {
   for (const w of BrowserWindow.getAllWindows()) {
-    if (w && !w.isDestroyed()) {
-      try { w.webContents.send("pet-say", { text, scene }); } catch { /* ignore */ }
-    }
+    safeSend(w, "pet-say", { text, scene });
   }
 }
 
