@@ -29,6 +29,16 @@ export function registerReviewRoutes(router, ctx) {
     { output: ReviewDueOutput }
   ));
 
+  // 强化复习工单任务 2：复习反馈（今日 N 张/掌握 X/待重练 Y）+ 错题重练队列
+  router.route("/api/review/feedback", "GET", withContract(
+    () => ({ ok: true, ...reviewApi.review.getReviewFeedback() }),
+    { output: /** @type {any} */ ({ type: "object", properties: { ok: { type: "boolean" }, today: { type: "number" }, mastered: { type: "number" }, retry: { type: "number" } } }) }
+  ));
+  router.route("/api/review/retry", "GET", withContract(
+    () => ({ ok: true, retry: reviewApi.review.getRetryQueue() }),
+    { output: /** @type {any} */ ({ type: "object", properties: { ok: { type: "boolean" }, retry: { type: "array" } } }) }
+  ));
+
   router.route("/api/review/wrong", (req, res) => {
     // 错题本：答错 >=2 次的卡（错题自动讲解闭环）
     try {

@@ -96,6 +96,8 @@ contextBridge.exposeInMainWorld("kanban", /** @type {import("./kanban-api").Kanb
   // 复习
   reviewDue: () => ipcRenderer.invoke("review:due"),
   reviewSubmit: (id, rating) => ipcRenderer.invoke("review:submit", { id, rating }),
+  reviewFeedback: () => ipcRenderer.invoke("review:feedback"),
+  reviewRetry: () => ipcRenderer.invoke("review:retry"),
   getMastery: () => ipcRenderer.invoke("widget:mastery"),
   runDiscover: () => ipcRenderer.invoke("widget:run-discover"),
   quit: () => ipcRenderer.invoke("window:quit"),

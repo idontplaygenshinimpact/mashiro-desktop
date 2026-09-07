@@ -1,9 +1,10 @@
 // review.mjs 单测：FSRS 复习卡调度（临时 DB 隔离）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { setupTempDb, cleanupTempDb, clearAllTables, resetMemoryState } from "./helpers.mjs";
+import { setupTempDb, cleanupTempDb, clearAllTables, resetMemoryState, mockLLM, setLlmResponses } from "./helpers.mjs";
 
 const dbDir = setupTempDb("review");
+mockLLM();
 const { review } = await import("../lib/review.mjs");
 const { memory } = await import("../lib/memory.mjs");
 const { db } = await import("../lib/db.mjs");
@@ -224,3 +225,48 @@ test("getTodayReviewedTopics：今天复习过的主题去重返回", () => {
   assert.equal(topics.length, 2);
   assert.deepEqual(topics.map((t) => t.topic).sort(), ["原型链", "闭包"].sort());
 });
+
+// ---------- 强化复习工单任务 4：补卡/多角度/每日限额/错题重练/优先级 ----------
+test("强化①：ensurePlanCoverage 清单无卡条目自动补卡（多角度 question + 优先级）", async () => {
+  const { ensurePlanCoverage } = await import("../lib/review.mjs");
+  const { addPlanItems, getPlan } = await import("../lib/study.mjs");
+  addPlanItems([{ topic: "事件循环", why: "w", source: "s", verify_question: "讲事件循环", level: "必会" }]);
+  // 多角度 LLM 提炼
+  setLlmResponses(JSON.stringify([{ i: 0, question: "原理：为什么微任务先执行；边界：宏任务嵌套；场景：长列表更新" }]));
+  const r = await ensurePlanCoverage();
+  assert.ok(r.added >= 1, "补卡");
+  const card = review.loadCards().cards.find((c) => c.topic === "事件循环");
+  assert.ok(card, "卡存在");
+  assert.ok(card.question.includes("原理"), "多角度 question（原理）");
+  assert.equal(card.priority, "必会", "优先级从 level");
+});
+
+test("强化②：getDailySession 每日限额 + 优先级（必会先出）", async () => {
+  const { addPlanItems } = await import("../lib/study.mjs");
+  addPlanItems([{ topic: "手写防抖", why: "w", source: "s", verify_question: "q", level: "必会" }]);
+  addPlanItems([{ topic: "HTTP 缓存", why: "w", source: "s", verify_question: "q", level: "进阶" }]);
+  // 造两张卡（必会 + 进阶）——直接造到期（fsrs_due=0，绕过新卡 1 天缓冲）
+  review.addCard({ topic: "手写防抖", question: "q", answer: "a", source: "t", priority: "必会" });
+  review.addCard({ topic: "HTTP 缓存", question: "q", answer: "a", source: "t", priority: "进阶" });
+  db.prepare("UPDATE review_cards SET fsrs_due=0, created_at=?").run(Date.now() - 2 * 24 * 3600 * 1000); // 新卡缓冲（created+1天）已过
+  const session = review.getDailySession(1);
+  assert.equal(session.length, 1, "每日限额 1 张");
+  assert.equal(session[0].topic, "手写防抖", "必会先出");
+});
+
+test("强化③：getRetryQueue 错题重练（again 卡入队）", async () => {
+  const card = review.addCard({ topic: "事件循环", question: "q", answer: "a", source: "t" });
+  review.reviewCard(card.id, 0); // again
+  const q = review.getRetryQueue(5);
+  assert.ok(q.some((r) => r.topic === "事件循环"), "again 卡入重练队列");
+});
+
+test("强化④：getReviewFeedback 今日统计", async () => {
+  const card = review.addCard({ topic: "事件循环", question: "q", answer: "a", source: "t" });
+  review.reviewCard(card.id, 2); // good（掌握）
+  const fb = review.getReviewFeedback();
+  assert.ok(fb.today >= 1, "今日复习计数");
+  assert.ok(fb.mastered >= 1, "掌握计数");
+});
+
+

@@ -5,11 +5,17 @@
       <span class="vr-count">剩余 {{ remaining }} 张</span>
     </div>
 
+    <!-- 复习反馈（强化复习工单任务 2③：今日 N 张 / 掌握 X / 待重练 Y——效果可感知） -->
+    <div v-if="!loading" class="vr-feedback">
+      📊 今日复习 <b>{{ feedback.today }}</b> 张 · 掌握 <b>{{ feedback.mastered }}</b> · 待重练 <b>{{ feedback.retry }}</b>
+      <button v-if="retryQueue.length" class="vr-retry-btn" @click="startRetry">🔁 重练错题（{{ retryQueue.length }}）</button>
+    </div>
+
     <div v-if="loading" class="vr-hint">加载中…</div>
     <div v-else-if="error" class="vr-hint vr-err">{{ error }}</div>
 
     <template v-else-if="current">
-      <!-- 卡片：算法题 → 手写模式（手写区+对照关键点）；概念题 → 翻转看答案 -->
+      <!-- 卡片：算法题 → 手写模式（手写区+对照关键点）；概念题 → 主动回忆（答案折叠，点显示答案展开） -->
       <ReviewCard :card="current" :flipped="flipped" :card-type="current.type" @flip="flipped = !flipped" />
 
       <!-- 遗忘曲线（评分后即时重绘） -->
@@ -34,12 +40,18 @@ import RatingButtons from "./components/RatingButtons.vue";
 import ForgettingCurve from "./components/ForgettingCurve.vue";
 import ScheduleTimeline from "./components/ScheduleTimeline.vue";
 
-const { current, flipped, history, loading, error, remaining, load, rate } = useReview();
+const { current, flipped, history, loading, error, remaining, feedback, retryQueue, load, rate, setCards } = useReview();
 onMounted(load);
 
 function onRate(key) {
   flipped.value = false;
   rate(key);
+}
+
+// 错题重练（强化复习工单任务 2②）：重练队列 → 作为当前卡组（评分后正常调度）
+function startRetry() {
+  if (!retryQueue.value.length) return;
+  setCards(retryQueue.value);
 }
 // 曲线展示当前卡稳定性（修复：此前优先取 history 末条 = 上一张已评卡的 S，与"当前卡"标题不一致。
 // 现改为当前卡：评分后 rate() 先更新 current 为新状态 → 曲线即时重绘展示调度结果，随后 next() 切下一张卡。
@@ -55,4 +67,15 @@ const curveStability = computed(() => current.value?.fsrs?.stability || 1);
 .vr-hint { color: #6a6790; font-size: 12px; padding: 16px 0; text-align: center; }
 .vr-err { color: #b91c1c; }
 .vr-done { color: #2f7a4a; font-weight: 600; }
+.vr-feedback {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+  padding: 5px 10px; border-radius: 8px; font-size: 11px; color: #5a5678;
+  background: linear-gradient(135deg, rgba(109,79,216,.08), rgba(80,160,255,.05));
+  border: 1px solid rgba(109,79,216,.14);
+}
+.vr-retry-btn {
+  font-size: 11px; padding: 2px 10px; border-radius: 6px; cursor: pointer;
+  background: rgba(229,72,77,.10); color: #c0392b; border: 1px solid rgba(229,72,77,.3); font-weight: 600;
+}
+.vr-retry-btn:hover { background: rgba(229,72,77,.16); }
 </style>

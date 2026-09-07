@@ -51,6 +51,8 @@ export function useReview() {
   const history = ref([]);        // 本次会话评分历史 {rating, stability, interval, at}
   const loading = ref(true);
   const error = ref("");
+  const feedback = ref({ today: 0, mastered: 0, retry: 0 }); // 复习反馈（强化复习工单任务 2③）
+  const retryQueue = ref([]);     // 错题重练队列（任务 2②）
 
   async function load() {
     loading.value = true;
@@ -65,6 +67,17 @@ export function useReview() {
       }
       // 真实接口无数据（widget 未跑/无到期卡）→ 回退示例数据（demo 标记，不上报后端）
       cards.value = got && got.length ? got : DEMO_CARDS.map(normalize);
+      // 复习反馈 + 错题重练（强化复习工单任务 2）
+      try {
+        if (kanban?.reviewFeedback) {
+          const fb = await kanban.reviewFeedback();
+          if (fb) feedback.value = { today: fb.today || 0, mastered: fb.mastered || 0, retry: fb.retry || 0 };
+        }
+        if (kanban?.reviewRetry) {
+          const rt = await kanban.reviewRetry();
+          if (rt?.retry) retryQueue.value = rt.retry.map(normalize);
+        }
+      } catch { /* 反馈失败不影响复习 */ }
     } catch (e) {
       error.value = String(e?.message || e).slice(0, 100);
       cards.value = DEMO_CARDS.map(normalize);
@@ -139,5 +152,12 @@ export function useReview() {
 
   const remaining = computed(() => cards.value.length);
 
-  return { cards, current, flipped, history, loading, error, remaining, load, rate, next };
+  // 错题重练（强化复习工单任务 2②）：外部替换卡组（重练队列 → 当前卡组）
+  function setCards(list) {
+    cards.value = (list || []).map(normalize);
+    retryQueue.value = [];
+    next();
+  }
+
+  return { cards, current, flipped, history, loading, error, remaining, feedback, retryQueue, load, rate, next, setCards };
 }

@@ -18,19 +18,16 @@
       </ul>
     </details>
   </div>
-  <!-- 概念题：翻转看答案（现状保持） -->
-  <div v-else class="rc-card" @click="$emit('flip')">
-    <transition name="flip">
-      <div v-if="!flipped" key="front" class="rc-face">
-        <div class="rc-side-label">题目</div>
-        <div class="rc-text">{{ card.title }}</div>
-        <div class="rc-hint">点击查看答案</div>
-      </div>
-      <div v-else key="back" class="rc-face rc-back">
-        <div class="rc-side-label">答案</div>
-        <div class="rc-text rc-answer">{{ card.answer }}</div>
-      </div>
-    </transition>
+  <!-- 概念题：主动回忆（强化复习工单任务 2①——答案默认折叠，点"显示答案"才展开——消除被动回忆） -->
+  <div v-else class="rc-card">
+    <div class="rc-side-label">题目</div>
+    <div class="rc-text">{{ card.title }}</div>
+    <div v-if="!flipped" class="rc-hint">🧠 先在脑子里作答，再显示答案对照（主动回忆更有效）</div>
+    <button v-if="!flipped" class="rc-show-answer" @click="$emit('flip')">👁️ 显示答案</button>
+    <div v-else class="rc-face rc-back">
+      <div class="rc-side-label">答案</div>
+      <div class="rc-text rc-answer">{{ card.answer }}</div>
+    </div>
   </div>
 </template>
 
@@ -62,6 +59,11 @@ const keyPoints = computed(() => {
 .rc-text { font-size: 13px; color: #2d2a45; line-height: 1.6; font-weight: 600; }
 .rc-answer { font-weight: 400; color: #2f4a3a; }
 .rc-hint { margin-top: 8px; font-size: 11px; color: #9a97b8; }
+.rc-show-answer {
+  margin-top: 8px; padding: 5px 14px; border-radius: 8px; cursor: pointer;
+  background: rgba(109,79,216,.10); color: #5d48b8; border: 1px solid rgba(109,79,216,.3); font-size: 12px; font-weight: 600;
+}
+.rc-show-answer:hover { background: rgba(109,79,216,.16); }
 .flip-enter-active, .flip-leave-active { transition: opacity .18s ease, transform .18s ease; }
 .flip-enter-from { opacity: 0; transform: rotateY(-14deg); }
 .flip-leave-to { opacity: 0; transform: rotateY(14deg); }

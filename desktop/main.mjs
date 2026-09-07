@@ -619,6 +619,8 @@ safeHandle("interview:end", () => widgetPost("/api/interview/end", {}));
 // 复习转发
         safeHandle("review:due", () => widgetGet("/api/review/due"));
         safeHandle("review:submit", (e, { id, rating }) => widgetPost("/api/review/submit", { id, rating }));
+        safeHandle("review:feedback", () => widgetGet("/api/review/feedback"));
+        safeHandle("review:retry", () => widgetGet("/api/review/retry"));
         safeHandle("widget:mastery", () => widgetGet("/api/mastery"));
 
 safeHandle("widget:notify", async (e, { title, message }) => {
