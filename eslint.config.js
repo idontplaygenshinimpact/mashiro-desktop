@@ -17,6 +17,7 @@ const panelGlobals = {
   drawIvRadar: "readonly",
   esc: "readonly",
   loadCareerProfile: "readonly",
+  loadTodayBar: "readonly", // 今日任务聚合条（panel-jobs.js 定义，panel-rest.js 轮询调用）
   loadChallenges: "readonly",
   loadCrawlData: "readonly",
   loadDashboard: "readonly",
