@@ -467,3 +467,44 @@ test("质量服务端兜底：低分+stage → 强制追问；高分+followup �
   assert.equal(r2.depth, 0, "高分不追问（depth=0）");
   assert.equal(memory.getInterview().roundIndex, 0, "高分放行本轮换题（不推进不纠缠）");
 });
+
+// ---------- 模拟面试 agent 化工单任务 6：循环内 tool_calls / messages 累积 / 兜底 ----------
+test("agent化①：循环内 tool_calls——LLM 先调工具（查题库）→ 结果回填 → 再出题", async () => {
+  setLlmResponses(
+    `TOOLCALL:${JSON.stringify({ name: "search_challenge", arguments: JSON.stringify({ query: "链表反转" }) })}`,
+    '{"scores":{"tech":60,"expr":60,"depth":60,"edge":60,"reflect":60},"comment":"中规中矩","finish":false,"next_kind":"stage","next_question":"手写链表反转","weak_topic":""}'
+  );
+  await startInterview({ position: "前端" });
+  const r = await submitAnswer("我的自我介绍和项目经历");
+  assert.equal(r.ok, true);
+  assert.ok(r.question.includes("链表反转"), "工具结果影响出题（查题库后出题）");
+});
+
+test("agent化②：messages 累积——多轮后上下文含全部历史（不重构造）", async () => {
+  setLlmResponses(
+    '{"scores":{"tech":60,"expr":60,"depth":60,"edge":60,"reflect":60},"comment":"ok","finish":false,"next_kind":"stage","next_question":"第二轮问题","weak_topic":""}',
+    '{"scores":{"tech":60,"expr":60,"depth":60,"edge":60,"reflect":60},"comment":"ok","finish":false,"next_kind":"stage","next_question":"第三轮问题","weak_topic":""}',
+    '{"scores":{"tech":60,"expr":60,"depth":60,"edge":60,"reflect":60},"comment":"ok","finish":false,"next_kind":"stage","next_question":"第四轮问题","weak_topic":""}'
+  );
+  await startInterview({ position: "前端" });
+  await submitAnswer("第一轮回答");
+  const r2 = await submitAnswer("第二轮回答");
+  assert.equal(r2.ok, true);
+  const session = (await import("../lib/memory.mjs")).memory.getInterview();
+  assert.ok(session.messages && session.messages.length >= 4, "messages 累积（system+多轮 user/assistant）");
+});
+
+test("agent化⑤：next_question 空 → 兜底追问（不再'请继续'）", async () => {
+  setLlmResponses(
+    '{"scores":{"tech":40,"expr":40,"depth":40,"edge":40,"reflect":40},"comment":"差","finish":false,"next_kind":"followup","next_question":"","weak_topic":""}',
+    '{"scores":{"tech":40,"expr":40,"depth":40,"edge":40,"reflect":40},"comment":"差","finish":false,"next_kind":"followup","next_question":"","weak_topic":""}'
+  );
+  await startInterview({ position: "前端" });
+  const r = await submitAnswer("回答得不好");
+  assert.equal(r.ok, true);
+  assert.ok(!r.question.includes("请继续。"), "不再'请继续。'（空兜底）");
+  assert.ok(r.question.includes("深入讲讲"), "兜底追问（基于当前问题）");
+});
+
+
+
