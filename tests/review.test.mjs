@@ -34,6 +34,41 @@ test("addCard 同 topic 更新不重复建卡", () => {
   assert.equal(cards[0].question, "q2");
 });
 
+// ---------- 复习卡去重归一化工单任务 1：相似合并（防漂移卡分裂） ----------
+test("addCard 相似表述合并：不新建漂移卡（状态机簇）", () => {
+  review.addCard({ topic: "状态机与异步并发", question: "q1", source: "薄弱点" });
+  // 漂移表述（同一知识点）→ 合并到已有卡，不新建；question 取更完整（合并语义）
+  const r = review.addCard({ topic: "异步状态机与并发提交控制", question: "q2 更长的追问内容", source: "薄弱点" });
+  const cards = review.loadCards().cards;
+  assert.equal(cards.length, 1, "相似表述合并不新建卡");
+  assert.equal(cards[0].topic, "状态机与异步并发", "保留原卡 topic");
+  assert.equal(cards[0].question, "q2 更长的追问内容", "question 取更完整（防短 question 覆盖详细内容）");
+});
+
+test("addCard 相似合并不误并：不同知识点（SSE 数据流 vs 接口联动）", () => {
+  review.addCard({ topic: "状态机与SSE数据流联动", question: "q1" });
+  // 共享"状态机与"前缀但 2-gram 重叠不足 → 不合并（isSimilarTopicForArchive 门槛）
+  const r = review.addCard({ topic: "状态机与接口联动", question: "q2" });
+  const cards = review.loadCards().cards;
+  assert.equal(cards.length, 2, "不同知识点不误并");
+});
+
+test("mergeSimilarCards：存量漂移卡归一化（幂等）", () => {
+  // 直接 INSERT 模拟存量漂移卡（addCard 已有相似合并，会并成 1 张——存量场景要绕过）
+  const ins = db.prepare("INSERT INTO review_cards (id, topic, question, answer, source, type, priority, fsrs, fsrs_due, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,0,?,?)");
+  ins.run("c1", "状态机与异步并发", "q1", "a1", "薄弱点", "concept", "必会", "{}", 1, 1);
+  ins.run("c2", "异步状态机与并发提交控制", "q2", "a2", "薄弱点", "concept", "必会", "{}", 1, 1);
+  ins.run("c3", "状态机异步并发控制", "q3", "a3", "薄弱点", "concept", "必会", "{}", 1, 1);
+  ins.run("c4", "事件循环", "q4", "a4", "测试", "concept", "必会", "{}", 1, 1); // 不相关，不合并
+  const r = review.mergeSimilarCards();
+  assert.equal(r.merged, 2, "两张漂移卡合并");
+  const cards = review.loadCards().cards;
+  assert.equal(cards.length, 2, "3 张状态机簇 → 1 张 + 事件循环");
+  // 幂等
+  const r2 = review.mergeSimilarCards();
+  assert.equal(r2.merged, 0, "幂等");
+});
+
 // P1-9 回归：复习提交 → 学习计划事件流埋点（kind=review）+ 返回即时反馈 tip
 test("reviewCard 埋点学习事件：recordLearningEvent 落库 + tip 字段", () => {
   const card = review.addCard({ topic: "异步并发控制" });

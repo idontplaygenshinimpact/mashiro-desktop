@@ -506,5 +506,16 @@ test("agent化⑤：next_question 空 → 兜底追问（不再'请继续'）", 
   assert.ok(r.question.includes("深入讲讲"), "兜底追问（基于当前问题）");
 });
 
+// ---------- 伪知识点过滤统一工单任务 4：cleanWeakTopic 委托 _cleanTopic（单一实现） ----------
+test("cleanWeakTopic 委托 _cleanTopic：题目占位符/测试残留被拦截（此前两套模式漏拦）", async () => {
+  const { cleanWeakTopic } = await import("../lib/interview-scoring.mjs");
+  assert.equal(cleanWeakTopic("题1【二叉树遍历（DFS/BFS）】"), null, "题目占位符拦截（_cleanTopic 模式）");
+  assert.equal(cleanWeakTopic("到期新卡"), null, "测试残留拦截");
+  assert.equal(cleanWeakTopic("综合能力"), null, "泛化标签拦截");
+  assert.equal(cleanWeakTopic("事件循环"), "事件循环", "正常知识点保留");
+  const long = "这是一个超过三十个字符的知识点名字用来测试过滤逻辑是否正常工作的例子";
+  assert.equal(cleanWeakTopic(long), long.slice(0, 30), "超长截断保留前 30 字（_cleanTopic 口径）");
+});
+
 
 

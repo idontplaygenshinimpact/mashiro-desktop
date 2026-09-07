@@ -223,11 +223,13 @@ test("markChallengeWrong：wrong_count 累加 + 薄弱点回流 + 自动建复�
   assert.equal(db.prepare("SELECT wrong_count FROM challenges WHERE id='debounce'").get().wrong_count, 2, "累加");
   // 薄弱点回流到 memory（弱断言：不抛即可；memory 单例在临时 DB 上）
   assert.equal(ac.markChallengeWrong("nope").ok, false, "不存在报错");
-  // 复习卡闭环：答错自动建 FSRS 卡（幂等，重复答错不重复建）
+  // 复习卡闭环：答错自动建 FSRS 卡（幂等，重复答错不重复建；相似表述合并——"手写题·"前缀
+  // 与薄弱点自动建的"手写防抖 debounce"是同一知识点，addCard 相似合并到一张）
+  await new Promise((r) => setTimeout(r, 100)); // 等薄弱点自动建卡（fire-and-forget 异步）完成——防时序偶发
   const { review } = await import("../lib/review.mjs");
-  const cards = review.loadCards().cards.filter((c) => c.topic === "手写题·手写防抖 debounce");
-  assert.equal(cards.length, 1, "答错建 1 张复习卡（topic 去重）");
-  assert.equal(cards[0].source, "手写题库");
+  const cards = review.loadCards().cards.filter((c) => c.topic === "手写题·手写防抖 debounce" || c.topic === "手写防抖 debounce");
+  assert.equal(cards.length, 1, "答错建 1 张复习卡（topic 去重 + 相似合并）");
+  assert.equal(cards[0].source, "手写题库", "来源保留先建卡（手写题库）");
   assert.ok(cards[0].question.includes("完整实现并讲清原理"), "复习卡问题为复现题");
 });
 

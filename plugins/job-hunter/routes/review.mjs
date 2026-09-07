@@ -149,8 +149,8 @@ export function registerReviewRoutes(router, ctx) {
       })
       .then(async (kbContext) => {
         const { solveQuestionStream } = await import("#lib/ai.ts");
-        const { getCareerProfile } = await import("#lib/career.mjs");
-        const prof = getCareerProfile();
+        // 复习卡讲解方向统一"面试"（工单任务 3）：复习错题讲解不按岗位方向——
+        // 卡是跨岗位的知识点，用 positionDefault 会让讲解偏岗位（如"前端实习生"）
         const text = `这是一道面试题「${card.topic}」，你在复习时答错了/答得困难，需要彻底讲透。
 复习卡问题：${card.question || card.topic}
 复习卡参考答案：${String(card.answer || "（无）").slice(0, 1500)}
@@ -161,7 +161,7 @@ ${kbContext ? `本地知识库相关段落（仅作补充素材）：\n${kbConte
           title: String(card.topic),
           text,
           company: "复习错题讲解",
-          position: prof.positionDefault || "前端",
+          position: "面试",
           sourceUrl: "复习卡",
         }, (delta) => {
           full += delta;
