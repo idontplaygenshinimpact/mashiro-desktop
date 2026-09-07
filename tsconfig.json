@@ -6,11 +6,12 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "strict": false,
     "skipLibCheck": true,
     "noImplicitAny": false
   },
-  "include": ["lib/**/*.mjs", "plugins/**/*.mjs", "config.mjs", "widget.mjs", "scripts/**/*.mjs", "mcp-server.mjs"]
+  "include": ["lib/**/*.mjs", "lib/**/*.ts", "plugins/**/*.mjs", "config.mjs", "widget.mjs", "scripts/**/*.mjs", "mcp-server.mjs"]
 }
 

@@ -5,7 +5,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync } fr
 import path from "node:path";
 import { config } from "./config.mjs";
 import { fetchPages, closeBrowser } from "./lib/fetch-page.mjs";
-import { classifyPage, solveQuestion } from "./lib/ai.mjs";
+import { classifyPage, solveQuestion } from "./lib/ai.ts";
 
 function readLinks(file) {
   if (!existsSync(file)) return [];

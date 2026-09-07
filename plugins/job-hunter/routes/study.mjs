@@ -213,7 +213,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
     const push = makePush(res);
     push({ type: "start", topic: item.topic });
     let full = "";
-    import("#lib/ai.mjs").then(async ({ solveQuestionStream }) => {
+    import("#lib/ai.ts").then(async ({ solveQuestionStream }) => {
       const { getCareerProfile } = await import("#lib/career.mjs");
       const prof = getCareerProfile();
       const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（缓存；重新生成才重新搜集）
@@ -325,7 +325,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
     const push = makePush(res);
     push({ type: "start", topic: item.topic });
     let full = "";
-    import("#lib/ai.mjs").then(async ({ solveAppendStream }) => {
+    import("#lib/ai.ts").then(async ({ solveAppendStream }) => {
       const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（追问也基于真实代码；缓存）
       full = await solveAppendStream({
         topic: item.topic,
@@ -382,7 +382,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
     const push = makePush(res);
     push({ type: "start", topic: item.topic });
     let full = "";
-    import("#lib/ai.mjs").then(async ({ consolidateStudyStream }) => {
+    import("#lib/ai.ts").then(async ({ consolidateStudyStream }) => {
       // 读 source 面经原文注入（与重新生成同款修复——整理不丢失来源：
       // 素材只有讲解文件内容，不含原始面经，整理后可能与面经脱节）
       let sourceText = "";
@@ -460,7 +460,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
         const push = makePush(res);
         push({ type: "start", topic: topics.map((t) => t.topic).join(" + ") });
         let full = "";
-        import("#lib/ai.mjs").then(async ({ clusterStudyStream }) => {
+        import("#lib/ai.ts").then(async ({ clusterStudyStream }) => {
           // 每个条目注入自己的 source 面经原文（与 consolidate 同款修复——归并不丢失来源；
           // 每个 source 截断 2000 字符控制总量）
           const topicsWithSource = await Promise.all(topics.map(async (t) => {
@@ -560,7 +560,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
       }
     }
     // 无文件：现场生成讲解（格式：结论/原理/实现/边界），并写入 study_notes 存档
-    import("#lib/ai.mjs").then(async ({ solveQuestion }) => {
+    import("#lib/ai.ts").then(async ({ solveQuestion }) => {
       const { getCareerProfile } = await import("#lib/career.mjs");
       const prof = getCareerProfile();
       const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（缓存；重新生成才重新搜集）

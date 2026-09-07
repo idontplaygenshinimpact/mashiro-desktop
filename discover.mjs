@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 import path from "node:path";
 import { config } from "./config.mjs";
 import { fetchPage, fetchPages, closeBrowser } from "./lib/fetch-page.mjs";
-import { classifyPage, solveQuestion, pickPosts, summarizeQiuzhao, detectQuestions } from "./lib/ai.mjs";
+import { classifyPage, solveQuestion, pickPosts, summarizeQiuzhao, detectQuestions } from "./lib/ai.ts";
 import { runPipeline, pipelineSummary } from "./lib/pipeline.mjs";
 
 const DEFAULT_STARTS = [

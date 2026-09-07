@@ -54,7 +54,7 @@ server.tool(
     try {
       const noKey = requireLlmKey();
       if (noKey) return { content: [{ type: "text", text: noKey }], isError: true };
-      const { solveQuestion } = await import("./lib/ai.mjs");
+      const { solveQuestion } = await import("./lib/ai.ts");
       const md = await solveQuestion({
         title: question,
         text: `这是一道前端面试题，请完整讲解：${question}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,

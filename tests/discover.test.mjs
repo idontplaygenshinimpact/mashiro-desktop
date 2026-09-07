@@ -3,9 +3,9 @@ import { test, beforeEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import { mockFetchPage, setMockPages } from "./helpers.mjs";
 
-// mock ai.mjs（discover 静态 import classifyPage/pickPosts/detectQuestions 等）
+// mock ai.ts（discover 静态 import classifyPage/pickPosts/detectQuestions 等）
 const calls = { pick: [], classify: [], detect: [] };
-mock.module(new URL("../lib/ai.mjs", import.meta.url).href, {
+mock.module(new URL("../lib/ai.ts", import.meta.url).href, {
   namedExports: {
     classifyPage: async ({ title, text: _text }) => {
       const r = { type: "other", direction: "other", company: "", position: "", worth: 50, reason: "mock" };

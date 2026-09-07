@@ -148,7 +148,7 @@ export function registerReviewRoutes(router, ctx) {
         return kbContext;
       })
       .then(async (kbContext) => {
-        const { solveQuestionStream } = await import("#lib/ai.mjs");
+        const { solveQuestionStream } = await import("#lib/ai.ts");
         const { getCareerProfile } = await import("#lib/career.mjs");
         const prof = getCareerProfile();
         const text = `这是一道面试题「${card.topic}」，你在复习时答错了/答得困难，需要彻底讲透。

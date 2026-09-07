@@ -132,7 +132,7 @@ test("⑤ study-consolidate：正常 → consolidateStudyStream 返回整合内�
   writeFileSync(f, "# 事件循环\n\n## 题目\n" + "原始讲解内容足够长，用于测试整理备份逻辑。事件循环是 JavaScript 的核心机制，宏任务与微任务的执行顺序决定了代码的运行结果。".repeat(4) + "\n### 结论\n结论内容\n", "utf8");
   setLlmResponses("## 总览\n整理后的完整讲解内容，足够长，包含结构。\n## 核心概念\n整理要点\n### 结论\n整理结论\n" + "补充内容确保超过两百字符阈值，用于验证整理结果完整性。".repeat(10));
   // 直接调 consolidateStudyStream（handler 的 import 链在测试环境挂起——detail 正常 consolidate 异常，属测试环境限制）
-  const { consolidateStudyStream } = await import("#lib/ai.mjs");
+  const { consolidateStudyStream } = await import("#lib/ai.ts");
   const full = await consolidateStudyStream({ topic: item.topic, content: "素材".repeat(200) }, () => {});
   // eslint-disable-next-line no-console
   console.log("⑤ full:", typeof full === "string" ? "len=" + full.length + " head=" + full.slice(0, 40) : full);
@@ -146,7 +146,7 @@ test("⑥ study-cluster：归并结果过短 → clusterStudyStream 返回过短
   writeFileSync(f, "# 事件循环\n\n## 题目\n" + "原始讲解内容足够长，用于测试归并。事件循环的宏任务微任务机制是面试高频考点，需要理解执行顺序和优先级。".repeat(3) + "\n### 结论\n结论\n", "utf8");
   setLlmResponses("太短"); // cluster 结果过短
   // 直接调 clusterStudyStream（handler 的 import 链在测试环境挂起——同 ⑤ 说明）
-  const { clusterStudyStream } = await import("#lib/ai.mjs");
+  const { clusterStudyStream } = await import("#lib/ai.ts");
   const full = await clusterStudyStream({ topics: [item.topic], onChunk: () => {} });
   assert.ok(String(full).trim().length < 200, "过短结果（handler 的 <200 守卫会拒绝存档）");
 });

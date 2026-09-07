@@ -1,18 +1,16 @@
 // AI 模块：DeepSeek 直连（chat/completions）
 // 功能1: classifyPage 判断页面类型（面经/招聘/笔试讲解/无关）
 // 功能2: solveQuestion 完整讲解（考察点/思路/讲解/答案/复杂度/追问）
+// TS 升级工单任务 2：lib/ai.mjs → lib/ai.ts（node 22.18+ type stripping 直接运行；esbuild 打包无感）
 import { extractJson } from "./llm.mjs";
 import { config } from "../config.mjs";
 import { sanitizeExternal, UNTRUSTED_DECLARATION } from "./prompt-guard.mjs";
+import type { AgentMessage, LLMOptions } from "./types.d.ts";
 
 // 从模型回复中提取第一个 JSON 对象（兼容带代码块/前后缀的回复）
 
 
-/**
- * @param {Array<{role: string, content?: string}>} messages
- * @param {{ maxTokens?: number, json?: boolean, temperature?: number, role?: string }} [opts]
- */
-export async function chat(messages, { maxTokens = 4000, json = false, temperature = 0.4, role } = {}) {
+export async function chat(messages: AgentMessage[], { maxTokens = 4000, json = false, temperature = 0.4, role }: LLMOptions = {}) {
   // 注意：Go 网关不支持 response_format=json_object（400），改为提示词约束 + 提取
   if (json) {
     if (messages[0]?.content?.includes("JSON")) {

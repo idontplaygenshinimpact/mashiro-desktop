@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "bin": {
     "mashiro-mcp": "bin/mashiro-mcp.mjs"
@@ -32,9 +32,9 @@
     "run": "node run.mjs",
     "smoke": "node scripts/smoke-test.mjs",
     "e2e": "node scripts/electron-e2e.mjs",
-    "test": "node --experimental-test-module-mocks --test \"tests/*.test.mjs\" && node --test \"tests/integration/*.test.mjs\"",
-    "test:unit": "node --experimental-test-module-mocks --test \"tests/*.test.mjs\"",
-    "test:integration": "node --test \"tests/integration/*.test.mjs\"",
+    "test": "node --experimental-strip-types --experimental-test-module-mocks --test \"tests/*.test.mjs\" && node --experimental-strip-types --test \"tests/integration/*.test.mjs\"",
+    "test:unit": "node --experimental-strip-types --experimental-test-module-mocks --test \"tests/*.test.mjs\"",
+    "test:integration": "node --experimental-strip-types --test \"tests/integration/*.test.mjs\"",
     "bench": "node scripts/benchmark.mjs",
     "bench:quick": "node scripts/benchmark.mjs --quick",
     "bench:validate": "node scripts/validate-evaldata.mjs --report benchmark/evaldata-hashes.json",

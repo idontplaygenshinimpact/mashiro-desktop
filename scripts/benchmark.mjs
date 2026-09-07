@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { llmChat, extractJson, startEvalMetrics, getEvalMetrics } from "../lib/llm.mjs";
-import { solveQuestion, classifyPage, detectQuestions } from "../lib/ai.mjs";
+import { solveQuestion, classifyPage, detectQuestions } from "../lib/ai.ts";
 import { matchKp } from "../lib/knowledge.mjs";
 import { summarizeEvalCost, formatEvalCost } from "../lib/eval-cost.mjs";
 import { appendEvalSummary } from "../lib/eval-summary.mjs";

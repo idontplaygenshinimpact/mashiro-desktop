@@ -1,6 +1,6 @@
 // 消融基线 A/B（Phase 评测 W3 §5：诚实版——prompt 工程消融，非 RAG）
 // 基线 A：裸 prompt——一句话"讲一讲这道题" + 题目（无系统人格、无结构模板、无 sanitize/来源约束）
-// 全链路 B：现有 solveQuestion（lib/ai.mjs：career 人格化 + 结论/原理/实现/边界结构模板 + UNTRUSTED 声明）
+// 全链路 B：现有 solveQuestion（lib/ai.ts：career 人格化 + 结论/原理/实现/边界结构模板 + UNTRUSTED 声明）
 // 同题 A/B 随机顺序跑（固定 seed 可复现，消除判官顺序偏差）；各用共享评分栈
 // （Judge 双评 + CRAG 事实判官 + must_cover 覆盖度，与 benchmark.mjs 同口径）
 // 用法: node scripts/bench-ablation.mjs [--sample N] [--seed S] [--no-save]
@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { llmChat, getReplyText, startEvalMetrics, getEvalMetrics } from "../lib/llm.mjs";
-import { solveQuestion } from "../lib/ai.mjs";
+import { solveQuestion } from "../lib/ai.ts";
 import { judgeAnswer, judgeTruthfulness, coverageRate, truthScore } from "../lib/eval-scoring.mjs";
 import { summarizeEvalCost, formatEvalCost } from "../lib/eval-cost.mjs";
 import { appendEvalSummary } from "../lib/eval-summary.mjs";

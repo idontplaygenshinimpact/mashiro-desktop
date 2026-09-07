@@ -1,11 +1,11 @@
-// ai.mjs 单测：分类/挑帖/题目检测/讲解/压缩（mock LLM + 临时 DB）
+// ai.ts 单测：分类/挑帖/题目检测/讲解/压缩（mock LLM + 临时 DB）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses } from "./helpers.mjs";
 
 const dbDir = setupTempDb("ai");
-mockLLM(); // 拦截 ai.mjs 的动态 import("./llm.mjs")
-const ai = await import("../lib/ai.mjs");
+mockLLM(); // 拦截 ai.ts 的动态 import("./llm.mjs")
+const ai = await import("../lib/ai.ts");
 
 beforeEach(async () => { await clearAllTables(); });
 after(() => { cleanupTempDb(dbDir); });
@@ -260,7 +260,7 @@ test("extractResumeProjects 空/非法返回空数组", async () => {
 // ---------- compactMessages（纵向拆分第 1 刀：已平移至 tests/ai-compact.test.mjs） ----------
 
 test("topicDirection：从知识本身——统一面试辅导老师（不再按方向定制/双方向）", async () => {
-  const { topicDirection } = await import("../lib/ai.mjs");
+  const { topicDirection } = await import("../lib/ai.ts");
   const prof = { roleLabel: "前端面试辅导老师", scopeNote: "前端" };
   // 2026-08 简化：不再按方向定制（前端/Agent/双方向判定引入"前端场景硬塞"等问题）——统一"面试辅导老师"
   const d1 = topicDirection("前端性能优化方案", "LLM 流式输出每帧携带 1-10 个 token，不能每 token 触发 setState", prof);
@@ -274,7 +274,7 @@ test("topicDirection：从知识本身——统一面试辅导老师（不再按
 });
 
 test("讲解范围约束：solveQuestion prompt 从知识本身讲（不改编方向）", async () => {
-  const ai = await import("../lib/ai.mjs");
+  const ai = await import("../lib/ai.ts");
   setLlmResponses("讲解内容", "补充内容"); // solveQuestion 内部 2 次 LLM 调用（防 mock 队列空假绿）
   await ai.solveQuestion({ title: "TraceParser 与 RiskReasoner 拆分", text: "多源安全日志 Schema 与实体身份不一致", company: "阿里云", position: "AI 应用开发", sourceUrl: "test" });
   const { getLastMessages } = await import("./helpers.mjs");
@@ -286,7 +286,7 @@ test("讲解范围约束：solveQuestion prompt 从知识本身讲（不改编�
 });
 
 test("一致性约束：solveAppendStream prompt 含一致性约束（防多视角矛盾）", async () => {
-  const ai = await import("../lib/ai.mjs");
+  const ai = await import("../lib/ai.ts");
   await ai.solveAppendStream({ topic: "TraceParser 与 RiskReasoner 拆分", existing: "已有讲解内容", question: "原始面经的范围是什么" }, () => {});
   const { getLastMessages } = await import("./helpers.mjs");
   const joined = getLastMessages().map((m) => String(m.content || "")).join("\n");
@@ -296,7 +296,7 @@ test("一致性约束：solveAppendStream prompt 含一致性约束（防多视�
 });
 
 test("讲解重点约束：solveQuestion prompt 含代码行数限制 + 纯理解性写无代码", async () => {
-  const ai = await import("../lib/ai.mjs");
+  const ai = await import("../lib/ai.ts");
   setLlmResponses("讲解内容", "补充内容"); // solveQuestion 内部 2 次 LLM 调用
   await ai.solveQuestion({ title: "React Hooks 原理", text: "链表与闭包机制", company: "c", position: "前端", sourceUrl: "test" });
   const { getLastMessages } = await import("./helpers.mjs");

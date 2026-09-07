@@ -180,7 +180,7 @@ router.route("/api/resume-plan", (req, res) => {  // 简历项目 → 学习清�
         try { resume = String(jobMatchApi.getResumeRaw?.()?.text || "").trim(); } catch { /* ignore */ }
       }
       if (!resume) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "resume required（或先在设置中心上传简历）" })); return; }
-      const { extractResumeProjects } = await import("#lib/ai.mjs");
+      const { extractResumeProjects } = await import("#lib/ai.ts");
       const projects = await extractResumeProjects(resume);
       if (!projects.length) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, added: 0, projects: [], message: "未从简历中识别到项目" })); return; }
       // 同步：简历更新 → 删除过时的未完成项目条目（如简历移除了网易云音乐项目，清单不再残留）
