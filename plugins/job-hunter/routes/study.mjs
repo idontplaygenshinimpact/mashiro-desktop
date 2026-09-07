@@ -663,6 +663,32 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
       }
     });
   });
+
+  // ---------- 面经产出转学习任务工单：讲解存档 → 学习清单（列表 + 转学习） ----------
+  router.route("/api/study-notes", async (req, res) => {
+    try {
+      const { listStudyNotesWithPlan } = await import("#lib/study-notes-learn.mjs");
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, notes: listStudyNotesWithPlan() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+  router.route("/api/study-notes/to-plan", "POST", (req, res) => {
+    readBody(req, res, async (body) => {
+      try {
+        const { file, all } = JSON.parse(body || "{}");
+        const { learnOneNote, learnAllNotes } = await import("#lib/study-notes-learn.mjs");
+        const r = all ? learnAllNotes() : learnOneNote(String(file || ""));
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, ...r }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+  });
 }
 
 

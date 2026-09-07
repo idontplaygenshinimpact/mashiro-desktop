@@ -253,6 +253,7 @@ $("import-save")?.addEventListener("click", async () => {
 async function loadCrawlData() {
   const r = await window.kanban.getData();
   if (!r?.ok) return;
+  loadStudyNotes(); // 讲解存档列表（面经产出转学习）
   const prog = r.progress || {};
   if (prog.status === "running") {
     $("crawl-progress").textContent = "🔍 " + (prog.message || "爬取中...");
@@ -400,6 +401,54 @@ async function loadCrawlData() {
     });
   } catch { /* ignore */ }
 }
+
+// ============ 讲解存档（面经产出转学习：列表 + 转学习按钮 + 已转标记） ============
+async function loadStudyNotes() {
+  const box = $("notes-list");
+  if (!box) return;
+  try {
+    const r = await fetch(API_BASE + "/api/study-notes");
+    const j = await r.json();
+    if (!j?.ok) return;
+    const notes = j.notes || [];
+    box.innerHTML = notes.length
+      ? notes.slice(0, 30).map((n) => `
+        <div class="file-item">
+          <span class="tag ${n.inPlan ? "" : "tag-fail"}">${n.inPlan ? "✅ 已转" : "📥 待转"}</span>
+          <span class="t" title="${esc(n.file)}">${esc(n.topic)}</span>
+          <span style="color:#6c6c7c;font-size:10px">${(n.size / 1024).toFixed(1)}KB</span>
+          ${n.inPlan ? "" : `<button class="job-btn notes-learn-one" data-file="${esc(n.file)}" style="font-size:10px;padding:1px 6px;">转学习</button>`}
+        </div>`).join("")
+      : '<div style="color:#7c7c7c;font-size:12px">暂无讲解存档（清单条目点「讲解」后生成）</div>';
+    box.querySelectorAll(".notes-learn-one").forEach((b) => {
+      b.addEventListener("click", async () => {
+        try {
+          const rr = await fetch(API_BASE + "/api/study-notes/to-plan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ file: b.dataset.file }),
+          });
+          const jj = await rr.json();
+          window.kanban.notify("📥 转学习", jj.added > 0 ? `已加入学习清单：${b.dataset.file}` : (jj.skipped || "已在清单"));
+          loadStudyNotes();
+        } catch { window.kanban.notify("📥 转学习", "转学习失败，请稍后重试"); }
+      });
+    });
+  } catch { /* widget 未启动忽略 */ }
+}
+
+$("notes-learn-all")?.addEventListener("click", async () => {
+  try {
+    const rr = await fetch(API_BASE + "/api/study-notes/to-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ all: true }),
+    });
+    const jj = await rr.json();
+    window.kanban.notify("📥 全部转学习", `共 ${jj.total ?? 0} 篇：新增 ${jj.added ?? 0} 条，已转跳过 ${jj.skipped ?? 0} 条`);
+    loadStudyNotes();
+  } catch { window.kanban.notify("📥 全部转学习", "转学习失败，请稍后重试"); }
+});
 
 $("crawl-run").addEventListener("click", async () => {
   await window.kanban.runDiscover();
