@@ -478,6 +478,13 @@ try {
   if (removed) console.log(`[widget] tool_results 清理：删除 ${removed} 个过期文件（>7 天）`);
 } catch { /* 目录不存在/权限问题忽略 */ }
 
+// 复习卡强化激活工单任务 1①：启动时补卡（清单无卡条目 → 多角度题 + 优先级——幂等，补完不再补）
+try {
+  const { ensurePlanCoverage } = await import("./lib/review.mjs");
+  const r = await ensurePlanCoverage();
+  if (r.added > 0) console.log(`[widget] 复习卡补卡：清单 ${r.added} 个无卡条目已补（多角度题 + 优先级）`);
+} catch { /* 补卡失败不阻断启动 */ }
+
 // ============ 主动推送：按关注点定时巡检新内容（纵向拆分：逻辑在 lib/patrol.mjs，可独立测试） ============
 const patrol = createPatrol({
   disabled: DISABLE_PATROL,

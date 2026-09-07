@@ -13,6 +13,9 @@ import path from "node:path";
 export function setupTempDb(label) {
   const dir = mkdtempSync(path.join(tmpdir(), `mianshi-${label}-`));
   process.env.MIANSHI_DB_PATH = path.join(dir, "test.db");
+  // 测试环境标记：addPlanItems 的 fire-and-forget 自动补卡默认关闭
+  // （防异步补卡消费 mock LLM 队列/污染后续测试断言——测试间干扰）
+  process.env.MIANSHI_TEST = "1";
   // 测试默认隔离 MCP：指向空配置（防止 chatWithAgent 连到真实/残留 MCP server 导致子进程挂住测试进程）
   const mcpCfg = path.join(dir, "mcp-empty.json");
   process.env.MIANSHI_MCP_CONFIG = mcpCfg;

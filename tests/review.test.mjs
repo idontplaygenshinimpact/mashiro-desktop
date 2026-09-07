@@ -270,3 +270,45 @@ test("强化④：getReviewFeedback 今日统计", async () => {
 });
 
 
+
+// ---------- 复习卡强化激活工单任务 2③：接线测试（幂等 + addPlanItems 触发） ----------
+test("激活①：ensurePlanCoverage 幂等（补完不再补）", async () => {
+  const { ensurePlanCoverage } = await import("../lib/review.mjs");
+  const { addPlanItems } = await import("../lib/study.mjs");
+  addPlanItems([{ topic: "事件循环", why: "w", source: "s", verify_question: "q", level: "必会" }]);
+  setLlmResponses(JSON.stringify([{ i: 0, question: "原理：为什么；边界：异常；场景：实际" }]));
+  const r1 = await ensurePlanCoverage();
+  assert.ok(r1.added >= 1, "首次补卡");
+  const r2 = await ensurePlanCoverage();
+  assert.equal(r2.added, 0, "幂等（补完不再补）");
+});
+
+test("激活②：addPlanItems 后自动触发补卡（新条目 → 卡）", async () => {
+  const { addPlanItems, setAutoPlanCoverage } = await import("../lib/study.mjs");
+  const { review } = await import("../lib/review.mjs");
+  setAutoPlanCoverage(true); // 测试环境默认关闭（防测试间干扰）——本测试显式开启验证接线
+  setLlmResponses(JSON.stringify([{ i: 0, question: "原理：为什么；边界：异常；场景：实际" }]));
+  addPlanItems([{ topic: "手写防抖", why: "w", source: "s", verify_question: "q", level: "必会" }]);
+  await new Promise((r) => setTimeout(r, 100)); // 等 fire-and-forget 补卡
+  const card = review.loadCards().cards.find((c) => c.topic === "手写防抖");
+  assert.ok(card, "新条目自动补卡");
+  assert.equal(card.priority, "必会", "优先级从 level");
+});
+
+test("激活③：ensurePlanCoverage 存量升级（占位 question → 多角度 + 优先级回填，幂等）", async () => {
+  const { ensurePlanCoverage } = await import("../lib/review.mjs");
+  const { addPlanItems } = await import("../lib/study.mjs");
+  // 旧形态卡：占位 question + 默认优先级（拓展）——模拟存量数据（工单任务 2① 的 117 张旧卡）
+  review.addCard({ topic: "HTTP 缓存", question: "请简述：HTTP 缓存", answer: "强缓存/协商缓存", source: "学习清单" });
+  addPlanItems([{ topic: "HTTP 缓存", why: "w", source: "s", verify_question: "q", level: "必会" }]);
+  setLlmResponses(JSON.stringify([{ i: 0, question: "原理：缓存命中；边界：协商失效；场景：静态资源" }]));
+  const r = await ensurePlanCoverage();
+  assert.ok(r.upgraded >= 2, "优先级回填 + question 重生成");
+  const card = review.loadCards().cards.find((c) => c.topic === "HTTP 缓存");
+  assert.equal(card.priority, "必会", "优先级从清单 level 回填");
+  assert.ok(card.question.includes("原理"), "占位 question 升级为多角度");
+  // 幂等：再跑不再动、不再调 LLM
+  const r2 = await ensurePlanCoverage();
+  assert.equal(r2.added, 0);
+  assert.equal(r2.upgraded, 0, "升级完不再动");
+});
