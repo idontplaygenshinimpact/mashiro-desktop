@@ -126,3 +126,60 @@ test("执行链路③：loopSuggest 有计划建议（未完成 → 建议学）
   const s = loopSuggest();
   assert.ok(s.suggestions.some((x) => x.includes("学习计划")), "有计划建议");
 });
+
+// ---------- 算法专项提升计划工单：scope 自动提取 + 创建 + 回流 ----------
+test("算法专项①：extractAlgoScope 从复习卡/清单/题库提取算法关键词（去重）", async () => {
+  // 造数据：algo 卡 + 清单算法条目 + 手写题库
+  db.prepare("INSERT INTO review_cards (id, topic, question, answer, source, type, priority, fsrs, fsrs_due, created_at, updated_at) VALUES ('c1','反转链表','q','a','t','algo','必会','{}',0,1,1)").run();
+  db.prepare("INSERT INTO review_cards (id, topic, question, answer, source, type, priority, fsrs, fsrs_due, created_at, updated_at) VALUES ('c2','事件循环','q','a','t','concept','必会','{}',0,1,1)").run();
+  db.prepare("INSERT INTO study_plan_items (id, topic, why, source, verify_question, level, done, reviewed, grp, date, created_at) VALUES ('p1','最长递增子序列','w','s','q','必会',0,0,'算法与手写','2026-09-07',1)").run();
+  db.prepare("INSERT INTO challenges (id, title, category, difficulty, frequency, time_limit, description, skeleton, test_code, source, created_at) VALUES ('ch1','LRU 缓存','algorithm',2,3,15,'d','s','t','test',1)").run();
+  const { extractAlgoScope } = await import("../lib/learning-plan.mjs");
+  const scope = extractAlgoScope();
+  assert.ok(scope.includes("链表"), "algo 卡关键词（链表）");
+  assert.ok(scope.includes("子序列"), "清单算法条目关键词（子序列）");
+  assert.ok(scope.includes("lru"), "题库关键词（lru）");
+  assert.ok(!scope.includes("事件循环"), "概念卡不贡献关键词");
+  assert.equal(new Set(scope).size, scope.length, "去重");
+});
+
+test("算法专项②：创建 30 天算法计划（quota 3/天 + 5 阶段 + scope 自动提取）", async () => {
+  const { extractAlgoScope, createLearningPlan, getLearningPlanStatus } = await import("../lib/learning-plan.mjs");
+  db.prepare("INSERT INTO review_cards (id, topic, question, answer, source, type, priority, fsrs, fsrs_due, created_at, updated_at) VALUES ('c1','反转链表','q','a','t','algo','必会','{}',0,1,1)").run();
+  const scope = extractAlgoScope();
+  assert.ok(scope.length >= 1, "scope 非空");
+  const r = await createLearningPlan({
+    title: "算法专项提升",
+    scope,
+    quotaPerDay: 3,
+    durationDays: 30,
+    milestones: ["阶段1：基础数据结构", "阶段2：链表与双指针", "阶段3：树与图", "阶段4：动态规划与贪心", "阶段5：排序查找与手写专项"],
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.plan.title, "算法专项提升");
+  assert.equal(r.plan.quotaPerDay, 3);
+  assert.equal(r.plan.durationDays, 30);
+  assert.equal(r.plan.milestones.length, 5, "5 阶段");
+  const st = getLearningPlanStatus(r.plan.id);
+  assert.equal(st.ok, true);
+  assert.equal(st.plan.title, "算法专项提升");
+});
+
+test("算法专项③：做题 fail 回流——计划统计 + 薄弱点 + 复习卡（闭环）", async () => {
+  const { createLearningPlan, recordLearningEvent, getLearningPlanStatus } = await import("../lib/learning-plan.mjs");
+  const { memory } = await import("../lib/memory.mjs");
+  const { review } = await import("../lib/review.mjs");
+  await createLearningPlan({ title: "算法专项提升", scope: ["链表"], quotaPerDay: 3, durationDays: 30 });
+  const pid = getLearningPlans()[0].id;
+  // 做题 fail（判题沙箱调用方：recordLearningEvent + addWeakPoint 回流）
+  recordLearningEvent({ topic: "反转链表", kind: "challenge_done", result: "fail", quality: 0, planId: pid });
+  memory.addWeakPoint("反转链表", "手写题练习");
+  await new Promise((r) => setTimeout(r, 80)); // 等复习卡异步创建
+  // 计划统计：fail 计入
+  const st = getLearningPlanStatus(pid);
+  assert.equal(st.status.doneTotal, 1);
+  assert.deepEqual(st.status.weakTopics, ["反转链表"], "薄弱主题聚合");
+  // 薄弱点 + 复习卡出现该题
+  assert.ok(memory.getWeakPoints().some((w) => w.topic === "反转链表"), "薄弱点回流");
+  assert.ok(review.loadCards().cards.some((c) => c.topic === "反转链表"), "复习卡回流");
+});
