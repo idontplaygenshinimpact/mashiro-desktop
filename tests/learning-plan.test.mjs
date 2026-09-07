@@ -16,10 +16,10 @@ beforeEach(async () => {
 });
 after(() => { cleanupTempDb(dbDir); });
 
-test("createLearningPlan：必填校验 + 计划实体完整", () => {
-  assert.equal(createLearningPlan({ title: "" }).ok, false, "标题必填");
-  assert.equal(createLearningPlan({ title: "算法", scope: [] }).ok, false, "scope 必填（归类钥匙）");
-  const r = createLearningPlan({ title: "算法专项", scope: ["二分", "链表", "DP"], quotaPerDay: 3, durationDays: 90, milestones: ["阶段1：链表", "阶段2：DP"] });
+test("createLearningPlan：必填校验 + 计划实体完整", async () => {
+  assert.equal((await createLearningPlan({ title: "" })).ok, false, "标题必填");
+  assert.equal((await createLearningPlan({ title: "算法", scope: [] })).ok, false, "scope 必填（归类钥匙）");
+  const r = await createLearningPlan({ title: "算法专项", scope: ["二分", "链表", "DP"], quotaPerDay: 3, durationDays: 90, milestones: ["阶段1：链表", "阶段2：DP"] });
   assert.equal(r.ok, true);
   assert.ok(r.plan.id.startsWith("plan-"));
   assert.equal(r.plan.quotaPerDay, 3);
@@ -27,8 +27,8 @@ test("createLearningPlan：必填校验 + 计划实体完整", () => {
   assert.equal(getLearningPlans().length, 1);
 });
 
-test("事件归属：topic 命中 scope → planId；未命中 → null", () => {
-  createLearningPlan({ title: "算法专项", scope: ["链表", "二分"] });
+test("事件归属：topic 命中 scope → planId；未命中 → null", async () => {
+  await createLearningPlan({ title: "算法专项", scope: ["链表", "二分"] });
   const hit = recordLearningEvent({ topic: "反转链表（LeetCode 206）", kind: "challenge_done", result: "pass", quality: 1, durationMs: 60000 });
   assert.ok(hit.ok && hit.planId, "链表题自动归入算法计划");
   const miss = recordLearningEvent({ topic: "事件循环与微任务", kind: "challenge_done", result: "fail", quality: 0 });
@@ -99,4 +99,30 @@ test("buildFeedbackTip：转正提示（历史 fail → 本次 pass）+ 无基�
 test("buildFeedbackTip：未归属计划 → 仅转正提示，不打扰普通学习", () => {
   const tip = buildFeedbackTip({ topic: "普通学习内容", kind: "manual", result: "pass", quality: 1, durationMs: 99999 });
   assert.equal(tip, null, "未归属计划不提示节奏");
+});
+
+// ---------- 学习计划执行链路工单验收：清单/面试队列/建议 ----------
+test("执行链路①：创建计划 → scope 单元入学习清单（可一键讲解）", async () => {
+  const { getPlan } = await import("../lib/study.mjs");
+  await createLearningPlan({ title: "算法专项", scope: ["二分", "链表"], quotaPerDay: 2 });
+  await new Promise((r) => setTimeout(r, 50)); // 等清单写入（动态 import 异步）
+  const items = getPlan().items || [];
+  assert.ok(items.some((i) => i.topic === "二分" && String(i.source || "").includes("学习计划")), "scope 单元入清单（计划来源）");
+  assert.ok(items.some((i) => i.topic === "链表"), "链表入清单");
+});
+
+test("执行链路②：buildInterviewFocus 含计划未完成单元（score 60）", async () => {
+  const { buildInterviewFocus } = await import("../lib/interview-focus.mjs");
+  await createLearningPlan({ title: "算法专项", scope: ["二分查找"], quotaPerDay: 2 });
+  const focus = await buildInterviewFocus();
+  const planItem = focus.find((f) => f.topic === "二分查找");
+  assert.ok(planItem, "计划单元进面试队列");
+  assert.ok(String(planItem.reason || "").includes("学习计划"), "来源标注计划");
+});
+
+test("执行链路③：loopSuggest 有计划建议（未完成 → 建议学）", async () => {
+  const { loopSuggest } = await import("../lib/loop.mjs");
+  await createLearningPlan({ title: "算法专项", scope: ["二分查找"], quotaPerDay: 2 });
+  const s = loopSuggest();
+  assert.ok(s.suggestions.some((x) => x.includes("学习计划")), "有计划建议");
 });
