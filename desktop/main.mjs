@@ -97,6 +97,8 @@ if (gotSingleInstanceLock) setInterval(() => widgetServer.ensure(), 30000);
 app.on("before-quit", () => {
   widgetServer.cleanup();
   try { if (asrWorker) asrWorker.terminate().catch(() => {}); } catch { /* ignore */ }
+  // 清全屏检测定时器（修复：退出时窗口销毁中定时器回调 win.hide() 报 "Object has been destroyed"）
+  if (desktopScopeTimer) { clearInterval(desktopScopeTimer); desktopScopeTimer = null; }
 });
 
 // ---------- 托盘图标（用字符画生成简单图标） ----------
@@ -1290,14 +1292,18 @@ safeHandle("window:panel-state", (e, { open }) => {
   return { ok: true };
 });
 
+let desktopScopeTimer = null; // 全屏检测定时器（退出时清理——防窗口销毁后回调报 "Object has been destroyed"）
 function startDesktopScopeCheck() {
   let checking = false;
-  setInterval(async () => {
+  desktopScopeTimer = setInterval(async () => {
     if (!win || win.isDestroyed()) return;
     if (checking) return;
     checking = true;
     try {
       const fg = await detectForeground();
+      // await 后窗口可能已销毁（退出/关闭竞态）——复检（修复：此前 await 后直接操作 win，
+      // 退出时窗口销毁中 hide/showInactive 报 "Object has been destroyed"）
+      if (!win || win.isDestroyed()) return;
       // 面板打开（mascotHidden）：桌宠保持隐藏，全屏检测不干预
       if (mascotHidden) {
         if (win.isVisible()) win.hide(); // 兜底：确保隐藏
