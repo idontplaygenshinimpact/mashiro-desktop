@@ -95,7 +95,7 @@ const SAFE_GET = [
   "/api/patrol-config", "/api/rss/digest", "/api/rss/config", "/api/mail/config",
   "/api/oj/problems", "/api/oj/progress", "/api/zhenti", "/api/notify-test",
   "/api/weak-points", "/api/review/wrong", "/api/career/profile",
-  "/api/review/quiz?id=no-such-card",
+  "/api/review/quiz?id=no-such-card", "/api/today-brief",
 ];
 
 test("安全 GET 全路由冒烟（44 条）", async () => {

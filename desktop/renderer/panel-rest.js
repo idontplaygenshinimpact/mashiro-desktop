@@ -1451,6 +1451,7 @@ checkServiceVersion(); // 检测后台服务是否旧版（防"改完不生效"�
 loadChatHistory(); // 恢复最近对话（刷新不丢）
 loadMascotModels(); // 桌宠形象列表
 loadLoopBar(); // 全局闭环状态条（顶栏下，所有 Tab 可见）
+loadTodayBar(); // 今日任务聚合条（计划配额/到期卡/薄弱点/一键面试）
 // 状态条自动刷新（M9 门控见文件顶部）
 loadStudyPlan();
 loadJobs(); // 校招推荐列表
@@ -1474,6 +1475,7 @@ _gatedInterval(checkAsks, 2000, null);
 _gatedInterval(loadTodo, 3000, "study");
 // 状态条自动刷新（M9 门控见文件顶端）
 _gatedInterval(loadLoopBar, 60 * 1000, null);
+_gatedInterval(loadTodayBar, 60 * 1000, null); // 今日任务条同步刷新（配额/到期卡/薄弱点）
 
 
 

@@ -28,7 +28,7 @@ import { createBackup, listBackups, markRestore, hoursSinceLastBackup, backupCon
 import { db } from "./lib/db.mjs";
 import { createPatrol } from "./lib/patrol.mjs";
 // 事件驱动内核（Phase 事件驱动内核 W1-W3）：事件总线 / 自主决策 / CC 会话 watcher
-import { installInternalBridge, emitEvent, onEventDecision } from "./lib/events.mjs";
+import { installInternalBridge, emitEvent, onEventDecision, enqueueExpression } from "./lib/events.mjs";
 import { createAutonomy } from "./lib/autonomy.mjs";
 import { createCcWatcher } from "./lib/adapters/cc-watcher.mjs";
 // 场景装配（Phase P1）：事件 → 技能子集映射
@@ -484,6 +484,23 @@ try {
   const r = await ensurePlanCoverage();
   if (r.added > 0) console.log(`[widget] 复习卡补卡：清单 ${r.added} 个无卡条目已补（多角度题 + 优先级）`);
 } catch { /* 补卡失败不阻断启动 */ }
+
+// 今日任务视图工单任务 1：桌宠每日播报（启动时 + 每日首次——跨天检测，settings 记 last_brief_date）
+// 播报内容：计划今日配额 / 复习卡到期 / 薄弱点 / 面试建议（与面板聚合卡同一数据源 today-brief）
+try {
+  const { buildTodayBrief } = await import("./lib/today-brief.mjs");
+  const { localDateKey } = await import("./lib/date-utils.mjs");
+  const today = localDateKey();
+  const last = (() => {
+    try { return String(db.prepare("SELECT value FROM settings WHERE key='last_brief_date'").get()?.value || ""); } catch { return ""; }
+  })();
+  if (last !== today) {
+    const brief = buildTodayBrief();
+    enqueueExpression({ text: brief.text, scene: "daily-brief", level: "bubble+voice" });
+    try { db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('last_brief_date', ?, ?)").run(today, Date.now()); } catch { /* ignore */ }
+    console.log(`[widget] 今日任务播报已入队：${brief.text.slice(0, 60)}…`);
+  }
+} catch { /* 播报失败不阻断启动 */ }
 
 // ============ 主动推送：按关注点定时巡检新内容（纵向拆分：逻辑在 lib/patrol.mjs，可独立测试） ============
 const patrol = createPatrol({

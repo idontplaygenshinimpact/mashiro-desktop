@@ -1,5 +1,5 @@
 // 真白面板 · 求职/设置域（纵向拆分）
-/* exported loadLoop, loadLoopBar, loadDocsProject, startJobsSchedTimer, stopJobsSchedTimer, loadSettings */
+/* exported loadLoop, loadLoopBar, loadTodayBar, loadDocsProject, startJobsSchedTimer, stopJobsSchedTimer, loadSettings */
 // ============ 校招（简历驱动匹配 + 投递管理） ============
 const STATUS_LABEL = { new: "🆕 未处理", ready: "📮 已投递", ready_bishi: "✍️ 待笔试", done: "✅ 已拿offer/结束" };
 const DIRECTION_LABEL = { frontend: "前端", agent: "AI Agent", fullstack: "全栈", backend: "后端", other: "其他" };
@@ -56,6 +56,33 @@ async function loadLoopBar() {
         <span class="track"><i style="width:${pct}%"></i></span>
         <span class="pct">${cs.done}/${cs.total}</span>
       </span>`;
+  } catch { /* widget 未启动忽略 */ }
+}
+
+// ============ 今日任务聚合条（今日任务视图工单：计划配额/到期卡/薄弱点/一键面试） ============
+async function loadTodayBar() {
+  try {
+    const r = await fetch(API_BASE + "/api/today-brief");
+    const j = await r.json();
+    if (!j?.ok) return;
+    const bar = document.getElementById("today-bar");
+    if (!bar) return;
+    const p = j.plan || {};
+    const quota = p.hasPlan ? `${p.todayDone}/${p.todayQuota}` : "—";
+    const ch = (label, val, cls = "") => `<span class="loop-chip ${cls}">${label} <b>${esc(String(val))}</b></span>`;
+    bar.innerHTML = `
+      <span class="loop-chip" style="font-weight:700;">📅 今日任务</span>
+      ${ch("计划", quota, p.hasPlan && p.todayDone < p.todayQuota ? "warn" : "ok")}
+      ${ch("复习卡到期", `${j.reviewDue ?? 0} 张`, j.reviewDue > 0 ? "warn" : "ok")}
+      ${ch("薄弱点", `${j.weakCount ?? 0} 个待消灭`, j.weakCount > 0 ? "warn" : "ok")}
+      ${(j.planTodo ?? 0) > 0 ? ch("清单", `${j.planTodo} 项未完成`, "warn") : ""}
+      <button class="job-btn" id="today-start-iv" type="button" style="margin-left:6px;font-size:11px;padding:2px 10px;" title="切到面试 Tab 开始一轮模拟面试">🎤 开始面试</button>`;
+    const btn = document.getElementById("today-start-iv");
+    if (btn) btn.addEventListener("click", () => {
+      switchTab("interview");
+      const start = document.getElementById("iv-start");
+      if (start) setTimeout(() => start.click(), 300); // 等 Tab 切换完成再触发（默认岗位"前端实习生"）
+    });
   } catch { /* widget 未启动忽略 */ }
 }
 
