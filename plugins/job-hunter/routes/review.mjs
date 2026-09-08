@@ -157,7 +157,7 @@ export function registerReviewRoutes(router, ctx) {
 ${kbContext ? `本地知识库相关段落（仅作补充素材）：\n${kbContext}` : ""}
 请重点讲解：核心原理（不只背 API）、常见追问、记忆口诀或易错点、一页纸总结。`;
         let full = "";
-        // 流式链路超时统一修复工单任务 2④：solveQuestionStream 包 withLLMTimeout（60s）
+        // 流式链路超时统一修复工单任务 2④：solveQuestionStream 包 withLLMTimeout（60s；env 可缩短——测试用）
         await /** @type {any} */ (withLLMTimeout(
           solveQuestionStream({
             title: String(card.topic),
@@ -169,7 +169,7 @@ ${kbContext ? `本地知识库相关段落（仅作补充素材）：\n${kbConte
             full += delta;
             send({ type: "delta", delta });
           }),
-          60000,
+          undefined,
           "讲解生成超时（60s）——请重试"
         ));
         // 讲解完成 → 更新卡答案（下次复习有完整参考）

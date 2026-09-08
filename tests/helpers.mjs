@@ -102,6 +102,9 @@ export async function mockLlmChat(messages, _opts = {}) {
 export async function mockLlmChatStream(messages, _opts = {}, onChunk) {
   lastMessages = messages; // 与 mockLlmChat 一致：prompt 断言可见
   const content = queue.shift() ?? "";
+  // 流式链路故障注入工单：HANG 特殊值 → 返回永不 resolve 的 Promise（模拟 LLM 挂起——
+  // 让路由 withLLMTimeout 超时分支真实触发，单测可用短超时 env 快速验证）
+  if (content === "HANG") return new Promise(() => {});
   // 与 mockLlmChat 一致：TOOLCALL: 前缀 → 工具调用响应（流式 + 工具调用共存）
   const m = content.match(/^TOOLCALL:(.+)$/s);
   if (m) {

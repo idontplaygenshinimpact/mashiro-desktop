@@ -106,8 +106,7 @@ test("竞态防护：快速切换讲解条目，旧流内容不得渲染进新�
     items[0].click();
     await tick(30);
     items[1].click();
-    await tick(30);
-    // 旧流 A 此刻才到达内容 → 必须被代际丢弃
+    await tick(30);    // 旧流 A 此刻才到达内容 → 必须被代际丢弃
     streams[idA]("【A 的讲解内容：比较版本号】");
     await tick(30);
     const body = window.document.getElementById("sd-modal-body");
@@ -300,4 +299,48 @@ test("空清单 → 引导文案显示（不崩）", async () => {
     assert.ok(list.textContent.includes("未生成"), "空态引导文案");
     assert.ok(list.textContent.includes("生成清单"), "提示点生成");
   }, { studyPlan: { ok: true, plan: { items: [] } } });
+});
+
+// ---------- 流式链路故障注入工单任务 4：前端状态恢复 ----------
+test("故障注入前端①：追问 LLM 挂起（流 error）→ sdAsking 恢复可再次追问", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    await tick(60);
+    let askCall = 0;
+    kanban.studyDetailAppend = async () => { askCall++; throw new Error("追问生成超时（60s）——请重试"); };
+    // 打开弹窗（hasFile 条目 → fromFile 直接返回）
+    window.document.querySelector("#study-list .s-learn").click();
+    await tick(40);
+    // 第一次追问（超时 → 抛错）
+    window.document.getElementById("sd-ask-input").value = "第一次追问";
+    window.document.getElementById("sd-ask-btn").click();
+    await tick(60);
+    assert.equal(askCall, 1, "第一次追问已提交");
+    assert.ok(window.document.getElementById("sd-modal-body").textContent.includes("超时"), "超时错误提示上屏");
+    // 再次追问（sdAsking 已恢复——不卡死）
+    window.document.getElementById("sd-ask-input").value = "第二次追问";
+    window.document.getElementById("sd-ask-btn").click();
+    await tick(60);
+    assert.equal(askCall, 2, "sdAsking 恢复——第二次追问可提交");
+  });
+});
+
+test("故障注入前端②：sdAsking 卡住时回车 → 明确提示（不静默拒绝）", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    await tick(60);
+    kanban.studyDetailAppend = async () => new Promise(() => {}); // 永不返回（挂起——sdAsking 卡 true）
+    window.document.querySelector("#study-list .s-learn").click();
+    await tick(40);
+    // 第一次追问（挂起——按钮 disabled）
+    window.document.getElementById("sd-ask-input").value = "卡住的问题";
+    window.document.getElementById("sd-ask-btn").click();
+    await tick(30);
+    assert.equal(window.document.getElementById("sd-ask-btn").disabled, true, "挂起时按钮禁用（防重入）");
+    // 第二次用回车（绕过 disabled 按钮）→ 明确提示（不静默拒绝）
+    window.document.getElementById("sd-ask-input").value = "再来一次";
+    const input = window.document.getElementById("sd-ask-input");
+    input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await tick(30);
+    const body = window.document.getElementById("sd-modal-body");
+    assert.ok(body.textContent.includes("还在进行中"), "卡住时明确提示（复用追问提示模式）");
+  });
 });

@@ -178,3 +178,42 @@ test("⑦ 集成链路：reset（删除）→ 生成失败 → 追问 → 拒绝
   assert.equal(existsSync(f), false, "全程无伪讲解文件产生");
 });
 
+// 流式链路故障注入工单任务 3：LLM 挂起（HANG）→ 短超时 error + 连接关闭（不挂死）
+test("⑧ 故障注入：solveAppendStream 挂起（HANG）→ 超时 error + 连接关闭", async () => {
+  const item = getPlan().items[0];
+  const f = path.join(notesDir(), "事件循环.md");
+  writeFileSync(f, "# 事件循环\n\n## 题目\n正常讲解内容足够长，用于测试超时路径。".repeat(3), "utf8");
+  process.env.MIANSHI_LLM_TIMEOUT_MS = "100"; // 短超时（生产默认 60s——验证超时分支而非等 60s）
+  try {
+    setLlmResponses("HANG"); // mock LLM 挂起（永不 resolve）
+    const res = mockRes();
+    const appendHandler = router.resolve("/api/study-append-stream", null).fn;
+    await runHandler(appendHandler, mockReq(`/api/study-append-stream?id=${item.id}&question=讲讲`), res);
+    assert.equal(res.writableEnded, true, "超时后连接关闭（res.end 调用）");
+    const evs = events(res);
+    const err = evs.find((e) => e.type === "error");
+    assert.ok(err, `收到 error 事件（实际: ${evs.map((e) => e.type).join(",")}）`);
+    assert.match(String(err.error || ""), /超时/, "超时错误信息");
+  } finally {
+    delete process.env.MIANSHI_LLM_TIMEOUT_MS;
+  }
+});
+
+test("⑨ 故障注入：solveQuestionStream 挂起（HANG）→ 讲解超时 error（生成链路覆盖）", async () => {
+  const item = getPlan().items[0];
+  process.env.MIANSHI_LLM_TIMEOUT_MS = "100";
+  try {
+    setLlmResponses("HANG");
+    const res = mockRes();
+    const detailHandler = router.resolve("/api/study-detail-stream", null).fn;
+    await runHandler(detailHandler, { url: `/api/study-detail-stream?id=${item.id}` }, res);
+    assert.equal(res.writableEnded, true, "超时后连接关闭");
+    const evs = events(res);
+    const err = evs.find((e) => e.type === "error");
+    assert.ok(err, `收到 error 事件（实际: ${evs.map((e) => e.type).join(",")}）`);
+    assert.match(String(err.error || ""), /超时/, "超时错误信息");
+  } finally {
+    delete process.env.MIANSHI_LLM_TIMEOUT_MS;
+  }
+});
+

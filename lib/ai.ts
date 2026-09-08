@@ -13,12 +13,13 @@ import type { AgentMessage, LLMOptions } from "./types.d.ts";
 /**
  * 流式链路超时统一修复工单任务 1：公共超时 helper（复用追问修复模式——Promise.race + clearTimeout）
  * LLM 挂起时流式无响应 → 前端 120s 才超时（太久）→ 状态卡住；60s 主动断 + error 事件——前端快速恢复
+ * 超时可配置（MIANSHI_LLM_TIMEOUT_MS env——测试用短超时跑超时路径，生产默认 60s）
  * @param {Promise<unknown>} promise 流式生成 Promise
- * @param {number} [ms] 超时毫秒（默认 60s）
+ * @param {number} [ms] 超时毫秒（默认 env 或 60s）
  * @param {string} [msg] 超时错误信息
  * @returns {Promise<unknown>} 竞速结果（超时抛错）
  */
-export function withLLMTimeout(promise: Promise<unknown>, ms = 60000, msg = "生成超时（60s）——请重试"): Promise<unknown> {
+export function withLLMTimeout(promise: Promise<unknown>, ms = Number(process.env.MIANSHI_LLM_TIMEOUT_MS) || 60000, msg = "生成超时（60s）——请重试"): Promise<unknown> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise((_, rej) => {
     timer = setTimeout(() => rej(new Error(msg)), ms);

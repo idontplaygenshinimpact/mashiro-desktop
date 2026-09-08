@@ -247,9 +247,8 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
           full += delta;
           push({ type: "delta", delta });
         }),
-        60000,
-        "讲解生成超时（60s）——请重试"
-      ));
+        undefined, // env MIANSHI_LLM_TIMEOUT_MS 可缩短（测试用）；生产默认 60s
+        "讲解生成超时（60s）——请重试"));
       // 存档（修复：生成失败/中断（full 过短）不写档——此前无条件写"header + 空"伪讲解，
       // 用户重新生成失败后文件存在但内容空，追问 append 到空文件 → 追问回答成了主体）
       let savedPath = null;
@@ -335,7 +334,8 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
       const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（追问也基于真实代码；缓存）
       // 追问 LLM 超时（修复：solveAppendStream 挂起时流式无响应——前端 120s 才超时，
       // 用户感知"卡住"且 sdAsking 防重入阻塞后续追问；60s 主动断 + error 事件——前端快速恢复可重试）
-      const LLM_TIMEOUT_MS = 60000;
+      // 流式链路故障注入工单：env MIANSHI_LLM_TIMEOUT_MS 可缩短（测试用短超时跑超时路径）
+      const LLM_TIMEOUT_MS = Number(process.env.MIANSHI_LLM_TIMEOUT_MS) || 60000;
       let timer;
       const timeoutPromise = new Promise((_, rej) => {
         timer = setTimeout(() => rej(new Error("追问生成超时（60s）——请重试")), LLM_TIMEOUT_MS);
@@ -419,13 +419,13 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
       const sourceBlock = sourceText
         ? `\n\n【原始面经内容（来自 ${item.source}，仅作整理对照）】\n${sanitizeExternal(sourceText).wrapped}`
         : "";
-      // 流式链路超时统一修复工单任务 2②：consolidateStudyStream 包 withLLMTimeout（60s）
+      // 流式链路超时统一修复工单任务 2②：consolidateStudyStream 包 withLLMTimeout（60s；env 可缩短——测试用）
       full = await /** @type {any} */ (withLLMTimeout(
         consolidateStudyStream({ topic: item.topic, content: `${content}${sourceBlock}` }, (delta) => {
           full += delta;
           push({ type: "delta", delta });
         }),
-        60000,
+        undefined,
         "整理生成超时（60s）——请重试"
       ));
       // 写回校验（修复：整理结果过短不写回——防"header+空"伪讲解覆盖原档；与 study-detail 同款守卫）
@@ -501,7 +501,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
               ? { ...t, content: `${t.content}\n\n【原始面经内容（来自 ${item?.source || "?"}，仅作归并对照）】\n${sanitizeExternal(sourceText).wrapped}` }
               : t;
           }));
-          // 流式链路超时统一修复工单任务 2③：clusterStudyStream 包 withLLMTimeout（60s）
+          // 流式链路超时统一修复工单任务 2③：clusterStudyStream 包 withLLMTimeout（60s；env 可缩短——测试用）
           full = await /** @type {any} */ (withLLMTimeout(
             clusterStudyStream({
               topics: topicsWithSource,
@@ -510,7 +510,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
                 push({ type: "delta", delta });
               },
             }),
-            60000,
+            undefined,
             "归并生成超时（60s）——请重试"
           ));
           // 存到 study_notes/主题簇/ 目录（按 AI 给的主题簇名）
