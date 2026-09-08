@@ -444,7 +444,7 @@ safeHandle("widget:chat", (e, { message, history, sessionId }) => widgetPost("/a
 // main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）；
 // 并发隔离：preload 每次调用带 __streamToken，chunk 定向发送到 `channel:token`（曾广播串流）
 // 非 SSE 响应（一次性 JSON：有文件/路由降级）同样转发——调用方按既有 jsonMode 处理
-async function streamForward(e, { channel, pathname, init, token }) {
+async function streamForward(e, { channel, pathname, init = {}, token }) {
   const chan = token ? `${channel}:${token}` : channel;
   try {
     const res = await widgetFetch(`${WIDGET_URL}${pathname}`, init || {});
