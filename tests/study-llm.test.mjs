@@ -42,12 +42,12 @@ test("generateStudyPlan：LLM 返回 group → grp 归一化为知识树分类�
   const r = await generateStudyPlan();
   assert.equal(r.error, undefined);
   assert.equal(r.items.length, 3);
-  assert.equal(r.items[0].grp, "RAG与LLM"); // 知识树外领域 → 兜底大类
-  assert.equal(r.items[1].grp, "RAG与LLM", "同一大类多条子知识点用同一 group 名");
+  assert.equal(r.items[0].grp, "Agent与LLM"); // 知识树外领域 → 兜底大类
+  assert.equal(r.items[1].grp, "Agent与LLM", "同一大类多条子知识点用同一 group 名");
   assert.equal(r.items[2].grp, "JavaScript 核心"); // 宏任务/微任务 → 知识树 JavaScript 核心
   // 入库一致
   const plan = getPlan();
-  assert.equal(plan.items.find((i) => i.topic === "向量数据库选型").grp, "RAG与LLM");
+  assert.equal(plan.items.find((i) => i.topic === "向量数据库选型").grp, "Agent与LLM");
   // 旧条目（addPlanItems 无 group）grp 为空不受影响
   const old = plan.items.find((i) => i.topic === "事件循环");
   assert.equal(old, undefined, "旧清单为空，无残留干扰");

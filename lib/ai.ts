@@ -10,6 +10,22 @@ import type { AgentMessage, LLMOptions } from "./types.d.ts";
 // 从模型回复中提取第一个 JSON 对象（兼容带代码块/前后缀的回复）
 
 
+/**
+ * 流式链路超时统一修复工单任务 1：公共超时 helper（复用追问修复模式——Promise.race + clearTimeout）
+ * LLM 挂起时流式无响应 → 前端 120s 才超时（太久）→ 状态卡住；60s 主动断 + error 事件——前端快速恢复
+ * @param {Promise<unknown>} promise 流式生成 Promise
+ * @param {number} [ms] 超时毫秒（默认 60s）
+ * @param {string} [msg] 超时错误信息
+ * @returns {Promise<unknown>} 竞速结果（超时抛错）
+ */
+export function withLLMTimeout(promise: Promise<unknown>, ms = 60000, msg = "生成超时（60s）——请重试"): Promise<unknown> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise((_, rej) => {
+    timer = setTimeout(() => rej(new Error(msg)), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
 export async function chat(messages: AgentMessage[], { maxTokens = 4000, json = false, temperature = 0.4, role }: LLMOptions = {}) {
   // 注意：Go 网关不支持 response_format=json_object（400），改为提示词约束 + 提取
   if (json) {

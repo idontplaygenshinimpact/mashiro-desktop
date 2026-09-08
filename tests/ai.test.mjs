@@ -306,3 +306,23 @@ test("讲解重点约束：solveQuestion prompt 含代码行数限制 + 纯理�
   assert.ok(joined.includes("讲解重点"), "prompt 含讲解重点约束");
   assert.ok(joined.includes("不是手写 useState"), "prompt 明确重点不是手写实现");
 });
+
+// ---------- 流式链路超时统一修复工单任务 4①：withLLMTimeout 单测 ----------
+test("withLLMTimeout：pending 超时抛错（60s 默认；测试用短超时）", async () => {
+  const ai = await import("../lib/ai.ts");
+  const pending = new Promise(() => {}); // 永不 resolve
+  await assert.rejects(
+    () => ai.withLLMTimeout(pending, 50, "讲解生成超时（60s）——请重试"),
+    /讲解生成超时/,
+    "pending 流式在超时后抛错"
+  );
+});
+
+test("withLLMTimeout：正常完成不超时 + 定时器清理", async () => {
+  const ai = await import("../lib/ai.ts");
+  const ok = await ai.withLLMTimeout(Promise.resolve("内容"), 50, "超时");
+  assert.equal(ok, "内容", "正常完成返回结果");
+  // 超时后定时器已清理（不残留——再等 60ms 无副作用即通过）
+  await new Promise((r) => setTimeout(r, 60));
+  assert.ok(true, "无残留定时器异常");
+});

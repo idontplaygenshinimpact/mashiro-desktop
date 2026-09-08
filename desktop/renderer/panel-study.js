@@ -1755,7 +1755,17 @@ async function showStudyDetail(id) {
 let sdAsking = false;
 async function askStudyDetail() {
   const question = $("sd-ask-input").value.trim();
-  if (!question || !sdCurrentId || sdAsking) return;
+  if (!question || !sdCurrentId) return;
+  if (sdAsking) {
+    // 防重入但给提示（修复：上次流式挂起时 sdAsking 卡 true——用户再点被静默拒绝，
+    // 问题留在输入框像"没发出去"；明确提示 + 60s 超时后自动恢复可重试）
+    const box = document.createElement("div");
+    box.style.cssText = "color:#b8860b;font-size:12px;padding:6px 8px;background:rgba(184,134,11,.08);border-radius:6px;margin:4px 0;";
+    box.textContent = "⏳ 上次追问还在进行中（生成较慢或网络超时）——请稍候，60 秒超时后自动恢复可重试";
+    sdBody().appendChild(box);
+    sdBody().scrollTop = sdBody().scrollHeight;
+    return;
+  }
   const id = sdCurrentId;     // 捕获：切换条目后旧追问不得污染新条目缓存（曾用全局 sdCurrentId 写错条目）
   const gen = sdGen;          // 捕获代际：切换/关闭后过期流回调直接丢弃
   sdAsking = true;
@@ -1913,22 +1923,39 @@ $("sd-consolidate-btn").addEventListener("click", consolidateStudyDetail);
 // 返回 { topic, similarFrom }（similarFrom：同知识点复用来源，无则 null）
 // sdForceRegen：重新生成入口置 true → 请求带 noSimilar=1，强制生成自己的讲解（不复用相似错档）
 let sdForceRegen = false;
+// 流式链路超时统一修复工单任务 3①：detail 生成防重入（同一条目连点"生成"会并发流式——SSE 通道冲突；
+// 按条目维度——切换条目允许（代际 sdGen 丢弃旧流），同条目连点拒绝）
+let sdGeneratingId = null;
 async function streamStudyDetail(id, onUpdate) {
-  let content = "";
-  let topic = "讲解";
-  const result = await window.kanban.studyDetailStream(id, (delta) => {
-    if (!delta) return;
-    content += delta;
-    onUpdate(content);
-  }, { noSimilar: sdForceRegen });
-  // JSON 模式（有文件）：result 带 topic/content
-  if (result?.fromFile) {
-    content = result.content || content;
-    topic = result.topic || topic;
+  if (sdGeneratingId === id) {
+    // 防重入但给提示（复用追问模式——不静默拒绝；60s 超时后自动恢复可重试）
+    const box = document.createElement("div");
+    box.style.cssText = "color:#b8860b;font-size:12px;padding:6px 8px;background:rgba(184,134,11,.08);border-radius:6px;margin:4px 0;";
+    box.textContent = "⏳ 讲解还在生成中（生成较慢或网络超时）——请稍候，60 秒超时后自动恢复可重试";
+    sdBody().appendChild(box);
+    sdBody().scrollTop = sdBody().scrollHeight;
+    throw new Error("讲解生成中，请稍候");
   }
-  if (!content) throw new Error("没有获取到内容");
-  studyDetailCache[id] = { content, topic };
-  return { topic, similarFrom: result?.similarFrom || null };
+  sdGeneratingId = id;
+  try {
+    let content = "";
+    let topic = "讲解";
+    const result = await window.kanban.studyDetailStream(id, (delta) => {
+      if (!delta) return;
+      content += delta;
+      onUpdate(content);
+    }, { noSimilar: sdForceRegen });
+    // JSON 模式（有文件）：result 带 topic/content
+    if (result?.fromFile) {
+      content = result.content || content;
+      topic = result.topic || topic;
+    }
+    if (!content) throw new Error("没有获取到内容");
+    studyDetailCache[id] = { content, topic };
+    return { topic, similarFrom: result?.similarFrom || null };
+  } finally {
+    if (sdGeneratingId === id) sdGeneratingId = null; // 成功/失败/超时/取消都恢复（防重入标志卡死）
+  }
 }
 
 $("sd-modal-close").addEventListener("click", () => { sdGen++; sdOverlay().classList.add("hidden"); }); // 关闭 → 过期流丢弃

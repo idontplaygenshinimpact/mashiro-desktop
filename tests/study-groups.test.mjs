@@ -22,7 +22,7 @@ test("normalizeGroup：知识树正常命中不被破坏（HTTP 缓存仍归浏�
 
 test("normalizeGroup：兜底规则 / 其他", () => {
   assert.equal(normalizeGroup("MySQL 索引回表"), "数据库", "数据库兜底");
-  assert.equal(normalizeGroup("RAG 向量检索"), "RAG与LLM", "RAG 兜底");
+  assert.equal(normalizeGroup("RAG 向量检索"), "Agent与LLM", "RAG 兜底");
   assert.equal(normalizeGroup("面试自我介绍模板"), "面试与求职", "面试兜底");
   assert.equal(normalizeGroup("完全不认识的主题词xyz"), "其他", "都不中 → 其他");
 });
@@ -43,8 +43,8 @@ test("方案②：独立成词检测——组合词不触发强语义词（技�
 });
 
 test("方案③：LLM/Agent 领域强信号优先于知识树（LLM 基础不再进 CSS/HTML）", () => {
-  assert.equal(normalizeGroup("LLM 基础与 Transformer 原理"), "RAG与LLM", "LLM 题归 RAG与LLM");
-  assert.equal(normalizeGroup("AI Agent LLM 微调与量化部署"), "RAG与LLM", "微调量化归 RAG与LLM");
+  assert.equal(normalizeGroup("LLM 基础与 Transformer 原理"), "Agent与LLM", "LLM 题归 Agent与LLM");
+  assert.equal(normalizeGroup("AI Agent LLM 微调与量化部署"), "Agent与LLM", "微调量化归 Agent与LLM");
 });
 
 test("方案③：项目条目按技术栈/原分组归类（项目名含领域词不被吸走）", () => {

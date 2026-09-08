@@ -213,7 +213,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
     const push = makePush(res);
     push({ type: "start", topic: item.topic });
     let full = "";
-    import("#lib/ai.ts").then(async ({ solveQuestionStream }) => {
+    import("#lib/ai.ts").then(async ({ solveQuestionStream, withLLMTimeout }) => {
       const { getCareerProfile } = await import("#lib/career.mjs");
       const prof = getCareerProfile();
       const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（缓存；重新生成才重新搜集）
@@ -234,16 +234,22 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
       const sourceBlock = sourceText
         ? `\n\n【原始面经内容（来自 ${item.source}，仅作讲解对象；原文可能含来源表述的方向词，不按它改编方向——从知识本身讲）】\n${sanitizeExternal(sourceText).wrapped}`
         : "";
-      full = await solveQuestionStream({
-        title: ep.title,
-        text: `${ep.text}${projCtx}${sourceBlock}`,
-        company: "真白讲解",
-        position: "面试", // 修复：position 硬编码"前端"诱导 LLM 硬套前端视角（"前端场景的特殊约束"）——通用"面试"，从知识本身讲
-        sourceUrl: "学习清单",
-      }, (delta) => {
-        full += delta;
-        push({ type: "delta", delta });
-      });
+      // 流式链路超时统一修复工单任务 2①：solveQuestionStream 包 withLLMTimeout（60s）——
+      // LLM 挂起时流式无响应 → 前端 120s 才超时（太久）→ 状态卡住；60s 主动断 + error 事件
+      full = await /** @type {any} */ (withLLMTimeout(
+        solveQuestionStream({
+          title: ep.title,
+          text: `${ep.text}${projCtx}${sourceBlock}`,
+          company: "真白讲解",
+          position: "面试", // 修复：position 硬编码"前端"诱导 LLM 硬套前端视角（"前端场景的特殊约束"）——通用"面试"，从知识本身讲
+          sourceUrl: "学习清单",
+        }, (delta) => {
+          full += delta;
+          push({ type: "delta", delta });
+        }),
+        60000,
+        "讲解生成超时（60s）——请重试"
+      ));
       // 存档（修复：生成失败/中断（full 过短）不写档——此前无条件写"header + 空"伪讲解，
       // 用户重新生成失败后文件存在但内容空，追问 append 到空文件 → 追问回答成了主体）
       let savedPath = null;
@@ -327,14 +333,28 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
     let full = "";
     import("#lib/ai.ts").then(async ({ solveAppendStream }) => {
       const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（追问也基于真实代码；缓存）
-      full = await solveAppendStream({
-        topic: item.topic,
-        existing: (existing || `（暂无已有讲解，围绕知识点直接回答）${item.verify_question || item.topic}`) + projCtx,
-        question,
-      }, (delta) => {
-        full += delta;
-        push({ type: "delta", delta });
+      // 追问 LLM 超时（修复：solveAppendStream 挂起时流式无响应——前端 120s 才超时，
+      // 用户感知"卡住"且 sdAsking 防重入阻塞后续追问；60s 主动断 + error 事件——前端快速恢复可重试）
+      const LLM_TIMEOUT_MS = 60000;
+      let timer;
+      const timeoutPromise = new Promise((_, rej) => {
+        timer = setTimeout(() => rej(new Error("追问生成超时（60s）——请重试")), LLM_TIMEOUT_MS);
       });
+      try {
+        full = await Promise.race([
+          solveAppendStream({
+            topic: item.topic,
+            existing: (existing || `（暂无已有讲解，围绕知识点直接回答）${item.verify_question || item.topic}`) + projCtx,
+            question,
+          }, (delta) => {
+            full += delta;
+            push({ type: "delta", delta });
+          }),
+          timeoutPromise,
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
       // 追加写回讲解文件（持久化：下次打开能看到补充内容）
       // 写回路径固定 study_notes（findStudyFile 可能命中产出目录文件——把追问追加进面经会污染产出）
       try {
@@ -382,7 +402,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
     const push = makePush(res);
     push({ type: "start", topic: item.topic });
     let full = "";
-    import("#lib/ai.ts").then(async ({ consolidateStudyStream }) => {
+    import("#lib/ai.ts").then(async ({ consolidateStudyStream, withLLMTimeout }) => {
       // 读 source 面经原文注入（与重新生成同款修复——整理不丢失来源：
       // 素材只有讲解文件内容，不含原始面经，整理后可能与面经脱节）
       let sourceText = "";
@@ -399,10 +419,15 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
       const sourceBlock = sourceText
         ? `\n\n【原始面经内容（来自 ${item.source}，仅作整理对照）】\n${sanitizeExternal(sourceText).wrapped}`
         : "";
-      full = await consolidateStudyStream({ topic: item.topic, content: `${content}${sourceBlock}` }, (delta) => {
-        full += delta;
-        push({ type: "delta", delta });
-      });
+      // 流式链路超时统一修复工单任务 2②：consolidateStudyStream 包 withLLMTimeout（60s）
+      full = await /** @type {any} */ (withLLMTimeout(
+        consolidateStudyStream({ topic: item.topic, content: `${content}${sourceBlock}` }, (delta) => {
+          full += delta;
+          push({ type: "delta", delta });
+        }),
+        60000,
+        "整理生成超时（60s）——请重试"
+      ));
       // 写回校验（修复：整理结果过短不写回——防"header+空"伪讲解覆盖原档；与 study-detail 同款守卫）
       if (full.trim().length < 200) {
         push({ type: "error", error: "整理失败（内容过短），原讲解未改动，请重试" });
@@ -460,7 +485,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
         const push = makePush(res);
         push({ type: "start", topic: topics.map((t) => t.topic).join(" + ") });
         let full = "";
-        import("#lib/ai.ts").then(async ({ clusterStudyStream }) => {
+        import("#lib/ai.ts").then(async ({ clusterStudyStream, withLLMTimeout }) => {
           // 每个条目注入自己的 source 面经原文（与 consolidate 同款修复——归并不丢失来源；
           // 每个 source 截断 2000 字符控制总量）
           const topicsWithSource = await Promise.all(topics.map(async (t) => {
@@ -476,13 +501,18 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
               ? { ...t, content: `${t.content}\n\n【原始面经内容（来自 ${item?.source || "?"}，仅作归并对照）】\n${sanitizeExternal(sourceText).wrapped}` }
               : t;
           }));
-          full = await clusterStudyStream({
-            topics: topicsWithSource,
-            onChunk: (delta) => {
-              full += delta;
-              push({ type: "delta", delta });
-            },
-          });
+          // 流式链路超时统一修复工单任务 2③：clusterStudyStream 包 withLLMTimeout（60s）
+          full = await /** @type {any} */ (withLLMTimeout(
+            clusterStudyStream({
+              topics: topicsWithSource,
+              onChunk: (delta) => {
+                full += delta;
+                push({ type: "delta", delta });
+              },
+            }),
+            60000,
+            "归并生成超时（60s）——请重试"
+          ));
           // 存到 study_notes/主题簇/ 目录（按 AI 给的主题簇名）
           // 素材校验（修复：归并结果过短不存档——防"header+空"伪讲解；与 study-detail 同款守卫）
           if (full.trim().length < 200) {
