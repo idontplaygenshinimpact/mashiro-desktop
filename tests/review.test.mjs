@@ -333,11 +333,19 @@ test("激活②：addPlanItems 后自动触发补卡（新条目 → 卡）", as
   }
   assert.ok(card, "新条目自动补卡");
   assert.equal(card.priority, "必会", "优先级从 level");
+  // 恢复默认（关闭自动补卡）：autoPlanCoverage 是模块级状态，残留 true 会让 ③/④ 的
+  // addPlanItems 也触发 fire-and-forget 补卡，与其显式 ensurePlanCoverage 竞争同一 mock 队列
+  // （竞态根源，9871381 的轮询只救了本测试没救 ③/④）
+  setAutoPlanCoverage(false);
 });
 
 test("激活③：ensurePlanCoverage 存量升级（占位 question → 多角度 + 优先级回填，幂等）", async () => {
   const { ensurePlanCoverage } = await import("../lib/review.mjs");
-  const { addPlanItems } = await import("../lib/study.mjs");
+  const { addPlanItems, setAutoPlanCoverage } = await import("../lib/study.mjs");
+  // 关闭自动补卡：本测试显式 await ensurePlanCoverage，若 addPlanItems 再触发 fire-and-forget
+  // 会异步竞争同一 mock 队列（先到消耗预设 → 后到队列空 → generateMultiAngle 内部 catch
+  // 静默回退占位 question 且计入 upgraded —— 断言"升级成功"实际是假绿，时序偶发红）
+  setAutoPlanCoverage(false);
   // 旧形态卡：占位 question + 默认优先级（拓展）——模拟存量数据（工单任务 2① 的 117 张旧卡）
   // topic 用独立名（修复：此前用"HTTP 缓存"——强化② 已建同 topic 卡，测试间状态依赖 + mock 队列竞争）
   review.addCard({ topic: "HTTP 缓存策略", question: "请简述：HTTP 缓存策略", answer: "强缓存/协商缓存", source: "学习清单" });
@@ -356,7 +364,8 @@ test("激活③：ensurePlanCoverage 存量升级（占位 question → 多角�
 
 test("激活④：generateMultiAngle prompt 必须携带条目列表（防 mock 盲区回归）", async () => {
   const { ensurePlanCoverage } = await import("../lib/review.mjs");
-  const { addPlanItems } = await import("../lib/study.mjs");
+  const { addPlanItems, setAutoPlanCoverage } = await import("../lib/study.mjs");
+  setAutoPlanCoverage(false); // 同激活③：禁止 fire-and-forget 竞争显式调用（竞态根源）
   addPlanItems([{ topic: "事件循环", why: "w", source: "s", verify_question: "q", level: "必会" }]);
   setLlmResponses(JSON.stringify([{ i: 0, question: "原理：为什么；边界：异常；场景：实际" }]));
   await ensurePlanCoverage();

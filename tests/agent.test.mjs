@@ -444,3 +444,26 @@ test("chatWithAgent 无回调：行为零变化（一次性返回）", async () 
   assert.equal(r.reply, "普通回复内容。");
 });
 
+// ---------- 架构 P0-1：敏感工具走审批（不再静默 auto） ----------
+test("P0-1：browse_fetch 触发审批（此前静默 auto 与 tool-policy 宣称的 confirm 脱节）", async () => {
+  const { chatWithAgent } = await import("../lib/agent.mjs");
+  setLlmResponses(
+    'TOOLCALL:{"name":"browse_fetch","arguments":"{\\"url\\":\\"http://x.com/1\\"}"}',
+    "已浏览完页面内容。"
+  );
+  const chatPromise = chatWithAgent("帮我看看 x.com 第一页的内容");
+  const { getPendingApprovals, resolveApproval } = await import("../lib/permission.mjs");
+  let sawBrowse = false;
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    const pending = getPendingApprovals();
+    for (const p of [...pending]) {
+      if (p.toolName === "browse_fetch") { sawBrowse = true; resolveApproval(p.toolName, { allow: true }); }
+    }
+    if (getPendingApprovals().length === 0 && i > 10) break;
+  }
+  const r = await chatPromise;
+  assert.ok(sawBrowse, "browse_fetch 走审批（P0-1 修复——此前静默 auto 放行）");
+  assert.ok(r.reply.length > 0, "批准后正常执行");
+});
+

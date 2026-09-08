@@ -41,7 +41,7 @@ function streamPromise({ channel, invokeName, args, onChunk, jsonMode = false, e
         finish(resolve, { done: true, fromFile: true, topic: j.topic, content: j.content, similarFrom: j.similarFrom, earlierArchive: j.earlierArchive });
       }
     };
-    timer = setTimeout(() => finish(reject, new Error("流式响应超时（120 秒无最终事件）")), 120000);
+    timer = setTimeout(() => finish(reject, new Error("流式响应超时（60 秒无最终事件）")), 60000);
     ipcRenderer.on(chan, listener);
     ipcRenderer.invoke(invokeName, Object.assign({}, args, { __streamToken: token }))
       .then((r) => { if (!r?.ok) finish(reject, new Error(r?.error || "流式启动失败")); })

@@ -75,7 +75,11 @@ let lastMessages = []; // 最近一次 llmChat 收到的 messages（供断言 pr
 export function getLastMessages() { return lastMessages; }
 export function setLlmResponses(...contents) { queue = contents.map((c) => String(c ?? "")); }
 export function llmQueueLen() { return queue.length; }
+// 可选 LLM 延迟（复现真实调用耗时——P1-1 并发写保护测试留并发窗口用；默认 0 不影响其他测试）
+let llmDelayMs = 0;
+export function setLlmDelay(ms) { llmDelayMs = Math.max(0, Number(ms) || 0); }
 export async function mockLlmChat(messages, _opts = {}) {
+  if (llmDelayMs > 0) await new Promise((r) => setTimeout(r, llmDelayMs));
   lastMessages = messages;
   // 防假绿（测试与 CI 工单）：队列空时抛错——mock 消费数 > 设置数说明测试少设了响应，
   // 静默返回空串会让断言"假绿"（如生成失败路径没被真正触发）

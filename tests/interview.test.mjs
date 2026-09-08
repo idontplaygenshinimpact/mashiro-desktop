@@ -517,5 +517,56 @@ test("cleanWeakTopic 委托 _cleanTopic：题目占位符/测试残留被拦截�
   assert.equal(cleanWeakTopic(long), long.slice(0, 30), "超长截断保留前 30 字（_cleanTopic 口径）");
 });
 
+// ---------- 架构 P1-1：会话治理（idle 超时 + 并发写保护） ----------
+test("P1-1：idle 超时（30 分钟无活动）→ submitAnswer 自动结束会话", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  // 模拟 31 分钟无活动：直接改内存镜像的 updatedAt（setInterview 会打新时间戳，绕开它）
+  memory.getInterview().updatedAt = Date.now() - 31 * 60 * 1000;
+  const r = await submitAnswer("迟到的回答");
+  assert.ok(r.error && r.error.includes("超时"), "返回超时错误");
+  assert.equal(memory.getInterview(), null, "会话已被自动清除");
+});
+
+test("P1-1：idle 超时 → getInterviewStatus 返回 expired:false active", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  memory.getInterview().updatedAt = Date.now() - 31 * 60 * 1000;
+  const s = await getInterviewStatus();
+  assert.equal(s.active, false, "过期会话视为无会话");
+  assert.equal(s.expired, true, "标记 expired");
+  assert.equal(memory.getInterview(), null, "过期会话被清理");
+});
+
+test("P1-1：idle 未超时 → submitAnswer 正常（updatedAt 自动更新）", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  assert.ok(memory.getInterview().updatedAt, "setInterview 自动打 updatedAt");
+  setLlmResponses('{"scores":{"tech":80,"expr":70,"depth":60,"edge":50,"reflect":40},"comment":"不错","finish":false,"next_question":"讲讲 React Fiber","next_basis":"x","next_dimension":"原理","next_criteria":"c","next_boundary":"b","weak_topic":""}');
+  const r = await submitAnswer("正常回答");
+  assert.equal(r.ok, true, "未超时会话正常推进");
+});
+
+test("P1-1：并发写保护——LLM 调用期间会话被替换 → 拒绝写入不覆盖", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  const { setLlmDelay } = await import("./helpers.mjs");
+  setLlmDelay(50); // 延迟 LLM mock：复现真实调用耗时——给并发替换留窗口
+  try {
+    const before = memory.getInterview();
+    setLlmResponses('{"scores":{"tech":80,"expr":70,"depth":60,"edge":50,"reflect":40},"comment":"不错","finish":false,"next_question":"讲讲 React Fiber","next_basis":"x","next_dimension":"原理","next_criteria":"c","next_boundary":"b","weak_topic":""}');
+    const p = submitAnswer("我的回答"); // 不 await
+    await new Promise((r) => setTimeout(r, 20)); // 等待 submitAnswer 进入 LLM 调用（延迟 mock 内）
+    memory.setInterview({ position: "并发面试", role: "技术深挖型", rounds: [], current: { round: 1 }, finished: false }); // 并发替换
+    const result = await p;
+    assert.ok(result.concurrent === true || (result.error && result.error.includes("并发")), `返回并发拒绝（实际: ${JSON.stringify(result)}）`);
+    const after = memory.getInterview();
+    assert.equal(after.position, "并发面试", "并发会话未被覆盖");
+    assert.equal(before.rounds.length, 0, "原会话未写脏（rounds 未追加）");
+  } finally {
+    setLlmDelay(0); // 恢复（影响后续测试）
+  }
+});
+
 
 

@@ -112,6 +112,11 @@ docs/今日任务视图工单.md
 docs/模拟面试agent化工单.md
 docs/学习闭环口径统一工单.md
 docs/相似度引擎统一工单.md
+docs/流式链路故障注入测试工单.md
+docs/流式链路超时统一修复工单.md
+docs/编排能力缺口补全工单.md
+docs/架构P0修复工单.md
+docs/架构P1修复工单.md
 docs/收尾工单.md
 docs/subagent打磨质量工单.md
 docs/打磨轮缩水修复工单.md

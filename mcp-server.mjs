@@ -6,6 +6,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { config } from "./config.mjs";
 import { getSettingsApiKey } from "./lib/llm.mjs";
+// 架构 P1-3：MCP 敏感数据门控 + 审计（默认关——零配置可用承诺；MIANSHI_MCP_GATE=on 开启）
+import { checkMcpReadGate, recordMcpRead, SENSITIVE_CONFIRM_FIELD } from "./lib/mcp-gate.mjs";
 
 // LLM 工具前置校验：无 key 时快速失败（修复：此前无 key 会走 llm 重试/failover 链，
 // 干净环境（npm 安装后未配置）下卡 15s+ 才超时，体验为"工具挂了"而非"需要配置"）。
@@ -116,14 +118,19 @@ server.tool(
 // ---------- 工具 5-8: 个人数据环境（简历/校招/日程/学习进度） ----------
 // 数据源统一走 lib/context-providers.mjs（单数据源），桌宠内部 agent 与外部 agent 同通道
 // 内联模式与既有工具一致（避免 helper 类型推断影响 server.tool overload 匹配）
-server.tool(
+/** @type {any} */ (server.tool)(
   "get_personal_profile",
-  "查看用户在个人主页上传的简历（教育背景/项目经历/技能栈/求职目标）",
-  {},
-  async () => {
+  /** @type {any} */ ("查看用户在个人主页上传的简历（教育背景/项目经历/技能栈/求职目标）"),
+  /** @type {any} */ ({ ...SENSITIVE_CONFIRM_FIELD }),
+  async (args) => {
+    const name = "get_personal_profile";
+    // 架构 P1-3：敏感数据门控（开启时需 confirm）+ 审计（谁读了什么可追溯）
+    const gate = checkMcpReadGate(name, args);
+    if (!gate.allow) { recordMcpRead(name, args, false); return { content: [{ type: "text", text: gate.error }], isError: true }; }
     try {
       const { executeProviderTool } = await import("./lib/context-providers.mjs");
-      const r = /** @type {any} */ (await executeProviderTool("get_personal_profile"));
+      const r = /** @type {any} */ (await executeProviderTool(name));
+      recordMcpRead(name, args, true);
       if (!r.ok) return { content: [{ type: "text", text: `⚠️ ${r.error || "读取失败"}` }], isError: true };
       if (r.empty) return { content: [{ type: "text", text: `${r.message || "暂无数据"}` }] };
       return { content: [{ type: "text", text: JSON.stringify(r.data, null, 2).slice(0, 6000) }] };
@@ -152,14 +159,19 @@ server.tool(
   }
 );
 
-server.tool(
+/** @type {any} */ (server.tool)(
   "get_schedule_events",
-  "查看面试/笔试日程安排（邮箱邀约识别）",
-  {},
-  async () => {
+  /** @type {any} */ ("查看面试/笔试日程安排（邮箱邀约识别）"),
+  /** @type {any} */ ({ ...SENSITIVE_CONFIRM_FIELD }),
+  async (args) => {
+    const name = "get_schedule_events";
+    // 架构 P1-3：敏感数据门控 + 审计
+    const gate = checkMcpReadGate(name, args);
+    if (!gate.allow) { recordMcpRead(name, args, false); return { content: [{ type: "text", text: gate.error }], isError: true }; }
     try {
       const { executeProviderTool } = await import("./lib/context-providers.mjs");
-      const r = /** @type {any} */ (await executeProviderTool("get_schedule_events"));
+      const r = /** @type {any} */ (await executeProviderTool(name));
+      recordMcpRead(name, args, true);
       if (!r.ok) return { content: [{ type: "text", text: `⚠️ ${r.error || "读取失败"}` }], isError: true };
       if (r.empty) return { content: [{ type: "text", text: `${r.message || "暂无数据"}` }] };
       return { content: [{ type: "text", text: JSON.stringify(r.data, null, 2).slice(0, 6000) }] };
@@ -190,14 +202,19 @@ server.tool(
 
 // ---------- 工具 9: 本地项目源码档案（模拟面试/清单讲解/对话辅导共用素材） ----------
 // 用户问「我的项目怎么介绍/怎么讲/哪里不足」时，agent 基于真实代码辅导表述（用户不会表述也没关系）
-server.tool(
+/** @type {any} */ (server.tool)(
   "get_project_archives",
-  "查看用户本地项目源码档案（技术栈/目录结构/核心实现/README——来自设置中心配置的项目名=目录）。用户询问自己项目的介绍/表述/面试准备时，必须先调用本工具基于真实代码辅导",
-  {},
-  async () => {
+  /** @type {any} */ ("查看用户本地项目源码档案（技术栈/目录结构/核心实现/README——来自设置中心配置的项目名=目录）。用户询问自己项目的介绍/表述/面试准备时，必须先调用本工具基于真实代码辅导"),
+  /** @type {any} */ ({ ...SENSITIVE_CONFIRM_FIELD }),
+  async (args) => {
+    const name = "get_project_archives";
+    // 架构 P1-3：敏感数据门控 + 审计（本地源码档案含目录结构——开启门控时需确认）
+    const gate = checkMcpReadGate(name, args);
+    if (!gate.allow) { recordMcpRead(name, args, false); return { content: [{ type: "text", text: gate.error }], isError: true }; }
     try {
       const { getPersonalProjects, buildProjectArchive } = await import("./lib/personal-projects.mjs");
       const projects = getPersonalProjects();
+      recordMcpRead(name, args, true);
       if (!projects.length) {
         return { content: [{ type: "text", text: "未配置个人项目源码。请在设置中心「🎯 简历项目源码」填 项目名=本地目录，配置后模拟面试/清单讲解/对话都能基于真实代码。" }] };
       }

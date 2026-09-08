@@ -12,7 +12,7 @@ import { readBody } from "#lib/widget-core.mjs";
 import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
 import { createSSEPush, withContract } from "#lib/routes/contract.mjs";
 import { StudyStreamEvent } from "#lib/contracts/sse.mjs";
-import { sanitizeExternal } from "#lib/prompt-guard.mjs";
+import { sanitizeExternal , safeExternalBlock} from "#lib/prompt-guard.mjs";
 import { config } from "#root/config.mjs";
 import { StudyPlanOutput, StudyCheckInput, StudyCheckOutput } from "#lib/contracts/study.mjs";
 
@@ -232,7 +232,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
         }
       } catch { /* ignore */ }
       const sourceBlock = sourceText
-        ? `\n\n【原始面经内容（来自 ${item.source}，仅作讲解对象；原文可能含来源表述的方向词，不按它改编方向——从知识本身讲）】\n${sanitizeExternal(sourceText).wrapped}`
+        ? `\n\n【原始面经内容（来自 ${item.source}，仅作讲解对象；原文可能含来源表述的方向词，不按它改编方向——从知识本身讲）】\n${safeExternalBlock(sourceText)}`
         : "";
       // 流式链路超时统一修复工单任务 2①：solveQuestionStream 包 withLLMTimeout（60s）——
       // LLM 挂起时流式无响应 → 前端 120s 才超时（太久）→ 状态卡住；60s 主动断 + error 事件
@@ -417,7 +417,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
         }
       } catch { /* ignore */ }
       const sourceBlock = sourceText
-        ? `\n\n【原始面经内容（来自 ${item.source}，仅作整理对照）】\n${sanitizeExternal(sourceText).wrapped}`
+        ? `\n\n【原始面经内容（来自 ${item.source}，仅作整理对照）】\n${safeExternalBlock(sourceText)}`
         : "";
       // 流式链路超时统一修复工单任务 2②：consolidateStudyStream 包 withLLMTimeout（60s；env 可缩短——测试用）
       full = await /** @type {any} */ (withLLMTimeout(
@@ -498,7 +498,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
               } catch { /* ignore */ }
             }
             return sourceText
-              ? { ...t, content: `${t.content}\n\n【原始面经内容（来自 ${item?.source || "?"}，仅作归并对照）】\n${sanitizeExternal(sourceText).wrapped}` }
+              ? { ...t, content: `${t.content}\n\n【原始面经内容（来自 ${item?.source || "?"}，仅作归并对照）】\n${safeExternalBlock(sourceText)}` }
               : t;
           }));
           // 流式链路超时统一修复工单任务 2③：clusterStudyStream 包 withLLMTimeout（60s；env 可缩短——测试用）
