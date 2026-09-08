@@ -6,7 +6,15 @@
 
 // ============ API 基址单一来源（Phase 2 §3.5：收编 117 处硬编码 8899 直连） ============
 // 与 desktop/renderer/api-client.mjs 的 BASE_URL 保持一致（同值双入口：普通 script 用常量，模块化代码用 client）
-const API_BASE = "http://127.0.0.1:8899";
+// 架构 P1-4：动态解析实际端口（widget 端口回退 EADDRINUSE 后同步——主进程读 widget-port.json），
+// 启动即预取，解析前兜底 8899；所有 panel-*.js 共享本全局。
+let API_BASE = "http://127.0.0.1:8899";
+(async () => {
+  try {
+    const r = await window.kanban?.getApiBase?.();
+    if (r && typeof r.base === "string" && r.base) API_BASE = r.base;
+  } catch { /* 保持兜底 */ }
+})();
 
 // ============ 全局错误捕获（任何未捕获 JS 错误 → 主进程日志 + 面板可见，便于定位） ============
 window.addEventListener("error", (e) => {

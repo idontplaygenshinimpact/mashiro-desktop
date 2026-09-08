@@ -2,7 +2,7 @@
 import { test, beforeEach, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, mockFetchPage, setLlmResponses, setMockPages, resetMemoryState } from "./helpers.mjs";
+import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, mockFetchPage, setLlmResponses, setMockPages, setMockSsrfs, resetMemoryState } from "./helpers.mjs";
 
 const dbDir = setupTempDb("agent");
 // 测试产出隔离：讲解/归档文件写到临时目录（防污染真实 output/chat_solutions）
@@ -45,6 +45,7 @@ beforeEach(async () => {
   await clearAllTables();
   resetMemoryState(memory); // 清内存镜像（DB 清了但模块级镜像累积）
   setMockPages([]);
+  setMockSsrfs([]); // P1-9：SSRF 拦截配置重置
 });
 after(() => { cleanupTempDb(dbDir); });
 
@@ -445,8 +446,7 @@ test("chatWithAgent 无回调：行为零变化（一次性返回）", async () 
 });
 
 // ---------- 架构 P0-1：敏感工具走审批（不再静默 auto） ----------
-test("P0-1：browse_fetch 触发审批（此前静默 auto 与 tool-policy 宣称的 confirm 脱节）", async () => {
-  const { chatWithAgent } = await import("../lib/agent.mjs");
+test("P0-1：browse_fetch 触发审批（此前静默 auto 与 tool-policy 宣称的 confirm 脱节）", async () => {  const { chatWithAgent } = await import("../lib/agent.mjs");
   setLlmResponses(
     'TOOLCALL:{"name":"browse_fetch","arguments":"{\\"url\\":\\"http://x.com/1\\"}"}',
     "已浏览完页面内容。"
@@ -465,5 +465,54 @@ test("P0-1：browse_fetch 触发审批（此前静默 auto 与 tool-policy 宣�
   const r = await chatPromise;
   assert.ok(sawBrowse, "browse_fetch 走审批（P0-1 修复——此前静默 auto 放行）");
   assert.ok(r.reply.length > 0, "批准后正常执行");
+});
+
+// ---------- 架构 P1-9：高风险行为回归（死循环变种/多 tool_calls 并发/agent 层 SSRF） ----------
+test("P1-9：死循环变种——同工具不同参数连续调用不误判（key 含参数哈希）", async () => {
+  setLlmResponses(
+    'TOOLCALL:{"name":"search_posts","arguments":"{\\"query\\":\\"React\\"}"}',
+    'TOOLCALL:{"name":"search_posts","arguments":"{\\"query\\":\\"Vue\\"}"}',
+    'TOOLCALL:{"name":"search_posts","arguments":"{\\"query\\":\\"TypeScript\\"}"}',
+    "已搜索 React/Vue/TypeScript 三个方向。"
+  );
+  const r = await chatWithAgent("帮我搜三个方向的面经");
+  assert.equal(r.reply, "已搜索 React/Vue/TypeScript 三个方向。", "不同参数连续调用不被死循环保护误杀");
+  assert.ok(!r.reply.includes("重复调用"), "无死循环终止提示");
+});
+
+test("P1-9：同一轮多个 tool_calls → 串行执行 + 全部回填 → LLM 汇总回答", async () => {
+  // TOOLCALLS 双工具：search_posts + get_weak_points 同一轮——agent 串行执行并回填两个 tool 消息
+  setLlmResponses(
+    'TOOLCALLS:[{"name":"search_posts","args":{"query":"React"}},{"name":"get_weak_points","args":{}}]',
+    "已查面经和薄弱点。"
+  );
+  const r = await chatWithAgent("查一下面经和我的薄弱点");
+  assert.equal(r.reply, "已查面经和薄弱点。", "两个工具执行后正常回答");
+});
+
+test("P1-9：agent 层 SSRF——fetch_page 内网 URL 被拒（工具层防 SSRF 前置校验）", async () => {
+  setMockSsrfs(["127.0.0.1"]); // 配置内网拦截（真实校验由 fetch-page.test 覆盖，此处验证 agent 传播链）
+  setLlmResponses(
+    'TOOLCALL:{"name":"fetch_page","arguments":"{\\"url\\":\\"http://127.0.0.1:8899/api/health\\"}"}',
+    "页面无法访问，已放弃。"
+  );
+  const r = await chatWithAgent("抓一下本地服务的健康检查");
+  assert.ok(!r.reply.includes("undefined"), "无异常输出");
+  // 工具返回 SSRF 错误回填给 LLM（错误信息含防护提示）
+  // 通过 trace 验证工具被记为失败（SSRF 拒绝）
+  const { db } = await import("../lib/db.mjs");
+  const row = db.prepare("SELECT error FROM trace_tools WHERE tool_name='fetch_page' ORDER BY id DESC LIMIT 1").get();
+  assert.ok(row && row.error && (row.error.includes("SSRF") || row.error.includes("内网")), `SSRF 拒绝已 trace（实际: ${row?.error}）`);
+});
+
+test("P1-9：多 tool_calls 中命中重复保护 → 剩余调用占位补全（工具消息序列对 provider 合法）", async () => {
+  // 同一轮 3 个 search_posts 相同参数 → 第 3 次命中 TOOL_REPEAT_LIMIT → 注入终止提示；
+  // 之后 LLM 收到合法 tool 消息序列（占位补全）并回答
+  setLlmResponses(
+    'TOOLCALLS:[{"name":"search_posts","args":{"query":"React"}},{"name":"search_posts","args":{"query":"React"}},{"name":"search_posts","args":{"query":"React"}}]',
+    "检测到重复，我停止搜索直接总结。"
+  );
+  const r = await chatWithAgent("搜 React 面经三次");
+  assert.ok(r.reply.length > 0, "重复保护后仍能正常回答（占位补全不破坏消息序列）");
 });
 

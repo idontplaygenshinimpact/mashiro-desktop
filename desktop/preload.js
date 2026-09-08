@@ -108,6 +108,8 @@ contextBridge.exposeInMainWorld("kanban", /** @type {import("./kanban-api").Kanb
   // 渲染层切换（方案 B：面板内下拉入口）——打开 React 模拟面试 / Vue 复习卡独立窗口
   openReactPanel: () => ipcRenderer.invoke("panel:open-react"),
   openVuePanel: () => ipcRenderer.invoke("panel:open-vue"),
+  // 架构 P1-4：实际 widget 端口（端口回退后同步——渲染层 API 基址单一来源）
+  getApiBase: () => ipcRenderer.invoke("widget:api-base"),
   setIgnoreMouse: (ignore) => ipcRenderer.invoke("window:set-ignore", { ignore }),
   speak: (text) => ipcRenderer.invoke("window:speak", { text }),
   // 实时语音两阶段（渲染层 speech-queue 预取流水线）：ttsSynth 准备 → ttsPlayFile 播放（播完 resolve）

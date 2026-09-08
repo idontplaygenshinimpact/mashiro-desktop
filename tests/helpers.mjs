@@ -72,8 +72,10 @@ export function resetMemoryState(mem) {
 //   TOOLCALL:{"name":"xxx","arguments":"{...json...}"} → 构造 tool_calls（模拟模型要调工具）
 let queue = [];
 let lastMessages = []; // 最近一次 llmChat 收到的 messages（供断言 prompt 内容）
+let allMessages = []; // 全部调用记录（讲解质量工单：两阶段/自评多次调用——断言需查任意一次）
 export function getLastMessages() { return lastMessages; }
-export function setLlmResponses(...contents) { queue = contents.map((c) => String(c ?? "")); }
+export function getAllMessages() { return allMessages; }
+export function setLlmResponses(...contents) { queue = contents.map((c) => String(c ?? "")); allMessages = []; }
 export function llmQueueLen() { return queue.length; }
 // 可选 LLM 延迟（复现真实调用耗时——P1-1 并发写保护测试留并发窗口用；默认 0 不影响其他测试）
 let llmDelayMs = 0;
@@ -81,12 +83,34 @@ export function setLlmDelay(ms) { llmDelayMs = Math.max(0, Number(ms) || 0); }
 export async function mockLlmChat(messages, _opts = {}) {
   if (llmDelayMs > 0) await new Promise((r) => setTimeout(r, llmDelayMs));
   lastMessages = messages;
+  allMessages.push(messages);
   // 防假绿（测试与 CI 工单）：队列空时抛错——mock 消费数 > 设置数说明测试少设了响应，
   // 静默返回空串会让断言"假绿"（如生成失败路径没被真正触发）
   if (!queue.length) {
     throw new Error(`mock LLM 队列已空（第 ${lastMessages.length} 条消息）——测试少设了 setLlmResponses，静默空响应会假绿`);
   }
   const content = queue.shift();
+  // TOOLCALLS:[{name,args},...] → 多工具调用响应（P1-9：一轮多个 tool_calls 并发/串行测试）
+  const multi = content.match(/^TOOLCALLS:(.+)$/s);
+  if (multi) {
+    let calls = [];
+    try {
+      calls = JSON.parse(multi[1]);
+    } catch { /* ignore */ }
+    return {
+      choices: [{
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: (Array.isArray(calls) ? calls : []).map((c, i) => ({
+            id: `call_${Date.now().toString(36)}_${i}`,
+            type: "function",
+            function: { name: String(c.name || "unknown"), arguments: typeof c.args === "string" ? c.args : JSON.stringify(c.args || {}) },
+          })),
+        },
+      }],
+    };
+  }
   const m = content.match(/^TOOLCALL:(.+)$/s);
   if (m) {
     let fn = { name: "unknown", arguments: "{}" };
@@ -105,10 +129,30 @@ export async function mockLlmChat(messages, _opts = {}) {
 }
 export async function mockLlmChatStream(messages, _opts = {}, onChunk) {
   lastMessages = messages; // 与 mockLlmChat 一致：prompt 断言可见
+  allMessages.push(messages);
   const content = queue.shift() ?? "";
   // 流式链路故障注入工单：HANG 特殊值 → 返回永不 resolve 的 Promise（模拟 LLM 挂起——
   // 让路由 withLLMTimeout 超时分支真实触发，单测可用短超时 env 快速验证）
   if (content === "HANG") return new Promise(() => {});
+  // P1-9：TOOLCALLS 多工具响应（流式路径同样需要——agent callLLM 恒走 stream）
+  const multi = content.match(/^TOOLCALLS:(.+)$/s);
+  if (multi) {
+    let calls = [];
+    try { calls = JSON.parse(multi[1]); } catch { /* ignore */ }
+    return {
+      choices: [{
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: (Array.isArray(calls) ? calls : []).map((c, i) => ({
+            id: `call_${Date.now().toString(36)}_${i}`,
+            type: "function",
+            function: { name: String(c.name || "unknown"), arguments: typeof c.args === "string" ? c.args : JSON.stringify(c.args || {}) },
+          })),
+        },
+      }],
+    };
+  }
   // 与 mockLlmChat 一致：TOOLCALL: 前缀 → 工具调用响应（流式 + 工具调用共存）
   const m = content.match(/^TOOLCALL:(.+)$/s);
   if (m) {
@@ -176,8 +220,30 @@ export function mockLLM() {
 // fetch-page mock：默认空页；可用 setMockPages 配置多个页面（按调用顺序返回）
 let pages = [];
 export function setMockPages(pageList) { pages = pageList.map((p) => ({ title: "mock页", text: "mock正文".repeat(30), links: [], invalid: false, ...p })); }
+// P1-9：SSRF 拦截配置——setMockSsrfs(["127.0.0.1"]) 后，命中子串的 URL 在工具层被拒（模拟真实内网拦截）
+// （真实校验逻辑由 fetch-page.test.mjs 覆盖；这里验证 agent 工具层正确传播 SSRF 拒绝——错误回填 + trace）
+let ssrfBlocks = [];
+export function setMockSsrfs(urls) { ssrfBlocks = (Array.isArray(urls) ? urls : []).map((u) => String(u)); }
 export async function mockFetchPageImpl(url, _opts = {}) {
   return pages.shift() ?? { title: "mock空页", text: "", links: [], invalid: false };
+}
+
+// ---------- web-search mock（讲解质量工单任务 1：时效性检索注入测试） ----------
+// setMockSearchResults(results) 配置返回；null = 未配置（searchWeb 抛错模拟"搜索失败"降级路径）
+let mockSearchResults = null;
+let mockSearchCalls = 0;
+export function setMockSearchResults(results) { mockSearchResults = results; mockSearchCalls = 0; }
+export function getMockSearchCalls() { return mockSearchCalls; }
+export function mockWebSearch() {
+  mock.module(new URL("../lib/web-search.mjs", import.meta.url).href, {
+    namedExports: {
+      searchWeb: async (query, _opts) => {
+        mockSearchCalls++;
+        if (mockSearchResults === null) throw new Error("搜索失败（模拟）");
+        return mockSearchResults;
+      },
+    },
+  });
 }
 
 // ---------- browse_* 工具 mock（browse_open/click/scroll/type/screenshot/fetch） ----------
@@ -217,8 +283,13 @@ export function mockFetchPage() {
       fetchPages: async () => [],
       closeBrowser: async () => {},
       // SSRF 校验在真实 fetch-page.mjs 里做（单独由 fetch-page.test.mjs 覆盖）；
-      // 这里 mock 成直接放行，避免测试里的假域名触发 DNS 解析
-      assertPublicUrl: async () => {},
+      // 这里 mock 成直接放行，避免测试里的假域名触发 DNS 解析；
+      // P1-9：命中 setMockSsrfs 配置的 URL 抛 SSRF 错误（验证 agent 工具层传播链）
+      assertPublicUrl: async (url) => {
+        for (const b of ssrfBlocks) {
+          if (String(url).includes(b)) throw new Error("拒绝访问内网/本机地址（SSRF 防护）");
+        }
+      },
       assertPublicHostname: async () => {},
       isPrivateHostname: () => false,
       isPrivateIP: () => false,

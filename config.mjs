@@ -17,6 +17,11 @@ function loadDotEnv() {
 }
 
 const dotenv = loadDotEnv();
+// .env 注入 process.env（未设置才注入——真实环境变量优先）：让 MIANSHI_PROVIDERS /
+// DEEPSEEK_BASE_URL / MIANSHI_MODEL 等全部配置项都能在 .env 配置（此前仅 DEEPSEEK_API_KEY 生效）
+for (const [k, v] of Object.entries(dotenv)) {
+  if (process.env[k] === undefined) process.env[k] = v;
+}
 
 function resolveApiKey() {
   if (dotenv.DEEPSEEK_API_KEY) return dotenv.DEEPSEEK_API_KEY;

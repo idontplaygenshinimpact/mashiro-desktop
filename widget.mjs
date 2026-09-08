@@ -24,7 +24,7 @@ import { classifyStudyFiles, pickDistinct } from "./lib/recommend.mjs";
 import { createRouter } from "./lib/routes/router.mjs";
 import { registerCoreRoutes } from "./lib/routes/core.mjs";
 import { loadEnabledPlugins, listPlugins, setPluginEnabled, readPluginSettings, writePluginSetting, installPlugin, getPluginMarket } from "./lib/plugin-admin.mjs";
-import { createBackup, listBackups, markRestore, hoursSinceLastBackup, backupConfig } from "./lib/backup.mjs";
+import { createBackup, listBackups, markRestore, hoursSinceLastBackup, backupConfig, getLastBackupOutcome } from "./lib/backup.mjs";
 import { db } from "./lib/db.mjs";
 import { createPatrol } from "./lib/patrol.mjs";
 // 事件驱动内核（Phase 事件驱动内核 W1-W3）：事件总线 / 自主决策 / CC 会话 watcher
@@ -73,7 +73,7 @@ registerCoreRoutes(router, {
     pluginInstall: (id) => installPlugin(id),
     pluginMarket: () => getPluginMarket(),
     backupCreate: () => createBackup("manual"),
-    backupList: () => listBackups(),
+    backupList: () => ({ ...listBackups(), lastStatus: getLastBackupOutcome() }), // 架构 P1-10：备份状态面板可见
     backupRestore: (name) => markRestore(name),
   },
 });

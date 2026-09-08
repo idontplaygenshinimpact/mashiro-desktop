@@ -1,10 +1,11 @@
 // ai.ts 单测：分类/挑帖/题目检测/讲解/压缩（mock LLM + 临时 DB）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses } from "./helpers.mjs";
+import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses, mockWebSearch, setMockSearchResults, getMockSearchCalls } from "./helpers.mjs";
 
 const dbDir = setupTempDb("ai");
 mockLLM(); // 拦截 ai.ts 的动态 import("./llm.mjs")
+mockWebSearch(); // 讲解质量工单任务 1：mock web-search（setMockSearchResults 配置返回）
 const ai = await import("../lib/ai.ts");
 
 beforeEach(async () => { await clearAllTables(); });
@@ -325,4 +326,110 @@ test("withLLMTimeout：正常完成不超时 + 定时器清理", async () => {
   // 超时后定时器已清理（不残留——再等 60ms 无副作用即通过）
   await new Promise((r) => setTimeout(r, 60));
   assert.ok(true, "无残留定时器异常");
+});
+
+// ---------- 讲解质量增强工单任务 1：时效性主题识别 + 联网检索注入 ----------
+const MOCK_REFS = [
+  { title: "DeepSeek R1 发布：推理模型新范式", url: "https://example.com/r1", snippet: "2025-01 发布，RL 训练推理链 + 推理时计算扩展" },
+  { title: "o3 推理时工具调用", url: "https://example.com/o3", snippet: "2025-04 发布，推理时计算扩展" },
+  { title: "GPT-5.1 与 Claude Opus 4.5 对比", url: "https://example.com/gpt51", snippet: "2025-11 发布" },
+];
+
+test("任务1①：时效性题命中 → prompt 含检索结果 + 来源链接", async () => {
+  setMockSearchResults(MOCK_REFS);
+  // 时效性题走两阶段（大纲）+ 自评：大纲返回非 JSON → 降级单次生成（含检索注入）→ 自评非 JSON 不补全
+  setLlmResponses("非JSON大纲", "## 结论\nLLM 演进\n## 原理\n...\n## 边界\n...", "非JSON自评");
+  await ai.solveQuestion({ title: "LLM 与 Agent 演进", text: "梳理大模型与 Agent 的发展历程", company: "c", position: "前端", sourceUrl: "" });
+  const { getAllMessages } = await import("./helpers.mjs");
+  const prompt = getAllMessages().map((msgs) => msgs.map((m) => String(m.content || "")).join("\n")).join("\n");
+  assert.ok(prompt.includes("最新资料参考"), "注入【最新资料参考】段");
+  assert.ok(prompt.includes("https://example.com/r1"), "带来源链接（可溯源）");
+  assert.ok(prompt.includes("DeepSeek R1"), "检索结果内容注入");
+  assert.ok(getMockSearchCalls() >= 2, `检索 2-3 个 query（实际 ${getMockSearchCalls()} 次）`);
+});
+
+test("任务1②：非时效性题（事件循环）→ searchWeb 不被调用（零网络）", async () => {
+  setMockSearchResults(MOCK_REFS);
+  setLlmResponses("## 结论\n事件循环\n## 原理\n...\n## 边界\n...");
+  await ai.solveQuestion({ title: "事件循环", text: "宏任务微任务", company: "c", position: "前端", sourceUrl: "" });
+  assert.equal(getMockSearchCalls(), 0, "非时效性题不触发检索");
+});
+
+test("任务1③：搜索失败 → 降级不炸、讲解照常", async () => {
+  setMockSearchResults(null); // null = searchWeb 抛错（模拟搜索失败）
+  setLlmResponses("非JSON大纲", "## 结论\nLLM 演进\n## 原理\n...\n## 边界\n...", "非JSON自评");
+  const md = await ai.solveQuestion({ title: "LLM 与 Agent 演进", text: "梳理发展历程", company: "c", position: "前端", sourceUrl: "" });
+  assert.ok(md.includes("## 结论"), "搜索失败讲解照常生成");
+});
+
+test("任务1④：检索结果被 wrapUntrusted 包裹（外部数据防注入）", async () => {
+  setMockSearchResults(MOCK_REFS);
+  setLlmResponses("非JSON大纲", "## 结论\nLLM 演进\n## 原理\n...\n## 边界\n...", "非JSON自评");
+  await ai.solveQuestion({ title: "LLM 与 Agent 演进", text: "梳理发展历程", company: "c", position: "前端", sourceUrl: "" });
+  const { getAllMessages } = await import("./helpers.mjs");
+  const prompt = getAllMessages().map((msgs) => msgs.map((m) => String(m.content || "")).join("\n")).join("\n");
+  assert.ok(prompt.includes("<untrusted_data>"), "检索结果包裹不可信标记");
+  assert.ok(prompt.includes("</untrusted_data>"), "闭合标记");
+});
+
+test("任务1：isTimeSensitiveTopic 判定（组合词命中/短词排除）", () => {
+  assert.equal(ai.isTimeSensitiveTopic("LLM 与 Agent 演进", "发展历程"), true, "演进命中");
+  assert.equal(ai.isTimeSensitiveTopic("2026 前端趋势", "最新技术"), true, "趋势/最新命中");
+  assert.equal(ai.isTimeSensitiveTopic("事件循环", "宏任务微任务"), false, "非时效性不命中");
+  assert.equal(ai.isTimeSensitiveTopic("对比度调整", "CSS filter"), false, "短词组合词排除（对比度≠对比）");
+  assert.equal(ai.isTimeSensitiveTopic("React 19 新特性", "发布"), true, "新特性/发布命中");
+});
+
+// ---------- 讲解质量增强工单任务 3：两阶段生成（大纲先行） ----------
+test("任务3：时效性题大纲合法 → 逐节生成拼接（深度分布均匀）", async () => {
+  setMockSearchResults(MOCK_REFS);
+  setLlmResponses(
+    '{"sections":[{"title":"演进时间线","points":["2024 起点","2025 推理模型"]},{"title":"关键模型对比","points":["R1","o3","GPT-5.1"]},{"title":"Agent 架构演进","points":["A2A","ACP"]}]}',
+    "## 演进时间线\n2024 起点…",
+    "## 关键模型对比\nR1 vs o3…",
+    "## Agent 架构演进\nA2A 与 ACP…",
+    "非JSON自评"
+  );
+  const md = await ai.solveQuestion({ title: "LLM 与 Agent 演进", text: "梳理发展历程", company: "c", position: "前端", sourceUrl: "" });
+  assert.ok(md.includes("## 演进时间线"), "第一节内容");
+  assert.ok(md.includes("## 关键模型对比"), "第二节内容");
+  assert.ok(md.includes("## Agent 架构演进"), "第三节内容");
+  assert.ok(md.includes("---"), "节间分隔");
+  // 大纲注入正文 prompt（防节间重复/遗漏）
+  const { getAllMessages } = await import("./helpers.mjs");
+  const prompt = getAllMessages().map((msgs) => msgs.map((m) => String(m.content || "")).join("\n")).join("\n");
+  assert.ok(prompt.includes("生成大纲"), "大纲注入正文 prompt");
+});
+
+test("任务3：大纲解析失败 → 降级单次生成（行为与旧版一致）", async () => {
+  setMockSearchResults(MOCK_REFS);
+  setLlmResponses("乱码大纲", "## 结论\n单次生成内容\n## 原理\n...\n## 边界\n...", "非JSON自评");
+  const md = await ai.solveQuestion({ title: "LLM 与 Agent 演进", text: "梳理发展历程", company: "c", position: "前端", sourceUrl: "" });
+  assert.ok(md.includes("## 结论"), "降级单次生成正常");
+});
+
+// ---------- 讲解质量增强工单任务 4：生成后自评门禁（Reflexion 式） ----------
+test("任务4：自评不达标 → 自动补一轮（补充缺失项）", async () => {
+  setMockSearchResults(MOCK_REFS);
+  setLlmResponses(
+    "非JSON大纲", // 大纲失败 → 单次生成
+    "## 结论\nLLM 演进\n## 原理\n...\n## 边界\n...", // 单次生成
+    '{"ok":false,"missing":["2025-2026 时间线节点","o3 推理时工具调用"]}', // 自评不达标
+    "## 补充\n2025-2026 时间线：DeepSeek R1（2025-01）…" // 补全
+  );
+  const md = await ai.solveQuestion({ title: "LLM 与 Agent 演进", text: "梳理发展历程", company: "c", position: "前端", sourceUrl: "" });
+  assert.ok(md.includes("## 补充（自评补全）"), "自评补全章节追加");
+  assert.ok(md.includes("DeepSeek R1"), "补全内容包含缺失项");
+});
+
+test("任务4：自评达标 → 不补全（零额外调用）", async () => {
+  setMockSearchResults(MOCK_REFS);
+  setLlmResponses(
+    "非JSON大纲",
+    "## 结论\nLLM 演进\n## 原理\n...\n## 边界\n...",
+    '{"ok":true,"missing":[]}'
+  );
+  const md = await ai.solveQuestion({ title: "LLM 与 Agent 演进", text: "梳理发展历程", company: "c", position: "前端", sourceUrl: "" });
+  assert.ok(!md.includes("自评补全"), "达标不补全");
+  assert.ok(md.includes("## 结论"), "原内容保留");
 });

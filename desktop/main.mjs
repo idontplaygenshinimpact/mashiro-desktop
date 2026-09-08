@@ -4,7 +4,7 @@ import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell, se
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
-import { writeFileSync, readFileSync, createWriteStream } from "node:fs";
+import { writeFileSync, readFileSync, createWriteStream, existsSync } from "node:fs";
 import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, healthUrl } from "../lib/widget-auth.mjs";
 // 纵向拆分：widget 服务守护 / 窗口位置持久化 / 重启设施（desktop/lib/*.mjs，无 electron 依赖可单测）
 import { safeSpawn, createWidgetServer } from "./lib/widget-server.mjs";
@@ -378,6 +378,18 @@ safeHandle("mascot:menu", async () => {
 });
 
 // ---------- IPC ----------
+// 架构 P1-4：渲染层 API 基址单一来源——widget 端口回退（EADDRINUSE → +1/+2）后同步实际端口。
+// 主进程读 widget-port.json（widget 启动后写入）；缺失/损坏回退 WIDGET_URL（config.widgetPort）
+safeHandle("widget:api-base", () => {
+  try {
+    const portFile = path.join(ROOT, "data", "widget-port.json");
+    if (existsSync(portFile)) {
+      const j = JSON.parse(readFileSync(portFile, "utf8"));
+      if (j && Number.isInteger(j.port) && j.port > 0) return { base: `http://127.0.0.1:${j.port}` };
+    }
+  } catch { /* 端口文件缺失/损坏回退默认 */ }
+  return { base: WIDGET_URL };
+});
 safeHandle("widget:data", async () => {
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/widget-data`);
@@ -427,15 +439,15 @@ async function widgetGet(pathname) {
   }
 }
 safeHandle("widget:chat", (e, { message, history, sessionId }) => widgetPost("/api/chat", { message, history, sessionId }));
-// 对话（流式过程版）：agent 工具事件实时转发（token 定向，复用流式隔离模式）
-safeHandle("widget:chat-stream", async (e, { message, history, sessionId, __streamToken: token }) => {
-  const chan = token ? `chat-chunk:${token}` : "chat-chunk";
+
+// 架构 P1-5：IPC SSE 流式转发统一 helper（chat/detail/append/consolidate/cluster 5 处同构重复收敛）
+// main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）；
+// 并发隔离：preload 每次调用带 __streamToken，chunk 定向发送到 `channel:token`（曾广播串流）
+// 非 SSE 响应（一次性 JSON：有文件/路由降级）同样转发——调用方按既有 jsonMode 处理
+async function streamForward(e, { channel, pathname, init, token }) {
+  const chan = token ? `${channel}:${token}` : channel;
   try {
-    const res = await widgetFetch(`${WIDGET_URL}/api/chat-stream`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, history, sessionId }),
-    });
+    const res = await widgetFetch(`${WIDGET_URL}${pathname}`, init || {});
     const ctype = res.headers.get("content-type") || "";
     if (!ctype.includes("text/event-stream")) {
       const j = await res.json();
@@ -453,14 +465,23 @@ safeHandle("widget:chat-stream", async (e, { message, history, sessionId, __stre
       while ((idx = buf.indexOf("\n\n")) >= 0) {
         const event = buf.slice(0, idx);
         buf = buf.slice(idx + 2);
-        e.sender.send(chan, event);
+        e.sender.send(chan, event); // 原样转发 data: {...}
       }
     }
     return { ok: true, mode: "sse" };
   } catch (err) {
     return { ok: false, error: err.message };
   }
-});
+}
+// 对话（流式过程版）：agent 工具事件实时转发（token 定向，复用流式隔离模式）
+safeHandle("widget:chat-stream", (e, { message, history, sessionId, __streamToken: token }) =>
+  streamForward(e, {
+    channel: "chat-chunk",
+    pathname: "/api/chat-stream",
+    token,
+    init: { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, history, sessionId }) },
+  })
+);
 safeHandle("widget:chat-history", () => widgetGet("/api/chat-history"));
 safeHandle("widget:chat-sessions", () => widgetGet("/api/chat/sessions"));
 safeHandle("widget:chat-messages", (_e, { sessionId }) => widgetGet(`/api/chat/messages?session=${encodeURIComponent(sessionId || "default")}`));
@@ -482,135 +503,40 @@ safeHandle("widget:patrol-run", () => widgetPost("/api/patrol-run", {}));
 safeHandle("widget:settings-rag", (e, cfg) => (cfg && Object.keys(cfg).length ? widgetPost("/api/settings/rag", cfg) : widgetGet("/api/settings/rag")));
 safeHandle("widget:interview-notes", (e, { topics }) => widgetPost("/api/interview-notes", { topics }));
 safeHandle("widget:study-detail", (e, { id }) => widgetGet(`/api/study-detail?id=${encodeURIComponent(id)}`));
-// 流式讲解：main 转发 widget SSE → 渲染层事件（避开渲染层 CORS/webSecurity 限制）
-// 并发隔离：preload 每次调用带 __streamToken，chunk 定向发送到 `channel:token`（曾广播串流）
-safeHandle("widget:study-detail-stream", async (e, { id, noSimilar, __streamToken: token }) => {
-  const chan = token ? `study-detail-chunk:${token}` : "study-detail-chunk";
-  try {
+// 流式讲解/追问/整理/归并：main 转发 widget SSE → 渲染层（统一走 streamForward —— 架构 P1-5）
+safeHandle("widget:study-detail-stream", (e, { id, noSimilar, __streamToken: token }) =>
+  streamForward(e, {
+    channel: "study-detail-chunk",
     // noSimilar=1（重新生成）：跳过相似条目存档复用，强制生成本条自己的讲解
-    const q = `id=${encodeURIComponent(id)}${noSimilar ? "&noSimilar=1" : ""}`;
-    const res = await widgetFetch(`${WIDGET_URL}/api/study-detail-stream?${q}`);
-    const ctype = res.headers.get("content-type") || "";
-    // 有文件：一次性 JSON
-    if (!ctype.includes("text/event-stream")) {
-      const j = await res.json();
-      e.sender.send(chan, JSON.stringify(j));
-      return { ok: true, mode: "json" };
-    }
-    // 无文件：SSE 流，逐块转发
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buf = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf("\n\n")) >= 0) {
-        const event = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        e.sender.send(chan, event); // 原样转发 data: {...}
-      }
-    }
-    return { ok: true, mode: "sse" };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-});
+    pathname: `/api/study-detail-stream?id=${encodeURIComponent(id)}${noSimilar ? "&noSimilar=1" : ""}`,
+    token,
+  })
+);
 // 讲解追问补充：main 转发 widget append-stream SSE → 渲染层（独立事件通道）
-safeHandle("widget:study-append-stream", async (e, { id, question, __streamToken: token }) => {
-  const chan = token ? `study-append-chunk:${token}` : "study-append-chunk";
-  try {
-    const res = await widgetFetch(`${WIDGET_URL}/api/study-append-stream?id=${encodeURIComponent(id)}&question=${encodeURIComponent(question)}`);
-    const ctype = res.headers.get("content-type") || "";
-    if (!ctype.includes("text/event-stream")) {
-      const j = await res.json();
-      e.sender.send(chan, JSON.stringify(j));
-      return { ok: true, mode: "json" };
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buf = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf("\n\n")) >= 0) {
-        const event = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        e.sender.send(chan, event);
-      }
-    }
-    return { ok: true, mode: "sse" };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-});
+safeHandle("widget:study-append-stream", (e, { id, question, __streamToken: token }) =>
+  streamForward(e, {
+    channel: "study-append-chunk",
+    pathname: `/api/study-append-stream?id=${encodeURIComponent(id)}&question=${encodeURIComponent(question)}`,
+    token,
+  })
+);
 // 整理讲解全文：main 转发 widget consolidate-stream SSE → 渲染层（独立事件通道）
-safeHandle("widget:study-consolidate-stream", async (e, { id, __streamToken: token }) => {
-  const chan = token ? `study-consolidate-chunk:${token}` : "study-consolidate-chunk";
-  try {
-    const res = await widgetFetch(`${WIDGET_URL}/api/study-consolidate-stream?id=${encodeURIComponent(id)}`);
-    const ctype = res.headers.get("content-type") || "";
-    if (!ctype.includes("text/event-stream")) {
-      const j = await res.json();
-      e.sender.send(chan, JSON.stringify(j));
-      return { ok: true, mode: "json" };
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buf = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf("\n\n")) >= 0) {
-        const event = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        e.sender.send(chan, event);
-      }
-    }
-    return { ok: true, mode: "sse" };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-});
+safeHandle("widget:study-consolidate-stream", (e, { id, __streamToken: token }) =>
+  streamForward(e, {
+    channel: "study-consolidate-chunk",
+    pathname: `/api/study-consolidate-stream?id=${encodeURIComponent(id)}`,
+    token,
+  })
+);
 // 多条目归并：main 转发 widget cluster-stream SSE → 渲染层（独立事件通道）
-safeHandle("widget:study-cluster-stream", async (e, { ids, __streamToken: token }) => {
-  const chan = token ? `study-cluster-chunk:${token}` : "study-cluster-chunk";
-  try {
-    const res = await widgetFetch(`${WIDGET_URL}/api/study-cluster-stream`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids }),
-    });
-    const ctype = res.headers.get("content-type") || "";
-    if (!ctype.includes("text/event-stream")) {
-      const j = await res.json();
-      e.sender.send(chan, JSON.stringify(j));
-      return { ok: true, mode: "json" };
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buf = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf("\n\n")) >= 0) {
-        const event = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        e.sender.send(chan, event);
-      }
-    }
-    return { ok: true, mode: "sse" };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-});
+safeHandle("widget:study-cluster-stream", (e, { ids, __streamToken: token }) =>
+  streamForward(e, {
+    channel: "study-cluster-chunk",
+    pathname: "/api/study-cluster-stream",
+    token,
+    init: { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) },
+  })
+);
 safeHandle("widget:study-generate", () => widgetPost("/api/study-generate"));
 safeHandle("widget:study-check", (e, { id, done }) => widgetGet(`/api/study-check?id=${encodeURIComponent(id)}&done=${done ? "1" : "0"}`));
 safeHandle("widget:study-review", () => widgetPost("/api/study-review"));

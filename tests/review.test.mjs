@@ -97,16 +97,24 @@ test("multiple addCard calls in one tick all persist", () => {
   assert.equal(db.prepare("SELECT COUNT(*) n FROM review_cards").get().n, topics.length, "DB 持久化一致");
 });
 
-// F8 回归：非法 rating 归一化为 Good(2)，DB 不存脏值
-test("reviewCard 非法 rating 回退 Good 且 DB 存归一化值", () => {
+// 架构 P1-8 回归：非法 rating 拒绝（不再默认 Good(2)）——不改状态不回流不写库
+test("reviewCard 非法 rating 拒绝且不动状态（不误清薄弱点/不误记掌握度）", () => {
   memory.addWeakPoint("闭包", "测试");
   const card = review.addCard({ topic: "闭包", question: "q" });
   const r = review.reviewCard(card.id, 99);
-  assert.equal(r.ok, true);
-  const log = db.prepare("SELECT rating FROM card_reviews WHERE card_id=?").get(card.id);
-  assert.equal(log.rating, 2, "越界 rating 归一化为 Good(2)，不存脏值 99");
-  // 非法 rating 按 Good 处理（答对）→ 清除薄弱点，与合法 Good 行为一致
-  assert.equal(memory.getWeakPoints().length, 0, "非法 rating 按 Good 处理清除薄弱点");
+  assert.equal(r.ok, false, "非法 rating 拒绝");
+  assert.ok(r.error.includes("非法评分"), "错误信息说明合法范围");
+  const log = db.prepare("SELECT COUNT(*) n FROM card_reviews WHERE card_id=?").get(card.id);
+  assert.equal(log.n, 0, "不写复习记录");
+  assert.equal(memory.getWeakPoints().length, 1, "薄弱点未被清除（不再误判答对）");
+  // 非整数/负数/超界同样拒绝
+  for (const bad of [4, -1, 2.5, "good", null, undefined]) {
+    const rr = review.reviewCard(card.id, bad);
+    assert.equal(rr.ok, false, `rating=${String(bad)} 拒绝`);
+  }
+  // 合法值仍正常
+  const ok = review.reviewCard(card.id, 2);
+  assert.equal(ok.ok, true, "合法 rating 2 正常");
 });
 
 // F9 回归：fsrs 列损坏 → 回退空卡，不拖垮全部读取

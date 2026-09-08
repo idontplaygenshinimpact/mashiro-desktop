@@ -57,6 +57,7 @@ export interface KanbanApi {
   openOutput: () => Promise<any>;
   openFile: (filePath: string) => Promise<any>;
   togglePanel: () => Promise<any>;
+  getApiBase: () => Promise<{ base: string }>; // 架构 P1-4：实际 widget 端口（端口回退后同步）
   setIgnoreMouse: (ignore: boolean) => Promise<any>;
   speak: (text: string) => Promise<any>;
   playScene: (scene: string) => Promise<any>;
