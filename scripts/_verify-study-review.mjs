@@ -16,7 +16,7 @@ writeFileSync(process.env.MIANSHI_MCP_CONFIG, "[]", "utf8");
 const { mockLLM, setLlmResponses } = await import("../tests/helpers.mjs");
 mockLLM();
 
-const { db } = await import("../lib/db.mjs");
+
 const { ensureSchema } = await import("../lib/db.mjs");
 ensureSchema();
 

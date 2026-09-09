@@ -13,7 +13,7 @@ try {
   writeFileSync(path.join(dbDir, "output", "2026-08-05_discover", "面经.md"), "# 事件循环面经\n\n".repeat(30) + "详细内容".repeat(30), "utf8");
 } catch { /* ignore */ }
 mockLLM(); // F1 回归测试需要 generateStudyPlan（mock 必须在 import study 之前）
-const { getPlan, addPlanItems, checkItem, startReview, generateStudyPlan, syncResumeProjectItems, normalizeGroup } = await import("../lib/study.mjs");
+const { getPlan, addPlanItems, checkItem, startReview, generateStudyPlan, syncResumeProjectItems } = await import("../lib/study.mjs");
 
 beforeEach(async () => { await clearAllTables(); });
 after(() => { cleanupTempDb(dbDir); });

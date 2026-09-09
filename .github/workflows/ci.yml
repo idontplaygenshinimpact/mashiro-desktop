@@ -52,8 +52,10 @@ jobs:
           name: coverage-lcov
           path: coverage/lcov.info
           retention-days: 14
-      - name: Type check (tsc --noEmit, checkJs)
+      - name: Type check (tsc --noEmit, checkJs + strict .ts)
         run: npm run typecheck
+      - name: Type probe (checkJs 配置未被放宽——故意类型错误必须被捕获)
+        run: node scripts/typecheck-probe.mjs
       - name: Desktop type check (preload/main/api-client, checkJs — Phase 2 前后端类型化)
         run: npm run typecheck:desktop
       - name: Lint

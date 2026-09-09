@@ -1384,7 +1384,7 @@ function widgetFetch(url, opts = {}) {
 // 2s 拉 widget /api/pet-events（事件内核表达队列，仅非空才返回数据）→ petSay 气泡+语音。
 // widget 未就绪时 tick 静默重试（不崩溃）；MIANSHI_AUTONOMY=off 时内部直接不启动。
 // 注：widgetFetch 需要完整 URL，这里适配 companion-poller 的相对路径调用。
-const companionPoller = startCompanionPoller({
+const _companionPoller = startCompanionPoller({
   widgetFetch: (path) => widgetFetch(`${WIDGET_URL}${path}`),
   petSay,
 });

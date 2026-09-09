@@ -5,7 +5,7 @@
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,7 +13,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKER = path.join(ROOT, "scripts", "tts-server-worker.py");
 const PORT = Number(process.env.MIANSHI_TTS_PORT || process.argv[2] || 8900);
 const TOKEN = process.env.MIANSHI_TTS_TOKEN || "";
-const WORKER_TIMEOUT_MS = 60000; // 单句合成超时
+const _WORKER_TIMEOUT_MS = 60000; // 单句合成超时
 const REQ_TIMEOUT_MS = 15000;    // HTTP 侧超时（合成前排队等待含在内，由上层控制降级）
 
 // ---------- worker 生命周期（崩溃自动重启，widget-server 同款 ensure 模式） ----------
@@ -55,7 +55,7 @@ function startWorker() {
     ready = false;
     inflight = null;
     // 在途/排队请求全部失败（上层降级）
-    for (const [id, p] of pending) { clearTimeout(p.timer); p.resolve({ ok: false, error: "worker restart" }); }
+    for (const [_id, p] of pending) { clearTimeout(p.timer); p.resolve({ ok: false, error: "worker restart" }); }
     pending.clear();
     queue = [];
     setTimeout(startWorker, 2000);

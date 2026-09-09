@@ -58,3 +58,38 @@ export interface WeakPoint {
   question?: string;
   answer?: string;
 }
+
+// ---------- TS 增量收益工单任务 C：T1-T4 新代码共享类型 ----------
+
+/** 计划状态（todo.mjs PlanStore——编排能力缺口工单 T1） */
+export interface PlanState {
+  id: string;
+  goal: string;
+  steps: Array<{ title: string; done: boolean }>;
+  currentStep: number;
+  status: "pending" | "confirmed" | "done" | "cancelled";
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 工具失败分类（agent.mjs executeTool 返回契约——编排能力缺口工单 T2） */
+export type ToolErrorKind = "param" | "perm" | "transient" | "hard";
+
+/** 审批请求/结果（permission.mjs——human-in-the-loop） */
+export interface Approval {
+  toolName: string;
+  args?: unknown;
+  allow: boolean;
+  reason?: string;
+  timeout?: boolean;
+  autoApproved?: boolean;
+}
+
+/** 决策账本条目（trace.mjs recordDecision 入参——审计可追溯） */
+export interface Decision {
+  decision: "allow" | "deny" | "auto_allow" | "timeout" | "tool_error" | "injection_hit";
+  toolName?: string;
+  reason?: string;
+  policyRef?: string;
+  approvedBy?: string;
+}

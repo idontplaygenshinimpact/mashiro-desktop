@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const ELECTRON = path.join(ROOT, "node_modules", "electron", "dist", "electron.exe");
+const _ELECTRON = path.join(ROOT, "node_modules", "electron", "dist", "electron.exe");
 const MAIN = path.join(ROOT, "desktop", "main.mjs");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

@@ -1,13 +1,13 @@
 // 工具直测：impl-search（纵向拆分第 3 刀新增——此前工具实现只能靠 agent 循环间接测）
 // 直测 toolSearchPosts：去重（URL + 标题归一化）/ 方向过滤（ignoreNote 噪音词）/ AI 挑帖
-import { mock, test } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { setupTempDb, mockLLM, setLlmResponses, setMockPages, mockFetchPage } from "./helpers.mjs";
 
 setupTempDb("impl-search");
 mockLLM();
 mockFetchPage();
-const { toolSearchPosts } = await import("../lib/tools/impl-search.mjs");
+const { toolSearchPosts } = await import("../lib/tools/impl-search.ts");
 
 // 构造 2 站页面（auto 模式依次调用 fetchPage：juejin → bing——牛客已去掉（搜索页改版 + fetchPage 卡死））
 function pagesFor({ jjArticles = [], bingLinks = [] }) {
@@ -61,7 +61,7 @@ test("toolSearchPosts AI 挑帖：候选 >4 时按 LLM 挑选结果", async () =
 });
 
 test("toolFetchPage SSRF 拒绝内网 + 注入检测包裹不可信", async () => {
-  const { toolFetchPage } = await import("../lib/tools/impl-search.mjs");
+  const { toolFetchPage } = await import("../lib/tools/impl-search.ts");
   const r = await toolFetchPage("ftp://x.com/a");
   assert.ok(r.error, "非 http(s) 拒绝");
   // 内网 URL 拒绝依赖 assertPublicUrl——测试环境 mockFetchPage 将其 mock 成放行（避免假域名 DNS 解析），
@@ -74,7 +74,7 @@ function nowcoderHtml({ page, totalPage, moments }) {
 }
 
 test("toolFetchNowcoderUser：2 页循环 + contentId 去重 + 解析", async () => {
-  const { toolFetchNowcoderUser } = await import("../lib/tools/impl-search.mjs");
+  const { toolFetchNowcoderUser } = await import("../lib/tools/impl-search.ts");
   const origFetch = globalThis.fetch;
   const pages = [
     nowcoderHtml({ page: 1, totalPage: 2, moments: [
@@ -98,7 +98,7 @@ test("toolFetchNowcoderUser：2 页循环 + contentId 去重 + 解析", async ()
 });
 
 test("toolFetchNowcoderUser：非法 userId → 拒绝；抓取失败 → 报告不静默", async () => {
-  const { toolFetchNowcoderUser } = await import("../lib/tools/impl-search.mjs");
+  const { toolFetchNowcoderUser } = await import("../lib/tools/impl-search.ts");
   const bad = await toolFetchNowcoderUser({ userId: "abc" });
   assert.ok(bad.error, "非法 userId 拒绝（返回 error）");
   assert.ok(String(bad.error || "").includes("数字"), "错误信息明确");

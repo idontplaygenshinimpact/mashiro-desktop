@@ -17,7 +17,7 @@ const DEMO_CARDS = [
 ].map((c) => ({ ...c, demo: true }));
 function daysFromNow(d) { const t = new Date(); t.setDate(t.getDate() + d); return t.toISOString(); }
 
-const RATINGS = [
+const _RATINGS = [
   { key: "again", label: "忘记", color: "#e5484d" },
   { key: "hard", label: "困难", color: "#e0a800" },
   { key: "good", label: "良好", color: "#3a8d5a" },
@@ -64,6 +64,8 @@ export function useReview() {
         const r = await kanban.reviewDue();
         // 真实接口出参是 due 数组（契约 ReviewDueOutput.due）——此前读 r.cards 恒空
         got = (r?.due || []).map(normalize);
+        // 功能补全任务 3③④：统计 + 趋势从 reviewDue 响应捕获（stats/trend 字段）
+        captureStatsAndTrend(r);
       }
       // 真实接口无数据（widget 未跑/无到期卡）→ 回退示例数据（demo 标记，不上报后端）
       cards.value = got && got.length ? got : DEMO_CARDS.map(normalize);
@@ -159,5 +161,145 @@ export function useReview() {
     next();
   }
 
-  return { cards, current, flipped, history, loading, error, remaining, feedback, retryQueue, load, rate, next, setCards };
+  // ============ Vue 复习面板功能补全工单：选择题自测 / 答错即学 / 错题本 / 掌握度 / 趋势 / 统计 / 入清单 ============
+  // API 访问：Vue 独立窗口直接 fetch（getApiBase 动态端口；CSP 已放行 127.0.0.1:*）
+  async function api(pathname, { method = "GET", body = undefined } = {}) {
+    const base = window.kanban?.getApiBase ? (await window.kanban.getApiBase()).base : "http://127.0.0.1:8899";
+    const res = await fetch(`${base}${pathname}`, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  // ---- 选择题自测（任务 1：懒生成 6 题抽 3、答错换批——对齐原生 panel-study.js） ----
+  const quiz = ref({ questions: [], chosen: {}, results: null, loading: false, error: "", kbUsed: false });
+  async function loadQuiz(cardId) {
+    if (!cardId) return;
+    quiz.value = { questions: [], chosen: {}, results: null, loading: true, error: "", kbUsed: false };
+    try {
+      let r = await api(`/api/review/quiz?id=${encodeURIComponent(cardId)}`);
+      if (!r.questions?.length) {
+        // 题库空 → 懒生成（首次约 10-20s；失败降级纯文本卡）
+        const g = await api("/api/review/quiz/generate", { method: "POST", body: { cardId } }).catch(() => ({ ok: false }));
+        if (g.ok && g.total > 0) {
+          r = await api(`/api/review/quiz?id=${encodeURIComponent(cardId)}`);
+          quiz.value.kbUsed = !!g.kbUsed;
+        } else {
+          quiz.value.loading = false;
+          return;
+        }
+      }
+      quiz.value.questions = r.questions || [];
+      quiz.value.loading = false;
+    } catch (e) {
+      quiz.value.error = String(e?.message || e).slice(0, 100);
+      quiz.value.loading = false;
+    }
+  }
+  function pickQuizOption(qi, oi) {
+    quiz.value.chosen = { ...quiz.value.chosen, [qi]: oi };
+  }
+  async function submitQuiz(cardId) {
+    if (!cardId || !quiz.value.questions.length) return;
+    quiz.value.loading = true;
+    try {
+      const answers = quiz.value.questions.map((q, qi) => ({ questionId: q.id, chosen: quiz.value.chosen[qi] ?? -1, map: q.map }));
+      const r = await api("/api/review/quiz/submit", { method: "POST", body: { cardId, answers } });
+      quiz.value.results = r.results || [];
+      quiz.value.loading = false;
+    } catch (e) {
+      quiz.value.error = String(e?.message || e).slice(0, 100);
+      quiz.value.loading = false;
+    }
+  }
+  function resetQuiz() { quiz.value = { questions: [], chosen: {}, results: null, loading: false, error: "", kbUsed: false }; }
+
+  // ---- 答错即学（任务 2①：SSE 流式讲解——复用 /api/review/explain-stream） ----
+  const explain = ref({ text: "", loading: false, error: "" });
+  async function explainCard(cardId) {
+    if (!cardId) return;
+    explain.value = { text: "", loading: true, error: "" };
+    try {
+      const base = window.kanban?.getApiBase ? (await window.kanban.getApiBase()).base : "http://127.0.0.1:8899";
+      const res = await fetch(`${base}/api/review/explain-stream?id=${encodeURIComponent(cardId)}`);
+      const ctype = res.headers.get("content-type") || "";
+      if (!ctype.includes("text/event-stream")) {
+        const j = await res.json();
+        explain.value.error = j.error || "讲解失败";
+        explain.value.loading = false;
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buf = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf("\n\n")) >= 0) {
+          const event = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          const line = event.startsWith("data:") ? event.slice(5).trim() : event;
+          if (!line) continue;
+          try {
+            const j = JSON.parse(line);
+            if (j.type === "delta") explain.value.text += j.delta;
+            else if (j.type === "error") explain.value.error = j.error || "讲解失败";
+          } catch { /* 非 JSON 事件忽略 */ }
+        }
+      }
+      explain.value.loading = false;
+    } catch (e) {
+      explain.value.error = String(e?.message || e).slice(0, 100);
+      explain.value.loading = false;
+    }
+  }
+  function closeExplain() { explain.value = { text: "", loading: false, error: "" }; }
+
+  // ---- 错题本（任务 3①：答错 ≥2 次——复用 /api/review/wrong） ----
+  const wrongBook = ref([]);
+  async function loadWrongBook() {
+    try {
+      const r = await api("/api/review/wrong");
+      wrongBook.value = (r.wrong || []).map(normalize);
+    } catch { wrongBook.value = []; }
+  }
+
+  // ---- 掌握度（任务 3②：知识点掌握列表——复用 /api/mastery） ----
+  const mastery = ref([]);
+  async function loadMastery() {
+    try {
+      const r = await api("/api/mastery");
+      mastery.value = r.mastery || [];
+    } catch { mastery.value = []; }
+  }
+
+  // ---- 趋势 + 统计（任务 3③④：7 天趋势 + streak + 复习统计——reviewDue 已含 stats/trend） ----
+  const stats = ref(null);
+  const trend = ref([]);
+  function captureStatsAndTrend(dueResp) {
+    if (dueResp?.stats) stats.value = dueResp.stats;
+    if (dueResp?.trend) trend.value = dueResp.trend;
+  }
+
+  // ---- 薄弱点一键入清单（任务 4：复用 /api/weak-points/to-plan） ----
+  const toPlanMsg = ref("");
+  async function addWeakToPlan(topics) {
+    toPlanMsg.value = "";
+    try {
+      const r = await api("/api/weak-points/to-plan", { method: "POST", body: { topics: topics || [] } });
+      toPlanMsg.value = r.message || `已加入学习清单 ${r.added || 0} 条`;
+    } catch (e) {
+      toPlanMsg.value = "入清单失败：" + String(e?.message || e).slice(0, 80);
+    }
+  }
+
+  return { cards, current, flipped, history, loading, error, remaining, feedback, retryQueue, load, rate, next, setCards,
+    quiz, loadQuiz, pickQuizOption, submitQuiz, resetQuiz,
+    explain, explainCard, closeExplain,
+    wrongBook, loadWrongBook, mastery, loadMastery,
+    stats, trend, captureStatsAndTrend, toPlanMsg, addWeakToPlan };
 }

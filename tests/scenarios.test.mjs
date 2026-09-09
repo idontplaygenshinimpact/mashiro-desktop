@@ -1,15 +1,15 @@
 // 场景装配单测（Phase P1）：事件→场景匹配/优先级/兜底/切换幂等/状态持久化
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, rmSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+
+
+
 
 // 场景状态文件指向项目 data/scene.json——测试通过临时目录注入：重写模块状态文件路径不可行，
 // 用 matchScenario/resolveEvent 纯逻辑 + 场景切换状态断言（持久化在 widget 接线层验证）
 const { SCENARIOS, matchScenario, resolveEvent, resetScenario, getCurrentScenario } = await import("../lib/scenarios.mjs");
-const { clearExpressions } = await import("../lib/events.mjs");
+
 
 const ev = (type, source = "test") => ({ type, source, ts: Date.now(), payload: {} });
 
@@ -86,7 +86,7 @@ test("端到端：interview 场景下 agent prompt 含面试技能 hints、不�
   resetScenario();
   const { mockLLM, setupTempDb, getLastMessages } = await import("./helpers.mjs");
   mockLLM(); // 对话用 mock，不调真实 LLM
-  const dbDir = setupTempDb("scenarios-e2e");
+  const _dbDir = setupTempDb("scenarios-e2e");
   const { setActiveSkillSet, getActiveSkillSet } = await import("../lib/skills.mjs");
   const { onEventDecision, emitEvent } = await import("../lib/events.mjs");
   const { resolveEvent: resolve } = await import("../lib/scenarios.mjs");

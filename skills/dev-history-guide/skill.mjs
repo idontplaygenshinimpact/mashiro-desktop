@@ -20,7 +20,7 @@ const CLAUDE_PROJECTS = path.join(process.env.USERPROFILE || "", ".claude", "pro
 const MAX_RESULT_CHARS = 6000; // 单次查询结果截断（防灌爆上下文）
 const MAX_GIT_COMMITS = 60;    // git 时间线上限
 const MAX_OPENCODE_SESSIONS = 20;
-const MAX_DSH_SESSIONS = 5;
+const _MAX_DSH_SESSIONS = 5;
 
 // ---------- 数据源：git 时间线（只读命令） ----------
 function readGitHistory(limit = 30) {

@@ -7,7 +7,7 @@ import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const ELECTRON = path.join(ROOT, "node_modules", "electron", "dist", "electron.exe");
+const _ELECTRON = path.join(ROOT, "node_modules", "electron", "dist", "electron.exe");
 const MAIN = path.join(ROOT, "desktop", "main.mjs");
 const OUT = path.join(ROOT, process.argv[2] === "--dir" && process.argv[3] ? process.argv[3] : "ui-shots");
 mkdirSync(OUT, { recursive: true });

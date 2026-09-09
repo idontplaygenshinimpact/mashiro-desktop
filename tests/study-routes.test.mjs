@@ -1,6 +1,6 @@
 // study 路由异常路径测试（讲解存档链路）：生成失败不写档 / 文件不存在拒绝追加 / 素材过短拒绝 / 集成链路
 // 覆盖盲区根因：mock LLM 不模拟失败 + 文件系统状态未模拟 + 路由异常路径未测
-import { test, before, beforeEach, after } from "node:test";
+import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
@@ -134,7 +134,7 @@ test("⑤ study-consolidate：正常 → consolidateStudyStream 返回整合内�
   // 直接调 consolidateStudyStream（handler 的 import 链在测试环境挂起——detail 正常 consolidate 异常，属测试环境限制）
   const { consolidateStudyStream } = await import("#lib/ai.ts");
   const full = await consolidateStudyStream({ topic: item.topic, content: "素材".repeat(200) }, () => {});
-  // eslint-disable-next-line no-console
+   
   console.log("⑤ full:", typeof full === "string" ? "len=" + full.length + " head=" + full.slice(0, 40) : full);
   assert.ok(String(full).length >= 200, "整理结果完整");
   assert.ok(String(full).includes("整理后的完整讲解"), "返回整合内容");

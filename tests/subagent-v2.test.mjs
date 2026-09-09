@@ -9,7 +9,7 @@ import { setupTempDb, cleanupTempDb, mockLLM, setLlmResponses } from "./helpers.
 const dbDir = setupTempDb("subagent-v2");
 mockLLM();
 const { runSubagent } = await import("../lib/subagent.mjs");
-const { toolReadFile, toolEditFile, toolWriteFile, safeResolve } = await import("../lib/subagent-tools.mjs");
+const { toolReadFile, toolEditFile, safeResolve } = await import("../lib/subagent-tools.mjs");
 
 // 临时项目目录（工具白名单根）
 const projDir = mkdtempSync(path.join(tmpdir(), "subagent-proj-"));

@@ -1,6 +1,6 @@
 // 工具直测：impl-study（纵向拆分第 3 刀新增）
 // 直测 toolAddStudyItems（清单反哺 + todo 挂载）/ toolCreateReviewCard（FSRS 建卡）
-import { mock, test } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { setupTempDb, mockLLM } from "./helpers.mjs";
 

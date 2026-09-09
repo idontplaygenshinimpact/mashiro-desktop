@@ -26,7 +26,7 @@ try {
     const cs = getComputedStyle(cont);
     const rc = cont.querySelector(".rc-card");
     const rcs = rc ? getComputedStyle(rc) : null;
-    const rcb = rcs ? getComputedStyle(rc.querySelector(".rc-back") || rc) : null;
+    const _rcb = rcs ? getComputedStyle(rc.querySelector(".rc-back") || rc) : null;
     const face = rc ? rc.querySelector(".rc-face") : null;
     const faceBg = face ? getComputedStyle(face).backgroundImage.slice(0, 70) : "none";
     return {

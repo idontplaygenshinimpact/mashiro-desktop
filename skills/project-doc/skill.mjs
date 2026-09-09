@@ -2,7 +2,7 @@
 // 分步生成（概览/源码要点/八股/拷打问答 5 组/讲述方法论）+ 源码外信息注入（README/package.json/docs/git log）
 // + 多轮打磨循环（评审/修正/上下文累积/缩水保护）+ 覆盖校验（17 章缺 ≤1）
 // 工具（skill__project-doc__* 命名空间）：generate_project_doc
-import { readFileSync, readdirSync, statSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { runSubagent, SUBAGENT_TOOLS } from "../../lib/subagent.mjs";
 import { getPersonalProjects, buildProjectArchive } from "../../lib/personal-projects.mjs";

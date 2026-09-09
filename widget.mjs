@@ -8,7 +8,6 @@ import { createServer } from "node:http";
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { exec } from "node:child_process";
 import notifier from "node-notifier";
 import { config } from "./config.mjs";
 import * as reviewApi from "./lib/review.mjs";

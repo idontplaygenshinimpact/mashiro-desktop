@@ -1,4 +1,7 @@
 // 五维评分可视化：评分条 + SVG 雷达图（React 版模拟面试）
+// 框架特色展示工单任务 2②：雷达图几何计算 useMemo 缓存（scores/rounds 不变不重算）
+import { useMemo } from "react";
+
 const DIMS = [
   ["tech", "技术深度"],
   ["expr", "表达清晰"],
@@ -36,31 +39,34 @@ export function ScoreBars({ scores }) {
 export function ScoreRadar({ scores, rounds }) {
   const n = DIMS.length;
   const cx = 90, cy = 85, R = 62;
-  const pts = (vals) =>
-    DIMS.map((_, i) => {
-      const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
-      const r = R * (vals[i] / 100);
-      return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
-    });
-  const avg = (k) => {
-    const r = Math.max(1, Number(rounds) || 1);
-    return Math.min(100, Math.round((Number(scores?.[k]) || 0) / r));
-  };
-  const vals = DIMS.map(([k]) => avg(k));
-  const poly = pts(vals).map((p) => p.join(",")).join(" ");
-  const ring = (p) => pts(DIMS.map(() => p)).map((p2) => p2.join(",")).join(" ");
-  const labels = pts(DIMS.map(() => 100)).map((p, i) => ({ x: p[0], y: p[1], label: DIMS[i][1] }));
+  // useMemo：pts/avg/ring 几何计算缓存——scores/rounds 不变不重算（声明式 + 性能优化）
+  const { poly, rings, spokes, labels } = useMemo(() => {
+    const pts = (vals) =>
+      DIMS.map((_, i) => {
+        const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
+        const r = R * (vals[i] / 100);
+        return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+      });
+    const avg = (k) => {
+      const r = Math.max(1, Number(rounds) || 1);
+      return Math.min(100, Math.round((Number(scores?.[k]) || 0) / r));
+    };
+    const vals = DIMS.map(([k]) => avg(k));
+    const poly = pts(vals).map((p) => p.join(",")).join(" ");
+    const rings = [25, 50, 75, 100].map((p) => pts(DIMS.map(() => p)).map((p2) => p2.join(",")).join(" "));
+    const spokes = DIMS.map((_, i) => pts([100, 100, 100, 100, 100])[i]);
+    const labels = pts(DIMS.map(() => 100)).map((p, i) => ({ x: p[0], y: p[1], label: DIMS[i][1] }));
+    return { poly, rings, spokes, labels };
+  }, [scores, rounds, n, cx, cy, R]);
 
   return (
     <svg width={180} height={170} viewBox="0 0 180 170">
-      {[25, 50, 75, 100].map((p) => (
-        <polygon key={p} points={ring(p)} fill="none" stroke="#2a2540" strokeWidth={1} />
+      {rings.map((pts, i) => (
+        <polygon key={i} points={pts} fill="none" stroke="#2a2540" strokeWidth={1} />
       ))}
-      {DIMS.map((_, i) => {
-        const [x1, y1] = pts([100, 100, 100, 100, 100])[i];
-        const [x2, y2] = [cx, cy];
-        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#2a2540" strokeWidth={1} />;
-      })}
+      {spokes.map(([x1, y1], i) => (
+        <line key={i} x1={x1} y1={y1} x2={cx} y2={cy} stroke="#2a2540" strokeWidth={1} />
+      ))}
       <polygon points={poly} fill="rgba(143,199,255,.25)" stroke="#8fc7ff" strokeWidth={2} />
       {labels.map((l) => (
         <text key={l.label} x={l.x} y={l.y + 4} fontSize={9} fill="#a8a3c8" textAnchor="middle">{l.label}</text>

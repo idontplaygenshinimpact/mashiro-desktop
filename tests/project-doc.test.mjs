@@ -1,6 +1,6 @@
 // project-doc skill 测试：分步生成 / 源码外信息注入 / 打磨循环 / 覆盖校验 / 缩水保护
 // mockLLM 必须在 import 前（llm.mjs 未加载时 mock 才生效）
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test, before, after, mock } from "node:test";

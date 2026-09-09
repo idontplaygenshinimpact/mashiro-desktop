@@ -173,6 +173,18 @@
         <div id="rc-src" class="rc-src" style="display:none"></div>
         <div class="rc-topic" id="rc-topic"></div>
         <div class="rc-question" id="rc-question"></div>
+        <!-- 复习卡消费侧升级工单任务 2：简答模式（提取练习——输入简答→对照→自评→FSRS） -->
+        <div id="rc-short" class="rc-short">
+          <div class="rc-sa-label">✍️ 简答自测（先用自己的话作答，再对照答案）</div>
+          <textarea id="rc-sa-input" rows="3" placeholder="不查资料，用自己的话回答…" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;border:1px solid rgba(109,79,216,.25);font-size:12px;"></textarea>
+          <button id="rc-sa-check" class="secondary" style="margin-top:4px;">📋 对照答案并自评</button>
+          <div id="rc-sa-self" class="hidden" style="margin-top:6px;">
+            <div style="font-size:11px;color:#6a6790;margin-bottom:4px;">对照后自评（映射 FSRS 调度）：</div>
+            <button class="rc-sa-rate" data-grade="0" style="margin-right:4px;">😵 答错</button>
+            <button class="rc-sa-rate" data-grade="1" style="margin-right:4px;">😕 部分对</button>
+            <button class="rc-sa-rate" data-grade="2">🙂 答对</button>
+          </div>
+        </div>
         <div id="rc-quiz" class="rc-quiz"></div>
         <div class="rc-answer hidden" id="rc-answer"></div>
         <div id="rc-memory" class="rc-memory"></div>

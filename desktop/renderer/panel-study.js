@@ -1,5 +1,19 @@
 // 真白面板 · 学习/复习/面试域（纵向拆分）
-/* exported loadIvResumeAuto, loadIvWeakChips */
+/* exported loadIvResumeAuto, loadIvWeakChips, loadIvResume */
+// 复习卡消费侧升级工单任务 1：多角度题分块（"原理：…；边界：…；场景：…" → 三块折叠区）
+// 返回 [{label, text}]；不足 2 块 = 非多角度题（整体显示）
+function splitAngleQuestion(q) {
+  const s = String(q || "");
+  const blocks = [];
+  const re = /(原理|边界|场景|易错|总结|对比|应用)[：:]\s*([^；;\n]+)/g;
+  let m;
+  while ((m = re.exec(s))) blocks.push({ label: m[1], text: m[2].trim() });
+  return blocks.length >= 2 ? blocks : null;
+}
+const ANGLE_ICONS = { 原理: "💡", 边界: "⚠️", 场景: "🧩", 易错: "🚨", 总结: "📌", 对比: "⚖️", 应用: "🛠️" };
+function angleLabel(label) {
+  return (ANGLE_ICONS[label] || "📖") + " " + label;
+}
 // ============ 简历文件解析（移植 ai-career：txt/md/json/docx/pdf） ============
 const fileBtn = $("iv-file-btn");
 const fileInput = $("iv-file");
@@ -930,13 +944,27 @@ function showReviewCard() {
   $("rc-progress-pct").textContent = pct + "%";
   $("rc-topic").textContent = "🔁 " + card.topic;
   // 默答引导：说明这题是"先心里作答→显示答案核对→选择题+评级"三步（此前标题无引导，用户困惑简答/选择的定位）
-  $("rc-question").innerHTML = `<div style="font-size:11px;color:#6a6790;margin-bottom:4px;">📝 先默答这题（心里组织答案），再点「显示答案」核对，最后做选择题并评级</div>` + esc(card.question || card.topic);
+  // 复习卡消费侧升级工单任务 1：多角度题分块渲染（"原理：…；边界：…；场景：…" → 三块折叠区——逐块回忆）
+  const angleBlocks = splitAngleQuestion(card.question || card.topic);
+  const questionHtml = angleBlocks
+    ? `<div style="font-size:11px;color:#6a6790;margin-bottom:4px;">📝 先默答这题（心里组织答案），再点「显示答案」核对，最后做选择题并评级</div>` +
+      angleBlocks.map((b, i) => `
+        <details style="margin:4px 0;border:1px solid rgba(109,79,216,.18);border-radius:6px;padding:4px 8px;" ${i === 0 ? "open" : ""}>
+          <summary style="font-size:12px;font-weight:600;color:#5d48b8;cursor:pointer;">${angleLabel(b.label)}角度</summary>
+          <div style="font-size:12px;color:#3a3a5a;margin-top:4px;line-height:1.6;">${esc(b.text)}</div>
+        </details>`).join("")
+    : `<div style="font-size:11px;color:#6a6790;margin-bottom:4px;">📝 先默答这题（心里组织答案），再点「显示答案」核对，最后做选择题并评级</div>` + esc(card.question || card.topic);
+  $("rc-question").innerHTML = questionHtml;
   $("rc-answer").textContent = card.answer || "";
   $("rc-answer").classList.add("hidden");
   $("rc-show").classList.remove("hidden");
   $("rc-buttons").classList.add("hidden");
   $("rc-feedback").classList.add("hidden");
   $("rc-explain")?.classList.add("hidden"); // 新卡不显示讲解按钮（答错后才出现）
+  // 简答区重置（任务 2）：新卡清空输入 + 启用 + 隐藏自评按钮（先输入简答再对照）
+  const saInput = $("rc-sa-input"), saSelf = $("rc-sa-self");
+  if (saInput) { saInput.value = ""; saInput.disabled = false; }
+  if (saSelf) saSelf.classList.add("hidden");
   loadCardQuiz(card.id); // 🧠 复习自测选择题（懒生成，异步加载）
   // 来源 + 复习次数 + 下次到期（FSRS 反馈）
   const src = card.source || "";
@@ -986,8 +1014,12 @@ function appendReviewTip(tip) {
   fb.appendChild(div);
 }
 
-$("rc-show").addEventListener("click", async () => {
+// 复习卡消费侧升级工单任务 2：抽公共函数（rc-show 与简答"对照答案"共用）
+
+/** 显示答案（含空答案回退讲解存档；隐藏"显示答案"按钮、显示评分按钮） */
+async function showAnswer() {
   const card = reviewQueue[reviewIdx];
+  if (!card) return;
   let answerText = card.answer || "";
   let answerNote = "";
   if (!answerText && card?.topic) {
@@ -1007,41 +1039,68 @@ $("rc-show").addEventListener("click", async () => {
   box.classList.remove("hidden");
   $("rc-show").classList.add("hidden");
   $("rc-buttons").classList.remove("hidden");
+  // 简答区：对照后自评按钮出现（简答路径与四级按钮并存）
+  const saSelf = $("rc-sa-self");
+  if (saSelf) saSelf.classList.remove("hidden");
+}
+
+/** 提交评分（rc-btn 四级与简答自评三档共用——FSRS 调度 + 反馈 + 答错讲解） */
+async function submitRating(card, rating) {
+  const r = await window.kanban.reviewSubmit(card.id, rating);
+  // FSRS 反馈：下次复习时间 + 间隔
+  if (r?.nextDue) showReviewFeedback(rating, r.nextDue, r.card);
+  // 学习计划即时反馈（对比基线）
+  if (r?.tip) appendReviewTip(r.tip);
+  // 答错（忘了/困难）→ 显示「让真白讲一遍」（复习即学闭环）+ 后台换一批选择题
+  const explainBtn = $("rc-explain");
+  if (explainBtn) {
+    if (rating < 2) {
+      explainBtn.classList.remove("hidden");
+      explainBtn.dataset.cardId = card.id;
+      explainBtn.dataset.topic = card.topic;
+      quizSwapBatch(card.id); // 换批：下次复习该卡抽新题
+    } else {
+      explainBtn.classList.add("hidden");
+    }
+  }
+  // 真白情感反馈：显示中文，语音播日语预设场景台词（emotionScene）
+  if (r?.emotion) {
+    window.kanban.notify("🎀 真白", r.emotion);
+    if (voiceOn) {
+      if (r.emotionScene) window.kanban.playScene(r.emotionScene);
+      else window.kanban.speak(r.emotion);
+    }
+  }
+  reviewIdx++;
+  if (reviewIdx < reviewQueue.length) showReviewCard();
+  else loadReview(); // 复习完一轮刷新
+  refreshReviewStats(); // 今日进度实时更新
+}
+
+$("rc-show").addEventListener("click", async () => {
+  await showAnswer();
 });
 
 document.querySelectorAll(".rc-btn").forEach((btn) => {
   btn.addEventListener("click", async () => {
     const card = reviewQueue[reviewIdx];
-    const rating = parseInt(btn.dataset.rating, 10);
-    const r = await window.kanban.reviewSubmit(card.id, rating);
-    // FSRS 反馈：下次复习时间 + 间隔
-    if (r?.nextDue) showReviewFeedback(rating, r.nextDue, r.card);
-    // 学习计划即时反馈（对比基线）
-    if (r?.tip) appendReviewTip(r.tip);
-    // 答错（忘了/困难）→ 显示「让真白讲一遍」（复习即学闭环）+ 后台换一批选择题
-    const explainBtn = $("rc-explain");
-    if (explainBtn) {
-      if (rating < 2) {
-        explainBtn.classList.remove("hidden");
-        explainBtn.dataset.cardId = card.id;
-        explainBtn.dataset.topic = card.topic;
-        quizSwapBatch(card.id); // 换批：下次复习该卡抽新题
-      } else {
-        explainBtn.classList.add("hidden");
-      }
-    }
-    // 真白情感反馈：显示中文，语音播日语预设场景台词（emotionScene）
-    if (r?.emotion) {
-      window.kanban.notify("🎀 真白", r.emotion);
-      if (voiceOn) {
-        if (r.emotionScene) window.kanban.playScene(r.emotionScene);
-        else window.kanban.speak(r.emotion);
-      }
-    }
-    reviewIdx++;
-    if (reviewIdx < reviewQueue.length) showReviewCard();
-    else loadReview(); // 复习完一轮刷新
-    refreshReviewStats(); // 今日进度实时更新
+    submitRating(card, parseInt(btn.dataset.rating, 10));
+  });
+});
+
+// 复习卡消费侧升级工单任务 2：简答模式——输入简答 → 对照答案 → 自评三档 → FSRS
+$("rc-sa-check").addEventListener("click", async () => {
+  const card = reviewQueue[reviewIdx];
+  if (!card) return;
+  $("rc-sa-input").disabled = true;
+  await showAnswer();
+});
+document.querySelectorAll(".rc-sa-rate").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const card = reviewQueue[reviewIdx];
+    if (!card) return;
+    // 自评三档映射 FSRS：答错→again(0)、部分对→hard(1)、答对→good(2)
+    submitRating(card, parseInt(btn.dataset.grade, 10));
   });
 });
 

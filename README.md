@@ -219,10 +219,10 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 | 层 | 技术 | 选型依据 |
 |---|---|---|
 | 主面板（原生） | 原生 JS + **esbuild** 单入口打包 | file:// 加载场景不需要 dev server/HMR；零依赖启动快（性能对照基线） |
-| 模拟面试（React 版） | **Vite 子项目**（`panel-react/`，vite 7） | 交互密集（状态机/评分可视化），HMR 开发效率；独立窗口（托盘一键切换） |
-| 复习卡（Vue 版） | **Vite 子项目**（`panel-vue-review/`，vite 6） | 数据可视化（FSRS 调度/遗忘曲线 SVG），Vue 响应式系统；独立窗口 |
+| 模拟面试（React 版） | **Vite 子项目**（`panel-react/`，vite 7） | 交互密集（**useReducer 面试 phase 状态机** setup/active/finished + **useMemo 雷达图缓存**），HMR 开发效率；独立窗口（托盘一键切换） |
+| 复习卡（Vue 版） | **Vite 子项目**（`panel-vue-review/`，vite 6） | 数据可视化（FSRS 调度/遗忘曲线 SVG），**Vue 响应式系统**（computed 曲线缓存 + watch 动画 + Transition 切卡）；独立窗口 |
 
-三套渲染层共用**同一 preload IPC 桥 + 同一业务层**（`lib/interview.mjs`/`lib/review.mjs` 零改动）——渲染层可替换性验证。子项目 `npm run build --prefix` 出静态产物（`base:'./'` 兼容 file://，CSP `'self'` 零修改）。
+三套渲染层共用**同一 preload IPC 桥 + 同一业务层**（`lib/interview.mjs`/`lib/review.mjs` 零改动）——**渲染层可替换性验证 + 框架特色展示**：功能等价证明可替换（同一业务层零改动），同时各框架秀招牌特性（Vue 响应式/Transition 动画、React useReducer/useMemo）——"渲染层选型"卖点从口号变成代码证据。子项目 `npm run build --prefix` 出静态产物（`base:'./'` 兼容 file://，CSP `'self'` 零修改）。
 
 ---
 

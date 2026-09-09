@@ -516,3 +516,38 @@ test("P1-9：多 tool_calls 中命中重复保护 → 剩余调用占位补全�
   assert.ok(r.reply.length > 0, "重复保护后仍能正常回答（占位补全不破坏消息序列）");
 });
 
+// ---------- 架构评审遗留收尾工单任务 2：高风险盲区补测 ----------
+test("收尾2①：流式中途抛错（STREAMERR）→ agent 收束不崩、错误回填", async () => {
+  // 第一轮流式输出部分内容后抛错 → agent 应捕获并收束（不崩溃），返回已有内容或错误提示
+  setLlmResponses("STREAMERR:SSE 流中断（网络错误）", "基于已有信息总结。");
+  const r = await chatWithAgent("帮我讲讲事件循环");
+  assert.equal(typeof r.reply, "string", "返回字符串不崩溃");
+  assert.ok(r.reply.length > 0, "有回复内容（收束或重试后回答）");
+});
+
+test("收尾2②：死循环变种——不同参数同工具连续多轮 → MAX_ROUNDS 兜底收束", async () => {
+  // 不同参数（key 不同）不触发同参重复保护——但无限轮工具调用由 MAX_ROUNDS 兜底收束
+  const responses = [];
+  for (let i = 0; i < 8; i++) responses.push(`TOOLCALL:{"name":"search_posts","arguments":"{\\"query\\":\\"关键词${i}\\"}"}`);
+  setLlmResponses(...responses);
+  const r = await chatWithAgent("一直搜下去");
+  assert.equal(typeof r.reply, "string");
+  assert.ok(r.reply.length > 0, "MAX_ROUNDS 兜底后给出收束回复");
+});
+
+test("收尾2③：agent 层 browse SSRF——browse_open 内网 IP 被拒（错误回填不崩溃）", async () => {
+  const { setBrowseFails, resetBrowseFails } = await import("./helpers.mjs");
+  setBrowseFails({ open: "ssrf" }); // mock browse 打开失败（SSRF 拦截）
+  try {
+    setLlmResponses(
+      'TOOLCALL:{"name":"browse_open","arguments":"{\\"url\\":\\"http://127.0.0.1:8899\\"}"}',
+      "页面无法打开，已放弃。"
+    );
+    const r = await chatWithAgent("打开本地服务页面");
+    assert.equal(typeof r.reply, "string", "不崩溃");
+    assert.ok(r.reply.length > 0, "错误回填后正常回答");
+  } finally {
+    resetBrowseFails();
+  }
+});
+

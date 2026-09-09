@@ -1,6 +1,6 @@
 // study-groups.mjs 测试：大类归一化（零 mockLLM——仅临时 DB 供 knowledge 知识树，独立直测）
 // 纵向拆分第 4 刀：纯函数域拆出后的零 mock 直测
-import { test, before, after } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { setupTempDb, cleanupTempDb } from "./helpers.mjs";
 import { normalizeGroup, kwHit } from "../lib/study-groups.mjs";

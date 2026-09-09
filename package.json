@@ -43,7 +43,7 @@
     "bench:ablation": "node scripts/bench-ablation.mjs",
     "bench:agent": "node --experimental-test-module-mocks scripts/benchmark-agent.mjs",
     "bench:web": "node scripts/web-task-bench.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.strict.json --noEmit",
     "typecheck:desktop": "tsc -p tsconfig.desktop.json",
     "lint": "eslint .",
     "coverage": "node --experimental-test-module-mocks --experimental-test-coverage --test \"tests/*.test.mjs\"",

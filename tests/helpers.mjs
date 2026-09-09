@@ -82,8 +82,22 @@ let llmDelayMs = 0;
 export function setLlmDelay(ms) { llmDelayMs = Math.max(0, Number(ms) || 0); }
 export async function mockLlmChat(messages, _opts = {}) {
   if (llmDelayMs > 0) await new Promise((r) => setTimeout(r, llmDelayMs));
-  lastMessages = messages;
   allMessages.push(messages);
+  // 自评门禁（讲解质量增强任务 4 强化：扩展到所有题）：self-judge 调用**只消费显式
+  // `SELFJUDGE:` 前缀的响应**（任务4测试控制自评结果用）；无前缀 → 缺省达标 {"ok":true}
+  // 且**不消费队列**——防自评误吃为后续调用预设的响应（agent.test solve_question 审批
+  // 测试曾因此错位：自评吃掉 agent 最终回答的预设 → 队列空抛错）。
+  // 注意：**不更新 lastMessages**——自评是内部质量检查，getLastMessages 语义保持
+  // "最近一次讲解/大纲调用"（否则断言讲解 prompt 的测试会拿到自评消息）。
+  if (_opts?.role === "self-judge") {
+    const peek = queue[0];
+    if (typeof peek === "string" && peek.startsWith("SELFJUDGE:")) {
+      queue.shift();
+      return { choices: [{ message: { content: peek.slice("SELFJUDGE:".length), role: "assistant" } }] };
+    }
+    return { choices: [{ message: { content: '{"ok":true,"missing":[]}', role: "assistant" } }] };
+  }
+  lastMessages = messages;
   // 防假绿（测试与 CI 工单）：队列空时抛错——mock 消费数 > 设置数说明测试少设了响应，
   // 静默返回空串会让断言"假绿"（如生成失败路径没被真正触发）
   if (!queue.length) {
@@ -134,6 +148,13 @@ export async function mockLlmChatStream(messages, _opts = {}, onChunk) {
   // 流式链路故障注入工单：HANG 特殊值 → 返回永不 resolve 的 Promise（模拟 LLM 挂起——
   // 让路由 withLLMTimeout 超时分支真实触发，单测可用短超时 env 快速验证）
   if (content === "HANG") return new Promise(() => {});
+  // 架构评审遗留收尾工单任务 2：STREAMERR:msg → 流式中途抛错（模拟 SSE 流中断/abort——
+  // 已交付部分内容后出错：agent 应收束不崩、错误回填）
+  const serr = content.match(/^STREAMERR:(.+)$/s);
+  if (serr) {
+    if (onChunk) onChunk("部分内容已输出");
+    throw new Error(String(serr[1] || "流式中断").slice(0, 120));
+  }
   // P1-9：TOOLCALLS 多工具响应（流式路径同样需要——agent callLLM 恒走 stream）
   const multi = content.match(/^TOOLCALLS:(.+)$/s);
   if (multi) {
@@ -237,7 +258,7 @@ export function getMockSearchCalls() { return mockSearchCalls; }
 export function mockWebSearch() {
   mock.module(new URL("../lib/web-search.mjs", import.meta.url).href, {
     namedExports: {
-      searchWeb: async (query, _opts) => {
+      searchWeb: async (_query, _opts) => {
         mockSearchCalls++;
         if (mockSearchResults === null) throw new Error("搜索失败（模拟）");
         return mockSearchResults;

@@ -11,7 +11,7 @@
 | `plugins/plugin-template/` | 示例插件模板（**协议即文档**——新插件照抄即写） |
 | `lib/` | 共享业务库（宿主与插件共用，单一数据源） |
 | `widget.mjs` | 后台数据服务（HTTP :8899）：鉴权 + 核心路由 + 插件加载 + 定时任务 |
-| `tests/` | 725+ 用例（单元 + 集成） |
+| `tests/` | 1071+ 用例（单元 1069 + 集成 38，mock LLM 无 key 可跑） |
 
 ## 环境准备
 
@@ -32,6 +32,8 @@ npm run typecheck
 
 | 命令 | 说明 |
 |---|---|
+
+> **类型约定（TS 增量收益工单任务 B）**：新增模块**默认写 .ts**（node 22.18+ type stripping 直接运行，esbuild 打包无感——lib/ai.ts 已示范）；纯数据/常量文件可 .mjs。存量 .mjs 保持不动（渐进式，见 docs/TS升级工单.md）。`npm run typecheck` 跑双 tsc：全量 checkJs + `tsconfig.strict.json`（已迁 .ts 文件 strict 检查）。
 | `npm run` | 启动完整应用（桌宠 + 面板 + 后台服务） |
 | `npm test` | 全量测试（单元 + 集成，mock LLM） |
 | `npm run test:unit` | 仅单元测试 |

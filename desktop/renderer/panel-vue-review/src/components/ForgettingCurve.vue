@@ -9,9 +9,9 @@
       <line v-for="gx in gridX" :key="'gx' + gx" :x1="gx" :x2="gx" y1="6" :y2="H - 16" class="fc-grid" />
       <line v-for="gy in gridY" :key="'gy' + gy" x1="34" :x2="W - 4" :y1="gy" :y2="gy" class="fc-grid" />
       <!-- 历史曲线（评分后稳定性变化，虚线对比） -->
-      <path v-for="(h, i) in history" :key="'hist' + i" :d="pathFor(h.stability)" class="fc-hist" />
-      <!-- 当前曲线 -->
-      <path :d="pathFor(stability)" class="fc-cur" />
+      <path v-for="(h, i) in history" :key="'hist' + i" :d="histPaths[i]" class="fc-hist" />
+      <!-- 当前曲线（computed 缓存——stability 变化才重算） -->
+      <path :d="curPath" class="fc-cur" />
       <!-- 轴标签 -->
       <text x="34" :y="H - 4" class="fc-axis">0</text>
       <text :x="W - 34" :y="H - 4" class="fc-axis">30天</text>
@@ -29,7 +29,9 @@ const W = 300, H = 96;
 const PAD_L = 34, PAD_R = 6, PAD_T = 6, PAD_B = 16;
 
 // R(t) = (1 + 19/81·t/S)^(-0.5)（FSRS-6 幂律遗忘曲线，与后端 calcMemPct/调度器同源），横轴 0-30 天 → SVG path
-function pathFor(S) {
+// 框架特色展示工单任务 1②：pathFor 改 computed 缓存——61 个曲线点不再每次渲染重算
+// （响应式缓存：stability 不变则 path 不重算；评分后 stability 变化 → 自动重算重绘）
+function buildPath(S) {
   const s = Math.max(0.1, Number(S) || 0.1);
   const pts = [];
   for (let t = 0; t <= 30; t += 0.5) {
@@ -39,6 +41,15 @@ function pathFor(S) {
   }
   return pts.join(" ");
 }
+// 当前曲线 path（computed 缓存——stability 依赖追踪，变化才重算）
+const curPath = computed(() => buildPath(props.stability));
+// 历史曲线 path 缓存（按 stability 值缓存——同一 S 不重复计算）
+const histPathCache = new Map();
+const histPaths = computed(() => (props.history || []).map((h) => {
+  const s = Number(h.stability) || 0.1;
+  if (!histPathCache.has(s)) histPathCache.set(s, buildPath(s));
+  return histPathCache.get(s);
+}));
 const gridX = computed(() => [PAD_L + (W - PAD_L - PAD_R) / 3, PAD_L + 2 * (W - PAD_L - PAD_R) / 3]);
 const gridY = computed(() => [PAD_T + (H - PAD_T - PAD_B) / 2, H - PAD_B]);
 </script>

@@ -6,7 +6,7 @@ import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
 const dbDir = setupTempDb("learning-plan");
 const {
   createLearningPlan, getLearningPlans, matchPlanForTopic,
-  recordLearningEvent, getLearningPlanStatus, newPlanId, buildFeedbackTip,
+  recordLearningEvent, getLearningPlanStatus, _newPlanId, buildFeedbackTip,
 } = await import("../lib/learning-plan.mjs");
 const { db } = await import("../lib/db.mjs");
 

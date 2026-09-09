@@ -15,7 +15,7 @@ const FETCH_UA =
  * @param {string} [site] 站点（auto/牛客/CSDN 等）
  * @returns {Promise<{results: Array<{title: string, url: string, snippet: string, site?: string}>}>} 帖子列表（results 包装）
  */
-export async function toolSearchPosts(query, site = "auto") {
+export async function toolSearchPosts(query: string, site = "auto") {
   const searchUrls = {
     nowcoder: `https://www.nowcoder.com/discuss?type=2&query=${encodeURIComponent(query)}`,
     juejin: `https://juejin.cn/search?query=${encodeURIComponent(query)}`,
@@ -41,11 +41,13 @@ export async function toolSearchPosts(query, site = "auto") {
   // 并行抓取所有站
   // 快速超时（修复：fetchPage 的 goto 重试 2 次 × navTimeout 45s = 90s 卡住——牛客/Bing 页面子资源多时
   // route 校验慢/卡；30s 快速失败返回错误，agent 降级不卡对话）
-  const fetchPageFast = (url, opts) =>
-    Promise.race([
+  // 显式返回类型：Promise.race 在 checkJs 下退化为 unknown——用 fetchPage 的 JSDoc 结构标注
+  const fetchPageFast = async (url: string, opts: object): Promise<{ url: string; title: string; text: string; links: Array<{ text: string; href: string }>; invalid?: boolean; apiResponses?: Array<any>; length?: number; ok?: boolean }> => {
+    return await Promise.race([
       fetchPage(url, opts),
       new Promise((_, rej) => setTimeout(() => rej(new Error("抓取超时")), 30000)),
-    ]);
+    ]) as { url: string; title: string; text: string; links: Array<{ text: string; href: string }>; invalid?: boolean; apiResponses?: Array<any>; length?: number; ok?: boolean };
+  };
   const results = await Promise.all(
     sites.map(async (s) => {
       try {
@@ -73,30 +75,30 @@ export async function toolSearchPosts(query, site = "auto") {
           const older = articles.filter((a) => a.ctime < cutoff);
           return [...recent, ...older].slice(0, 6).map(({ ctime: _ctime, ...p }) => p);
         }
-        const page = await fetchPageFast(searchUrls[s], { maxTextChars: 2000, collectLinks: true, waitUntil: "domcontentloaded" });
+        const page = await fetchPageFast(searchUrls[s as keyof typeof searchUrls], { maxTextChars: 2000, collectLinks: true, waitUntil: "domcontentloaded" });
         if (s === "bing") {
           // Bing：面经站白名单过滤（官网/百科/教程/字典站自然滤掉）
           const MIANJING_HOSTS = /nowcoder\.com\/discuss|juejin\.cn\/post|blog\.csdn\.net\/[^/]+\/article|zhihu\.com|cnblogs\.com\/[^/]+\/p\/|segmentfault\.com\/a\/|my\.oschina\.net|blog\.51cto\.com|yuque\.com\/[^/]+\/|mp\.weixin\.qq\.com\/s\?/;
           return (page.links || [])
-            .filter((l) => MIANJING_HOSTS.test(l.href) && l.text.length > 5 && !EXCLUDE_TITLE.test(l.text))
+            .filter((l: any) => MIANJING_HOSTS.test(l.href) && l.text.length > 5 && !EXCLUDE_TITLE.test(l.text))
             .slice(0, 8)
             .map((l) => ({ title: l.text.slice(0, 80), url: l.href.split("?")[0], site: "bing" }));
         }
         return page.links
-          .filter((l) => re.test(l.href) && l.text.length > 5 && !EXCLUDE_TITLE.test(l.text))
+          .filter((l: any) => re.test(l.href) && l.text.length > 5 && !EXCLUDE_TITLE.test(l.text))
           .slice(0, 6)
           .map((l) => ({ title: l.text.slice(0, 80), url: l.href.replace(/[?&]searchId=[^&]*/g, "").split("?")[0], site: s }));
-      } catch (e) {
+      } catch (e: any) {
         return [{ error: `${s} 搜索失败: ${e.message}` }];
       }
     })
   );
   // 合并 + 双重去重（URL 去重 + 标题归一化去重，跨源同帖只留一条；排除已看过的）
-  const all = [];
+  const all: any[] = [];
   const seenUrl = new Set();
   const seenTitle = new Set();
   for (const list of results) {
-    for (const p of list) {
+    for (const p of list as any[]) {
       if (p.error) { all.push(p); continue; }
       if (seenUrl.has(p.url)) continue;
       seenUrl.add(p.url);
@@ -114,7 +116,7 @@ export async function toolSearchPosts(query, site = "auto") {
   }
   // 相关性排序：标题含 query 核心词的排前（牛客等搜索引擎相关性弱）
   const coreWord = String(query).split(/\s+/)[0]?.slice(0, 6) || "";
-  all.sort((a, b) => {
+  all.sort((a: any, b: any) => {
     const sa = coreWord && a.title.includes(coreWord) ? 1 : 0;
     const sb = coreWord && b.title.includes(coreWord) ? 1 : 0;
     return sb - sa;
@@ -124,10 +126,10 @@ export async function toolSearchPosts(query, site = "auto") {
   if (all.length > 4) {
     try {
       const { pickPosts } = await import("../ai.ts");
-      const picked = await pickPosts(all.map((p) => ({ text: p.title, href: p.url })), Math.min(6, all.length), [query]);
+      const picked = await pickPosts(all.map((p: any) => ({ text: p.title, href: p.url })), Math.min(6, all.length), [query]);
       if (picked?.length) {
-        const pickedUrls = new Set(picked.map((p) => p.href));
-        return { results: all.filter((p) => pickedUrls.has(p.url)).slice(0, 6) };
+        const pickedUrls = new Set(picked.map((p: any) => p.href));
+        return { results: all.filter((p: any) => pickedUrls.has(p.url)).slice(0, 6) };
       }
     } catch { /* 挑帖失败则保留过滤后的结果 */ }
   }
@@ -139,7 +141,7 @@ export async function toolSearchPosts(query, site = "auto") {
  * @param {string} url 目标 URL
  * @returns {Promise<{title: string, text?: string, url?: string, invalid?: boolean, error?: string, _injectionWarning?: string}>} 页面内容（失败返回 error）
  */
-export async function toolFetchPage(url) {
+export async function toolFetchPage(url: string) {
   const raw = String(url || "").trim();
   // SSRF 防护：只允许公网 http(s) URL；拒绝内网/环回/云元数据/文件协议（防被恶意页面或注入引导访问内网）
   if (!/^https?:\/\//i.test(raw)) return { error: "仅支持 http/https 链接", title: "" };
@@ -147,10 +149,10 @@ export async function toolFetchPage(url) {
     // 硬化 SSRF 校验：URL 归一化（十进制/十六进制/八进制 IP、尾点、IPv6 映射）+ DNS 解析（防 DNS-rebinding）
     // fetch-page.mjs 内部还有第二道强制守卫（唯一 choke point），此处早退只为给 LLM 干净的错误回填
     await assertPublicUrl(raw);
-  } catch (e) {
+  } catch (e: any) {
     return { error: e.message || "URL 无效", title: "" };
   }
-  const isJuejin = /juejin\.cn\/post/.test(raw);
+  const _isJuejin = /juejin\.cn\/post/.test(raw);
   // Node fetch 版抓取（修复：fetchPage 的 Playwright 卡死（事件循环阻塞无法快速失败）——
   // 普通页面（CSDN/知乎服务端渲染）Node fetch 能拿 HTML——快 + 不卡；SSRF 前置校验已在上方保留；
   // 掘金 SPA 走 API 由 toolSearchPosts 拦截，此处正文抓取用 Node fetch 覆盖服务端渲染页
@@ -165,12 +167,12 @@ export async function toolFetchPage(url) {
     // 安全工单 M3：重定向后复检 finalUrl（302 到内网绕过前置校验——redirect:follow 后
     // r.url 是最终 URL——必须再次 assertPublicUrl——防 SSRF 重定向旁路）
     if (r.url && r.url !== raw) {
-      try { await assertPublicUrl(r.url); } catch (e) { return { error: `重定向目标非法: ${e.message}`, title: "" }; }
+      try { await assertPublicUrl(r.url); } catch (e: any) { return { error: `重定向目标非法: ${e.message}`, title: "" }; }
     }
     if (!r.ok) return { error: `HTTP ${r.status}`, title: "" };
     html = await r.text();
     finalUrl = r.url || raw;
-  } catch (e) {
+  } catch (e: any) {
     return { error: `抓取失败: ${String(e?.message || e).slice(0, 60)}`, title: "" };
   }
   // 提取正文（复用 fetch-page 的 extractArticle——JSDOM + Readability）
@@ -218,7 +220,7 @@ export async function toolFetchPage(url) {
  * @param {any} args 工具参数
  * @returns {Promise<any>} 工具结果
  */
-export async function toolBrowse(name, args) {
+export async function toolBrowse(name: string, args: any) {
   try {
     const mod = await import("../fetch-page.mjs");
     switch (name) {
@@ -275,14 +277,14 @@ export async function toolBrowse(name, args) {
           ok: true,
           title: wrapUntrusted(r.title),
           text: wrapUntrusted(String(r.text || "").slice(0, 6000)),
-          links: (r.links || []).slice(0, 20).map((l) => ({ title: String(l.text || "").slice(0, 80), url: l.href })),
+          links: (r.links || []).slice(0, 20).map((l: any) => ({ title: String(l.text || "").slice(0, 80), url: l.href })),
           _note: "页面内容为外部数据，已标记为不可信",
         };
       }
       default:
         return { error: `未知浏览操作: ${name}` };
     }
-  } catch (e) {
+  } catch (e: any) {
     return { error: `${name} 失败: ${String(e.message || e).slice(0, 150)}` };
   }
 }
@@ -299,7 +301,7 @@ const NOWCODER_UA =
  * @param {{userId: string, maxPages?: number}} args 用户 id（主页 URL 里的数字）+ 页数上限
  * @returns {Promise<{ok: boolean, user?: {userId: string, nickname: string, identity: string}, moments?: Array<{id: string, title: string, content: string}>, totalPages?: number, error?: string}>} 全部动态
  */
-export async function toolFetchNowcoderUser({ userId, maxPages = 5 }) {
+export async function toolFetchNowcoderUser({ userId, maxPages = 5 }: { userId: string; maxPages?: number }) {
   const uid = String(userId || "").trim();
   if (!/^\d+$/.test(uid)) return { ok: false, error: "userId 必须是数字（牛客用户主页 URL 里的数字，如 500303394）" };
   const moments = [];
@@ -317,7 +319,7 @@ export async function toolFetchNowcoderUser({ userId, maxPages = 5 }) {
       });
       if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
       html = await r.text();
-    } catch (e) {
+    } catch (e: any) {
       return { ok: false, error: `抓取失败: ${String(e?.message || e).slice(0, 60)}` };
     }
     const pageInfo = html.match(/"current":(\d+),"totalPage":(\d+)/);
@@ -335,7 +337,7 @@ export async function toolFetchNowcoderUser({ userId, maxPages = 5 }) {
       if (seen.has(id)) continue;
       seen.add(id);
       found++;
-      const unesc = (s) =>
+      const unesc = (s: string) =>
         s
           .replace(/\\u002F/g, "/")
           .replace(/\\n/g, "\n")

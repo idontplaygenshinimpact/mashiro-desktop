@@ -53,7 +53,7 @@ test("datasetHash：同 version 样本变更 → hash 变化（回归对比同 h
 });
 
 test("validateDataset：真实 questions.json envelope 完整", () => {
-  const r = validateDataset({ name: "questions", file: "benchmark/questions.json", listKey: "questions", check: (c, errs, ctx) => {
+  const r = validateDataset({ name: "questions", file: "benchmark/questions.json", listKey: "questions", check: (c, errs, _ctx) => {
     if (!["code", "predict", "coverage", "trace"].includes(c.type)) errs.push("bad-type");
   } });
   assert.equal(r.ok, true, r.errors.join(";"));

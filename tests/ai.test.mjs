@@ -414,7 +414,7 @@ test("任务4：自评不达标 → 自动补一轮（补充缺失项）", async
   setLlmResponses(
     "非JSON大纲", // 大纲失败 → 单次生成
     "## 结论\nLLM 演进\n## 原理\n...\n## 边界\n...", // 单次生成
-    '{"ok":false,"missing":["2025-2026 时间线节点","o3 推理时工具调用"]}', // 自评不达标
+    'SELFJUDGE:{"ok":false,"missing":["2025-2026 时间线节点","o3 推理时工具调用"]}', // 自评不达标（SELFJUDGE: 前缀——helpers 只消费显式自评响应）
     "## 补充\n2025-2026 时间线：DeepSeek R1（2025-01）…" // 补全
   );
   const md = await ai.solveQuestion({ title: "LLM 与 Agent 演进", text: "梳理发展历程", company: "c", position: "前端", sourceUrl: "" });
@@ -427,9 +427,30 @@ test("任务4：自评达标 → 不补全（零额外调用）", async () => {
   setLlmResponses(
     "非JSON大纲",
     "## 结论\nLLM 演进\n## 原理\n...\n## 边界\n...",
-    '{"ok":true,"missing":[]}'
+    'SELFJUDGE:{"ok":true,"missing":[]}'
   );
   const md = await ai.solveQuestion({ title: "LLM 与 Agent 演进", text: "梳理发展历程", company: "c", position: "前端", sourceUrl: "" });
   assert.ok(!md.includes("自评补全"), "达标不补全");
+  assert.ok(md.includes("## 结论"), "原内容保留");
+});
+
+// ---------- 任务 4 强化：自评门禁扩展到所有题（原仅时效性题——非时效性题边界/追问简略漏过） ----------
+test("任务4强化①：非时效性题边界/追问简略 → 自评补全", async () => {
+  // 模拟"混合检索"类非时效性题：讲解只有 1 条边界、1 个追问（简略）→ 自评不达标 → 补全
+  setLlmResponses(
+    "## 结论\n混合检索\n## 原理\nBM25 稀疏检索与向量密集检索…\n## 边界\n语料全是长文档且主题集中时 BM25 区分度下降\n## 追问\nQ1：RRF 和加权分数融合有什么区别？",
+    'SELFJUDGE:{"ok":false,"missing":["边界不足 3 项且维度单一","追问不足 3 个"]}',
+    "## 补充\n- 边界：语料全是短文本且同义改写频繁时向量检索优势明显；融合权重需按业务调参\n- 追问：Q2 如果 embedding 模型是领域微调过的，还需要 BM25 吗？——需要，精确匹配（版本号/代码）仍是盲区"
+  );
+  const md = await ai.solveQuestion({ title: "混合检索", text: "BM25 与向量检索融合", company: "c", position: "前端", sourceUrl: "" });
+  assert.ok(md.includes("## 补充（自评补全）"), "非时效性题也触发自评补全（原缺口）");
+  assert.ok(md.includes("领域微调"), "补全内容包含缺失的追问");
+});
+
+test("任务4强化②：非时效性题自评缺省达标 → 零补全（现有测试语义不变）", async () => {
+  // 只给讲解响应——自评 shift 空队列 → 缺省 {"ok":true} → 不补全（helpers.mjs self-judge 分支）
+  setLlmResponses("## 结论\n事件循环\n## 原理\n宏任务微任务机制…\n## 边界\n- 异常：…\n- 性能：…\n- 兼容性：…\n## 追问\nQ1…\nQ2…\nQ3…");
+  const md = await ai.solveQuestion({ title: "事件循环", text: "宏任务微任务", company: "c", position: "前端", sourceUrl: "" });
+  assert.ok(!md.includes("自评补全"), "缺省达标不补全");
   assert.ok(md.includes("## 结论"), "原内容保留");
 });

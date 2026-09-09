@@ -5,8 +5,8 @@
 //   硬红（--gate 时 exit 1）：classify/detect/static 任一降 >3%（确定性高、样本大）
 //   黄牌（exit 0 + ⚠️）：solve/truthfulness 降 3~5%（波动大；连续 2 次同向才升级红）
 // 数据集变更（hash 不同）不跨集对比，只提示。
-import { readEvalSummary, SUMMARY_FILE } from "../lib/eval-summary.mjs";
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { readEvalSummary } from "../lib/eval-summary.mjs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const GATE = process.argv.includes("--gate");
@@ -38,7 +38,7 @@ export function compareRunsFromRows(rows) {
   for (const [key, runs] of groups) {
     const sorted = runs.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
     if (sorted.length < 2) continue; // 只有一次 → 无对比
-    const [layer, hash, mode] = key.split("|");
+    const [layer, hash, _mode] = key.split("|");
     const prev = sorted[sorted.length - 2];
     const cur = sorted[sorted.length - 1];
     const DIMS = [

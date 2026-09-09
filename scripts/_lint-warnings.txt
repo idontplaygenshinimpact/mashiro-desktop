@@ -1,0 +1,100 @@
+D:\mianshi-agent\bin\tts-server.mjs
+   8:10  warning  'existsSync' is defined but never used. Allowed unused vars must match /^_/u                  no-unused-vars
+  16:7   warning  'WORKER_TIMEOUT_MS' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+  58:17  warning  'id' is assigned a value but never used. Allowed unused vars must match /^_/u                 no-unused-vars
+D:\mianshi-agent\desktop\main.mjs
+  1387:7  warning  'companionPoller' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\desktop\renderer\panel-study.js
+  221:16  warning  'loadIvResume' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\desktop\renderer\panel-vue-review\src\useReview.js
+  20:7  warning  'RATINGS' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\desktop\renderer\speech-queue.mjs
+  7:7  warning  'CODE_LINE' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\adapters\cc-watcher.mjs
+  12:45  warning  'readFileSync' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+  51:99  warning  'log' is assigned a value but never used. Allowed unused args must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\ai-compact.mjs
+  7:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\interview-start.mjs
+  6:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\job-collect.mjs
+   5:10  warning  'readFileSync' is defined but never used. Allowed unused vars must match /^_/u                no-unused-vars
+   5:24  warning  'existsSync' is defined but never used. Allowed unused vars must match /^_/u                  no-unused-vars
+  10:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u            no-unused-vars
+  12:18  warning  'isDetailPageUrl' is defined but never used. Allowed unused vars must match /^_/u             no-unused-vars
+  14:7   warning  'CAREER_SITES_FILE' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\job-match.mjs
+  6:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\jobs.mjs
+  11:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\learning-plan.mjs
+  13:14  warning  'withTx' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\loop.mjs
+  44:13  warning  'sanitizeExternal' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\mail.mjs
+  9:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\mcp-client.mjs
+  14:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\quiz.mjs
+   10:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+  173:15  warning  'answer' is assigned a value but never used. Allowed unused vars must match /^_/u   no-unused-vars
+D:\mianshi-agent\lib\rag.mjs
+  9:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\rss.mjs
+  8:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\study-plan.mjs
+  13:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\subagent.mjs
+  6:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\tools\impl-interview.mjs
+  109:9  warning  'profile' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\tools\impl-search.mjs
+  153:9  warning  'isJuejin' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\lib\web-search.mjs
+  4:10  warning  'fetchPage' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\plugins\job-hunter\routes\study.mjs
+  15:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\_audit-study-notes.mjs
+  17:9  warning  'st' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\_style-check.mjs
+  29:11  warning  'rcb' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\_tts-play-sim.mjs
+  10:7  warning  'ROOT' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\_verify-study-review.mjs
+  19:9  warning  'db' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\bench-ablation.mjs
+  96:7  warning  'startedAt' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\bench-compare.mjs
+   8:27  warning  'SUMMARY_FILE' is defined but never used. Allowed unused vars must match /^_/u   no-unused-vars
+   9:36  warning  'existsSync' is defined but never used. Allowed unused vars must match /^_/u     no-unused-vars
+  41:25  warning  'mode' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\benchmark.mjs
+   5:50  warning  'existsSync' is defined but never used. Allowed unused vars must match /^_/u         no-unused-vars
+  14:68  warning  'TRUTH_LABEL_SCORE' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\smoke-companion.mjs
+  6:79  warning  'clearExpressions' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\tmp-nowcoder-all.mjs
+  6:16  warning  'fetchPage' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\ui-contrast-audit.mjs
+  9:7  warning  'ELECTRON' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\ui-dpi-shot.mjs
+  9:7  warning  'ELECTRON' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\ui-layout-audit.mjs
+  9:7  warning  'ELECTRON' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\scripts\ui-shot.mjs
+  10:7  warning  'ELECTRON' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\skills\company-intel\skill.mjs
+  4:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\skills\dev-history-guide\skill.mjs
+  23:7  warning  'MAX_DSH_SESSIONS' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\skills\github-repo\skill.mjs
+  4:10  warning  'sanitizeExternal' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\skills\nowcoder-surf\skill.mjs
+  31:7  warning  'archived' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+  43:9  warning  'list' is assigned a value but never used. Allowed unused vars must match /^_/u      no-unused-vars
+D:\mianshi-agent\skills\project-doc\skill.mjs
+  5:37  warning  'statSync' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\tests\autonomy.test.mjs
+  121:11  warning  'onHook' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
+D:\mianshi-agent\tests\eval-metrics.test.mjs
+  28:11  warning  'appendEvalSummary' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars

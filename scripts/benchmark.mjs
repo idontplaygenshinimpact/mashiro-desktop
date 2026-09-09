@@ -2,7 +2,7 @@
 // 注意：本层反映「模型 + prompt」组合能力（内部仍调 LLM API），用于回归监控 prompt/模型变更，
 // 不体现 harness 能力。Agent 机制本身的评测见 scripts/benchmark-agent.mjs（Layer B，mock LLM 故障注入）。
 // 用法: node scripts/benchmark.mjs [--quick] [--no-save] [--judge-check]
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +11,7 @@ import { solveQuestion, classifyPage, detectQuestions } from "../lib/ai.ts";
 import { matchKp } from "../lib/knowledge.mjs";
 import { summarizeEvalCost, formatEvalCost } from "../lib/eval-cost.mjs";
 import { appendEvalSummary } from "../lib/eval-summary.mjs";
-import { judgeAnswer, judgeTruthfulness, coverageRate, truthScore, TRUTH_LABEL_SCORE, TRUTH_LABEL_RANK } from "../lib/eval-scoring.mjs";
+import { judgeAnswer, judgeTruthfulness, coverageRate, truthScore, TRUTH_LABEL_RANK } from "../lib/eval-scoring.mjs";
 import { computeDatasetHash } from "./validate-evaldata.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");

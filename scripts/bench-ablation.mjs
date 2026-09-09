@@ -93,7 +93,7 @@ async function scoreQuestion(q, answer) {
   return { judge, truth, coverRate: cov.rate, answerLen: String(answer || "").length };
 }
 
-const startedAt = Date.now();
+const _startedAt = Date.now();
 startEvalMetrics();
 console.log("========== 消融基线 A/B（prompt 工程消融） ==========");
 console.log(`样本 ${SAMPLE} 题（seed=${SEED}）| A=裸 prompt（无模板） vs B=全链路 solveQuestion`);

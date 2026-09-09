@@ -3,7 +3,7 @@
 import { mkdtempSync, writeFileSync, appendFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { installInternalBridge, emitEvent, onEventDecision, drainExpressions, clearExpressions } from "../lib/events.mjs";
+import { installInternalBridge, emitEvent, onEventDecision, drainExpressions } from "../lib/events.mjs";
 import { createAutonomy } from "../lib/autonomy.mjs";
 import { createCcWatcher } from "../lib/adapters/cc-watcher.mjs";
 

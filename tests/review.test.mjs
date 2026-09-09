@@ -38,7 +38,7 @@ test("addCard 同 topic 更新不重复建卡", () => {
 test("addCard 相似表述合并：不新建漂移卡（状态机簇）", () => {
   review.addCard({ topic: "状态机与异步并发", question: "q1", source: "薄弱点" });
   // 漂移表述（同一知识点）→ 合并到已有卡，不新建；question 取更完整（合并语义）
-  const r = review.addCard({ topic: "异步状态机与并发提交控制", question: "q2 更长的追问内容", source: "薄弱点" });
+  const _r = review.addCard({ topic: "异步状态机与并发提交控制", question: "q2 更长的追问内容", source: "薄弱点" });
   const cards = review.loadCards().cards;
   assert.equal(cards.length, 1, "相似表述合并不新建卡");
   assert.equal(cards[0].topic, "状态机与异步并发", "保留原卡 topic");
@@ -48,7 +48,7 @@ test("addCard 相似表述合并：不新建漂移卡（状态机簇）", () => 
 test("addCard 相似合并不误并：不同知识点（SSE 数据流 vs 接口联动）", () => {
   review.addCard({ topic: "状态机与SSE数据流联动", question: "q1" });
   // 共享"状态机与"前缀但 2-gram 重叠不足 → 不合并（isSimilarTopicForArchive 门槛）
-  const r = review.addCard({ topic: "状态机与接口联动", question: "q2" });
+  const _r = review.addCard({ topic: "状态机与接口联动", question: "q2" });
   const cards = review.loadCards().cards;
   assert.equal(cards.length, 2, "不同知识点不误并");
 });
@@ -272,7 +272,7 @@ test("getTodayReviewedTopics：今天复习过的主题去重返回", () => {
 // ---------- 强化复习工单任务 4：补卡/多角度/每日限额/错题重练/优先级 ----------
 test("强化①：ensurePlanCoverage 清单无卡条目自动补卡（多角度 question + 优先级）", async () => {
   const { ensurePlanCoverage } = await import("../lib/review.mjs");
-  const { addPlanItems, getPlan } = await import("../lib/study.mjs");
+  const { addPlanItems } = await import("../lib/study.mjs");
   addPlanItems([{ topic: "事件循环", why: "w", source: "s", verify_question: "讲事件循环", level: "必会" }]);
   // 多角度 LLM 提炼
   setLlmResponses(JSON.stringify([{ i: 0, question: "原理：为什么微任务先执行；边界：宏任务嵌套；场景：长列表更新" }]));

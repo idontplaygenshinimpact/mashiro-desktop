@@ -1,10 +1,32 @@
 // React 版模拟面试面板（渲染层可替换性验证的核心交互）
 // 全部交互经 window.kanban IPC 桥（同一 preload，74 方法）→ 业务层 lib/interview.mjs 零改动
-import { useEffect, useRef, useState } from "react";
+// 框架特色展示工单任务 2①：面试 phase 状态机（setup/active/finished）改 useReducer——
+// 状态更新集中到 reducer（可追踪/可测试），替代 8 个散落 useState
+import { useEffect, useRef, useState, useReducer } from "react";
 import { renderMarkdown } from "./markdown.js";
 import { ScoreBars, ScoreRadar } from "./score.jsx";
 
 const ROLES = ["技术深挖型", "温和引导型", "压力追问型"];
+
+// 面试 phase 状态机：setup（配置）→ active（会话）→ finished（复盘）
+// 动作：phase/busy/session/scores/log/report——状态更新全部经 reducer（单一入口）
+const PHASE_INIT = {
+  phase: "setup", busy: false,
+  session: null, // {round, roundType, question, dimension, basis, criteria, boundary, depth, totalRounds}
+  scores: { tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0, rounds: 0 },
+  log: [], report: null,
+};
+function phaseReducer(state, action) {
+  switch (action.type) {
+    case "phase": return { ...state, phase: action.phase };
+    case "busy": return { ...state, busy: action.busy };
+    case "session": return { ...state, session: action.session };
+    case "scores": return { ...state, scores: action.scores };
+    case "log": return { ...state, log: action.log };
+    case "report": return { ...state, report: action.report };
+    default: return state;
+  }
+}
 
 function pick(r, keys) {
   if (!r) return null;
@@ -14,16 +36,18 @@ function pick(r, keys) {
 }
 
 export function InterviewPanel() {
-  const [phase, setPhase] = useState("setup"); // setup | active | finished
-  const [busy, setBusy] = useState(false);
-  // 配置
+  // useReducer：phase 状态机集中管理（setup/active/finished + 会话/评分/日志/复盘）
+  const [st, dispatch] = useReducer(phaseReducer, PHASE_INIT);
+  const { phase, busy, session, scores, log, report } = st;
+  // 包装 setter（调用点零改动——语义与 useState 一致；函数式更新支持）
+  const setPhase = (p) => dispatch({ type: "phase", phase: p });
+  const setBusy = (b) => dispatch({ type: "busy", busy: b });
+  const setSession = (s) => dispatch({ type: "session", session: s });
+  const setScores = (s) => dispatch({ type: "scores", scores: typeof s === "function" ? s(st.scores) : s });
+  const setLog = (l) => dispatch({ type: "log", log: typeof l === "function" ? l(st.log) : l });
+  const setReport = (r) => dispatch({ type: "report", report: r });
+  // 配置/历史/可恢复会话（非 phase 状态机部分——保持 useState）
   const [config, setConfig] = useState({ position: "前端实习生", role: "技术深挖型", focus: "", resume: "" });
-  // 会话
-  const [session, setSession] = useState(null); // {round, roundType, question, dimension, basis, criteria, boundary, depth, totalRounds}
-  const [scores, setScores] = useState({ tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0, rounds: 0 });
-  const [log, setLog] = useState([]);
-  // 复盘
-  const [report, setReport] = useState(null);
   const [history, setHistory] = useState([]);
   const [resumable, setResumable] = useState(null);
 
@@ -137,6 +161,7 @@ function SetupView({ config, setConfig, busy, onStart, resumable, onResume, hist
         <h2 style={{ margin: 0 }}>🎤 模拟面试 <span style={{ fontSize: 12, color: "#8fc7ff" }}>React 版</span></h2>
         <div style={{ fontSize: 12, color: "#a8a3c8", marginTop: 4 }}>
           与原生面板共用同一 IPC 桥与业务层——仅换渲染层（渲染层/业务层解耦验证）
+          <br />框架特色：useReducer 面试状态机（setup/active/finished）+ useMemo 雷达图缓存
         </div>
       </div>
 

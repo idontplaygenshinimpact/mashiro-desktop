@@ -12,7 +12,7 @@ import { readBody } from "#lib/widget-core.mjs";
 import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
 import { createSSEPush, withContract } from "#lib/routes/contract.mjs";
 import { StudyStreamEvent } from "#lib/contracts/sse.mjs";
-import { sanitizeExternal , safeExternalBlock} from "#lib/prompt-guard.mjs";
+import { safeExternalBlock } from "#lib/prompt-guard.mjs";
 import { config } from "#root/config.mjs";
 import { StudyPlanOutput, StudyCheckInput, StudyCheckOutput } from "#lib/contracts/study.mjs";
 

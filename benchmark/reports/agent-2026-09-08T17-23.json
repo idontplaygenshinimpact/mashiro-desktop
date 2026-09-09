@@ -1,12 +1,12 @@
 {
-  "ts": "2026-09-08T17:24:31.157Z",
+  "ts": "2026-09-08T17:23:28.957Z",
   "layer": "B",
   "repeat": 3,
-  "pass": 19,
+  "pass": 18,
   "total": 19,
-  "rate": 1,
+  "rate": 0.9473684210526315,
   "consistency": {
-    "fullyConsistent": 19,
+    "fullyConsistent": 18,
     "total": 19,
     "scenarios": [
       {
@@ -26,9 +26,9 @@
       {
         "id": "未知工具：LLM 幻觉工具名 → 报错不崩溃",
         "name": "未知工具：LLM 幻觉工具名 → 报错不崩溃",
-        "pass1": true,
-        "passN": 3,
-        "consistent": 1
+        "pass1": false,
+        "passN": 0,
+        "consistent": 0
       },
       {
         "id": "记忆写入：remember 工具 → 关注点持久化",
@@ -149,7 +149,7 @@
     "wrong_tool": 0,
     "constraint_miss": 0,
     "state_mismatch": 0,
-    "crash": 0,
+    "crash": 3,
     "timeout": 0
   },
   "interviewer": {
@@ -206,11 +206,11 @@
       "id": "未知工具：LLM 幻觉工具名 → 报错不崩溃",
       "name": "未知工具：LLM 幻觉工具名 → 报错不崩溃",
       "kind": "legacy",
-      "pass1": true,
-      "passN": 3,
-      "consistent": 1,
-      "taxonomy": null,
-      "detail": "回复:好的。",
+      "pass1": false,
+      "passN": 0,
+      "consistent": 0,
+      "taxonomy": "crash",
+      "detail": "异常: 场景超时(>50000ms)",
       "stateDetail": ""
     },
     {

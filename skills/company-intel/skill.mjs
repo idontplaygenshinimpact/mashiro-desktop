@@ -1,7 +1,7 @@
 // 公司面经情报技能：搜目标公司面经 → 抓 2 篇 → LLM 汇总高频考点与真题线索
 // 只读；复用 agent 的搜索工具与抓页能力（动态 import，无循环依赖）
 import { llmChat, getReplyText, extractJson } from "../../lib/llm.mjs";
-import { sanitizeExternal , safeExternalBlock} from "../../lib/prompt-guard.mjs";
+import { safeExternalBlock } from "../../lib/prompt-guard.mjs";
 
 export const name = "company-intel";
 export const description = "目标公司面经情报（高频考点+真题线索）";

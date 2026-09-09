@@ -11,12 +11,12 @@ import { getCareerProfile } from "../career.mjs";
  * @param {{ title: string, text: string }} arg 面经标题 + 正文
  * @returns {Promise<Array<{topic: string, question: string}>>} 提取的题目
  */
-export async function toolDetectQuestions({ title, text }) {
+export async function toolDetectQuestions({ title, text }: { title: string; text: string }) {
   const r = await detectQuestions({ title, text });
   memory.markSeen(title); // 记录已处理
   // 提取的题目来自外部页面，包裹为不可信数据（防恶意页面注入持久化到后续轮次）
   if (r?.questions?.length) {
-    r.questions = r.questions.map((q) => ({ ...q, question: wrapUntrusted(q.question) }));
+    r.questions = r.questions.map((q: { question: string }) => ({ ...q, question: wrapUntrusted(q.question) }));
   }
   return r;
 }
@@ -30,8 +30,8 @@ export async function toolGetRecentOutputs() {
     const { readdirSync, readFileSync, statSync } = await import("node:fs");
     const path = await import("node:path");
     const outDir = path.join(config.outputDir);
-    const files = [];
-    const walk = (dir, depth = 0) => {
+    const files: string[] = [];
+    const walk = (dir: string, depth = 0) => {
       if (depth > 3) return;
       for (const e of readdirSync(dir, { withFileTypes: true })) {
         const p = path.join(dir, e.name);
@@ -42,8 +42,8 @@ export async function toolGetRecentOutputs() {
       }
     };
     walk(outDir);
-    files.sort((a, b) => statSync(b).mtime.getTime() - statSync(a).mtime.getTime());
-    const latest = files.slice(0, 5).map((f) => {
+    files.sort((a: string, b: string) => statSync(b).mtime.getTime() - statSync(a).mtime.getTime());
+    const latest = files.slice(0, 5).map((f: string) => {
       const c = readFileSync(f, "utf8");
       const title = path.basename(f).replace(/\.md$/, "").slice(0, 40);
       // 提取 ## 标题作为知识点线索
@@ -52,7 +52,7 @@ export async function toolGetRecentOutputs() {
     });
     return { outputs: latest, hint: "这些是最近爬取的面经/题目，出题可参考真实考点" };
   } catch (e) {
-    return { error: e.message };
+    return { error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -62,7 +62,7 @@ export async function toolGetRecentOutputs() {
  * @param {string} company 公司名
  * @returns {Promise<{ok: boolean, added: string[], existing: string[], skipped: Array<{topic: string, reason: string}>, hint: string}>} 记录结果
  */
-export async function toolRecordInterviewTopics(topics, company) {
+export async function toolRecordInterviewTopics(topics: string[], company: string) {
   const added = [], existing = [], skipped = [];
   for (const t of (topics || []).slice(0, 8)) {
     const rawTopic = String(t || "").trim().slice(0, 40);
@@ -90,7 +90,7 @@ export async function toolRecordInterviewTopics(topics, company) {
         existing.push(topic);
       }
     } catch (e) {
-      skipped.push({ topic, reason: e.message });
+      skipped.push({ topic, reason: e instanceof Error ? e.message : String(e) });
     }
   }
   return {
@@ -105,8 +105,8 @@ export async function toolRecordInterviewTopics(topics, company) {
  * @param {{ question: string, company: string, sourceUrl?: string }} arg 题目信息
  * @returns {Promise<{saved: string, preview: string}>} 讲解存档路径 + 预览
  */
-export async function toolSolveQuestion({ question, company, sourceUrl }) {
-  const profile = getCareerProfile();
+export async function toolSolveQuestion({ question, company, sourceUrl }: { question: string; company: string; sourceUrl?: string }) {
+  const _profile = getCareerProfile();
   const md = await solveQuestion({
     title: question.slice(0, 50),
     text: question,

@@ -43,7 +43,7 @@ export async function chat(messages: AgentMessage[], { maxTokens = 4000, json = 
  * 判断页面内容类型
  * returns { type: 'mianshi'|'zhaopin'|'bishi'|'other', company, position, worth, reason }
  */
-export async function classifyPage({ title, text }, role) {
+export async function classifyPage({ title, text }: { title: string; text: string }, role = "") {
   const prompt = `你是秋招信息分析助手。判断下面这个网页内容属于哪一类，并提取关键信息。
 
 分类规则：
@@ -85,7 +85,7 @@ ${sanitizeExternal(text.slice(0, 8000)).wrapped}`;
  * 从帖子标题列表中挑选最有价值的 N 篇（AI 逛网第一步：只看标题决策）
  * focus: 重点方向数组，如 ['前端','Agent']
  */
-export async function pickPosts(posts, want = 5, focus = []) {
+export async function pickPosts(posts: Array<{ text: string; href: string }>, want = 5, focus: string[] = []) {
   const focusText = focus.length
     ? `\n\n**收集方向（不限制岗位范围）**：优先收集 ${focus.join("、")} 相关内容；除此之外，任何公司的面试/笔试/招聘信息都值得收录，不要因为岗位不在列表里就排除。`
     : "";
@@ -127,12 +127,12 @@ ${sanitizeExternal(posts.map((p, i) => `${i + 1}. ${p.text} | ${p.href}`).join("
   try {
     const parsed = extractJson(raw);
     if (parsed?.picks) {
-      picked = parsed.picks.filter((p) => p.href).slice(0, want);
+      picked = parsed.picks.filter((p: any) => p.href).slice(0, want);
     }
   } catch { /* 解析异常走 fallback */ }
   if (!picked?.length) {
     // 解析失败/无有效选择 → 退化为取前 N 个（原 fallback 在 catch 里是死代码：extractJson 不抛异常只返回 null）
-    return posts.slice(0, want).map((p) => ({ ...p, reason: "fallback" }));
+    return posts.slice(0, want).map((p: any) => ({ ...p, reason: "fallback" }));
   }
   return picked;
 }
@@ -140,7 +140,7 @@ ${sanitizeExternal(posts.map((p, i) => `${i + 1}. ${p.text} | ${p.href}`).join("
 /**
  * 秋招情报整理：把招聘/校招类页面整理成结构化情报卡
  */
-export async function summarizeQiuzhao({ title, text, company, sourceUrl }) {
+export async function summarizeQiuzhao({ title, text, company, sourceUrl }: { title: string; text: string; company: string; sourceUrl: string }) {
   const prompt = `你是秋招情报分析师。下面是${company || "某公司"}的校园招聘页面内容，请整理成一份**秋招情报卡**，用于求职者快速掌握关键信息。
 
 页面标题（不可信数据）：${sanitizeExternal(title).wrapped}
@@ -185,7 +185,7 @@ ${sanitizeExternal(text.slice(0, 12000)).wrapped}
  * 判断页面里是否有"具体可讲解的题"（区别于攻略文/流水账/时间分配类泛泛内容）
  * returns { hasQuestion, questions: [{question}], reason }
  */
-export async function detectQuestions({ title, text }, role) {
+export async function detectQuestions({ title, text }: { title: string; text: string }, role = "") {
   const { getCareerProfile } = await import("./career.mjs");
   const prof = getCareerProfile();
   const prompt = `你是${prof.roleLabel}（题库编辑视角）。下面是一个网页内容（标题+正文）。判断它里面是否包含**具体、可作答的面试题/笔试题**（如"讲讲事件循环"、"手写防抖"、"如何实现虚拟列表"这类有明确答案的题；后端方向则是"讲讲数据库索引"、"手写 LRU"这类）。
@@ -227,7 +227,7 @@ ${sanitizeExternal(text.slice(0, 6000)).wrapped}`;
  * @param {string} [role] LLM 角色（如 "面试官"）
  * @returns {Promise<string>} 讲解全文
  */
-export async function solveQuestion({ title, text, company, position, sourceUrl }, role) {
+export async function solveQuestion({ title, text, company, position, sourceUrl }: { title: string; text: string; company: string; position: string; sourceUrl: string }, role = "") {
   const { llmChat, getReplyText } = await import("./llm.mjs");
   return await solveQuestionImpl({ title, text, company, position, sourceUrl }, async (messages, opts) => {
     const data = await llmChat(messages, { ...opts, role });
@@ -244,7 +244,7 @@ export async function solveQuestion({ title, text, company, position, sourceUrl 
  * @param {(delta: string) => void} onChunk 流式回调
  * @returns {Promise<string>} 讲解全文
  */
-export async function solveQuestionStream({ title, text, company, position, sourceUrl }, onChunk) {
+export async function solveQuestionStream({ title, text, company, position, sourceUrl }: { title: string; text: string; company: string; position: string; sourceUrl: string }, onChunk: (delta: string) => void) {
   const { llmChatStream } = await import("./llm.mjs");
   return await solveQuestionImpl({ title, text, company, position, sourceUrl }, async (messages, opts) => {
     return await llmChatStream(messages, opts, onChunk);
@@ -264,7 +264,7 @@ export async function solveQuestionStream({ title, text, company, position, sour
  * @param {(delta: string) => void} onChunk 流式回调
  * @returns {Promise<string>} 补充内容
  */
-export async function solveAppendStream({ topic, existing, question }, onChunk) {
+export async function solveAppendStream({ topic, existing, question }: { topic: string; existing: string; question: string }, onChunk: (delta: string) => void) {
   const { llmChatStream } = await import("./llm.mjs");
   const { getCareerProfile } = await import("./career.mjs");
   const prof = getCareerProfile();
@@ -309,7 +309,7 @@ ${question}`;
  * @param {number} [maxTotal] 总预算（主文 + 追问段）
  * @returns {{main: string, tail: string}}
  */
-export function splitExplain(text, maxTotal = 30000) {
+export function splitExplain(text: string, maxTotal = 30000) {
   const raw = String(text || "");
   const firstMark = raw.indexOf("## 💬 追问");
   if (firstMark <= 0) return { main: raw.slice(-maxTotal), tail: "" }; // 无追问段：整体截尾即可（无前缀分层需求）
@@ -334,7 +334,7 @@ export function splitExplain(text, maxTotal = 30000) {
  * @param {(delta: string) => void} onChunk 流式回调
  * @returns {Promise<string>} 整合后的完整讲解
  */
-export async function consolidateStudyStream({ topic, content }, onChunk) {
+export async function consolidateStudyStream({ topic, content }: { topic: string; content: string }, onChunk: (delta: string) => void) {
   const { llmChatStream } = await import("./llm.mjs");
   const { getCareerProfile } = await import("./career.mjs");
   const prof = getCareerProfile();
@@ -375,17 +375,17 @@ ${tail}`;
  * @param {{ topics: Array<{topic: string, content?: string}>, onChunk: (delta: string) => void }} arg 归并条目 + 流式回调
  * @returns {Promise<string>} 归并结果（含【cluster】主题簇名标记）
  */
-export async function clusterStudyStream({ topics, onChunk }) {  const { llmChatStream } = await import("./llm.mjs");
+export async function clusterStudyStream({ topics, onChunk }: { topics: Array<{ topic: string; content?: string }>; onChunk: (delta: string) => void }) {  const { llmChatStream } = await import("./llm.mjs");
   const { getCareerProfile } = await import("./career.mjs");
   const prof = getCareerProfile();
   // 条目内容可能来自爬取的网页/外部衍生数据 → 包裹为不可信数据（防提示注入）
   // 预算分配：每个条目独立裁剪（截头保留开头核心）再拼接，避免整串 slice(-30000) 丢末尾条目
   const BUDGET = Math.max(6000, Math.floor(30000 / Math.max(1, topics.length)) - 200);
   const topicText = sanitizeExternal(
-    topics.map((t, i) => `【条目${i + 1}：${t.topic}】\n${String(t.content || "").slice(0, BUDGET)}`).join("\n\n")
+    topics.map((t: any, i: number) => `【条目${i + 1}：${t.topic}】\n${String(t.content || "").slice(0, BUDGET)}`).join("\n\n")
   ).wrapped;
   // 题目域自适应（与 solveQuestionImpl 同口径）：Agent/LLM 类主题簇用 AI Agent 方向
-  const dir = topicDirection(topics.map((t) => t.topic).join(" "), "", prof);
+  const dir = topicDirection(topics.map((t: any) => t.topic).join(" "), "", prof);
   const prompt = `你是${dir.roleLabel}。下面是**多个相关知识点条目**的讲解素材，它们属于同一个知识主题簇（例如：MySQL底层原理、B树B+树区别、回表查询 → 都属于"数据库索引与B+树"主题）。
 
 请把这多个条目**整合成一篇结构统一的主题簇综合讲解**，要求：
@@ -431,7 +431,7 @@ const AGENT_TOPIC_RE = /agent|工具调用|function\s*calling|tool\s*binding|mcp
 // 约束——改用词列表 + kwHit 独立成词检测（组合词表一处维护全局生效）
 import { kwHit } from "./match-utils.mjs";
 const ALGO_TOPIC_WORDS = ["合并", "排序", "链表", "数组", "二叉树", "动态规划", "双指针", "滑动窗口", "回溯", "贪心", "哈希", "栈", "队列", "堆", "递归", "dfs", "bfs", "二分", "前缀和", "拓扑", "并查集", "单调栈", "字符串匹配", "kmp", "lru", "lfu", "topk", "第k", "中位数", "反转", "旋转", "去重", "子序列", "子数组", "岛屿", "路径", "排列", "组合", "背包", "手写", "手撕", "算法"];
-function isAlgoTopic(text) {
+function isAlgoTopic(text: string) {
   const t = String(text || "").toLowerCase();
   return ALGO_TOPIC_WORDS.some((w) => kwHit(t, w));
 }
@@ -454,7 +454,7 @@ const FRONTEND_TOPIC_RE = /渲染|浏览器|dom|布局|重排|回流|性能优�
  * @param {{ roleLabel?: string, codeLang?: string }} prof 职业画像
  * @returns {{ roleLabel: string, scopeNote: string, dual: boolean, isAlgo: boolean }} 方向信息（roleLabel 用于 prompt 角色）
  */
-export function topicDirection(title, text, prof) {
+export function topicDirection(title: string, text: string, prof: { roleLabel?: string; codeLang?: string }) {
   const joined = String(title || "") + " " + String(text || "");
   const isAlgo = isAlgoTopic(joined);
   return { roleLabel: "资深面试辅导老师", scopeNote: "面试相关（从知识本身讲，不按方向定制）", dual: false, isAlgo };
@@ -506,7 +506,7 @@ const TIME_SENSITIVE_WORDS = [
   "生态", "格局", "盘点", "梳理", "总结", "回顾", "展望", "前沿", "热点", "风口",
 ];
 /** 时效性主题判定：title + 正文前 500 字命中任一组合词（kwHit 模式——短词排除组合词误命中） */
-export function isTimeSensitiveTopic(title, text) {
+export function isTimeSensitiveTopic(title: string, text: string) {
   const t = `${String(title || "")} ${String(text || "").slice(0, 500)}`;
   return TIME_SENSITIVE_WORDS.some((w) => {
     if (!t.includes(w)) return false;
@@ -525,7 +525,7 @@ export function isTimeSensitiveTopic(title, text) {
  * @param {string} title 题目主题
  * @returns {Promise<Array<{title: string, url: string, snippet: string}>>} 检索结果（已 wrapUntrusted）
  */
-export async function fetchLatestReferences(title) {
+export async function fetchLatestReferences(title: string) {
   const queries = [
     `${String(title || "").slice(0, 40)} 2025 2026 最新`,
     `${String(title || "").slice(0, 40)} 演进 时间线`,
@@ -557,7 +557,7 @@ export async function fetchLatestReferences(title) {
   }
 }
 
-async function solveQuestionImpl({ title, text, company, position, sourceUrl }, call) {
+async function solveQuestionImpl({ title, text, company, position, sourceUrl }: { title: string; text: string; company: string; position: string; sourceUrl: string }, call: (messages: any[], opts: any) => Promise<string>) {
   const { getCareerProfile } = await import("./career.mjs");
   const prof = getCareerProfile();
   const dir = topicDirection(title, text, prof);
@@ -606,7 +606,7 @@ ${content.slice(0, 6000)}`;
         { maxTokens: 1500, temperature: 0.3, role: "outline" }
       );
       const outline = extractJson(getReplyText(outlineRaw));
-      const sections = Array.isArray(outline?.sections) ? outline.sections.filter((s) => s && String(s.title || "").trim()) : [];
+      const sections = Array.isArray(outline?.sections) ? outline.sections.filter((s: any) => s && String(s.title || "").trim()) : [];
       if (sections.length >= 2) {
         const parts = [];
         for (let i = 0; i < sections.length; i++) {
@@ -614,7 +614,7 @@ ${content.slice(0, 6000)}`;
           const sectionPrompt = `你是一名${dir.roleLabel}（覆盖${dir.scopeNote}方向）。下面是「${String(title || "").slice(0, 100)}」的讲解任务。
 
 【生成大纲】（已定稿——严格按本节范围写，不越界不重复其他节）：
-${sections.map((x, j) => `${j + 1}. ${x.title}：${(x.points || []).join("、")}`).join("\n")}
+${sections.map((x: any, j: number) => `${j + 1}. ${x.title}：${(x.points || []).join("、")}`).join("\n")}
 
 【本节】第 ${i + 1} 节「${s.title}」——要点：${(s.points || []).join("、")}
 
@@ -660,7 +660,8 @@ ${algoReq}${dualReq}${ADAPTATION_CONSTRAINT}${latestRefs}${archiveRef}
 【讲解深度】（重要）：
 - **不写提纲式讲解**——每个考点讲透：机制（为什么成立）+ 关键对比（与相似概念的区别）+ 核心流程
 - 纯概念知识点：原理段必须深入（机制/流程/对比/例子 ≥3 项展开）——省略代码不能省略深度
-- 边界至少 3 项（异常/性能/安全/兼容性/替代方案中选有意义的）+ 追问 3-5 个（每个带简答）
+- **边界至少 3 项且覆盖不同维度**（从 异常/性能/安全/兼容性/替代方案 五类中选有意义的，每类 1 条——不要 3 条全是同一类）
+- **追问 3-5 个且每个带简答**，覆盖不同类型（原理追问/对比追问/场景追问/边界追问/实现追问——不要全是同一类型）
 - 篇幅分配：原理最重（全文的 50%+），结论一句话，实现按需，边界和追问完整
 3. 参考格式（${dir.roleLabel}风格）：
 
@@ -679,7 +680,7 @@ ${algoReq}${dualReq}${ADAPTATION_CONSTRAINT}${latestRefs}${archiveRef}
 但把原理/流程/对比写透——"无代码"不等于"浅"]
 
 ### 边界与追问
-[异常情况、性能、安全、兼容性 + 面试官可能追问的 2-3 个问题及简答]
+[边界 ≥3 项（异常/性能/安全/兼容性/替代方案中选有意义的，覆盖不同维度）+ 追问 3-5 个（每个带简答，覆盖原理/对比/场景/边界/实现不同类型）]
 
 ---
 来源：${sourceUrl}`;
@@ -696,15 +697,24 @@ ${algoReq}${dualReq}${ADAPTATION_CONSTRAINT}${latestRefs}${archiveRef}
     { maxTokens: config.solveMaxTokens, temperature: 0.5 }
   );
 
-  // 讲解质量增强工单任务 4：生成后自评门禁（Reflexion 式）——仅时效性题（最易缺时间线/对比/边界）
+  // 讲解质量增强工单任务 4 强化：自评门禁扩展到**所有题**（原仅时效性题——非时效性题
+  // 边界/追问简略直接漏过，如"混合检索"只有 2 条边界 2 个追问）
+  // 检查项按题型：通用（边界≥3 不同维度/追问 3-5 带简答/原理深度）；时效性 +时间线；算法 +复杂度/边界/演进
   // 轻量自评（maxTokens 300 收紧，成本 ~0.001 元/次）；不足自动补一轮（复用 call——流式链路 onChunk 透传）
-  if (isTimeSensitiveTopic(title, text)) {
+  {
     try {
       const { llmChat, getReplyText, extractJson } = await import("./llm.mjs");
+      const checks = [
+        "边界是否 ≥3 项且覆盖不同维度（异常/性能/安全/兼容性/替代方案——不要全是同一类）",
+        "追问是否 3-5 个且每个带简答（覆盖原理/对比/场景/边界/实现不同类型）",
+        "原理是否深入（机制/对比/流程 ≥3 项展开，非提纲式）",
+        ...(isTimeSensitiveTopic(title, text) ? ["演进/时间线类是否覆盖关键节点（2025-2026 最新）"] : []),
+        ...(isAlgoTopic(`${title} ${text}`) ? ["算法题是否含复杂度分析/边界条件/暴力→优化演进"] : []),
+      ];
       const judge = await llmChat(
         [
           { role: "system", content: "你是讲解质量评审。检查讲解是否达标，只输出 JSON。" },
-          { role: "user", content: `题目：${String(title || "").slice(0, 100)}\n讲解（前 4000 字）：\n${String(result || "").slice(0, 4000)}\n检查项：1) 演进/时间线类是否覆盖关键节点（2025-2026 最新） 2) 对比是否充分（与相似概念） 3) 边界是否 ≥3 项 4) 追问是否 3-5 个。输出：{"ok":true/false,"missing":["缺什么（1-3 条）"]}` },
+          { role: "user", content: `题目：${String(title || "").slice(0, 100)}\n讲解（前 4000 字）：\n${String(result || "").slice(0, 4000)}\n检查项：${checks.join("；")}\n输出：{"ok":true/false,"missing":["缺什么（1-3 条）"]}` },
         ],
         { maxTokens: 300, temperature: 0, role: "self-judge" }
       );
@@ -735,7 +745,7 @@ export { COMPACT_CONFIG, estimateTokens, msgTokens, bodyTokens, compactMessages 
 /** 从简历提取项目列表：{projects: [{name, tech_stack, description}]}
  * 面试拷打前把简历项目加入学习清单，逐个生成拷打档案
  */
-export async function extractResumeProjects(resume) {
+export async function extractResumeProjects(resume: string) {
   const { llmChat, getReplyText, extractJson } = await import("./llm.mjs");
   const prompt = `你是简历解析助手。从下面的简历中提取候选人做过的**项目经历**（3-6 个，按重要性排序）。
 
@@ -754,8 +764,8 @@ ${sanitizeExternal(String(resume).slice(0, 5000)).wrapped}`;
     { maxTokens: 1500, temperature: 0.2 }
   );
   const parsed = extractJson(getReplyText(data));
-  const projects = (parsed?.projects || []).filter((p) => p?.name).slice(0, 6);
-  return projects.map((p) => ({
+  const projects = (parsed?.projects || []).filter((p: any) => p?.name).slice(0, 6);
+  return projects.map((p: any) => ({
     name: String(p.name).slice(0, 30),
     techStack: String(p.tech_stack || "").slice(0, 100),
     description: String(p.description || "").slice(0, 120),

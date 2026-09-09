@@ -2,7 +2,7 @@
 // 从"基础爬虫"到"逛"：围绕用户目标自主决策——价值判断 / 线索扩展 / 逛完判定 / 记忆去重 / 失败不漂移
 // 工具组合：fetch_nowcoder_user（抓全用户动态）+ search_posts（搜面经）+ 归档（学习清单/复习卡）
 import { llmChat, getReplyText } from "../../lib/llm.mjs";
-import { toolFetchNowcoderUser } from "../../lib/tools/impl-search.mjs";
+import { toolFetchNowcoderUser } from "../../lib/tools/impl-search.ts";
 
 export const name = "nowcoder-surf";
 export const description = "自主逛牛客：围绕目标逛用户/面经，价值判断 + 线索扩展 + 逛完判定 + 汇报（不是固定 URL 爬虫）";
@@ -23,12 +23,10 @@ async function surfNowcoder({ userId, goal = "秋招面经", maxPages = 5 }) {
   // ② 价值判断 + ③ 线索扩展（LLM 每篇判断：价值 + 知识点 + 线索）
   const judged = await judgeMoments(moments, goal);
   // ④ 归档：高/中价值 → 学习清单（讲解入口在面板）
-  let archived = 0;
   for (const m of judged.highValue) {
     try {
       const { addPlanItems } = await import("../../lib/study.mjs");
       addPlanItems([{ topic: m.topic, why: `牛客逛完·${user.nickname || uid} 面经提炼`, source: `牛客用户 ${uid}`, verify_question: m.title, level: "必会" }]);
-      archived++;
     } catch { /* 归档失败不阻塞逛完 */ }
   }
   // ⑤ 逛完判定 + 汇报
@@ -40,7 +38,7 @@ async function surfNowcoder({ userId, goal = "秋招面经", maxPages = 5 }) {
 
 /** LLM 批量价值判断（一次调用判断全部——比逐篇调用省 token；返回高/中/低 + 线索） */
 async function judgeMoments(moments, goal) {
-  const list = moments.map((m, i) => `${i}.【${m.title}】\n${m.content.slice(0, 500)}`).join("\n\n");
+  const _list = moments.map((m, i) => `${i}.【${m.title}】\n${m.content.slice(0, 500)}`).join("\n\n");
   const prompt = `你是秋招信息筛选助手。用户目标是：${goal}。以下是逛到的 ${moments.length} 篇牛客动态，请逐篇判断价值并提取线索。
 
 对每篇输出：{"i":序号,"value":"高|中|低|无关","topic":"提炼的知识点（高/中价值时，如'事件循环'）","leads":["线索（公司/牛友/技术栈，如'字节'、'用户12345'，无关则空）"]}

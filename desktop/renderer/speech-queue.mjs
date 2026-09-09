@@ -4,7 +4,7 @@
 
 // ---------- 句子切分（规则，零 LLM 成本） ----------
 const SENT_END = /[。！？\n]/;
-const CODE_LINE = /^\s*(```|~~~|`)/;          // 代码块行
+const _CODE_LINE = /^\s*(```|~~~|`)/;          // 代码块行
 const URL_LINE = /^\s*(https?:\/\/|www\.)/;   // URL 行
 const MIN_SENT = 8;                            // 小于 8 字符并入前句（防碎片）
 

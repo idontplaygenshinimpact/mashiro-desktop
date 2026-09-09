@@ -14,7 +14,7 @@ const files = readdirSync(NOTES).filter((f) => f.endsWith(".md"));
 const issues = [];
 for (const f of files) {
   const p = path.join(NOTES, f);
-  const st = statSync(p);
+  const _st = statSync(p);
   const text = readFileSync(p, "utf8");
   const len = text.length;
   const qIdx = text.indexOf("## 💬 追问");

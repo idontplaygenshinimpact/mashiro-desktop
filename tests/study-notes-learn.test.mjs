@@ -1,7 +1,7 @@
 // study-notes-learn.mjs 单测：讲解存档 → 学习清单（列表/单条/全部/增量/频率 level）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync, rmSync, statSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
 
