@@ -4,12 +4,12 @@
 //   React 版只在数据变化时更新对应子树）；进度条按状态派生（running/done/idle）。
 import { useEffect, useMemo, useState } from "react";
 
-const card = { background: "#241f3a", border: "1px solid #4a4568", borderRadius: 10, padding: 12 };
-const muted = { fontSize: 11, color: "#a8a3c8" };
-const btn = { background: "#2a2540", color: "#e8e6f5", border: "1px solid #4a4568", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 12 };
-const btnPrimary = { background: "#8fc7ff", color: "#171322", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 };
-const chip = { background: "#2a2540", border: "1px solid #4a4568", borderRadius: 4, padding: "1px 6px", fontSize: 10, color: "#8fc7ff", whiteSpace: "nowrap" };
-const item = { display: "flex", alignItems: "center", gap: 8, background: "#1f1a31", border: "1px solid #4a4568", borderRadius: 8, padding: "7px 10px", marginTop: 6, fontSize: 12 };
+// 批次 2：深色内联已收敛为 panel.css 的 .rf-* 语义类（见 panel.css 样式词汇段）
+const muted = {};
+const btn = {};
+const btnPrimary = {};
+const chip = {};
+const item = { display: "flex", alignItems: "center", gap: 8, fontSize: 12 };
 
 export function CrawlPanel() {
   const [data, setData] = useState(null);
@@ -75,35 +75,35 @@ export function CrawlPanel() {
   }, [data]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: "#e8e6f5" }}>
-      <div style={card}>
+    <div className="rf-stack">
+      <div className="rf-card">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-          <b style={{ fontSize: 13 }}>🔍 爬取 · React 版</b>
+          <b className="rf-title">🔍 爬取 · React 版</b>
           <span style={{ display: "flex", gap: 6 }}>
             <button style={btnPrimary} onClick={startCrawl} disabled={busy}>{busy ? "启动中…" : "🔍 开始爬取"}</button>
             <button style={btn} onClick={() => window.kanban.openOutput()}>📁 打开输出目录</button>
             <button style={btn} onClick={load}>🔄 刷新</button>
           </span>
         </div>
-        <div style={muted}>{progressText}</div>
+        <div className="rf-muted">{progressText}</div>
         {/* 进度条（running/done/idle 三态派生） */}
         {pct > 0 && (
-          <div style={{ height: 6, background: "#1f1a31", borderRadius: 3, overflow: "hidden", marginTop: 6 }}>
-            <i style={{ display: "block", height: "100%", width: `${pct}%`, background: prog.status === "done" ? "#3a8a5a" : "#8fc7ff", borderRadius: 3 }} />
+          <div className="rf-track" style={{ marginTop: 6 }}>
+            <i className={prog.status === "done" ? "rf-fill rf-fill-done" : "rf-fill"} style={{ width: `${pct}%` }} />
           </div>
         )}
         {err && <div style={{ ...muted, color: "#e8c04a", marginTop: 6 }}>⚠️ {err}</div>}
         {/* 使用统计（与原生 stats-row 同口径） */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-          <span style={chip}>💬 对话 {stats?.chats || 0}</span>
-          <span style={chip}>📝 复盘 {stats?.reviewsDone || 0}</span>
-          <span style={chip}>🎤 面试 {stats?.interviewsDone || 0}</span>
-          <span style={chip}>📚 复习 {data?.review?.total || 0}</span>
+          <span className="rf-chip">💬 对话 {stats?.chats || 0}</span>
+          <span className="rf-chip">📝 复盘 {stats?.reviewsDone || 0}</span>
+          <span className="rf-chip">🎤 面试 {stats?.interviewsDone || 0}</span>
+          <span className="rf-chip">📚 复习 {data?.review?.total || 0}</span>
         </div>
       </div>
 
-      <div style={card}>
-        <b style={{ fontSize: 12 }}>📌 今日推荐</b>
+      <div className="rf-card">
+        <b className="rf-title">📌 今日推荐</b>
         {reco.length === 0 ? (
           <div style={{ ...muted, marginTop: 6 }}>暂无推荐（先跑一次爬取）</div>
         ) : (
@@ -114,15 +114,15 @@ export function CrawlPanel() {
               title={f.path ? "点击用系统默认程序打开" : ""}
               onClick={() => f.path && window.kanban.openFile(f.path)}
             >
-              <span style={{ ...chip, color: f.tag === "笔试" ? "#4a6fe0" : "#e8c04a" }}>{f.tag}</span>
+              <span className={f.tag === "笔试" ? "rf-chip rf-chip-info" : "rf-chip rf-chip-warn"}>{f.tag}</span>
               <span style={{ flex: 1 }}>{f.title || f.file || ""}</span>
             </div>
           ))
         )}
       </div>
 
-      <div style={card}>
-        <b style={{ fontSize: 12 }}>📄 最近产出（{data?.files?.length || 0}）</b>
+      <div className="rf-card">
+        <b className="rf-title">📄 最近产出（{data?.files?.length || 0}）</b>
         {files.length === 0 ? (
           <div style={{ ...muted, marginTop: 6 }}>暂无产出</div>
         ) : (
@@ -136,7 +136,7 @@ export function CrawlPanel() {
         )}
       </div>
 
-      <div style={muted}>⚛️ React 特性：产出/推荐用 useMemo 派生 + 轮询依赖收敛（空闲不轮询，仅爬取中 5s 拉取）</div>
+      <div className="rf-muted">⚛️ React 特性：产出/推荐用 useMemo 派生 + 轮询依赖收敛（空闲不轮询，仅爬取中 5s 拉取）</div>
     </div>
   );
 }

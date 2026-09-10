@@ -1291,7 +1291,7 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
    收敛路径：组件改用这些语义类，颜色只在 CSS 里定义一次；框架版自身主题靠容器类切换。 */
 .rf-card { background: linear-gradient(135deg, rgba(109,79,216,.08), rgba(109,79,216,.03)); border: 1px solid rgba(109,79,216,.18); border-radius: 10px; padding: 12px; }
 .rf-sub { background: rgba(109,79,216,.05); border: 1px solid rgba(109,79,216,.16); border-radius: 8px; padding: 10px; }
-.rf-chip { background: rgba(255,255,255,.85); border: 1px solid rgba(109,79,216,.25); border-radius: 4px; padding: 1px 6px; font-size: 10px; color: #5d48b8; white-space: nowrap; }
+.rf-chip { background: rgba(255,255,255,.85); border: 1px solid rgba(109,79,216,.25); border-radius: 4px; padding: 1px 6px; font-size: 11px; color: #5d48b8; white-space: nowrap; }
 .rf-chip-warn { color: #9a7b1a; }
 .rf-chip-ok { color: #2f7d4e; }
 .rf-btn { background: rgba(255,255,255,.85); color: #5d48b8; border: 1px solid rgba(109,79,216,.25); border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
@@ -1327,3 +1327,10 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 .renderer-framework [style*="rgb(232, 230, 245)"] { color: #2d2a45 !important; }
 .renderer-framework [style*="rgb(74, 69, 104)"] { border-color: rgba(109,79,216,.30) !important; }
 .renderer-framework [style*="rgb(42, 37, 64)"] { background: rgba(255,255,255,.85) !important; color: #5d48b8 !important; border-color: rgba(109,79,216,.25) !important; }
+.rf-track { height: 6px; background: rgba(109,79,216,.10); border-radius: 3px; overflow: hidden; }
+.rf-fill { display: block; height: 100%; border-radius: 3px; background: #6d4fd8; }
+.rf-fill-done { background: #2f7d4e; }
+.rf-chip-info { color: #3a5bd5; }
+.rf-title { font-size: 13px; font-weight: 700; color: #2d2a45; }
+.rf-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.rf-stack { display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: #2d2a45; }
