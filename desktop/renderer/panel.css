@@ -1294,7 +1294,7 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 .rf-chip { background: rgba(255,255,255,.85); border: 1px solid rgba(109,79,216,.25); border-radius: 4px; padding: 1px 6px; font-size: 11px; color: #5d48b8; white-space: nowrap; }
 .rf-chip-warn { color: #9a7b1a; }
 .rf-chip-ok { color: #2f7d4e; }
-.rf-btn { background: rgba(255,255,255,.85); color: #5d48b8; border: 1px solid rgba(109,79,216,.25); border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
+.rf-btn { min-height: 24px; background: rgba(255,255,255,.85); color: #5d48b8; border: 1px solid rgba(109,79,216,.25); border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
 .rf-btn:hover { filter: brightness(1.04); }
 .rf-btn:disabled { opacity: .55; cursor: not-allowed; }
 .rf-btn:focus-visible, .rf-input:focus-visible, .renderer-compare-btn:focus-visible, .renderer-switch-btn:focus-visible { outline: 2px solid rgba(109,79,216,.55); outline-offset: 1px; }
@@ -1349,4 +1349,4 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 .rf-bar-challenge { background: #3a5bd5; }
 .rf-mark { background: rgba(109,79,216,.18); color: #2d2a45; border-radius: 2px; }
 /* 触达尺寸：勾选框按 WCAG 2.5.8 给 24×24 命中区（原 13px 原生尺寸过小） */
-.rf-row input[type="checkbox"] { width: 24px; height: 24px; margin: 0 2px 0 0; accent-color: #6d4fd8; }
+.rf-stack input[type="checkbox"], .rf-row input[type="checkbox"] { width: 24px; height: 24px; margin: 0 2px 0 0; accent-color: #6d4fd8; }

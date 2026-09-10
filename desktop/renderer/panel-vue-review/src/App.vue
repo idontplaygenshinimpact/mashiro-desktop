@@ -227,7 +227,7 @@ const trendMax = computed(() => Math.max(1, ...(trend.value || []).map((t) => t.
 .vr-wrap { padding: 10px 12px; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
 .vr-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .vr-title { font-weight: 700; color: #5d48b8; font-size: 14px; }
-.vr-sub { font-size: 11px; color: #9a97b8; margin-bottom: 6px; }
+.vr-sub { font-size: 11px; color: #6a6790; margin-bottom: 6px; }
 .vr-count { font-size: 12px; color: #6a6790; }
 .vr-hint { color: #6a6790; font-size: 12px; padding: 16px 0; text-align: center; }
 .vr-err { color: #b91c1c; }
@@ -239,7 +239,7 @@ const trendMax = computed(() => Math.max(1, ...(trend.value || []).map((t) => t.
   border: 1px solid rgba(109,79,216,.14);
 }
 .vr-retry-btn {
-  font-size: 11px; padding: 2px 10px; border-radius: 6px; cursor: pointer;
+  font-size: 11px; padding: 2px 10px; min-height: 24px; border-radius: 6px; cursor: pointer;
   background: rgba(229,72,77,.10); color: #c0392b; border: 1px solid rgba(229,72,77,.3); font-weight: 600;
 }
 .vr-retry-btn:hover { background: rgba(229,72,77,.16); }
@@ -268,7 +268,7 @@ const trendMax = computed(() => Math.max(1, ...(trend.value || []).map((t) => t.
 .vr-quiz { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: rgba(109,79,216,.04); border: 1px solid rgba(109,79,216,.12); }
 .vr-quiz-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; color: #5d48b8; font-size: 12px; margin-bottom: 6px; }
 .vr-quiz-btn {
-  font-size: 11px; padding: 2px 10px; border-radius: 6px; cursor: pointer;
+  font-size: 11px; padding: 2px 10px; min-height: 24px; border-radius: 6px; cursor: pointer;
   background: rgba(109,79,216,.10); color: #5d48b8; border: 1px solid rgba(109,79,216,.3); font-weight: 600;
 }
 .vr-quiz-kb { font-size: 11px; color: #6a6790; margin-bottom: 4px; }

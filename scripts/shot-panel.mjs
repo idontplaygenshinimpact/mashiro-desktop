@@ -85,7 +85,7 @@ const tinyText = all.filter((e) => e.tagName !== "SUP" && e.tagName !== "SUB" &&
         const m = String(s).match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/);
         return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
       };
-      const lum = ([r, g, b]) => {
+      const lum = (rgb) => { const [r, g, b] = rgb;
         const f = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
         return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
       };

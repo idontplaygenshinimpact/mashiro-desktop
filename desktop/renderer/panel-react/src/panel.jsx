@@ -168,7 +168,7 @@ function SetupView({ config, setConfig, busy, onStart, resumable, onResume, hist
       {resumable && (
         <div className="rf-card" style={{ borderColor: "rgba(109,79,216,.35)", display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 13 }}>🔄 检测到未完成的面试（第 {Number(resumable.round) || 1} 轮）</span>
-          <button onClick={onResume} disabled={busy} style={btnPrimary}>继续上一场</button>
+          <button onClick={onResume} disabled={busy} className="rf-btn rf-btn-primary">继续上一场</button>
         </div>
       )}
 
@@ -187,7 +187,7 @@ function SetupView({ config, setConfig, busy, onStart, resumable, onResume, hist
           className="rf-input" style={{ resize: "vertical", lineHeight: 1.5 }} />
       </div>
 
-      <button onClick={onStart} disabled={busy} style={{ ...btnPrimary, padding: "12px 0", fontSize: 15 }}>
+      <button onClick={onStart} disabled={busy} className="rf-btn rf-btn-primary" style={{ padding: "12px 0", fontSize: 15 }}>
         {busy ? "启动中…" : "🚀 开始面试"}
       </button>
       <div style={{ fontSize: 11, color: "#6a6790", marginTop: -8 }}>💡 会话中 Ctrl/Cmd + Enter 快速提交回答</div>

@@ -99,7 +99,7 @@ const keyPoints = computed(() => {
 .rc-side-label { font-size: 11px; color: #6a6790; margin-bottom: 6px; }
 .rc-text { font-size: 13px; color: #2d2a45; line-height: 1.6; font-weight: 600; }
 .rc-answer { font-weight: 400; color: #2f4a3a; }
-.rc-hint { margin-top: 8px; font-size: 11px; color: #9a97b8; }
+.rc-hint { margin-top: 8px; font-size: 11px; color: #6a6790; }
 .rc-sa-input {
   width: 100%; box-sizing: border-box; margin-top: 4px; padding: 6px 8px; border-radius: 6px;
   border: 1px solid rgba(109,79,216,.25); font-size: 12px; font-family: inherit; resize: vertical;

@@ -80,9 +80,9 @@ export function CrawlPanel() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
           <b className="rf-title">🔍 爬取 · React 版</b>
           <span style={{ display: "flex", gap: 6 }}>
-            <button style={btnPrimary} onClick={startCrawl} disabled={busy}>{busy ? "启动中…" : "🔍 开始爬取"}</button>
-            <button style={btn} onClick={() => window.kanban.openOutput()}>📁 打开输出目录</button>
-            <button style={btn} onClick={load}>🔄 刷新</button>
+            <button type="button" className="rf-btn rf-btn-primary" onClick={startCrawl} disabled={busy}>{busy ? "启动中…" : "🔍 开始爬取"}</button>
+            <button type="button" className="rf-btn" onClick={() => window.kanban.openOutput()}>📁 打开输出目录</button>
+            <button type="button" className="rf-btn" onClick={load}>🔄 刷新</button>
           </span>
         </div>
         <div className="rf-muted">{progressText}</div>
@@ -127,8 +127,8 @@ export function CrawlPanel() {
           <div style={{ ...muted, marginTop: 6 }}>暂无产出</div>
         ) : (
           files.map((f, i) => (
-            <div key={`${f.dir || ""}-${f.title || i}`} style={item}>
-              <span style={chip}>{f.company || "?"}</span>
+            <div key={`${f.dir || ""}-${f.title || i}`} className="rf-row" style={item}>
+              <span className="rf-chip">{f.company || "?"}</span>
               <span style={{ flex: 1 }}>{f.title || ""}</span>
               <span className="rf-muted rf-dir" title={f.dir || ""}>{f.dir || ""}</span>
             </div>

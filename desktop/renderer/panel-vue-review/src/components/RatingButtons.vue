@@ -67,7 +67,7 @@ function submitAlgo() {
   font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid;
 }
 .rb-btn.rb-off { opacity: .45; cursor: not-allowed; }
-.rb-hint { margin-top: 6px; font-size: 11px; color: #9a97b8; text-align: center; }
+.rb-hint { margin-top: 6px; font-size: 11px; color: #6a6790; text-align: center; }
 .algo-review { margin-top: 8px; }
 .algo-q { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
 .algo-label { font-size: 11px; color: #2d2a45; font-weight: 600; flex: 1; min-width: 180px; }
