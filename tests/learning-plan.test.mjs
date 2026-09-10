@@ -112,7 +112,7 @@ test("执行链路①：创建计划 → scope 单元入学习清单（可一键
 });
 
 test("执行链路②：buildInterviewFocus 含计划未完成单元（score 60）", async () => {
-  const { buildInterviewFocus } = await import("../lib/interview-focus.mjs");
+  const { buildInterviewFocus } = await import("../lib/interview-focus.ts");
   await createLearningPlan({ title: "算法专项", scope: ["二分查找"], quotaPerDay: 2 });
   const focus = await buildInterviewFocus();
   const planItem = focus.find((f) => f.topic === "二分查找");

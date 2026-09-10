@@ -10,9 +10,12 @@
 // 全部去重合并（同 topic 取最高优先级来源），按"优先级分 + 最近时间"排序
 import { memory } from "./memory.mjs";
 
+/** 优先考察项（去重合并后的一条） */
+interface FocusEntry { topic: string; reason: string; score: number }
+
 export async function buildInterviewFocus() {
-  const byTopic = new Map(); // topic -> { topic, reason, score }（同 topic 取最高分来源）
-  const add = (topic, reason, score) => {
+  const byTopic = new Map<string, FocusEntry>(); // topic -> { topic, reason, score }（同 topic 取最高分来源）
+  const add = (topic: unknown, reason: string, score: number): void => {
     const t = String(topic || "").trim().slice(0, 40);
     if (!t) return;
     const clean = memory._cleanTopic ? memory._cleanTopic(t) : t;
