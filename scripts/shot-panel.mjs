@@ -72,7 +72,22 @@ for (const [tab, mode] of TABS) {
       const tinyText = all.filter((e) => e.children.length === 0 && (e.textContent || "").trim() && parseFloat(getComputedStyle(e).fontSize) < 11).length;
       const overflowX = all.filter((e) => e.scrollWidth > e.clientWidth + 2 && getComputedStyle(e).overflowX !== "auto" && getComputedStyle(e).overflowX !== "scroll").length;
       const noAltImg = all.filter((e) => e.tagName === "IMG" && !e.getAttribute("alt")).length;
-      return { nodes: all.length, inlineDarkStyles: inlineDark, clickable: clickable.length, clickableWithoutLabel: noLabel, textBelow11px: tinyText, possibleOverflowX: overflowX, imgWithoutAlt: noAltImg, scrollH: root.scrollHeight, clientH: root.clientHeight };
+      // 视觉一致性度量（UI 批次 2 输入）：字号/文字色/背景色/圆角取值集合——原生 Tab 与框架版做差集
+      // 即可量化"两套视觉语言"的缺口（不依赖视觉模型）。每类取出现最多的 8 个值。
+      const tally = (get) => {
+        const m = new Map();
+        for (const e of all) { const v = get(getComputedStyle(e)); if (!v) continue; m.set(v, (m.get(v) || 0) + 1); }
+        return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([v, n]) => `${v}×${n}`);
+      };
+      return {
+        nodes: all.length, inlineDarkStyles: inlineDark, clickable: clickable.length,
+        clickableWithoutLabel: noLabel, textBelow11px: tinyText, possibleOverflowX: overflowX, imgWithoutAlt: noAltImg,
+        scrollH: root.scrollHeight, clientH: root.clientHeight,
+        fontSizes: tally((s) => s.fontSize),
+        textColors: tally((s) => s.color),
+        bgColors: tally((s) => s.backgroundColor).filter((v) => !v.startsWith("rgba(0, 0, 0, 0)")),
+        radii: tally((s) => s.borderRadius).filter((v) => v !== "0px"),
+      };
     }, sel);
     report.push({ tab, mode, file: path.relative(ROOT, file), ...audit });
   } catch (e) {
