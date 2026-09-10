@@ -1,10 +1,10 @@
-// study-groups.mjs 测试：大类归一化（仅临时 DB 供 knowledge 知识树，独立直测）
+// study-groups.ts 测试：大类归一化（仅临时 DB 供 knowledge 知识树，独立直测）
 // 纵向拆分第 4 刀：纯函数域拆出后的零 mock 直测
 // 分类判定相似度引擎工单任务 1：normalizeGroupAsync 的 LLM 语义层测试需要 mockLLM
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { setupTempDb, cleanupTempDb, mockLLM, setLlmResponses } from "./helpers.mjs";
-import { normalizeGroup, kwHit } from "../lib/study-groups.mjs";
+import { normalizeGroup, kwHit } from "../lib/study-groups.ts";
 
 const dbDir = setupTempDb("study-groups");
 mockLLM();
@@ -72,14 +72,14 @@ test("任务1：similarity 规则层不误伤（无关主题仍归其他）", ()
 });
 
 test("任务1：similarityGroupRule 缓存幂等（同 topic 不重复判定）", async () => {
-  const { similarityGroupRule } = await import("../lib/study-groups.mjs");
+  const { similarityGroupRule } = await import("../lib/study-groups.ts");
   assert.equal(similarityGroupRule("爬楼梯"), "算法与手写");
   assert.equal(similarityGroupRule("爬楼梯"), "算法与手写", "缓存命中同结果");
   assert.equal(similarityGroupRule(""), null, "空 topic 返回 null");
 });
 
 test("任务1：normalizeGroupAsync 规则层未命中 → LLM 语义层归组", async () => {
-  const { normalizeGroupAsync } = await import("../lib/study-groups.mjs");
+  const { normalizeGroupAsync } = await import("../lib/study-groups.ts");
   // 规则层未命中的模糊题 → LLM 判定归"算法与手写"
   setLlmResponses('{"group":"算法与手写"}');
   const g = await normalizeGroupAsync("某道模糊算法变体题", "", "");

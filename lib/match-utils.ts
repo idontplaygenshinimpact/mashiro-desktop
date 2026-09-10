@@ -1,6 +1,6 @@
 // 中文关键词匹配统一工具（7 个独立实现的公共层）
 // 背景：n-gram 相似度（memory.mjs）/ indexOf 包含（study-topic.ts）/ kws 子串
-// （study-groups.mjs、knowledge.mjs matchKp）/ 正则方向判定（ai.mjs）/ bigram 编辑距离
+// （study-groups.ts、knowledge.mjs matchKp）/ 正则方向判定（ai.mjs）/ bigram 编辑距离
 // （followup-cache.mjs）/ normName includes（study-files.mjs）各自为政——每次修复只补
 // 单个调用点，组合词排除/独立成词/特异性门槛/词边界经验没有沉淀，其他调用点继续踩同类坑。
 // 本模块统一：组合词表（一处更新全局生效）+ 独立成词 + 词边界 + n-gram + 组合词正则生成器。

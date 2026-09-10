@@ -22,7 +22,7 @@ if (!others.length) {
   process.exit(0);
 }
 
-const { similarityGroupRule, normalizeGroupAsync } = await import("../lib/study-groups.mjs");
+const { similarityGroupRule, normalizeGroupAsync } = await import("../lib/study-groups.ts");
 let ruleHit = 0, llmHit = 0, remain = 0;
 const moved = [];
 for (const it of others) {
