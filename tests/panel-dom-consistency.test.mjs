@@ -44,8 +44,8 @@ test("面试/邮箱关键元素存在（iv-answer-area 曾是 class 被当 id �
   }
 });
 
-test("panel-*.js 文件集完整（5 个模块按序加载）", () => {
-  assert.deepEqual(jsFiles.sort(), ["panel-chat.js", "panel-core.js", "panel-jobs.js", "panel-rest.js", "panel-study.js"]);
+test("panel-*.js 文件集完整（6 个模块按序加载——含 panel-state.js 状态收敛工单）", () => {
+  assert.deepEqual(jsFiles.sort(), ["panel-chat.js", "panel-core.js", "panel-jobs.js", "panel-rest.js", "panel-state.js", "panel-study.js"]);
 });
 
 // ---------- 面板 ↔ widget 接口字段契约（防"题库为空"类错位回归） ----------

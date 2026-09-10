@@ -11,7 +11,7 @@ import { JSDOM } from "jsdom";
 
 const renderer = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "desktop", "renderer");
 const html = readFileSync(path.join(renderer, "panel.html"), "utf8");
-const SCRIPTS = ["panel-core.js", "panel-study.js", "panel-chat.js", "panel-jobs.js", "panel-rest.js"];
+const SCRIPTS = ["panel-state.js", "panel-core.js", "panel-study.js", "panel-chat.js", "panel-jobs.js", "panel-rest.js"];
 const srcs = SCRIPTS.map((f) => readFileSync(path.join(renderer, f), "utf8"));
 
 /** 学习清单样例：待学×2 / 学习中×1 / 已掌握×1（覆盖全部状态流） */
@@ -22,7 +22,7 @@ export const SAMPLE_PLAN = {
       { id: "1", topic: "React Hooks 原理", why: "面试必问", level: "必会", done: false, hasFile: true, reviewed: false },
       { id: "2", topic: "事件循环与微任务", why: "高频", level: "必会", done: false, hasFile: false, reviewed: false },
       { id: "3", topic: "性能优化实战", why: "进阶", level: "进阶", done: false, hasFile: false, reviewed: false },
-      { id: "4", topic: "已完成主题", why: "旧项", level: "拓展", done: true, hasFile: true, reviewed: true },
+      { id: "4", topic: "已完成主题", why: "旧项", level: "拓展", done: true, hasFile: true, reviewed: true, mastered: true },
     ],
   },
 };
