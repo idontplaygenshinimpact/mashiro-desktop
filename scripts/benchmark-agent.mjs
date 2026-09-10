@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { appendEvalSummary } from "../lib/eval-summary.mjs";
+import { appendEvalSummary } from "../lib/eval-summary.ts";
 import { mockLLM, mockFetchPage, setLlmResponses, setMockPages, setupTempDb, setBrowseFails, resetBrowseFails } from "../tests/helpers.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");

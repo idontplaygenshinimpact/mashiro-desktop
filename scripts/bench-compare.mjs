@@ -5,7 +5,7 @@
 //   硬红（--gate 时 exit 1）：classify/detect/static 任一降 >3%（确定性高、样本大）
 //   黄牌（exit 0 + ⚠️）：solve/truthfulness 降 3~5%（波动大；连续 2 次同向才升级红）
 // 数据集变更（hash 不同）不跨集对比，只提示。
-import { readEvalSummary } from "../lib/eval-summary.mjs";
+import { readEvalSummary } from "../lib/eval-summary.ts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 

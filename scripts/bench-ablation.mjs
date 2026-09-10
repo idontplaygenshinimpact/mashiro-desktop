@@ -11,7 +11,7 @@ import { llmChat, getReplyText, startEvalMetrics, getEvalMetrics } from "../lib/
 import { solveQuestion } from "../lib/ai.ts";
 import { judgeAnswer, judgeTruthfulness, coverageRate, truthScore } from "../lib/eval-scoring.mjs";
 import { summarizeEvalCost, formatEvalCost } from "../lib/eval-cost.mjs";
-import { appendEvalSummary } from "../lib/eval-summary.mjs";
+import { appendEvalSummary } from "../lib/eval-summary.ts";
 import { computeDatasetHash } from "./validate-evaldata.mjs";
 import { setupTempDb } from "../tests/helpers.mjs";
 setupTempDb("bench-ablation");

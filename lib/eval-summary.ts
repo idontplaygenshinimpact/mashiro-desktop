@@ -14,10 +14,11 @@ export const SUMMARY_FILE = path.join(SUMMARY_DIR, "eval_summary.csv");
  * （此前直接 join(",")——LLM 模型名/错误信息含逗号会破坏列对齐）
  * @param {Array<string|number|null|undefined>} fields
  */
-export function appendEvalSummary(fields) {
+/** 追加一行评测摘要（CSV）——fields 是**按表头顺序的单元格数组**（调用方传 string|number 混合） */
+export function appendEvalSummary(fields: readonly (string | number)[]): boolean {
   try {
     mkdirSync(SUMMARY_DIR, { recursive: true });
-    const esc = (f) => {
+    const esc = (f: unknown): string => {
       const s = f === null || f === undefined ? "" : String(f);
       return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
@@ -25,7 +26,7 @@ export function appendEvalSummary(fields) {
     writeFileSync(SUMMARY_FILE, (existsSync(SUMMARY_FILE) ? "" : SUMMARY_HEADER + "\n") + row + "\n", { flag: "a" });
     return true;
   } catch (e) {
-    console.warn(`[eval-summary] 写入失败: ${String(e?.message || e).slice(0, 100)}`);
+    console.warn(`[eval-summary] 写入失败: ${(e instanceof Error ? e.message : String(e)).slice(0, 100)}`);
     return false;
   }
 }
@@ -39,7 +40,7 @@ export function readEvalSummary() {
     const keys = lines[0].split(",");
     return lines.slice(1).map((l) => {
       const vals = l.split(",");
-      const o = /** @type {Record<string,string>} */ ({});
+      const o: Record<string, string> = {}; // .ts 里 JSDoc @type 断言不生效——必须用 TS 语法
       keys.forEach((k, i) => { o[k] = vals[i] ?? ""; });
       return o;
     });

@@ -10,7 +10,7 @@ import { llmChat, extractJson, startEvalMetrics, getEvalMetrics } from "../lib/l
 import { solveQuestion, classifyPage, detectQuestions } from "../lib/ai.ts";
 import { matchKp } from "../lib/knowledge.mjs";
 import { summarizeEvalCost, formatEvalCost } from "../lib/eval-cost.mjs";
-import { appendEvalSummary } from "../lib/eval-summary.mjs";
+import { appendEvalSummary } from "../lib/eval-summary.ts";
 import { judgeAnswer, judgeTruthfulness, coverageRate, truthScore, TRUTH_LABEL_RANK } from "../lib/eval-scoring.mjs";
 import { computeDatasetHash } from "./validate-evaldata.mjs";
 

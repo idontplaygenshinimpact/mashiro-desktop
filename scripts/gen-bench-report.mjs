@@ -3,7 +3,7 @@
 // 读 eval_summary.csv：
 //   1) 最近一次 A 层 full 运行 → README 徽章片段（文本 + shields.io 动态 badge URL）
 //   2) 最近 8 次 A 层 composite/truthfulness 趋势 → benchmark/trend.svg（纯字符串拼折线）
-import { readEvalSummary } from "../lib/eval-summary.mjs";
+import { readEvalSummary } from "../lib/eval-summary.ts";
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 

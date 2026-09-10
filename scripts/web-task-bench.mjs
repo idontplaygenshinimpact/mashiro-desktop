@@ -24,7 +24,7 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { appendEvalSummary } from "../lib/eval-summary.mjs";
+import { appendEvalSummary } from "../lib/eval-summary.ts";
 import { computeDatasetHash } from "./validate-evaldata.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");

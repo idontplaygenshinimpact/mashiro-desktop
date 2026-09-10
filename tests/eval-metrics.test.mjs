@@ -23,9 +23,9 @@ test("summarizeEvalCost：成本/延迟/分账/失败计数", async () => {
   assert.equal(s.p95Ms, 2000, "p95 ≈ 最大");
 });
 
-// ---------- lib/eval-summary.mjs ----------
+// ---------- lib/eval-summary.ts ----------
 test("appendEvalSummary / readEvalSummary 写读回环", async () => {
-  const { readEvalSummary } = await import("../lib/eval-summary.mjs");
+  const { readEvalSummary } = await import("../lib/eval-summary.ts");
   const { mkdtempSync, rmSync, mkdirSync, writeFileSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const path = await import("node:path");
@@ -35,7 +35,7 @@ test("appendEvalSummary / readEvalSummary 写读回环", async () => {
     mkdirSync(path.dirname(fake), { recursive: true });
     // 用真实模块但换文件——appendEvalSummary 写固定路径；这里验证 read 对自造文件
     writeFileSync(fake, "ts,layer,mode,datasetHash,composite\n2026-01-01,A,full,abc,80\n2026-01-02,A,full,abc,82\n", "utf8");
-    const _rows = (await import("../lib/eval-summary.mjs")).readEvalSummary;
+    const _rows = (await import("../lib/eval-summary.ts")).readEvalSummary;
     // readEvalSummary 读固定路径，无法直接测假文件——改为测真实 CSV 结构（若存在）
     const real = readEvalSummary();
     assert.ok(Array.isArray(real), "读返回数组");
