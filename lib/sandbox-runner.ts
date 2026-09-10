@@ -24,18 +24,24 @@ const WORKER_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "san
  * @param {{userCode: string, testCode: string, skeleton: string, timeoutMs?: number}} opts
  * @returns {Promise<{ok: boolean, success: boolean, tests: Array<{passed: boolean, label: string}>, logs: string[], error: string|null, durationMs: number}>}
  */
-export function runInSandbox({ userCode, testCode, skeleton, timeoutMs = 15000 }) {
+export interface SandboxTask { userCode: string; testCode?: string; skeleton?: string; timeoutMs?: number }
+/** 判题结果（与上方 JSDoc 契约一致：调用方 lib/ai-career.mjs 直接读这些字段） */
+export interface SandboxResult {
+  ok: boolean; success: boolean; tests: Array<{ passed: boolean; label: string }>;
+  logs: string[]; error: string | null; durationMs: number;
+}
+export function runInSandbox({ userCode, testCode, skeleton, timeoutMs = 15000 }: SandboxTask): Promise<SandboxResult> {
   return new Promise((resolve) => {
     let settled = false;
-    const done = (payload) => {
+    const done = (payload: Record<string, unknown>) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      // 收尾回收 worker（幂等；超时分支已 terminate）
-      worker.terminate().catch(() => {});
-      resolve(payload);
+      // 收尾回收 worker（幂等；超时分支已 terminate）；worker 尚未创建时（构造抛错）跳过
+      worker?.terminate().catch(() => {});
+      resolve(payload as unknown as SandboxResult);
     };
-    let worker;
+    let worker: Worker | undefined;
     try {
       worker = new Worker(WORKER_FILE, {
         workerData: {
@@ -46,7 +52,7 @@ export function runInSandbox({ userCode, testCode, skeleton, timeoutMs = 15000 }
         resourceLimits: { maxOldGenerationSizeMb: 64, maxYoungGenerationSizeMb: 16, stackSizeMb: 2 },
       });
     } catch (e) {
-      resolve({ ok: false, success: false, tests: [], logs: [], error: `执行器启动失败: ${String(e?.message || e).slice(0, 150)}`, durationMs: 0 });
+      resolve({ ok: false, success: false, tests: [], logs: [], error: `执行器启动失败: ${(e instanceof Error ? e.message : String(e)).slice(0, 150)}`, durationMs: 0 });
       return;
     }
     const timer = setTimeout(() => {

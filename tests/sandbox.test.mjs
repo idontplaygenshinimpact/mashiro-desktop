@@ -1,9 +1,9 @@
 // 判题沙箱测试（第二轮任务 ③：最危险组件补盲区）
-// lib/sandbox-runner.mjs（worker 线程）+ lib/sandbox-worker.mjs（vm 双隔离）执行不可信用户代码——
+// lib/sandbox-runner.ts（worker 线程）+ lib/sandbox-worker.mjs（vm 双隔离）执行不可信用户代码——
 // 此前 tests/ 零引用。本测试验证隔离有效（正例 + 逃逸反例 + 超时 + 资源限制），不改沙箱实现。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runInSandbox } from "../lib/sandbox-runner.mjs";
+import { runInSandbox } from "../lib/sandbox-runner.ts";
 
 const TEST_TMPL = `async function __test__({EXPORT}) {
   {BODY}
@@ -160,7 +160,7 @@ test("⑥ 资源限制：无限递归 → 栈限制生效（RangeError 被捕获
 // （1e7=80MB 分配超过 64MB 限制仍成功），且极端分配（5e7=400MB）触发 V8 OOM → **FATAL 杀整个进程**
 // （worker 线程的 OOM 是进程级 fatal，Node 平台行为）——沙箱隔离不了 V8 OOM。
 // 这是测试暴露的已知 DoS 边界（判题代码可崩桌宠进程）：实际防护靠 timeout + widget 守护自动重启兜底，
-// 不写触发 fatal 的测试用例（会杀测试进程本身）。见 sandbox-runner.mjs 注释。
+// 不写触发 fatal 的测试用例（会杀测试进程本身）。见 sandbox-runner.ts 注释。
 
 test("⑦ 正例：console 日志收集 + 多断言混合", async () => {
   const r = await runInSandbox(code({
