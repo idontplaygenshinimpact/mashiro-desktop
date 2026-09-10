@@ -61,7 +61,7 @@ test("任务1①：8 个 Tab 都有三态切换按钮（interview/review 手写�
       assert.equal(pressed.filter((b) => b.getAttribute("aria-pressed") === "true").length, 1, `Tab ${tab} 恰有一个 aria-pressed=true`);
     }
     // 任务 2：已登记框架版的 Tab 必须有挂载容器（在 native 之外——否则切原生会把框架版一起藏了）
-    for (const [tab, mode] of [["interview", "react"], ["dashboard", "react"], ["kb", "react"], ["study", "react"], ["crawl", "react"], ["jobs", "react"], ["review", "vue"]]) {
+    for (const [tab, mode] of [["interview", "react"], ["dashboard", "react"], ["kb", "react"], ["study", "react"], ["crawl", "react"], ["jobs", "react"], ["chat", "react"], ["review", "vue"]]) {
       const native = window.document.getElementById(`${tab}-native`);
       const box = window.document.getElementById(`${tab}-${mode}`);
       assert.ok(box, `${tab} 有 ${mode} 容器`);
@@ -69,7 +69,7 @@ test("任务1①：8 个 Tab 都有三态切换按钮（interview/review 手写�
       assert.equal(box.style.display, "none", `${tab} 的 ${mode} 容器默认隐藏`);
     }
     // 未登记框架版的 Tab 不该有空容器（否则"容器存在"会被当成"已实现"）
-    for (const tab of ["chat"]) {
+    for (const tab of []) {  // 8 个 Tab 中 7 个已有 React 版；Vue 侧未实现的是 interview/study/...
       assert.ok(!window.document.getElementById(`${tab}-react`), `${tab} 无 React 容器（未实现不建空壳）`);
     }
   } finally { await settle(); window.clearAllTimers(); dom.window.close(); }
@@ -81,11 +81,11 @@ test("任务1②：未实现的框架版 → 提示开发中（整 Tab 未实现
     const notes = [];
     kanban.notify = (t, m) => notes.push(m);
     const click = (sel) => window.document.querySelector(sel).click();
-    // ① 整 Tab 的框架版都没做（chat 未登记 react——S4 才补）
-    click('#tab-chat .renderer-switch-btn[data-mode="react"]');
+    // ① 整 Tab 的框架版都没做（study 无 Vue 版——任务 3 才补）
+    click('#tab-study .renderer-switch-btn[data-mode="vue"]');
     await settle();
     assert.ok(notes.some((m) => m.includes("开发中")), "未实现 Tab 提示开发中");
-    assert.equal(window.document.getElementById("chat-native").style.display, "", "原生容器不受影响");
+    assert.equal(window.document.getElementById("study-native").style.display, "", "原生容器不受影响");
     // ② 只有单个框架版缺（面试缺 Vue / 复习缺 React——任务 2/3 补全前）
     notes.length = 0;
     click('#tab-interview .renderer-switch-btn[data-mode="vue"]');

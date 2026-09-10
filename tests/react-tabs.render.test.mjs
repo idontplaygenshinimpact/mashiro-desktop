@@ -40,7 +40,7 @@ const KB_STATS = { total: 12, byKind: [{ kind: "note", n: 7 }, { kind: "mianjing
 
 function boot() {
   const dom = new JSDOM(
-    '<div id="dashboard-react"></div><div id="kb-react"></div><div id="study-react"></div><div id="crawl-react"></div><div id="jobs-react"></div><div id="probe"></div>',
+    '<div id="dashboard-react"></div><div id="kb-react"></div><div id="study-react"></div><div id="crawl-react"></div><div id="jobs-react"></div><div id="chat-react"></div><div id="probe"></div>',
     { url: "http://localhost/" }
   );
   globalThis.window = dom.window;
@@ -142,7 +142,7 @@ test("React 版 S1：驾驶舱/知识库按 tab 挂载，功能等价（同一 H
   await assertUiClean(kbEl, "kb", 8);
   kbRoot.unmount();
   // 未登记 Tab：抛错而非静默白屏（panel-core 捕获后提示"挂载失败"）
-  assert.throws(() => globalThis.__mountReactPanel("chat", document.getElementById("probe")), /未实现/, "未登记 Tab 抛错");
+  assert.throws(() => globalThis.__mountReactPanel("review", document.getElementById("probe")), /未实现/, "未登记 Tab 抛错（review 只有 Vue 版）");
   dom.window.close();
 });
 
@@ -295,6 +295,46 @@ test("React 版 S3：校招（列表 + 筛选 + 收藏 + 投递状态 + UI 不�
   [...el.querySelectorAll("button")].find((b) => text(b).includes("学考点")).click();
   assert.ok(calls.some((c) => c[0] === "switchRenderer" && c[1] === "jobs" && c[2] === "native"), "学考点切回原生渲染层（不重复实现 agent 流程）");
   await assertUiClean(el, "jobs", 20);
+  root.unmount();
+  dom.window.close();
+});
+test("React 版 S4：对话（会话载入 + 流式发送 + 工具事件时间线 + UI 不变量）", { skip: !existsSync(BUNDLE) && "产物未构建（先 npm run build:react-panel）" }, async () => {
+  const { dom } = boot();
+  await import(new URL("../desktop/renderer/panel-react/dist/assets/react-panel.js", import.meta.url).href);
+  const calls = [];
+  globalThis.window.kanban = {
+    chatSessions: async () => ({ sessions: [{ id: "s-1", title: "面经讨论" }, { id: "s-2", title: "算法练习" }] }),
+    chatMessages: async (sid) => ({ messages: [{ role: "user", content: "事件循环是什么" }, { role: "assistant", content: "先同步后微任务" }] }),
+    chatStream: async (msg, history, onEvent, sid) => {
+      calls.push(["chatStream", msg, sid]);
+      onEvent({ type: "tool", tool: "web-search", text: "检索事件循环" });
+      onEvent({ type: "chunk", text: "宏任务与" });
+      onEvent({ type: "chunk", text: "微任务的顺序是…" });
+      return { ok: true };
+    },
+    chatSessionDelete: async (sid) => { calls.push(["del", sid]); return { ok: true }; },
+    notify: () => {},
+  };
+  globalThis.window.switchRenderer = (...a) => calls.push(["switchRenderer", ...a]);
+  const el = document.getElementById("chat-react");
+  const root = globalThis.__mountReactPanel("chat", el);
+  assert.ok(await waitFor(() => text(el).includes("对话")), "对话渲染（按 tab 分发）");
+  assert.ok(await waitFor(() => text(el).includes("事件循环是什么")), "会话消息载入（chatMessages）");
+  assert.ok(text(el).includes("先同步后微任务"), "助手历史消息渲染");
+  // 发送：流式 chunk 累积 + 工具事件进时间线
+  const input = el.querySelector('input[aria-label="消息输入"]');
+  const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set;
+  setter.call(input, "再讲讲宏任务");
+  input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  [...el.querySelectorAll("button")].find((b) => text(b).includes("发送")).click();
+  assert.ok(await waitFor(() => calls.some((c) => c[0] === "chatStream")), "发送走同一 IPC（chatStream）");
+  assert.ok(await waitFor(() => text(el).includes("宏任务与微任务的顺序是…")), "流式 delta 累积成正文（useReducer chunk）");
+  assert.ok(text(el).includes("工具事件时间线") && text(el).includes("tool"), "工具事件以只读时间线呈现");
+  assert.ok(text(el).includes("工具事件：tool×1"), "事件归并计数（useMemo 派生）");
+  // 审批类流程复用原生
+  [...el.querySelectorAll("button")].find((b) => text(b).includes("审批")).click();
+  assert.ok(calls.some((c) => c[0] === "switchRenderer" && c[1] === "chat" && c[2] === "native"), "审批切回原生渲染层");
+  await assertUiClean(el, "chat", 20);
   root.unmount();
   dom.window.close();
 });
