@@ -69,7 +69,7 @@ test("任务1①：8 个 Tab 都有三态切换按钮（interview/review 手写�
       assert.equal(box.style.display, "none", `${tab} 的 ${mode} 容器默认隐藏`);
     }
     // 未登记框架版的 Tab 不该有空容器（否则"容器存在"会被当成"已实现"）
-    for (const tab of []) {  // 8 个 Tab 中 7 个已有 React 版；Vue 侧未实现的是 interview/study/...
+    for (const tab of ["review"]) {  // Vue 侧已 8/8；React 侧只差 review
       assert.ok(!window.document.getElementById(`${tab}-react`), `${tab} 无 React 容器（未实现不建空壳）`);
     }
   } finally { await settle(); window.clearAllTimers(); dom.window.close(); }
@@ -81,14 +81,14 @@ test("任务1②：未实现的框架版 → 提示开发中（整 Tab 未实现
     const notes = [];
     kanban.notify = (t, m) => notes.push(m);
     const click = (sel) => window.document.querySelector(sel).click();
-    // ① 整 Tab 的框架版都没做（interview 无 Vue 版——任务 3 最后一块）
-    click('#tab-interview .renderer-switch-btn[data-mode="vue"]');
+    // ① 整 Tab 的框架版都没做（review 无 React 版——Vue 侧已 8/8，这是唯一剩下的未实现组合）
+    click('#tab-review .renderer-switch-btn[data-mode="react"]');
     await settle();
     assert.ok(notes.some((m) => m.includes("开发中")), "未实现 Tab 提示开发中");
-    assert.equal(window.document.getElementById("interview-native").style.display, "", "原生容器不受影响");
+    assert.equal(window.document.getElementById("review-native").style.display, "", "原生容器不受影响");
     // ② 只有单个框架版缺（面试缺 Vue / 复习缺 React——任务 2/3 补全前）
     notes.length = 0;
-    click('#tab-interview .renderer-switch-btn[data-mode="vue"]');
+    click('#tab-review .renderer-switch-btn[data-mode="react"]');
     click('#tab-review .renderer-switch-btn[data-mode="react"]');
     await settle();
     assert.equal(notes.filter((m) => m.includes("开发中")).length, 2, "缺失的框架版各自提示开发中");
