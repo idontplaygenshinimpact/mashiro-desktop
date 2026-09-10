@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 const { emitEvent, onEventDecision, enqueueExpression, drainExpressions, expressionQueueLength, clearExpressions, installInternalBridge } = await import("../lib/events.mjs");
-const { onHook, clearHooks } = await import("../lib/hooks.mjs");
+const { onHook, clearHooks } = await import("../lib/hooks.ts");
 
 test.beforeEach(() => { clearHooks(); clearExpressions(); installInternalBridge(); });
 
@@ -68,7 +68,7 @@ test("表达队列上限 100：超限丢最旧", () => {
 });
 
 test("chat_done 内部归一：emitHook 触发总线事件（决策层可消费，默认不表达）", async () => {
-  const { emitHook } = await import("../lib/hooks.mjs");
+  const { emitHook } = await import("../lib/hooks.ts");
   const got = [];
   const off = onEventDecision((ev) => { if (ev.type === "chat_done") got.push(ev.payload.replyLen); });
   await emitHook("chat_done", { userMsg: "你好", reply: "回复内容" });

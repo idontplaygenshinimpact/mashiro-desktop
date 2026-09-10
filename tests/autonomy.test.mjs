@@ -118,7 +118,7 @@ test("full 级：精炼日上限（REFINE_DAILY=10）内精炼，超限用模板
 test("端到端：emitEvent → autonomy.handle → enqueueExpression → drain", async () => {
   await clearAllTables();
   const { emitEvent, drainExpressions, clearExpressions, installInternalBridge } = await import("../lib/events.mjs");
-  const { clearHooks } = await import("../lib/hooks.mjs");
+  const { clearHooks } = await import("../lib/hooks.ts");
   clearHooks(); clearExpressions(); installInternalBridge();
   const a = createAutonomy({ now: () => Date.now() });
   const off = (await import("../lib/events.mjs")).onEventDecision((e) => a.handle(e));

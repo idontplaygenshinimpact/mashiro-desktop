@@ -13,7 +13,7 @@ const listeners = new Map(); // event -> Set<fn>
  * @param {string} event
  * @param {(payload: any) => any | Promise<any>} fn
  */
-export function onHook(event, fn) {
+export function onHook(event: string, fn: (payload: Record<string, unknown>) => unknown): () => void {
   if (!listeners.has(event)) listeners.set(event, new Set());
   listeners.get(event).add(fn);
   return () => { listeners.get(event)?.delete(fn); };
@@ -26,7 +26,7 @@ export function onHook(event, fn) {
  * @param {object} [payload]
  * @returns {Promise<Array<any>>} 各监听器返回值（无监听器返回 []）
  */
-export async function emitHook(event, payload = {}) {
+export async function emitHook(event: string, payload: Record<string, unknown> = {}): Promise<unknown[]> {
   const set = listeners.get(event);
   if (!set || !set.size) return [];
   const results = [];
@@ -34,7 +34,7 @@ export async function emitHook(event, payload = {}) {
     try {
       results.push(await fn({ ...payload, event }));
     } catch (e) {
-      console.log(`[hooks] ${event} 监听器异常: ${String(e?.message || e).slice(0, 120)}`);
+      console.log(`[hooks] ${event} 监听器异常: ${(e instanceof Error ? e.message : String(e)).slice(0, 120)}`);
     }
   }
   return results;

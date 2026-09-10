@@ -1,7 +1,7 @@
 // hooks 事件系统单测：注册/触发/拦截语义/异常隔离
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { onHook, emitHook, listHooks, clearHooks } from "../lib/hooks.mjs";
+import { onHook, emitHook, listHooks, clearHooks } from "../lib/hooks.ts";
 
 test("onHook + emitHook 基本：监听器收到 payload 并合并 event 字段", async () => {
   clearHooks();

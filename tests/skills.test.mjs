@@ -45,7 +45,7 @@ test("loadSkills：SKILL.md 与 skill.mjs 合并（描述/system/工具），坏
 
 test("skill hooks 自动注册到 hooks 系统（监听器生效）", async () => {
   // good-skill 的 after_tool hook 记录 globalThis.__goodSkillLastTool
-  const { emitHook } = await import("../lib/hooks.mjs");
+  const { emitHook } = await import("../lib/hooks.ts");
   await emitHook("after_tool", { toolName: "fetch_page", ok: true });
   assert.equal(globalThis.__goodSkillLastTool, "fetch_page", "skill 的 hooks 已接线");
 });
@@ -95,7 +95,7 @@ test("inspectSkills：运行时概览（技能/工具/权限/hooks）", async ()
 test("reloadSkills：清缓存重扫 + hooks 不重复注册", async () => {
   await loadSkills(FIXTURES);
   // 重载前 after_tool 监听器数（good-skill 注册了 1 个）
-  const { listHooks } = await import("../lib/hooks.mjs");
+  const { listHooks } = await import("../lib/hooks.ts");
   const before = listHooks().find((h) => h.event === "after_tool")?.count || 0;
   const r = await reloadSkills(FIXTURES);
   assert.equal(r.ok, true);
