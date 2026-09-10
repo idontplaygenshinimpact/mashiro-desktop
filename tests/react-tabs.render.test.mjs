@@ -69,6 +69,17 @@ const waitFor = async (fn, ms = 3000) => {
   return false;
 };
 const text = (el) => el?.textContent || "";
+/** UI 批次 2 固化断言：① 容器内无深色内联样式（收敛成果）② 有实际内容（防"空渲染假归零"）
+ * ③ 可点击元素都有可访问名（aria-label/title/placeholder/文本四者之一） */
+async function assertUiClean(el, name, minNodes) {
+  await waitFor(() => el.querySelectorAll("*").length >= minNodes);
+  const nodes = [...el.querySelectorAll("*")];
+  const dark = nodes.filter((e) => /rgb\(36, 31, 58\)|rgb\(31, 26, 49\)|rgb\(42, 37, 64\)|rgb\(58, 54, 88\)/.test(e.getAttribute("style") || ""));
+  assert.equal(dark.length, 0, `${name}: 无深色内联样式（UI 批次 2）——越界元素：${dark.slice(0, 3).map((e) => e.tagName).join(",")}`);
+  assert.ok(nodes.length >= minNodes, `${name}: 渲染了实际内容（${nodes.length} 节点，防空渲染假归零）`);
+  const unlabeled = [...el.querySelectorAll("button, input, select, textarea, a")].filter((e) => !e.getAttribute("aria-label") && !e.getAttribute("title") && !e.getAttribute("placeholder") && !(e.textContent || "").trim());
+  assert.equal(unlabeled.length, 0, `${name}: 可点击元素都有可访问名`);
+}
 
 test("React 版 S1：驾驶舱/知识库按 tab 挂载，功能等价（同一 HTTP 数据源）+ 特色标注", { skip: !existsSync(BUNDLE) && "产物未构建（先 npm run build:react-panel）" }, async () => {
   const { dom, calls } = boot();
@@ -98,6 +109,7 @@ test("React 版 S1：驾驶舱/知识库按 tab 挂载，功能等价（同一 H
   assert.ok(text(dashEl).includes("求职驾驶舱"), "刷新后仍是同一挂载（未被卸载重挂）");
 
   // 对称卸载：切回原生时容器清空
+  await assertUiClean(dashEl, "dashboard", 20);
   dashRoot.unmount();
   await waitFor(() => text(dashEl) === "");
   assert.equal(text(dashEl), "", "unmount 后容器清空（对称卸载）");
@@ -122,6 +134,7 @@ test("React 版 S1：驾驶舱/知识库按 tab 挂载，功能等价（同一 H
   assert.ok(kbEl.querySelector("mark"), "命中关键词高亮（派生渲染，不拼 HTML）");
   assert.ok(text(kbEl).includes("React 特性"), "⚛️ React 特色标注");
 
+  await assertUiClean(kbEl, "kb", 8);
   kbRoot.unmount();
   // 未登记 Tab：抛错而非静默白屏（panel-core 捕获后提示"挂载失败"）
   assert.throws(() => globalThis.__mountReactPanel("chat", document.getElementById("probe")), /未实现/, "未登记 Tab 抛错");
@@ -189,6 +202,7 @@ test("React 版 S2：清单（状态流分组 + 勾选回流 + 搜索过滤 + �
   assert.ok(calls.some((c) => c[0] === "showStudyDetail"), "打开原生讲解弹窗（同一实现）");
   assert.ok(text(el).includes("React 特性"), "⚛️ React 特色标注");
 
+  await assertUiClean(el, "study", 20);
   root.unmount();
   dom.window.close();
 });
