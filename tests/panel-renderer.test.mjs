@@ -56,6 +56,18 @@ test("任务1①：8 个 Tab 都有三态切换按钮（interview/review 手写�
       assert.equal(active.length, 1, `Tab ${tab} 恰有一个高亮`);
       assert.equal(active[0].dataset.mode, "native", `Tab ${tab} 初始高亮为原生`);
     }
+    // 任务 2：已登记框架版的 Tab 必须有挂载容器（在 native 之外——否则切原生会把框架版一起藏了）
+    for (const [tab, mode] of [["interview", "react"], ["dashboard", "react"], ["kb", "react"], ["review", "vue"]]) {
+      const native = window.document.getElementById(`${tab}-native`);
+      const box = window.document.getElementById(`${tab}-${mode}`);
+      assert.ok(box, `${tab} 有 ${mode} 容器`);
+      assert.ok(!native.contains(box), `${tab} 的 ${mode} 容器在 native 之外（不随原生隐藏）`);
+      assert.equal(box.style.display, "none", `${tab} 的 ${mode} 容器默认隐藏`);
+    }
+    // 未登记框架版的 Tab 不该有空容器（否则"容器存在"会被当成"已实现"）
+    for (const tab of ["study", "chat", "crawl", "jobs"]) {
+      assert.ok(!window.document.getElementById(`${tab}-react`), `${tab} 无 React 容器（未实现不建空壳）`);
+    }
   } finally { await settle(); window.clearAllTimers(); dom.window.close(); }
 });
 

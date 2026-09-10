@@ -57,8 +57,20 @@ document.querySelectorAll(".tab").forEach((btn) => {
 
 // ---------- 渲染层同窗切换（方案 D：互斥容器，不叠加；挂载/卸载对称防事件泄漏） ----------
 const rendererState = { interview: "native", review: "native", study: "native", chat: "native", crawl: "native", jobs: "native", dashboard: "native", kb: "native" };
-const reactRoot = { current: null }; // React root 引用（对称卸载）
-const vueApp = { current: null };    // Vue app 引用（对称卸载）
+// 挂载引用按 Tab 分槽（前端三态并行展示工单任务 2）：多 Tab 各自挂框架版时互不覆盖——
+// 单一引用会让"先挂 interview 再挂 dashboard"丢掉前者的 root（切回原生只卸载最后一个 → 泄漏）
+const reactRoots = new Map(); // tab → React root
+const vueApps = new Map();    // tab → Vue app
+
+// 前端三态并行展示工单任务 2：哪些 Tab 已有框架版（S1→S4 逐 Tab 登记——未登记的模式提示"开发中"）
+// 登记即由 initRendererSwitches 建容器；不登记则切过去只提示，不会留下空容器骗过后续判断
+const FRAMEWORK_TABS = {
+  react: ["interview", "dashboard", "kb"], // S1：驾驶舱/知识库
+  vue: ["review"],
+};
+function hasFrameworkTab(tab, mode) {
+  return (FRAMEWORK_TABS[mode] || []).includes(tab);
+}
 
 // 按需加载框架 bundle（M9：首屏不加载——切到对应面板才 import；动态 import 是 module 脚本，同源 CSP OK）
 async function ensureBundle(kind) {
@@ -77,47 +89,47 @@ async function ensureBundle(kind) {
 
 async function switchRenderer(tab, mode) {
   const native = document.getElementById(`${tab}-native`);
-  const react = document.getElementById(`${tab}-react`);
-  const vue = document.getElementById(`${tab}-vue`);
   if (!native) return;
-  // 框架容器不存在（该 Tab 的框架版未实现）→ 提示开发中（S1→S4 推进）
-  if (mode === "react" && !react) {
-    window.kanban?.notify?.("🎨 渲染层", `「${TAB_LABELS[tab] || tab}」的 React 版开发中（按 S1→S4 推进）`);
+  // 该 Tab 的框架版未登记（S1→S4 推进中）→ 提示开发中，不留下空容器骗过后续判断
+  if (mode !== "native" && !hasFrameworkTab(tab, mode)) {
+    window.kanban?.notify?.("🎨 渲染层", `「${TAB_LABELS[tab] || tab}」的 ${mode === "react" ? "React" : "Vue"} 版开发中（按 S1→S4 推进）`);
     return;
   }
-  if (mode === "vue" && !vue) {
-    window.kanban?.notify?.("🎨 渲染层", `「${TAB_LABELS[tab] || tab}」的 Vue 版开发中（按 S1→S4 推进）`);
-    return;
-  }
+  const box = document.getElementById(`${tab}-${mode}`);
+  if (!box) { window.kanban?.notify?.("🎨 渲染层", `${TAB_LABELS[tab] || tab} 的容器缺失，请刷新面板重试`); return; }
   if (mode === "react") {
     const ready = await ensureBundle("react");
     if (!ready) { window.kanban?.notify?.("🎨 渲染层", "React 版加载失败，请刷新面板重试"); return; }
     native.style.display = "none";
-    react.style.display = "";
-    if (!reactRoot.current) {
-      try { reactRoot.current = window.__mountReactPanel(tab, react); }
+    box.style.display = "";
+    if (!reactRoots.has(tab)) {
+      try { reactRoots.set(tab, window.__mountReactPanel(tab, box)); }
       catch (e) { window.kanban?.notify?.("🎨 渲染层", "React 版挂载失败: " + (e?.message || e)); }
     }
   } else if (mode === "vue") {
     const ready = await ensureBundle("vue");
     if (!ready) { window.kanban?.notify?.("🎨 渲染层", "Vue 版加载失败，请刷新面板重试"); return; }
     native.style.display = "none";
-    vue.style.display = "";
-    if (!vueApp.current) {
-      try { vueApp.current = window.__mountVueReview(tab, vue); }
+    box.style.display = "";
+    if (!vueApps.has(tab)) {
+      try { vueApps.set(tab, window.__mountVueReview(tab, box)); }
       catch (e) { window.kanban?.notify?.("🎨 渲染层", "Vue 版挂载失败: " + (e?.message || e)); }
     }
   } else {
+    const react = document.getElementById(`${tab}-react`);
+    const vue = document.getElementById(`${tab}-vue`);
     if (react) react.style.display = "none";
     if (vue) vue.style.display = "none";
     native.style.display = "";
-    if (reactRoot.current) {
-      try { reactRoot.current.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
-      reactRoot.current = null; // 无论卸载成败都清引用（防"切不回来"：引用残留 → 再切 React 不重新挂载）
+    const rr = reactRoots.get(tab);
+    if (rr) {
+      try { rr.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
+      reactRoots.delete(tab); // 无论卸载成败都清引用（防"切不回来"：引用残留 → 再切 React 不重新挂载）
     }
-    if (vueApp.current) {
-      try { vueApp.current.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
-      vueApp.current = null; // 无论卸载成败都清引用（防"切不回来"）
+    const va = vueApps.get(tab);
+    if (va) {
+      try { va.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
+      vueApps.delete(tab); // 无论卸载成败都清引用（防"切不回来"）
     }
   }
   // 任务1 实现项 4：切换时状态处理——原生面板流式进行中切走：DOM 只隐藏不销毁（内容/滚动位置保留），
@@ -156,7 +168,7 @@ function saveRendererPref(tab, mode) {
 function restoreRendererPrefs() {
   for (const [tab, mode] of Object.entries(readRendererPrefs())) {
     if (mode === "native") continue;
-    if (document.getElementById(`${tab}-${mode}`)) switchRenderer(tab, mode);
+    if (hasFrameworkTab(tab, mode)) switchRenderer(tab, mode);
   }
 }
 
@@ -194,6 +206,17 @@ function initRendererSwitches() {
     // 初始高亮：无偏好时为原生（restoreRendererPrefs 恢复成功后会改写）
     const cur = rendererState[tab] || "native";
     bar.querySelectorAll(".renderer-switch-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === cur));
+    // 框架版容器（任务 2）：按登记创建——必须在 native 包裹之外（否则切原生隐藏 native 时把框架版一起藏了）
+    // interview/react 与 review/vue 的容器是 panel.html 手写的，这里只补缺失
+    for (const mode of ["react", "vue"]) {
+      if (!hasFrameworkTab(tab, mode)) continue;
+      if (document.getElementById(`${tab}-${mode}`)) continue;
+      const box = document.createElement("div");
+      box.id = `${tab}-${mode}`;
+      box.className = "renderer-framework";
+      box.style.display = "none";
+      panel.appendChild(box);
+    }
   }
 }
 
