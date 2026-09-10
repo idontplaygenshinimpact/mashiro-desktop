@@ -6,27 +6,27 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 
 const S = {
-  wrap: { display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: "#e8e6f5" },
-  card: { background: "#241f3a", border: "1px solid #4a4568", borderRadius: 10, padding: 12 },
+  // 批次 2：深色内联已收敛为 panel.css 的 .rf-* 语义类（见 panel.css 样式词汇段）
+  card: {},
   head: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 },
   title: { fontSize: 13, fontWeight: 700 },
-  muted: { fontSize: 11, color: "#a8a3c8" },
+  muted: {},
   chipRow: { display: "flex", flexWrap: "wrap", gap: 6 },
-  chip: { background: "#1f1a31", border: "1px solid #4a4568", borderRadius: 8, padding: "6px 10px", fontSize: 12 },
+  chip: {},
   num: { color: "#8fc7ff", fontSize: 14, fontWeight: 700 },
-  btn: { background: "#2a2540", color: "#e8e6f5", border: "1px solid #4a4568", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 12 },
+  btn: {},
   row: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginTop: 6 },
-  rowLabel: { width: 110, fontSize: 11, color: "#a8a3c8" },
-  track: { flex: 1, height: 6, background: "#1f1a31", borderRadius: 3, overflow: "hidden" },
-  rep: { whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.7, color: "#e8e6f5", margin: 0 },
+  rowLabel: { width: 110 },
+  track: { flex: 1 },
+  rep: {},
   err: { fontSize: 12, color: "#e8c04a" },
 };
 
 /** 本周总览 chip（组件化：原生是模板串） */
 function StatChip({ label, value }) {
   return (
-    <div style={S.chip}>
-      {label} <b style={S.num}>{value}</b>
+    <div className="rf-stat">
+      {label} <b className="rf-num">{value}</b>
     </div>
   );
 }
@@ -35,9 +35,9 @@ function StatChip({ label, value }) {
 function ProgressRow({ label, done = 0, total = 0, color = "#8fc7ff" }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
   return (
-    <div style={S.row}>
-      <span style={S.rowLabel}>{label}</span>
-      <span style={S.track}>
+    <div className="rf-row">
+      <span className="rf-muted">{label}</span>
+      <span className="rf-track rf-grow">
         <i style={{ display: "block", height: "100%", width: `${pct}%`, background: color, borderRadius: 3 }} />
       </span>
       <b style={{ fontSize: 11 }}>
@@ -87,16 +87,16 @@ export function DashboardPanel() {
   if (report.gaps?.length) reportLines.push(`⚠️ 待补：${report.gaps.join("；")}`);
 
   return (
-    <div style={S.wrap}>
-      <div style={S.card}>
-        <div style={S.head}>
-          <span style={S.title}>📊 求职驾驶舱 · React 版</span>
+    <div className="rf-stack">
+      <div className="rf-card">
+        <div className="rf-head">
+          <span className="rf-title">📊 求职驾驶舱 · React 版</span>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {at && <span style={S.muted}>{at} 更新</span>}
-            <button style={S.btn} onClick={load} disabled={busy}>{busy ? "刷新中…" : "🔄 刷新"}</button>
+            {at && <span className="rf-muted">{at} 更新</span>}
+            <button className="rf-btn" onClick={load} disabled={busy}>{busy ? "刷新中…" : "🔄 刷新"}</button>
           </span>
         </div>
-        <div style={S.chipRow}>
+        <div className="rf-toolbar">
           <StatChip label="📚 学习完成" value={week.studyDone ?? 0} />
           <StatChip label="🔁 复习" value={`${week.reviewDone ?? 0} 张`} />
           <StatChip label="✍️ 刷题" value={`${week.challengeDone ?? 0} 道`} />
@@ -107,9 +107,9 @@ export function DashboardPanel() {
         {err && <div style={{ ...S.err, marginTop: 8 }}>⚠️ {err}</div>}
       </div>
 
-      <div style={S.card}>
-        <div style={S.title}>📈 近 7 天活动</div>
-        <div style={S.muted}>绿=学习 · 紫=复习 · 蓝=刷题 · 底部条=专注时长</div>
+      <div className="rf-card">
+        <div className="rf-title">📈 近 7 天活动</div>
+        <div className="rf-muted">绿=学习 · 紫=复习 · 蓝=刷题 · 底部条=专注时长</div>
         {series.length === 0 ? (
           <div style={{ ...S.muted, marginTop: 8 }}>📭 暂无活动数据</div>
         ) : (
@@ -136,7 +136,7 @@ export function DashboardPanel() {
                     title={`专注 ${d.focus || 0} 分钟`}
                     style={{ height: 4, marginTop: 2, borderRadius: 2, background: d.focus ? "#8a5adc" : "rgba(138,90,220,.2)" }}
                   />
-                  <div style={{ fontSize: 9, color: isToday ? "#8fc7ff" : "#a8a3c8", fontWeight: isToday ? 700 : 400 }}>
+                  <div className={isToday ? "rf-day rf-day-today" : "rf-day"}>
                     {DAY_NAMES[new Date(d.date + "T00:00:00").getDay()] || d.date.slice(5)}
                   </div>
                 </div>
@@ -146,17 +146,17 @@ export function DashboardPanel() {
         )}
       </div>
 
-      <div style={S.card}>
-        <div style={S.title}>📝 本周复盘与下周建议</div>
-        <pre style={S.rep}>
+      <div className="rf-card">
+        <div className="rf-title">📝 本周复盘与下周建议</div>
+        <pre className="rf-report">
           {reportLines.join("\n")}
           {reportLines.length ? "\n\n" : ""}
           {(report.suggestions || []).join("\n") || (reportLines.length ? "" : "📭 暂无建议")}
         </pre>
       </div>
 
-      <div style={S.card}>
-        <div style={S.title}>📌 累计进度（闭环总览）</div>
+      <div className="rf-card">
+        <div className="rf-title">📌 累计进度（闭环总览）</div>
         <ProgressRow label="📚 学习清单" done={progress.plan?.done} total={progress.plan?.total} />
         <ProgressRow label="✍️ 手写/算法题库" done={progress.challenges?.done} total={progress.challenges?.total} color="#4a6fe0" />
         <ProgressRow label="🔁 复习卡掌握" done={progress.review?.mastered} total={progress.review?.total} color="#3a8a5a" />
@@ -169,7 +169,7 @@ export function DashboardPanel() {
         </div>
       </div>
 
-      <div style={S.muted}>⚛️ React 特性：useMemo 缓存 7 天峰值 + 组件化 StatChip/ProgressRow（状态驱动差量更新）</div>
+      <div className="rf-muted">⚛️ React 特性：useMemo 缓存 7 天峰值 + 组件化 StatChip/ProgressRow（状态驱动差量更新）</div>
     </div>
   );
 }

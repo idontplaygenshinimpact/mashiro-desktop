@@ -1336,3 +1336,9 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 .rf-stack { display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: #2d2a45; }.rf-chip-plain { color: #5a5678; }
 .rf-row-start { align-items: flex-start; }
 .rf-grow { flex: 1; }
+.rf-stat { background: rgba(109,79,216,.05); border: 1px solid rgba(109,79,216,.16); border-radius: 8px; padding: 6px 10px; font-size: 12px; }
+.rf-num { color: #6d4fd8; font-size: 14px; font-weight: 700; }
+.rf-report { white-space: pre-wrap; font-size: 12px; line-height: 1.7; color: #2d2a45; margin: 0; }
+.rf-day { font-size: 11px; color: #5a5678; }
+.rf-day-today { color: #6d4fd8; font-weight: 700; }
+.rf-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
