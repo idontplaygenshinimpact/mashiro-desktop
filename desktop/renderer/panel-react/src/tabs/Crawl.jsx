@@ -130,7 +130,7 @@ export function CrawlPanel() {
             <div key={`${f.dir || ""}-${f.title || i}`} style={item}>
               <span style={chip}>{f.company || "?"}</span>
               <span style={{ flex: 1 }}>{f.title || ""}</span>
-              <span style={{ ...muted, fontSize: 10 }}>{f.dir || ""}</span>
+              <span className="rf-muted rf-dir" title={f.dir || ""}>{f.dir || ""}</span>
             </div>
           ))
         )}

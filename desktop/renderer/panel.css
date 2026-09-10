@@ -1342,3 +1342,4 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 .rf-day { font-size: 11px; color: #5a5678; }
 .rf-day-today { color: #6d4fd8; font-weight: 700; }
 .rf-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.rf-dir { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
