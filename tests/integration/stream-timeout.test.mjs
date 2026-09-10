@@ -111,7 +111,8 @@ test("故障注入①：study-detail-stream LLM 挂起 → 超时 error（不挂
 });
 
 test("故障注入②：study-append-stream LLM 挂起 → 超时 error", async () => {
-  const events = await readSse("/api/study-append-stream?id=hang1&question=讲讲事件循环的细节", 15000);
+  // 纯英文独特问题（防命中 followup 语义缓存——相似度匹配会命中"事件循环"相关历史追问）
+  const events = await readSse("/api/study-append-stream?id=hang1&question=HANGTEST-9f3a-xyz", 15000);
   const err = events.find((e) => e.type === "error");
   assert.ok(err, "收到 error 事件");
   assert.match(String(err.error || ""), /超时/, "超时错误信息");

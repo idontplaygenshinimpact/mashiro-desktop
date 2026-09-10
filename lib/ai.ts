@@ -14,15 +14,24 @@ import type { AgentMessage, LLMOptions } from "./types.d.ts";
  * 流式链路超时统一修复工单任务 1：公共超时 helper（复用追问修复模式——Promise.race + clearTimeout）
  * LLM 挂起时流式无响应 → 前端 120s 才超时（太久）→ 状态卡住；60s 主动断 + error 事件——前端快速恢复
  * 超时可配置（MIANSHI_LLM_TIMEOUT_MS env——测试用短超时跑超时路径，生产默认 60s）
+ * 2026-09 再修：**空闲超时语义**——activity.touch() 在流式 delta 回调里调用时重置计时器——
+ * 流式输出中（LLM 慢但正常生成）不超时；只有长时间无输出（LLM 挂起）才中断。
+ * （此前固定 60s：长讲解生成 >60s 被误中断——重新生成失败但旧档保留，用户困惑）
  * @param {Promise<unknown>} promise 流式生成 Promise
- * @param {number} [ms] 超时毫秒（默认 env 或 60s）
+ * @param {number} [ms] 空闲超时毫秒（默认 env 或 60s）
  * @param {string} [msg] 超时错误信息
- * @returns {Promise<unknown>} 竞速结果（超时抛错）
+ * @param {{ touch?: () => void }} [activity] 活动对象——调用方在流式回调里调 touch() 重置计时器
+ * @returns {Promise<unknown>} 竞速结果（空闲超时抛错）
  */
-export function withLLMTimeout(promise: Promise<unknown>, ms = Number(process.env.MIANSHI_LLM_TIMEOUT_MS) || 60000, msg = "生成超时（60s）——请重试"): Promise<unknown> {
+export function withLLMTimeout(promise: Promise<unknown>, ms = Number(process.env.MIANSHI_LLM_TIMEOUT_MS) || 60000, msg = "生成超时（60s）——请重试", activity: { touch?: () => void } | null = null): Promise<unknown> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise((_, rej) => {
-    timer = setTimeout(() => rej(new Error(msg)), ms);
+    const start = () => { timer = setTimeout(() => rej(new Error(msg)), ms); };
+    start();
+    if (activity) {
+      const origTouch = activity.touch;
+      activity.touch = () => { clearTimeout(timer); start(); origTouch?.(); };
+    }
   });
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
 }

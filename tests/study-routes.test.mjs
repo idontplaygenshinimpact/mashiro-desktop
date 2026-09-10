@@ -188,7 +188,7 @@ test("⑧ 故障注入：solveAppendStream 挂起（HANG）→ 超时 error + �
     setLlmResponses("HANG"); // mock LLM 挂起（永不 resolve）
     const res = mockRes();
     const appendHandler = router.resolve("/api/study-append-stream", null).fn;
-    await runHandler(appendHandler, mockReq(`/api/study-append-stream?id=${item.id}&question=讲讲`), res);
+    await runHandler(appendHandler, mockReq(`/api/study-append-stream?id=${item.id}&question=HANGTEST-9f3a-xyz`), res);
     assert.equal(res.writableEnded, true, "超时后连接关闭（res.end 调用）");
     const evs = events(res);
     const err = evs.find((e) => e.type === "error");
@@ -214,6 +214,46 @@ test("⑨ 故障注入：solveQuestionStream 挂起（HANG）→ 讲解超时 er
     assert.match(String(err.error || ""), /超时/, "超时错误信息");
   } finally {
     delete process.env.MIANSHI_LLM_TIMEOUT_MS;
+  }
+});
+
+// ---------- 清单完成语义自动判定工单：讲解完自动 done + 两级语义（已学 vs 已掌握） ----------
+test("⑩ 讲解生成成功 → 清单条目自动标记已学（done=true）", async () => {
+  const item = getPlan().items[0];
+  assert.equal(item.done, false, "初始未完成");
+  setLlmResponses("## 结论\n事件循环分宏微任务\n## 原理\n宏任务先执行完再清微任务队列\n## 实现JS\n```js\nconsole.log(1)\n```\n## 边界\n异常/性能/兼容性".repeat(3)); // >200 字符
+  const res = mockRes();
+  const handler = router.resolve("/api/study-detail-stream", null).fn;
+  await runHandler(handler, { url: `/api/study-detail-stream?id=${item.id}` }, res);
+  const evs = events(res);
+  const done = evs.find((e) => e.type === "done");
+  assert.ok(done && done.saved, "讲解生成成功并写档");
+  const after = getPlan().items.find((i) => i.id === item.id);
+  assert.equal(after.done, true, "讲解完自动标记已学（可手动取消）");
+});
+
+test("⑪ /api/study-plan 返回 mastered 标记（两级语义：已学 vs 已掌握）", async () => {
+  const item = getPlan().items[0];
+  // 未掌握：done 但 mastery 未达阈值 → mastered:false
+  const r1 = await (async () => {
+    const res = mockRes();
+    const handler = router.resolve("/api/study-plan", "GET").fn;
+    await runHandler(handler, { url: "/api/study-plan" }, res);
+    return JSON.parse(res.chunks.join(""));
+  })();
+  const it1 = r1.plan.items.find((i) => i.id === item.id);
+  assert.equal(typeof it1.mastered, "boolean", "mastered 字段存在");
+  // 已掌握：recordKp 达阈值 → mastered:true
+  const { matchKp, recordKp, getAllPoints } = await import("../lib/knowledge.mjs");
+  const kpId = matchKp(item.topic);
+  if (kpId && getAllPoints().some((p) => p.id === kpId)) {
+    for (let i = 0; i < 5; i++) recordKp(kpId, { correct: true, strong: true });
+    const res2 = mockRes();
+    const handler2 = router.resolve("/api/study-plan", "GET").fn;
+    await runHandler(handler2, { url: "/api/study-plan" }, res2);
+    const r2 = JSON.parse(res2.chunks.join(""));
+    const it2 = r2.plan.items.find((i) => i.id === item.id);
+    assert.equal(it2.mastered, true, "掌握度达标 → mastered:true");
   }
 });
 

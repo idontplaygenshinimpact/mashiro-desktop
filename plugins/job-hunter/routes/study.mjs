@@ -132,16 +132,31 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
   const makePush = (res) => createSSEPush(res, { eventSchema: StudyStreamEvent }).push;
 
   router.route("/api/study-plan", "GET", withContract(
-    // 学习清单（读取）——为每条附加讲解文件路径
-    () => {
+    // 学习清单（读取）——为每条附加讲解文件路径 + 掌握度标记（清单完成语义自动判定工单任务 2）
+    // 两级语义：done = "已学"（讲解过/勾选）；mastered = "已掌握"（面试/复习答对，mastery score ≥ 80）
+    async () => {
       const plan = studyApi.getPlan();
+      let masteryMap = null;
+      let matchKpFn = null;
+      try {
+        const { getMastery, matchKp } = await import("#lib/knowledge.mjs");
+        masteryMap = new Map(getMastery().map((k) => [k.id, k.score]));
+        matchKpFn = matchKp;
+      } catch { /* 掌握度不可用按未掌握 */ }
       const items = (plan.items || []).map((it) => {
         const filePath = findStudyFile(it);
-        return { ...it, filePath, hasFile: !!filePath };
+        let mastered = false;
+        try {
+          if (masteryMap && matchKpFn) {
+            const kpId = matchKpFn(it.topic);
+            if (kpId && masteryMap.has(kpId)) mastered = (masteryMap.get(kpId) || 0) >= 80;
+          }
+        } catch { /* ignore */ }
+        return { ...it, filePath, hasFile: !!filePath, mastered };
       });
       return { ok: true, plan: { ...plan, items } };
     },
-    { output: StudyPlanOutput }
+    { output: StudyPlanOutput, src: "query" }
   ));
 
   router.route("/api/study-note/reset", "POST", (req, res) => {
@@ -234,8 +249,9 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
       const sourceBlock = sourceText
         ? `\n\n【原始面经内容（来自 ${item.source}，仅作讲解对象；原文可能含来源表述的方向词，不按它改编方向——从知识本身讲）】\n${safeExternalBlock(sourceText)}`
         : "";
-      // 流式链路超时统一修复工单任务 2①：solveQuestionStream 包 withLLMTimeout（60s）——
-      // LLM 挂起时流式无响应 → 前端 120s 才超时（太久）→ 状态卡住；60s 主动断 + error 事件
+      // 流式链路超时统一修复工单任务 2①：solveQuestionStream 包 withLLMTimeout——
+      // 空闲超时（activity.touch 在 delta 回调重置——流式输出中不超时；LLM 挂起无输出才 60s 中断）
+      const activity = { touch: () => {} };
       full = await /** @type {any} */ (withLLMTimeout(
         solveQuestionStream({
           title: ep.title,
@@ -245,10 +261,12 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
           sourceUrl: "学习清单",
         }, (delta) => {
           full += delta;
+          activity.touch(); // 流式活动——重置空闲超时（长讲解生成不误中断）
           push({ type: "delta", delta });
         }),
-        undefined, // env MIANSHI_LLM_TIMEOUT_MS 可缩短（测试用）；生产默认 60s
-        "讲解生成超时（60s）——请重试"));
+        undefined, // env MIANSHI_LLM_TIMEOUT_MS 可缩短（测试用）；生产默认 60s 空闲超时
+        "讲解生成超时（60s 无输出）——请重试",
+        activity));
       // 存档（修复：生成失败/中断（full 过短）不写档——此前无条件写"header + 空"伪讲解，
       // 用户重新生成失败后文件存在但内容空，追问 append 到空文件 → 追问回答成了主体）
       let savedPath = null;
@@ -274,6 +292,14 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
           source: "学习清单讲解",
         });
       } catch { /* ignore */ }
+      // 清单完成语义自动判定工单任务 1：讲解生成成功 → 自动标记"已学"（done=true——可手动取消）
+      // 语义：done = "已学"（讲解过）——区别于"已掌握"（面试/复习答对，mastery 标记）
+      if (savedPath) {
+        try {
+          const { checkItem } = await import("#lib/study-plan.mjs");
+          await checkItem(item.id, true);
+        } catch { /* 自动标记失败不影响讲解 */ }
+      }
       push({ type: "done", saved: !!savedPath, filePath: savedPath });
       res.end();
     }).catch((e) => {
@@ -330,30 +356,33 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
     const push = makePush(res);
     push({ type: "start", topic: item.topic });
     let full = "";
-    import("#lib/ai.ts").then(async ({ solveAppendStream }) => {
+    import("#lib/ai.ts").then(async ({ solveAppendStream, withLLMTimeout }) => {
       const projCtx = await getProjectArchiveContext(item.topic, item.source); // 关联项目 → 注入真实代码档案（追问也基于真实代码；缓存）
       // 追问 LLM 超时（修复：solveAppendStream 挂起时流式无响应——前端 120s 才超时，
       // 用户感知"卡住"且 sdAsking 防重入阻塞后续追问；60s 主动断 + error 事件——前端快速恢复可重试）
+      // 2026-09 再修：空闲超时语义（activity.touch 在 delta 回调重置——流式输出中不超时）
       // 流式链路故障注入工单：env MIANSHI_LLM_TIMEOUT_MS 可缩短（测试用短超时跑超时路径）
-      const LLM_TIMEOUT_MS = Number(process.env.MIANSHI_LLM_TIMEOUT_MS) || 60000;
-      let timer;
-      const timeoutPromise = new Promise((_, rej) => {
-        timer = setTimeout(() => rej(new Error("追问生成超时（60s）——请重试")), LLM_TIMEOUT_MS);
-      });
+      const activity = { touch: () => {} };
       try {
-        full = await Promise.race([
+        full = await /** @type {any} */ (withLLMTimeout(
           solveAppendStream({
             topic: item.topic,
             existing: (existing || `（暂无已有讲解，围绕知识点直接回答）${item.verify_question || item.topic}`) + projCtx,
             question,
           }, (delta) => {
             full += delta;
+            activity.touch(); // 流式活动——重置空闲超时
             push({ type: "delta", delta });
           }),
-          timeoutPromise,
-        ]);
-      } finally {
-        clearTimeout(timer);
+          undefined,
+          "追问生成超时（60s 无输出）——请重试",
+          activity));
+      } catch (e) {
+        // 超时/失败 → error 事件 + 关闭连接（修复：此前空 catch 吞掉超时错误——流程继续
+        // 空内容 append 写档 → 用户看到 done 而非 error，且空追问块污染讲解文件）
+        push({ type: "error", error: String(e?.message || e).slice(0, 120) });
+        res.end();
+        return;
       }
       // 追加写回讲解文件（持久化：下次打开能看到补充内容）
       // 写回路径固定 study_notes（findStudyFile 可能命中产出目录文件——把追问追加进面经会污染产出）
@@ -419,14 +448,17 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
       const sourceBlock = sourceText
         ? `\n\n【原始面经内容（来自 ${item.source}，仅作整理对照）】\n${safeExternalBlock(sourceText)}`
         : "";
-      // 流式链路超时统一修复工单任务 2②：consolidateStudyStream 包 withLLMTimeout（60s；env 可缩短——测试用）
+      // 流式链路超时统一修复工单任务 2②：consolidateStudyStream 包 withLLMTimeout（空闲超时——流式输出中不超时）
+      const activity = { touch: () => {} };
       full = await /** @type {any} */ (withLLMTimeout(
         consolidateStudyStream({ topic: item.topic, content: `${content}${sourceBlock}` }, (delta) => {
           full += delta;
+          activity.touch(); // 流式活动——重置空闲超时
           push({ type: "delta", delta });
         }),
         undefined,
-        "整理生成超时（60s）——请重试"
+        "整理生成超时（60s 无输出）——请重试",
+        activity
       ));
       // 写回校验（修复：整理结果过短不写回——防"header+空"伪讲解覆盖原档；与 study-detail 同款守卫）
       if (full.trim().length < 200) {
@@ -501,17 +533,20 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
               ? { ...t, content: `${t.content}\n\n【原始面经内容（来自 ${item?.source || "?"}，仅作归并对照）】\n${safeExternalBlock(sourceText)}` }
               : t;
           }));
-          // 流式链路超时统一修复工单任务 2③：clusterStudyStream 包 withLLMTimeout（60s；env 可缩短——测试用）
+          // 流式链路超时统一修复工单任务 2③：clusterStudyStream 包 withLLMTimeout（空闲超时——流式输出中不超时）
+          const activity = { touch: () => {} };
           full = await /** @type {any} */ (withLLMTimeout(
             clusterStudyStream({
               topics: topicsWithSource,
               onChunk: (delta) => {
                 full += delta;
+                activity.touch(); // 流式活动——重置空闲超时
                 push({ type: "delta", delta });
               },
             }),
             undefined,
-            "归并生成超时（60s）——请重试"
+            "归并生成超时（60s 无输出）——请重试",
+            activity
           ));
           // 存到 study_notes/主题簇/ 目录（按 AI 给的主题簇名）
           // 素材校验（修复：归并结果过短不存档——防"header+空"伪讲解；与 study-detail 同款守卫）
