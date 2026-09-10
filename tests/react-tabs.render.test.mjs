@@ -26,8 +26,7 @@ const DASHBOARD = {
   },
 };
 
-const KB_STATS = { total: 12, byKind: [{ kind: "note", n: 7 }, { kind: "mianjing", n: 5 }], enabled: true, docs: 3, followups: 2, lastBuild: "" };
-const KB_SEARCH = {
+const KB_STATS = { total: 12, byKind: [{ kind: "note", n: 7 }, { kind: "mianjing", n: 5 }], enabled: true, docs: 3, followups: 2, lastBuild: "" };const KB_SEARCH = {
   hits: [
     { kind: "followup", docId: "事件循环", section: "宏任务与微任务", content: "宏任务与微任务的执行顺序：先同步代码，再清空微任务队列，然后取下一个宏任务。" },
     { kind: "note", docId: "React Hooks", section: "闭包陷阱", content: "useEffect 依赖数组为空时会捕获首次渲染的闭包变量。" },
@@ -37,7 +36,7 @@ const KB_SEARCH = {
 
 function boot() {
   const dom = new JSDOM(
-    '<div id="dashboard-react"></div><div id="kb-react"></div><div id="probe"></div>',
+    '<div id="dashboard-react"></div><div id="kb-react"></div><div id="study-react"></div><div id="crawl-react"></div><div id="probe"></div>',
     { url: "http://localhost/" }
   );
   globalThis.window = dom.window;
@@ -59,6 +58,7 @@ function boot() {
   };
   return { dom, calls };
 }
+
 
 const waitFor = async (fn, ms = 3000) => {
   const t0 = Date.now();
@@ -124,6 +124,124 @@ test("React 版 S1：驾驶舱/知识库按 tab 挂载，功能等价（同一 H
 
   kbRoot.unmount();
   // 未登记 Tab：抛错而非静默白屏（panel-core 捕获后提示"挂载失败"）
-  assert.throws(() => globalThis.__mountReactPanel("study", document.getElementById("probe")), /未实现/, "未登记 Tab 抛错");
+  assert.throws(() => globalThis.__mountReactPanel("chat", document.getElementById("probe")), /未实现/, "未登记 Tab 抛错");
+  dom.window.close();
+});
+
+test("React 版 S2：清单（状态流分组 + 勾选回流 + 搜索过滤 + 讲解入口复用原生）", { skip: !existsSync(BUNDLE) && "产物未构建（先 npm run build:react-panel）" }, async () => {
+  const { dom } = boot();
+  await import(new URL("../desktop/renderer/panel-react/dist/assets/react-panel.js", import.meta.url).href);
+
+  // mock IPC 桥（与 preload 同签名）：清单数据 + 勾选回流（含薄弱点消灭）+ 生成
+  const calls = [];
+  const notes = [];
+  const items = [
+    { id: "s1", topic: "事件循环与微任务", why: "面经高频", level: "必会", grp: "JavaScript 核心", done: false, hasFile: false },
+    { id: "s2", topic: "防抖与节流手写", why: "手写题", level: "进阶", grp: "算法与手写", done: false, hasFile: true },
+    { id: "s3", topic: "React Hooks 闭包陷阱", why: "项目拷打", level: "必会", grp: "React", done: true, mastered: true, fromInterview: true },
+    { id: "s4", topic: "浏览器缓存策略", why: "复习到期", level: "拓展", grp: "浏览器原理", done: true, reviewDue: true },
+  ];
+  globalThis.window.kanban = {
+    studyPlan: async () => { calls.push(["studyPlan"]); return { ok: true, plan: { date: "2026-09-01", items } }; },
+    studyCheck: async (id, done) => { calls.push(["studyCheck", id, done]); return { ok: true, item: { id, done }, clearedWeak: done ? "事件循环与微任务" : null }; },
+    studyGenerate: async () => { calls.push(["studyGenerate"]); return { ok: true, addedCount: 2 }; },
+    notify: (t, m) => notes.push(m),
+  };
+  globalThis.window.switchRenderer = (...a) => calls.push(["switchRenderer", ...a]);
+  globalThis.window.showStudyDetail = (id) => calls.push(["showStudyDetail", id]);
+
+  const el = document.getElementById("study-react");
+  const root = globalThis.__mountReactPanel("study", el);
+  assert.ok(await waitFor(() => text(el).includes("学习清单")), "清单渲染（按 tab 分发）");
+  assert.ok(await waitFor(() => text(el).includes("事件循环与微任务")), "条目渲染（走同一 IPC 桥 studyPlan）");
+  assert.ok(calls.some((c) => c[0] === "studyPlan"), "调用了 window.kanban.studyPlan");
+  // 状态流分组（与原生 stateOf 同口径）——按"分组名+计数"断言（下拉选项里只有组名，不会误判）
+  assert.ok(text(el).includes("📥 待学习1"), "待学习分组（s1）");
+  assert.ok(text(el).includes("📖 学习中1"), "学习中分组（hasFile → s2）");
+  assert.ok(text(el).includes("🔁 待复习（复习卡到期）1"), "待复习分组（reviewDue 优先 → s4）");
+  assert.ok(text(el).includes("2/4（50%）"), "进度（s3/s4 已完成 = 2/4）");
+  // 已掌握默认折叠（控制行常驻——否则展开按钮在被折叠块里永远点不到）；折叠时条目内容不渲染
+  assert.ok(text(el).includes("🏆 已掌握1"), "已掌握汇总行常驻（含计数）");
+  assert.ok(!text(el).includes("React Hooks 闭包陷阱"), "已掌握条目默认折叠不渲染");
+  [...el.querySelectorAll("button")].find((b) => text(b).includes("展开")).click();
+  assert.ok(await waitFor(() => text(el).includes("React Hooks 闭包陷阱")), "展开后渲染已掌握条目");
+
+  // 勾选回流：studyCheck + 薄弱点消灭 toast
+  const boxes = [...el.querySelectorAll('input[type="checkbox"]')];
+  assert.ok(boxes.length >= 3, "勾选框渲染");
+  boxes[0].click();
+  assert.ok(await waitFor(() => calls.some((c) => c[0] === "studyCheck")), "勾选走同一 IPC（studyCheck）");
+  assert.ok(notes.some((m) => m.includes("事件循环与微任务")), "薄弱点消灭正反馈（clearedWeak）");
+
+  // useDeferredValue 搜索过滤：输入 → 只剩匹配条目
+  const input = el.querySelector('input[type="text"], input:not([type])');
+  const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set;
+  setter.call(input, "防抖");
+  input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  assert.ok(await waitFor(() => text(el).includes("匹配 1/4")), "搜索过滤（useDeferredValue 派生）");
+  assert.ok(!text(el).includes("React Hooks 闭包陷阱"), "不匹配条目被过滤");
+
+  // 讲解入口：复用原生弹窗（切回原生渲染层 + showStudyDetail），不重复实现流式
+  const explainBtn = [...el.querySelectorAll("button")].find((b) => text(b).includes("讲解"));
+  explainBtn.click();
+  await waitFor(() => calls.some((c) => c[0] === "showStudyDetail"));
+  assert.ok(calls.some((c) => c[0] === "switchRenderer" && c[1] === "study" && c[2] === "native"), "讲解前切回原生渲染层");
+  assert.ok(calls.some((c) => c[0] === "showStudyDetail"), "打开原生讲解弹窗（同一实现）");
+  assert.ok(text(el).includes("React 特性"), "⚛️ React 特色标注");
+
+  root.unmount();
+  dom.window.close();
+});
+
+test("React 版 S2：爬取（进度三态 + 产出列表 + 今日推荐打开 + 工具栏动作）", { skip: !existsSync(BUNDLE) && "产物未构建（先 npm run build:react-panel）" }, async () => {
+  const { dom } = boot();
+  await import(new URL("../desktop/renderer/panel-react/dist/assets/react-panel.js", import.meta.url).href);
+
+  const calls = [];
+  let running = false;
+  globalThis.window.kanban = {
+    getData: async () => {
+      calls.push(["getData"]);
+      return {
+        ok: true,
+        progress: running ? { status: "running", message: "正在抓取第 3/10 页", current: 3, total: 10 } : { status: "done", message: "完成" },
+        files: [{ company: "字节跳动", title: "前端一面面经", dir: "output/2026-09" }, { company: "美团", title: "笔试真题", dir: "output/2026-09" }],
+        plan: { bishi: [{ path: "output/bishi.md", title: "美团笔试" }], mianshi: [{ path: "output/mianshi.md", title: "字节面经" }] },
+        review: { total: 9 },
+      };
+    },
+    getStats: async () => ({ ok: true, stats: { chats: 4, reviewsDone: 7, interviewsDone: 2 } }),
+    runDiscover: async () => { calls.push(["runDiscover"]); running = true; return { ok: true }; },
+    openOutput: () => calls.push(["openOutput"]),
+    openFile: (p) => calls.push(["openFile", p]),
+  };
+
+  const el = document.getElementById("crawl-react");
+  const root = globalThis.__mountReactPanel("crawl", el);
+  assert.ok(await waitFor(() => text(el).includes("爬取")), "爬取渲染（按 tab 分发）");
+  assert.ok(await waitFor(() => text(el).includes("字节跳动")), "产出列表（同一 IPC 桥 getData）");
+  assert.ok(calls.some((c) => c[0] === "getData"), "调用了 window.kanban.getData");
+  assert.ok(text(el).includes("✅ 完成"), "进度三态：done");
+  assert.ok(text(el).includes("前端一面面经") && text(el).includes("美团"), "产出条目内容");
+  // 使用统计（与原 stats-row 同口径）
+  assert.ok(text(el).includes("💬 对话 4") && text(el).includes("🎤 面试 2"), "统计 chips（getStats）");
+  assert.ok(text(el).includes("📚 复习 9"), "复习数来自 getData.review.total");
+
+  // 今日推荐：点击 → openFile（系统默认程序打开）
+  assert.ok(text(el).includes("今日推荐") && text(el).includes("笔试"), "今日推荐区（笔试/面经标签）");
+  const recoRow = [...el.querySelectorAll("div")].find((d) => text(d) === "笔试美团笔试");
+  assert.ok(recoRow, "推荐条目可点击");
+  recoRow.click();
+  assert.ok(await waitFor(() => calls.some((c) => c[0] === "openFile")), "点击推荐 → openFile");
+
+  // 工具栏：开始爬取 → runDiscover → 进度变 running（轮询生效）
+  [...el.querySelectorAll("button")].find((b) => text(b).includes("开始爬取")).click();
+  assert.ok(await waitFor(() => calls.some((c) => c[0] === "runDiscover")), "开始爬取走同一 IPC（runDiscover）");
+  assert.ok(await waitFor(() => text(el).includes("正在抓取第 3/10 页")), "running 态进度文案（轮询刷新）");
+  [...el.querySelectorAll("button")].find((b) => text(b).includes("打开输出目录")).click();
+  assert.ok(calls.some((c) => c[0] === "openOutput"), "打开输出目录走同一 IPC");
+  assert.ok(text(el).includes("React 特性"), "⚛️ React 特色标注");
+
+  root.unmount();
   dom.window.close();
 });

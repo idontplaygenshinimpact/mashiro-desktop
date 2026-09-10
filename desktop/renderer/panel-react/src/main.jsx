@@ -4,6 +4,8 @@ import { createRoot } from "react-dom/client";
 import { InterviewPanel } from "./panel.jsx";
 import { DashboardPanel } from "./tabs/Dashboard.jsx";
 import { KbPanel } from "./tabs/Kb.jsx";
+import { StudyPanel } from "./tabs/Study.jsx";
+import { CrawlPanel } from "./tabs/Crawl.jsx";
 
 // 开发模式（vite dev，浏览器打开）：window.kanban 由 Electron preload 注入；
 // 浏览器无 preload → 注入 dev mock（仅 DEV 生效，生产构建不含）
@@ -27,12 +29,14 @@ export function mountInterviewPanel(container) {
   return root;
 }
 
-// 前端三态并行展示工单任务 2：Tab 注册表（S1 驾驶舱/知识库 → S4 对话逐级补全）
+// 前端三态并行展示工单任务 2：Tab 注册表（S1 驾驶舱/知识库 → S2 清单 → S3 校招 → S4 对话）
 // 登记即代表"该 Tab 有 React 版"——panel-core 的 FRAMEWORK_TABS 决定按钮可用性，二者需同步
 const TABS = {
   interview: InterviewPanel,
   dashboard: DashboardPanel,
   kb: KbPanel,
+  study: StudyPanel,
+  crawl: CrawlPanel,
 };
 
 /** 按 Tab 挂载 React 版（未登记的 Tab 直接抛错——由 panel-core 捕获并提示，不静默白屏） */
