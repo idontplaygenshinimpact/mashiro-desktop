@@ -843,7 +843,7 @@ function shutdown() {
   }
   // 回收 MCP 子进程（自环 server 持有 DB 连接——不回收会堆积孤儿进程占住 WAL）
   try {
-    import("./lib/mcp-client.mjs").then((m) => m.closeMcpClients()).catch(() => {});
+    import("./lib/mcp-client.ts").then((m) => m.closeMcpClients()).catch(() => {});
   } catch { /* ignore */ }
   try { db.close(); } catch { /* ignore */ } // WAL checkpoint + 释放连接
   setTimeout(() => process.exit(0), 300);

@@ -25,7 +25,7 @@ function loadConfig() {
   try {
     return JSON.parse(readFileSync(CONFIG_FILE, "utf8")) || [];
   } catch (e) {
-    console.log(`[mcp-client] 配置解析失败: ${e.message}`);
+    console.log(`[mcp-client] 配置解析失败: ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
 }
@@ -34,7 +34,7 @@ function loadConfig() {
 // （key 只由宿主 process.env 注入）时子进程的 LLM 类工具必须能拿到配置；
 // ELECTRON_RUN_AS_NODE：打包版宿主以该模式运行，子进程需继承才能读 asar 内代码）
 function hostEnv() {
-  const out = {};
+  const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
     if ((/^(DEEPSEEK_|MIANSHI_)/.test(k) || k === "ELECTRON_RUN_AS_NODE") && v !== undefined) out[k] = v;
   }
@@ -76,7 +76,7 @@ export async function initMcpClients() {
       try { await transport?.close(); } catch { /* ignore */ }
       try { await client?.close(); } catch { /* ignore */ }
       initialized = false; // 允许下次对话重试（慢启动/瞬时故障不永久丢失 MCP 能力）
-      console.log(`[mcp-client] 连接 ${cfg.name} 失败: ${String(e?.message || e).slice(0, 80)}（已隔离，不影响主 agent）`);
+      console.log(`[mcp-client] 连接 ${cfg.name} 失败: ${(e instanceof Error ? e.message : String(e)).slice(0, 80)}（已隔离，不影响主 agent）`);
     }
   }
   return getMcpTools();
@@ -104,17 +104,17 @@ export function getMcpTools() {
 /** MCP 工具权限级别：server 配置 permission:"auto" 则自动执行，否则默认 confirm（deny-first）
  * 外部 MCP server 视为不可信——不声明 auto 的一律需要用户批准
  */
-export function getMcpPermission(fullName) {
+export function getMcpPermission(fullName: string): string {
   const m = fullName.match(NAME_RE);
   if (!m) return "confirm";
-  const cfg = loadConfig().find((c) => c.name === m[1]);
+  const cfg = loadConfig().find((c: { name?: string; permission?: string }) => c.name === m[1]);
   return cfg?.permission === "auto" ? "auto" : "confirm";
 }
 
 const MCP_CALL_TIMEOUT_MS = 30000; // 单次 MCP 调用超时（防 server 挂起拖死 agent 循环）
 
 /** 调用 MCP 工具（结果按不可信数据包裹；未连接/失败/超时返回可读错误） */
-export async function callMcpTool(fullName, args) {
+export async function callMcpTool(fullName: string, args: Record<string, unknown> = {}): Promise<{ ok?: boolean; result?: unknown; error?: string }> {
   const m = fullName.match(NAME_RE);
   if (!m) return { error: `非法 MCP 工具名: ${fullName}` };
   const [, serverName, toolName] = m;
@@ -130,13 +130,13 @@ export async function callMcpTool(fullName, args) {
     ]);
     // 结果转文本 + 不可信包裹（外部 server 输出可能夹带指令，防提示注入）
     const text = (result?.content || [])
-      .filter((c) => c.type === "text")
-      .map((c) => c.text)
+      .filter((c: { type?: string }) => c.type === "text")
+      .map((c: { text?: string }) => c.text)
       .join("\n");
     const raw = text || JSON.stringify(result || {});
     return { ok: true, result: safeExternalBlock(raw) };
   } catch (e) {
-    return { error: `MCP 工具 ${fullName} 调用失败: ${e.message}` };
+    return { error: `MCP 工具 ${fullName} 调用失败: ${e instanceof Error ? e.message : String(e)}` };
   } finally {
     if (timer) clearTimeout(timer); // 防定时器堆积
   }

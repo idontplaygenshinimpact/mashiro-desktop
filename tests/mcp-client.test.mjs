@@ -17,7 +17,7 @@ const cfgDir = mkdtempSync(path.join(tmpdir(), "mcp-cfg-"));
 const cfgFile = path.join(cfgDir, "mcp-servers.json");
 process.env.MIANSHI_MCP_CONFIG = cfgFile;
 
-const { initMcpClients, getMcpTools, callMcpTool, getMcpStatus, closeMcpClients } = await import("../lib/mcp-client.mjs");
+const { initMcpClients, getMcpTools, callMcpTool, getMcpStatus, closeMcpClients } = await import("../lib/mcp-client.ts");
 const { chatWithAgent } = await import("../lib/agent.mjs");
 const { memory } = await import("../lib/memory.mjs");
 
@@ -125,7 +125,7 @@ test("MCP server 配置 permission:auto 时免审批", async () => {
   wfs(cfgFile, JSON.stringify([
     { name: "test-server", command: process.execPath, args: ["tests/fixtures/test-mcp-server.mjs"], cwd: ROOT, permission: "auto" },
   ]), "utf8");
-  const { getMcpPermission } = await import("../lib/mcp-client.mjs");
+  const { getMcpPermission } = await import("../lib/mcp-client.ts");
   assert.equal(getMcpPermission("mcp__test-server__add"), "auto");
   // 恢复（无 permission → 默认 confirm）
   wfs(cfgFile, JSON.stringify([
