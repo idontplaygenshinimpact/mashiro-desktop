@@ -20,26 +20,52 @@ async function surfNowcoder({ userId, goal = "秋招面经", maxPages = 5 }) {
   const data = await toolFetchNowcoderUser({ userId: uid, maxPages });
   if (!data.ok) return { error: data.error };
   const { user, moments, totalPages } = data;
-  // ② 价值判断 + ③ 线索扩展（LLM 每篇判断：价值 + 知识点 + 线索）
-  const judged = await judgeMoments(moments, goal);
+  // 薄弱点闭环工单任务 3：读用户薄弱点（逛网从"泛逛"变"定向补弱"——薄弱点相关 → 高价值）
+  let weakTopics = [];
+  try {
+    const { memory } = await import("../../lib/memory.mjs");
+    weakTopics = memory.getTrustedWeakPoints(10).map((w) => w.topic);
+  } catch { /* 薄弱点不可用按无薄弱点 */ }
+  // ② 价值判断 + ③ 线索扩展（LLM 每篇判断：价值 + 知识点 + 线索；薄弱点注入 prompt）
+  const judged = await judgeMoments(moments, goal, weakTopics);
   // ④ 归档：高/中价值 → 学习清单（讲解入口在面板）
+  // 任务 3：薄弱点匹配（similarity weak）→ 优先入清单（level 必会 + 标注"薄弱点定向"）
+  let weakHitCount = 0;
   for (const m of judged.highValue) {
     try {
       const { addPlanItems } = await import("../../lib/study.mjs");
-      addPlanItems([{ topic: m.topic, why: `牛客逛完·${user.nickname || uid} 面经提炼`, source: `牛客用户 ${uid}`, verify_question: m.title, level: "必会" }]);
+      const { similarityRule } = await import("../../lib/similarity.mjs");
+      const weakHit = weakTopics.some((w) => {
+        const r = similarityRule(String(m.topic || ""), String(w || ""), "weak");
+        return r.similar && r.score >= 0.5;
+      });
+      if (weakHit) weakHitCount++;
+      addPlanItems([{
+        topic: m.topic,
+        why: `牛客逛完·${user.nickname || uid} 面经提炼${weakHit ? "（薄弱点定向——优先补强）" : ""}`,
+        source: `牛客用户 ${uid}`,
+        verify_question: m.title,
+        level: weakHit ? "必会" : "必会",
+      }]);
     } catch { /* 归档失败不阻塞逛完 */ }
   }
   // ⑤ 逛完判定 + 汇报
   return {
     ok: true,
-    report: `逛完用户 ${user.nickname || uid}（${user.identity || "牛友"}）：共 ${moments.length} 篇动态（${totalPages} 页），高价值 ${judged.highValue.length} 篇已归档学习清单，中价值 ${judged.mediumValue.length} 篇，无关 ${judged.lowValue.length} 篇。线索：${judged.leads.length ? judged.leads.join("、") : "无新线索"}。`,
+    report: `逛完用户 ${user.nickname || uid}（${user.identity || "牛友"}）：共 ${moments.length} 篇动态（${totalPages} 页），高价值 ${judged.highValue.length} 篇已归档学习清单（薄弱点定向 ${weakHitCount} 篇），中价值 ${judged.mediumValue.length} 篇，无关 ${judged.lowValue.length} 篇。线索：${judged.leads.length ? judged.leads.join("、") : "无新线索"}。`,
   };
 }
 
-/** LLM 批量价值判断（一次调用判断全部——比逐篇调用省 token；返回高/中/低 + 线索） */
-async function judgeMoments(moments, goal) {
+/** LLM 批量价值判断（一次调用判断全部——比逐篇调用省 token；返回高/中/低 + 线索）
+ * 薄弱点闭环工单任务 3：weakPoints 参数——价值判断 prompt 注入薄弱点列表
+ * （薄弱点相关 → 高价值 → 优先提炼归档——逛网从"泛逛"变"定向补弱"） */
+async function judgeMoments(moments, goal, weakPoints = []) {
   const _list = moments.map((m, i) => `${i}.【${m.title}】\n${m.content.slice(0, 500)}`).join("\n\n");
-  const prompt = `你是秋招信息筛选助手。用户目标是：${goal}。以下是逛到的 ${moments.length} 篇牛客动态，请逐篇判断价值并提取线索。
+  // 薄弱点注入（任务 3：薄弱点相关 → 高价值；权重设计：相关 +2 分，不相关不扣分——不误杀新知识）
+  const weakBlock = weakPoints.length
+    ? `\n\n【用户薄弱点】（用户答错过/自评不会的知识点——动态涉及这些 → 价值提升为"高"（优先提炼归档）；不涉及不降级，按原标准判断）\n${weakPoints.map((w) => `- ${w}`).join("\n")}`
+    : "";
+  const prompt = `你是秋招信息筛选助手。用户目标是：${goal}。以下是逛到的 ${moments.length} 篇牛客动态，请逐篇判断价值并提取线索。${weakBlock}
 
 对每篇输出：{"i":序号,"value":"高|中|低|无关","topic":"提炼的知识点（高/中价值时，如'事件循环'）","leads":["线索（公司/牛友/技术栈，如'字节'、'用户12345'，无关则空）"]}
 

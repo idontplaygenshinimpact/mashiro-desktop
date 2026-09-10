@@ -75,6 +75,7 @@ async function loadTodayBar() {
       ${ch("计划", quota, p.hasPlan && p.todayDone < p.todayQuota ? "warn" : "ok")}
       ${ch("复习卡到期", `${j.reviewDue ?? 0} 张`, j.reviewDue > 0 ? "warn" : "ok")}
       ${ch("薄弱点", `${j.weakCount ?? 0} 个待消灭`, j.weakCount > 0 ? "warn" : "ok")}
+      ${(j.progress?.weakCleared ?? 0) > 0 ? ch("已消灭", `${j.progress.weakCleared} 个 🎉`, "ok") : ""}
       ${(j.planTodo ?? 0) > 0 ? ch("清单", `${j.planTodo} 项未完成`, "warn") : ""}
       <button class="job-btn" id="today-start-iv" type="button" style="margin-left:6px;font-size:11px;padding:2px 10px;" title="切到面试 Tab 开始一轮模拟面试">🎤 开始面试</button>`;
     const btn = document.getElementById("today-start-iv");
@@ -1083,13 +1084,98 @@ $("set-direction-btn")?.addEventListener("click", async () => {
     $("set-direction-status").textContent = j.ok
       ? `✅ 已保存${autoTxt}${j.advice ? "，建议：" + String(j.advice).slice(0, 60) + "…" : ""}`
       : "⚠️ " + (j.error || "保存失败");
-    if (j.ok) { loadCareerProfile(); loadKnowledgeTree(); loadTreeTemplates(); }
+    if (j.ok) { loadCareerProfile(); loadKnowledgeTree(); loadTreeTemplates(); maybeShowSelfAssess(); }
   } catch (e) {
     $("set-direction-status").textContent = "⚠️ " + e.message;
   } finally {
     btn.disabled = false;
   }
 });
+
+// ============ 薄弱点闭环工单任务 1：5 分钟摸底自评（冷启动画像） ============
+// 入口：设置目标方向后弹引导（方向是摸排的上下文——知识树按方向过滤）；
+// 自评页按知识树分类/知识点三档自评（熟悉/一般/不会）——"不会"建薄弱点+入清单，"一般"写掌握度，"熟悉"不采信
+let saAssessments = {}; // topic -> level（familiar/ok/weak）
+
+/** 方向保存后检查：未摸底 → 弹引导（幂等：self_assess_done 后不再弹） */
+async function maybeShowSelfAssess() {
+  try {
+    const r = await fetch(API_BASE + "/api/self-assess/status").then((x) => x.json());
+    if (r?.ok && !r.done) {
+      if (confirm("🧭 5 分钟摸底：按知识树快速自评（熟悉/一般/不会），建立你的薄弱点画像——面试/复习/讲解都会优先覆盖薄弱点。现在开始？")) {
+        openSelfAssess();
+      }
+    }
+  } catch { /* widget 未启动忽略 */ }
+}
+
+/** 打开自评弹窗：拉知识树 → 按分类/知识点渲染三档按钮 */
+async function openSelfAssess() {
+  const overlay = $("self-assess-overlay");
+  if (!overlay) return;
+  overlay.classList.remove("hidden");
+  const body = $("sa-body");
+  body.innerHTML = '<div style="color:#6a6790;font-size:12px;">加载知识树…</div>';
+  saAssessments = {};
+  try {
+    const r = await fetch(API_BASE + "/api/knowledge/tree").then((x) => x.json());
+    const tree = r?.tree || [];
+    const total = tree.reduce((n, c) => n + (c.points || []).length, 0);
+    body.innerHTML = `<div style="font-size:11px;color:#6a6790;margin-bottom:8px;">共 ${total} 个知识点——诚实自评即可（"不会"会进薄弱点+学习清单优先补强；"熟悉"不采信，防高估）</div>` +
+      tree.map((cat) => `
+        <div style="margin-bottom:10px;">
+          <div style="font-size:12px;font-weight:700;color:#5d48b8;margin-bottom:4px;">${esc(cat.title)}</div>
+          ${(cat.points || []).map((p) => `
+            <div style="display:flex;align-items:center;gap:6px;margin:3px 0;font-size:12px;">
+              <span style="flex:1;color:#3a3a5a;">${esc(p.title)}</span>
+              <button class="sa-lv" data-topic="${esc(p.title)}" data-level="familiar" style="font-size:11px;padding:1px 8px;border-radius:5px;cursor:pointer;border:1px solid #d8d4ea;background:#fff;color:#6a6790;">熟悉</button>
+              <button class="sa-lv" data-topic="${esc(p.title)}" data-level="ok" style="font-size:11px;padding:1px 8px;border-radius:5px;cursor:pointer;border:1px solid #d8d4ea;background:#fff;color:#6a6790;">一般</button>
+              <button class="sa-lv" data-topic="${esc(p.title)}" data-level="weak" style="font-size:11px;padding:1px 8px;border-radius:5px;cursor:pointer;border:1px solid #d8d4ea;background:#fff;color:#6a6790;">不会</button>
+            </div>`).join("")}
+        </div>`).join("");
+    // 三档按钮：点选高亮（同知识点互斥）
+    body.querySelectorAll(".sa-lv").forEach((b) => {
+      b.addEventListener("click", () => {
+        const topic = b.dataset.topic;
+        saAssessments[topic] = b.dataset.level;
+        body.querySelectorAll(`.sa-lv[data-topic="${CSS.escape(topic)}"]`).forEach((x) => {
+          x.style.background = "#fff"; x.style.color = "#6a6790"; x.style.borderColor = "#d8d4ea";
+        });
+        b.style.background = b.dataset.level === "weak" ? "rgba(229,72,77,.15)" : b.dataset.level === "ok" ? "rgba(224,168,0,.15)" : "rgba(47,122,74,.15)";
+        b.style.color = b.dataset.level === "weak" ? "#c0392b" : b.dataset.level === "ok" ? "#9a5b00" : "#2f7a4a";
+        b.style.borderColor = b.dataset.level === "weak" ? "#c0392b" : b.dataset.level === "ok" ? "#9a5b00" : "#2f7a4a";
+        const n = Object.keys(saAssessments).length;
+        $("sa-status").textContent = `已自评 ${n}/${total} 项`;
+      });
+    });
+  } catch (e) {
+    body.innerHTML = `<div style="color:#b91c1c;font-size:12px;">加载失败：${esc(String(e?.message || e).slice(0, 80))}</div>`;
+  }
+}
+
+// 提交摸底
+$("sa-submit")?.addEventListener("click", async () => {
+  const btn = $("sa-submit");
+  btn.disabled = true;
+  try {
+    const assessments = Object.entries(saAssessments).map(([topic, level]) => ({ topic, level }));
+    if (!assessments.length) { $("sa-status").textContent = "⚠️ 先自评至少一项"; btn.disabled = false; return; }
+    const r = await fetch(API_BASE + "/api/self-assess", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assessments }),
+    }).then((x) => x.json());
+    $("sa-status").textContent = r?.message || "已提交";
+    if (r?.ok) {
+      setTimeout(() => { $("self-assess-overlay")?.classList.add("hidden"); }, 1200);
+      loadStudyPlan(); // 刷新清单（自评"不会"已入清单）
+    }
+  } catch (e) {
+    $("sa-status").textContent = "⚠️ " + String(e?.message || e).slice(0, 80);
+  } finally {
+    btn.disabled = false;
+  }
+});
+$("sa-close")?.addEventListener("click", () => $("self-assess-overlay")?.classList.add("hidden"));
 
 // ============ 🧭 方向画像（讲解/面试/考点提炼角度；转方向/开源只改这里） ============
 async function loadCareerProfile() {

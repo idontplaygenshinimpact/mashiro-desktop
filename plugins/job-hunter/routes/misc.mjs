@@ -463,6 +463,8 @@ export function registerMiscRoutes(router) {
           challenges: { total: chTotal, done: chDone },
           review: reviewStats,
           weak: weakCount,
+          // 薄弱点消灭进度可视化工单任务 1：已消灭计数（累计清除——用户可感知的进步）
+          weakCleared: memory.getClearedWeakCount(),
           jobs: { open: openJobs, applied: applyCount },
           direction: jobMatchApi.getTargetDirection() || "",
         },

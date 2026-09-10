@@ -473,3 +473,27 @@ test("薄弱点闭环②：mergeSimilarWeakPoints 存量伪知识点删除（题
   assert.equal(r2.removed + r2.merged, 0, "幂等");
 });
 
+// ---------- 薄弱点消灭进度可视化工单任务 1：已消灭计数 ----------
+test("clearedCount：clearWeakPoint 清除时累计（settings 持久化）", () => {
+  memory.addWeakPoint("事件循环", "测试", "agent");
+  memory.addWeakPoint("闭包", "测试", "agent");
+  assert.equal(memory.getClearedWeakCount(), 0, "初始 0");
+  memory.clearWeakPoint("事件循环");
+  assert.equal(memory.getClearedWeakCount(), 1, "清除 1 条 → 计数 1");
+  memory.clearWeakPoint("不存在的点"); // 未命中不计数
+  assert.equal(memory.getClearedWeakCount(), 1, "未命中不累计");
+  memory.clearWeakPoint("闭包");
+  assert.equal(memory.getClearedWeakCount(), 2, "清除 2 条 → 计数 2");
+  // 持久化：settings 表可读
+  const row = db.prepare("SELECT value FROM settings WHERE key='weak_cleared_count'").get();
+  assert.equal(Number(row.value), 2, "计数落 settings 表");
+});
+
+test("clearedCount：addMastered 清除薄弱点也累计", () => {
+  memory.addWeakPoint("防抖节流", "测试", "agent");
+  const before = memory.getClearedWeakCount();
+  memory.addMastered("防抖节流");
+  assert.equal(memory.getClearedWeakCount(), before + 1, "掌握清除计入已消灭");
+  assert.equal(memory.getWeakPoints().length, 0, "薄弱点已清");
+});
+
