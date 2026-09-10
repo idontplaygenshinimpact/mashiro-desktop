@@ -13,7 +13,7 @@ import { llmChat, getReplyText, extractJson } from "./llm.mjs";
 import { safeExternalBlock } from "./prompt-guard.mjs";
 import { getAllPoints } from "./knowledge.mjs";
 import { getCareerProfile } from "./career.mjs";
-import { sanitizeFilename } from "./study-files.mjs"; // 存档文件名统一（与 routes/study.mjs 同源，防双份实现漂移）
+import { sanitizeFilename } from "./study-files.ts"; // 存档文件名统一（与 routes/study.mjs 同源，防双份实现漂移）
 import { loadPlan, savePlan, newPlanId } from "./study-store.ts";
 import type { PlanItem, StudyPlan } from "./study-store.ts";
 import { normalizeGroup, normalizeGroupName, EXTRA_GROUP_RULES } from "./study-groups.ts";

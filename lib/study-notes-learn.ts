@@ -3,19 +3,23 @@
 //   - 自动增量（widget 启动：新讲解自动入清单，settings last_notes_learn_ts 增量幂等）
 //   - 手动按钮（面板"转学习"：单条/全部，已转标记防重复）
 // 文件名即知识点（讲解是按 topic 生成的存档）——无需 LLM 提炼，直接文件名 → topic
+// 全量 TS 升级工单阶段 1⑬：lib/study-notes-learn.mjs → .ts（存档条目形状显式声明）
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { studyNotesDir } from "./study-files.mjs";
+import { studyNotesDir } from "./study-files.ts";
 import { isSimilarTopicForArchive } from "./memory.mjs"; // 倒序/措辞漂移相似（"版本号比较" vs "比较版本号"）
 import { addPlanItems, getPlan } from "./study.mjs";
 import { db } from "./db.mjs";
 
 const LEARN_TS_KEY = "last_notes_learn_ts"; // 增量游标：只处理该时间之后的新存档
 
+/** 讲解存档条目（文件名即 topic） */
+export interface StudyNote { file: string; topic: string; size: number; mtimeMs: number }
+
 /** 扫描讲解存档（顶层 .md，不含主题簇子目录） */
-export function listStudyNotes() {
+export function listStudyNotes(): StudyNote[] {
   const dir = studyNotesDir();
-  const out = [];
+  const out: StudyNote[] = [];
   try {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       if (!e.isFile() || !e.name.endsWith(".md")) continue;
@@ -30,20 +34,20 @@ export function listStudyNotes() {
 }
 
 /** 清单是否已有该知识点（精确或相似——防重复转学习） */
-function inPlan(topic) {
+function inPlan(topic: string): boolean {
   const items = getPlan().items || [];
   return items.some((i) => i.topic === topic || isSimilarTopicForArchive(topic, String(i.topic || "")));
 }
 
 /** level 按考点频率：同知识点有多个变体存档（"版本号比较/比较版本号/版本号数组排序"）→ 必会；单篇 → 进阶
  * 注意：isSimilarTopicForArchive 对相同字符串返回 false（a===b 短路）——自身要 +1 */
-function levelFor(topic, all) {
+function levelFor(topic: string, all: StudyNote[]): string {
   const freq = 1 + all.filter((n) => n.topic !== topic && isSimilarTopicForArchive(topic, n.topic)).length;
   return freq >= 2 ? "必会" : "进阶";
 }
 
 /** 入清单（source="面经产出·{文件名}"；精确/相似已存在则跳过） */
-function toPlan(note) {
+function toPlan(note: StudyNote): { ok: boolean; added: number; skipped?: string; error?: string } {
   if (inPlan(note.topic)) return { ok: true, added: 0, skipped: "已在清单" };
   const all = listStudyNotes();
   const r = addPlanItems([{
@@ -57,7 +61,7 @@ function toPlan(note) {
 }
 
 /** 单条转学习（面板按钮） */
-export function learnOneNote(file) {
+export function learnOneNote(file: unknown): { ok: boolean; added?: number; skipped?: string; error?: string } {
   const name = String(file || "").trim();
   if (!name.endsWith(".md")) return { ok: false, error: "文件必须是 .md 讲解存档" };
   const note = listStudyNotes().find((n) => n.file === name);
@@ -66,7 +70,7 @@ export function learnOneNote(file) {
 }
 
 /** 全部转学习（面板"全部转"按钮——存量 122 篇一键沉淀） */
-export function learnAllNotes() {
+export function learnAllNotes(): { ok: true; total: number; added: number; skipped: number } {
   const notes = listStudyNotes();
   let added = 0, skipped = 0;
   for (const n of notes) {
@@ -78,9 +82,13 @@ export function learnAllNotes() {
 
 /** 自动增量（widget 启动）：只处理 last_notes_learn_ts 之后的新存档——幂等，不刷爆存量清单
  * 首次运行（游标不存在）只推进游标不转存量：存量 122 篇用面板"全部转学习"按钮按需转（用户可控） */
-export function learnFromStudyNotes() {
+export function learnFromStudyNotes(): { ok: true; scanned: number; added: number } {
   const last = (() => {
-    try { return Number(db.prepare("SELECT value FROM settings WHERE key=?").get(LEARN_TS_KEY)?.value || 0); } catch { return 0; }
+    try {
+      // node:sqlite 行值类型在边界处收口
+      const row = db.prepare("SELECT value FROM settings WHERE key=?").get(LEARN_TS_KEY) as unknown as { value?: unknown } | undefined;
+      return Number(row?.value || 0);
+    } catch { return 0; }
   })();
   const notes = listStudyNotes();
   // 容差 1ms：文件 mtime 与游标同毫秒（mtime 带小数、游标整数毫秒）时误判为新文件——偶发重复转

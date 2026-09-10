@@ -26,7 +26,7 @@ test("localDateKey：本地时区日期键（UTC 0 点 = 东八区 8 点，不�
 
 // ---------- S5：判分失败不标记 reviewed ----------
 test("S5：判分解析失败 → 返回 ok:false 且不标记 reviewed", async () => {
-  const { answerReview } = await import("../lib/study-review.mjs");
+  const { answerReview } = await import("../lib/study-review.ts");
   const { addPlanItems, getPlan } = await import("../lib/study.mjs");
   addPlanItems([{ topic: "事件循环", why: "w", source: "s", verify_question: "讲事件循环", level: "必会" }]);
   const item = getPlan().items[0];

@@ -1,4 +1,4 @@
-// study-notes-learn.mjs 单测：讲解存档 → 学习清单（列表/单条/全部/增量/频率 level）
+// study-notes-learn.ts 单测：讲解存档 → 学习清单（列表/单条/全部/增量/频率 level）
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
@@ -9,7 +9,7 @@ const dbDir = setupTempDb("notes-learn");
 process.env.MIANSHI_OUTPUT_DIR = path.join(dbDir, "output");
 const notesDir = path.join(dbDir, "output", "study_notes");
 mkdirSync(notesDir, { recursive: true });
-const { listStudyNotes, learnOneNote, learnAllNotes, learnFromStudyNotes, listStudyNotesWithPlan } = await import("../lib/study-notes-learn.mjs");
+const { listStudyNotes, learnOneNote, learnAllNotes, learnFromStudyNotes, listStudyNotesWithPlan } = await import("../lib/study-notes-learn.ts");
 const { getPlan } = await import("../lib/study.mjs");
 const { db } = await import("../lib/db.mjs");
 

@@ -41,7 +41,7 @@ test("subagent task 含八股提取要求 + 学习文档存档（项目概览/�
   const taskText = getLastMessages().map((m) => String(m.content || "")).join("\n");
   assert.ok(taskText.includes("八股"), "subagent task 含八股提取要求");
   // ② 学习文档存档（工单任务 2——幂等覆盖 study_notes/项目·xxx-学习文档.md）
-  const { studyNotesDir } = await import("../lib/study-files.mjs");
+  const { studyNotesDir } = await import("../lib/study-files.ts");
   const docPath = path.join(studyNotesDir(), "项目·低代码平台-学习文档.md");
   assert.ok(existsSync(docPath), "学习文档已存档");
   const doc = readFileSync(docPath, "utf8");

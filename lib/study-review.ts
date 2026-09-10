@@ -7,7 +7,7 @@ import { llmChat, getReplyText, extractJson } from "./llm.mjs";
 import { memory } from "./memory.mjs";
 import { matchKp, recordKp, getAllPoints } from "./knowledge.mjs";
 import { getCareerProfile } from "./career.mjs";
-import { sanitizeFilename } from "./study-files.mjs"; // 存档文件名统一（与 routes/study.mjs 同源，防双份实现漂移）
+import { sanitizeFilename } from "./study-files.ts"; // 存档文件名统一（与 routes/study.mjs 同源，防双份实现漂移）
 import { smartSlice } from "./text-utils.ts"; // 技术债 L3：收敛单点
 import { loadPlan, savePlan } from "./study-store.ts";
 
@@ -28,10 +28,15 @@ export async function startReview() {
 }
 
 // ---------- 复盘：判分 ----------
-// sanitizeFilename 从 study-files.mjs 导入（存档文件名统一，防双份实现漂移）
+// sanitizeFilename 从 study-files.ts 导入（存档文件名统一，防双份实现漂移）
 // smartSlice 从 text-utils.ts 导入（技术债 L3：收敛单点）
 
-export async function answerReview(answers) {
+/** 复盘提交的作答（面板传入：{id, answer} 数组） */
+export interface ReviewAnswer { id: string; answer?: string }
+/** 单题判分结果（LLM JSON 在边界处归一为字符串字段） */
+export interface ReviewResult { topic: string; verdict: string; comment: string; reference: string }
+
+export async function answerReview(answers: readonly ReviewAnswer[]): Promise<{ ok: boolean; error?: string; results?: unknown[] }> {
   // answers: [{id, answer}]
   const plan = loadPlan();
   const answered = answers.filter((a) => a.answer && a.answer.trim());
@@ -74,12 +79,18 @@ ${q.learned ? `【该题学习内容】\n${q.learned}\n【学习内容结束】`
     { maxTokens: 4000, temperature: 0.3 }
   );
 
-  let results = [];
+  let results: ReviewResult[] = [];
   let parseFailed = false;
   try {
-    const parsed = extractJson(getReplyText(data));
+    // LLM 判分 JSON：形状是提示词契约（非类型保证）——边界处归一为字符串字段
+    const parsed = extractJson(getReplyText(data)) as { results?: Array<{ topic?: unknown; verdict?: unknown; comment?: unknown; reference?: unknown }> } | null;
     if (!parsed || !Array.isArray(parsed.results)) parseFailed = true; // 解析失败/结构不对 → 判分无效
-    else results = parsed.results;
+    else results = parsed.results.map((r) => ({
+      topic: String(r?.topic || ""),
+      verdict: String(r?.verdict || ""),
+      comment: String(r?.comment || ""),
+      reference: String(r?.reference || ""),
+    }));
   } catch { parseFailed = true; }
 
   // 判分失败（修复 S5：此前解析失败 results=[] 仍无条件标记 reviewed + savePlan——
@@ -107,7 +118,7 @@ ${q.learned ? `【该题学习内容】\n${q.learned}\n【学习内容结束】`
     for (const r of results) {
       const kpId = matchKp(r.topic); // 只匹配预定义知识点，匹配不到跳过（如"综合能力"等伪知识点）
       if (!kpId) continue;
-      if (!getAllPoints().some((p) => p.id === kpId)) continue; // 树外主题（动态伪知识点）不写入掌握度表
+      if (!getAllPoints().some((p: { id?: unknown }) => p.id === kpId)) continue; // 树外主题（动态伪知识点）不写入掌握度表
       const v = String(r.verdict || "");
       // 对 → correct（答对记分）；部分对/错 → correct=false（部分对按未掌握处理，半对不加分）
       const correct = v.includes("对") && !v.includes("错") && v !== "部分对";

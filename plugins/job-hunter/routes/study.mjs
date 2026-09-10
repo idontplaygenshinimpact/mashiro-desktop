@@ -5,7 +5,7 @@ import path from "node:path";
 import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
 import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
-import { findStudyFile, studyNotesDir, sanitizeFilename, normName } from "#lib/study-files.mjs";
+import { findStudyFile, studyNotesDir, sanitizeFilename, normName } from "#lib/study-files.ts";
 import { isSimilarTopicForArchive } from "#lib/memory.mjs";
 import { queryFollowupCache, loadFollowupCache } from "#lib/followup-cache.mjs";
 import { readBody } from "#lib/widget-core.mjs";
@@ -775,7 +775,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
   // ---------- 面经产出转学习任务工单：讲解存档 → 学习清单（列表 + 转学习） ----------
   router.route("/api/study-notes", async (req, res) => {
     try {
-      const { listStudyNotesWithPlan } = await import("#lib/study-notes-learn.mjs");
+      const { listStudyNotesWithPlan } = await import("#lib/study-notes-learn.ts");
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ ok: true, notes: listStudyNotesWithPlan() }));
     } catch (e) {
@@ -787,7 +787,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
     readBody(req, res, async (body) => {
       try {
         const { file, all } = JSON.parse(body || "{}");
-        const { learnOneNote, learnAllNotes } = await import("#lib/study-notes-learn.mjs");
+        const { learnOneNote, learnAllNotes } = await import("#lib/study-notes-learn.ts");
         const r = all ? learnAllNotes() : learnOneNote(String(file || ""));
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ok: true, ...r }));

@@ -504,7 +504,7 @@ try {
 // 面经产出转学习任务工单任务 1：讲解存档自动增量入清单（新讲解 → 学习任务——采集→学习闭环；
 // settings last_notes_learn_ts 增量游标，幂等；存量 122 篇用面板"转学习"按钮按需转）
 try {
-  const { learnFromStudyNotes } = await import("./lib/study-notes-learn.mjs");
+  const { learnFromStudyNotes } = await import("./lib/study-notes-learn.ts");
   const r = learnFromStudyNotes();
   if (r.added > 0) console.log(`[widget] 讲解存档转学习：${r.added} 篇新讲解已入清单（source=面经产出）`);
 } catch { /* 转学习失败不阻断启动 */ }

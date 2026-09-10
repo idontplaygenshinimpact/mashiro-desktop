@@ -1,19 +1,23 @@
 // 学习讲解文件工具：study_notes 目录 + 条目讲解文件查找 + 文件名安全化
 // 从 widget.mjs 抽出（路由纵向拆分共用），独立可测
+// 全量 TS 升级工单阶段 1⑫：lib/study-files.mjs → .ts（findStudyFile 的 item/opts 形状显式声明）
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { config } from "../config.mjs";
 
+/** 清单条目里本模块用到的字段（宽松：调用方传 DB 行/构造对象都有） */
+export interface StudyFileItem { topic?: unknown; source?: unknown }
+
 /** 文件名规范化：忽略空格/下划线/括号/冒号/斜杠等差异，用于模糊匹配。
  * 注意：必须覆盖 sanitizeFilename 删除的字符（\\/:*?"<>|）——否则 topic 含冒号/斜杠时
  * 存档名与查找名不一致，findStudyFile 找不到已存在的存档 → 重新生成覆盖 → 讲解/追问丢失 */
-export const normName = (s) => String(s || "").toLowerCase().replace(/[\s_\-（）()【】[\].:/\\*?"<>|]/g, "");
+export const normName = (s: unknown): string => String(s || "").toLowerCase().replace(/[\s_\-（）()【】[\].:/\\*?"<>|]/g, "");
 
 /** 学习讲解文件专用目录（AI 生成的讲解存档） */
-export const studyNotesDir = () => path.join(config.outputDir, "study_notes");
+export const studyNotesDir = (): string => path.join(config.outputDir, "study_notes");
 
 /** 知识点名 → 安全文件名（去掉 Windows 非法字符） */
-export function sanitizeFilename(name) {
+export function sanitizeFilename(name: unknown): string {
   return String(name || "note")
     .replace(/[\\/:*?"<>|\r\n]/g, "")
     .trim()
@@ -24,12 +28,12 @@ export function sanitizeFilename(name) {
  * 查找学习条目的讲解文件：
  * 1. study_notes/ 下按 topic 精确匹配（最优先——AI 生成的讲解存档）
  * 2. 产出目录里按 source 文件名模糊匹配
- * @param {{topic?: string, source?: string}} item
- * @param {{notesOnly?: boolean}} [opts] notesOnly=true 时只查 study_notes 精确匹配——
+ * @param item 清单条目（只用到 topic/source）
+ * @param opts notesOnly=true 时只查 study_notes 精确匹配——
  *    "重新生成"（noSimilar=1）用：产出目录 source 模糊匹配（includes 双向）可能命中相似文件
  *    （如 source 短时匹配到"合并有序数组.md"），导致 reset 删了本条存档后仍返回旧文件（重新生成不生效）
  */
-export function findStudyFile(item, { notesOnly = false } = {}) {
+export function findStudyFile(item: StudyFileItem | null | undefined, { notesOnly = false }: { notesOnly?: boolean } = {}): string | null {
   const outDir = config.outputDir;
   if (!existsSync(outDir)) return null;
   // 1. study_notes 按 topic 匹配

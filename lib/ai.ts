@@ -617,7 +617,7 @@ ${refs.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join(
   // 可溯源，不违背"讲解不用 RAG"决策）——有存档则基于存档增强生成（补充新信息/修正过时/保持结构一致）
   let archiveRef = "";
   try {
-    const { findStudyFile } = await import("./study-files.mjs");
+    const { findStudyFile } = await import("./study-files.ts");
     const f = findStudyFile({ topic: title });
     if (f) {
       const { readFileSync } = await import("node:fs");

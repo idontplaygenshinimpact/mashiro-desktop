@@ -1,4 +1,4 @@
-// study-files.mjs 单测：讲解文件查找/文件名安全化/规范化
+// study-files.ts 单测：讲解文件查找/文件名安全化/规范化
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
@@ -7,7 +7,7 @@ import path from "node:path";
 import { setupTempDb, cleanupTempDb } from "./helpers.mjs";
 
 const dbDir = setupTempDb("study-files");
-const { normName, sanitizeFilename, findStudyFile, studyNotesDir } = await import("../lib/study-files.mjs");
+const { normName, sanitizeFilename, findStudyFile, studyNotesDir } = await import("../lib/study-files.ts");
 const { config } = await import("../config.mjs");
 
 let tmpOut = null;

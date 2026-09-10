@@ -1,4 +1,4 @@
-// 验收复现：study-review 判分失败仍标记已复盘（study-review.mjs:87-98）
+// 验收复现：study-review 判分失败仍标记已复盘（study-review.ts:87-98）
 // 场景：LLM 返回乱码（extractJson 解析失败）→ results=[] → 是否仍标记 reviewed？
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,7 +28,7 @@ console.log("初始 reviewed:", item.reviewed);
 
 // LLM 返回乱码 → 判分解析失败
 setLlmResponses("这不是 JSON 乱码回复");
-const { answerReview } = await import("../lib/study-review.mjs");
+const { answerReview } = await import("../lib/study-review.ts");
 const r = await answerReview([{ id: item.id, answer: "我的回答" }]);
 console.log("answerReview 返回:", JSON.stringify(r));
 
