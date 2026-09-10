@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseFollowups, normalizeQuestion, findSimilarFollowup, queryFollowupCache } from "../lib/followup-cache.mjs";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { config } from "../config.mjs";
@@ -99,6 +99,34 @@ test("queryFollowupCache：无存档 → null（不误命中）", () => {
   config.outputDir = dir;
   try {
     assert.equal(queryFollowupCache("不存在的知识点", "随便问问"), null);
+  } finally {
+    config.outputDir = origOutput;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------- 讲解追问交互增强工单第二步 B2②：缓存键含引用段落 ----------
+test("queryFollowupCache 引用追问：同问题引用不同段落 → 不命中（防错误缓存）", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "fup-ref-"));
+  const origOutput = config.outputDir;
+  config.outputDir = dir;
+  try {
+    mkdirSync(path.join(dir, "study_notes"), { recursive: true });
+    // 历史追问带引用标注（B2③ 存档格式：<!-- ref:段落摘要 -->——与缓存键一致）
+    writeFileSync(
+      path.join(dir, "study_notes", "事件循环.md"),
+      `# 事件循环\n\n正文…\n\n---\n\n## 💬 追问：宏任务和微任务的执行顺序\n\n<!-- ref:原理内容段落文本摘要 -->\n宏任务先执行，微任务在同步代码后…\n`,
+      "utf8"
+    );
+    // 同引用（段落内容一致）→ 命中
+    const hit = queryFollowupCache("事件循环", "宏任务与微任务的执行顺序？", 0.72, { text: "原理内容段落文本摘要", source: "主文「原理」" });
+    assert.ok(hit, "同引用命中缓存");
+    // 不同引用（同一问题）→ 不命中（引用不同段落是不同语义）
+    const miss = queryFollowupCache("事件循环", "宏任务与微任务的执行顺序？", 0.72, { text: "边界内容段落文本摘要", source: "主文「边界」" });
+    assert.equal(miss, null, "不同引用不命中（防错误缓存）");
+    // 无引用 → 原键兼容（命中）
+    const noRef = queryFollowupCache("事件循环", "宏任务与微任务的执行顺序？");
+    assert.ok(noRef, "无引用保持原键（兼容）");
   } finally {
     config.outputDir = origOutput;
     rmSync(dir, { recursive: true, force: true });

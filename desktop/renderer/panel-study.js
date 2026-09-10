@@ -1,4 +1,6 @@
 // 真白面板 · 学习/复习/面试域（纵向拆分）
+// 原生面板状态收敛工单：模块级状态对象（studyDetailState/interviewState）+ 事件总线（panel-state.js 挂 window.panelState）
+const { studyDetailState, interviewState, resetStudyDetail, interviewTimer } = window.panelState;
 /* exported loadIvResumeAuto, loadIvWeakChips, loadIvResume */
 // 复习卡消费侧升级工单任务 1：多角度题分块（"原理：…；边界：…；场景：…" → 三块折叠区）
 // 返回 [{label, text}]；不足 2 块 = 非多角度题（整体显示）
@@ -122,14 +124,9 @@ uploadZone.addEventListener("drop", async (e) => {
 });
 
 // ============ 模拟面试 ============
+// 原生面板状态收敛工单任务 3：ivRound/ivRoundType/ivTimer/ivRoundStart/ivRoundSeconds/ivScoreSum/ivScoreCount
+// → interviewState.*（模块级状态对象——计时器生命周期走 interviewTimer 集中管理）
 let ivTotalRounds = 9;      // 后端 start 返回（兜底 9）
-let ivRound = 0;            // 当前轮
-let ivRoundType = "";       // 当前轮类型（项目拷打/八股…）
-let ivTimer = null;         // 本题计时器
-let ivRoundStart = 0;       // 本题开始时间戳
-let ivRoundSeconds = 0;     // 本题已用秒
-let ivScoreSum = { tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0 }; // 全场累计
-let ivScoreCount = 0;       // 已评分轮数
 const ivSetup = $("interview-setup");
 const ivSessionEl = $("interview-session");
 
@@ -156,32 +153,33 @@ function renderIvProgress() {
   if (!el) return;
   const dots = Array.from({ length: ivTotalRounds }, (_, i) => {
     const n = i + 1;
-    if (n < ivRound) return `<span class="iv-dot done">✓</span>`;
-    if (n === ivRound) return `<span class="iv-dot cur">${n}</span>`;
+    if (n < interviewState.round) return `<span class="iv-dot done">✓</span>`;
+    if (n === interviewState.round) return `<span class="iv-dot cur">${n}</span>`;
     return `<span class="iv-dot">${n}</span>`;
   }).join("");
-  el.innerHTML = dots + `<span class="iv-progress-txt">${ivRound}/${ivTotalRounds}</span>`;
+  el.innerHTML = dots + `<span class="iv-progress-txt">${interviewState.round}/${ivTotalRounds}</span>`;
 }
 
 // 本题计时
 function startIvTimer() {
   stopIvTimer();
-  ivRoundStart = Date.now();
-  ivRoundSeconds = 0;
+  interviewState.roundStart = Date.now();
+  interviewState.roundSeconds = 0;
   const tick = () => {
-    ivRoundSeconds = Math.floor((Date.now() - ivRoundStart) / 1000);
-    const m = String(Math.floor(ivRoundSeconds / 60)).padStart(2, "0");
-    const s = String(ivRoundSeconds % 60).padStart(2, "0");
+    interviewState.roundSeconds = Math.floor((Date.now() - interviewState.roundStart) / 1000);
+    const m = String(Math.floor(interviewState.roundSeconds / 60)).padStart(2, "0");
+    const s = String(interviewState.roundSeconds % 60).padStart(2, "0");
     const el = $("iv-timer");
     if (el) {
       el.textContent = `⏱ ${m}:${s}`;
-      el.style.color = ivRoundSeconds > 180 ? "#c05050" : ivRoundSeconds > 90 ? "#9a5b00" : "";
+      el.style.color = interviewState.roundSeconds > 180 ? "#c05050" : interviewState.roundSeconds > 90 ? "#9a5b00" : "";
     }
   };
   tick();
-  ivTimer = setInterval(tick, 1000);
+  interviewState.timer = setInterval(tick, 1000);
 }
-function stopIvTimer() { if (ivTimer) { clearInterval(ivTimer); ivTimer = null; } }
+// 原生面板状态收敛工单任务 3：stop 走 interviewTimer 集中管理（start/stop/reset 一个函数）
+function stopIvTimer() { interviewTimer("stop"); }
 
 $("iv-start").addEventListener("click", () => {
   startIvSession({
@@ -249,7 +247,7 @@ async function loadIvResume() {
 }
 
 // 恢复面试中形态：用服务端会话状态直接渲染（与服务端内存会话对齐，无需重新 start）
-// 注意顺序：showInterviewUi 内部会重置 ivScoreSum/ivScoreCount → 必须先渲染再恢复累计分
+// 注意顺序：showInterviewUi 内部会重置 interviewState.scoreSum/interviewState.scoreCount → 必须先渲染再恢复累计分
 function resumeIvSession(status) {
   showInterviewUi({
     question: status.question, basis: status.basis, dimension: status.dimension,
@@ -258,10 +256,10 @@ function resumeIvSession(status) {
     weakQueue: status.weakQueue || [], totalRounds: status.totalRounds,
   });
   // 已评分轮次 → 恢复全场均分累计（服务端镜像持续累计，逐轮增量写）
-  ivScoreCount = Number(status.roundsCount) || 0;
+  interviewState.scoreCount = Number(status.roundsCount) || 0;
   if (status.scoreSum) {
-    ivScoreSum = { tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0 };
-    for (const k of Object.keys(ivScoreSum)) ivScoreSum[k] = Number(status.scoreSum[k]) || 0;
+    interviewState.scoreSum = { tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0 };
+    for (const k of Object.keys(interviewState.scoreSum)) interviewState.scoreSum[k] = Number(status.scoreSum[k]) || 0;
   }
   addIvLog(`↩️ 已恢复上一场面试（第 ${status.round} 轮${status.roundsCount ? `，此前已完成 ${status.roundsCount} 轮` : ""}）——录音/计时不跨进程保留，作答照常`);
 }
@@ -278,8 +276,8 @@ function showInterviewUi(r) {
   $("iv-scores").innerHTML = "";
   $("iv-answer-area").style.display = "";
   ivTotalRounds = Number(r.totalRounds) || 9;
-  ivScoreSum = { tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0 };
-  ivScoreCount = 0;
+  interviewState.scoreSum = { tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0 };
+  interviewState.scoreCount = 0;
   clearIvRecordings(); // 新面试开始 → 清理上一场录音（本场录音从 0 开始）
   showQuestion(r);
 }
@@ -287,19 +285,19 @@ function showInterviewUi(r) {
 const IV_MAX_CHAIN = 6; // 同一追问点最大深挖次数（与服务端 MAX_DEPTH=6 一致，修复：原 3 vs 6 不一致）
 
 function showQuestion(r) {
-  ivRound = Number(r.round) || 1;
-  ivRoundType = r.roundType || (ivRound === 1 ? "开场与自我介绍" : "");
-  $("iv-status").textContent = `面试中 · 第 ${ivRound} 轮`;
+  interviewState.round = Number(r.round) || 1;
+  interviewState.roundType = r.roundType || (interviewState.round === 1 ? "开场与自我介绍" : "");
+  $("iv-status").textContent = `面试中 · 第 ${interviewState.round} 轮`;
   // 追问链指示：同一追问点的第 N 次深挖
   const chain = Number(r.depth) || 0;
   const chainHtml = chain > 0
     ? ` <span class="iv-chain" title="同一追问点的第 ${chain} 次深挖（最多 ${IV_MAX_CHAIN} 次）">🔗 追问 ${chain}/${IV_MAX_CHAIN}</span>`
     : "";
-  $("iv-round-type").innerHTML = `${ivRoundType ? `📍 本轮：${esc(ivRoundType)}` : ""}${chainHtml}`;
+  $("iv-round-type").innerHTML = `${interviewState.roundType ? `📍 本轮：${esc(interviewState.roundType)}` : ""}${chainHtml}`;
   $("iv-question").textContent = r.question || "请继续";
   // 优先考察计划（开场轮展示一次）：自动聚合薄弱点/题库错题/复习错题/今日复习/清单
   let weakPlan = "";
-  if (ivRound === 1 && Array.isArray(r.weakQueue) && r.weakQueue.length) {
+  if (interviewState.round === 1 && Array.isArray(r.weakQueue) && r.weakQueue.length) {
     weakPlan = `<div class="iv-weak-plan">🎯 本次优先考察（自动聚合你的练习数据）：${r.weakQueue.slice(0, 8).map((w) => `${esc(w.topic)}${w.reason ? `<span style="opacity:.75">（${esc(w.reason)}）</span>` : ""}`).join("、")}</div>`;
   }
   $("iv-meta").innerHTML = weakPlan + `
@@ -311,7 +309,7 @@ function showQuestion(r) {
   $("iv-answer").focus();
   renderIvProgress();
   startIvTimer();
-  addIvLog(`轮${ivRound}【${ivRoundType || "问答"}】问题：${(r.question || "").slice(0, 60)}`);
+  addIvLog(`轮${interviewState.round}【${interviewState.roundType || "问答"}】问题：${(r.question || "").slice(0, 60)}`);
 }
 
 $("iv-send").addEventListener("click", submitAnswer);
@@ -325,18 +323,18 @@ async function submitAnswer() {
   $("iv-send").disabled = true;
   $("iv-send").textContent = "评分中...";
   stopIvTimer();
-  addIvLog(`我的回答（${ivRoundSeconds}s）：${answer.slice(0, 60)}`, { play: true });
+  addIvLog(`我的回答（${interviewState.roundSeconds}s）：${answer.slice(0, 60)}`, { play: true });
   try {
     const r = await window.kanban.invAnswer(answer);
     if (r.error) { alert(r.error); return; }
     // 评分展示：条形图 + 全场累计
     if (r.scores) {
       renderIvScores(r.scores, r.total);
-      ivScoreCount++;
+      interviewState.scoreCount++;
       for (const k of ["tech", "expr", "depth", "edge", "reflect"]) {
-        ivScoreSum[k] += Number(r.scores[k]) || 0;
+        interviewState.scoreSum[k] += Number(r.scores[k]) || 0;
       }
-      ivScoreSum.total += Number(r.total) || 0;
+      interviewState.scoreSum.total += Number(r.total) || 0;
     }
     if (r.comment) $("iv-scores").insertAdjacentHTML("beforeend", `<div class="iv-comment">💬 ${esc(r.comment)}</div>`);
     // 🎯 薄弱点队列命中（本轮问题来自已知薄弱点 → 已从队列移除）
@@ -432,10 +430,10 @@ $("iv-history-toggle").addEventListener("click", () => {
 // 结束小结：全场均分 + 五维均分条（基于每轮累计）
 function renderIvSummary() {
   const box = $("iv-summary");
-  if (!box || !ivScoreCount) return;
-  const n = ivScoreCount;
-  const dims = DIM_LABELS.map(([k, l]) => [k, l, Math.round(ivScoreSum[k] / n)]);
-  const avg = Math.round(ivScoreSum.total / n);
+  if (!box || !interviewState.scoreCount) return;
+  const n = interviewState.scoreCount;
+  const dims = DIM_LABELS.map(([k, l]) => [k, l, Math.round(interviewState.scoreSum[k] / n)]);
+  const avg = Math.round(interviewState.scoreSum.total / n);
   const best = dims.slice().sort((a, b) => b[2] - a[2])[0];
   const worst = dims.slice().sort((a, b) => a[2] - b[2])[0];
   box.classList.remove("hidden");
@@ -548,8 +546,8 @@ function addIvLog(text, opts = {}) {
   const div = document.createElement("div");
   div.textContent = text;
   // 录音回听：本轮有录音 → 附 ▶️ 回听按钮（单例播放：再点同一按钮=停止，点其他=切播）
-  if (opts.play && ivRecordings[ivRound]) {
-    const rec = ivRecordings[ivRound];
+  if (opts.play && ivRecordings[interviewState.round]) {
+    const rec = ivRecordings[interviewState.round];
     const btn = document.createElement("button");
     btn.className = "iv-replay";
     btn.textContent = `▶️ 回听 ${fmtIvTime(rec.secs)}`;
@@ -638,7 +636,7 @@ async function startIvMic() {
   ivMicRec.onstop = () => {
     try {
       const blob = new Blob(ivMicChunks, { type: ivMicRec?.mimeType || "audio/webm" });
-      ivRecordings[ivRound] = { url: URL.createObjectURL(blob), secs: ivMicSecs };
+      ivRecordings[interviewState.round] = { url: URL.createObjectURL(blob), secs: ivMicSecs };
     } catch { /* ignore */ }
     ivMicChunks = [];
     transcribeIvPcm(); // 转写回填（录音已保存，转写失败不影响回听）
@@ -1047,17 +1045,29 @@ async function showAnswer() {
 /** 提交评分（rc-btn 四级与简答自评三档共用——FSRS 调度 + 反馈 + 答错讲解） */
 async function submitRating(card, rating) {
   const r = await window.kanban.reviewSubmit(card.id, rating);
+  // 薄弱点消灭进度可视化工单任务 2：答对清除薄弱点 → 正反馈 toast（"29:1 的挫败 → 可感知的胜利"）
+  if (r?.clearedWeak) {
+    window.kanban.notify("🎉 薄弱点已消灭", `「${String(r.clearedWeak).slice(0, 20)}」已清除——继续加油！`);
+  }
   // FSRS 反馈：下次复习时间 + 间隔
   if (r?.nextDue) showReviewFeedback(rating, r.nextDue, r.card);
   // 学习计划即时反馈（对比基线）
   if (r?.tip) appendReviewTip(r.tip);
   // 答错（忘了/困难）→ 显示「让真白讲一遍」（复习即学闭环）+ 后台换一批选择题
+  // 复习首刷不计 fail 工单任务 2：首刷答错 → 更强引导（"先学再复习"——讲解后回来重刷）
   const explainBtn = $("rc-explain");
   if (explainBtn) {
     if (rating < 2) {
       explainBtn.classList.remove("hidden");
       explainBtn.dataset.cardId = card.id;
       explainBtn.dataset.topic = card.topic;
+      if (r?.isFirst) {
+        explainBtn.textContent = "📖 先学再复习——让真白讲一遍，讲完回来重刷";
+        explainBtn.style.fontWeight = "700";
+      } else {
+        explainBtn.textContent = "🤔 没懂？让真白讲一遍";
+        explainBtn.style.fontWeight = "";
+      }
       quizSwapBatch(card.id); // 换批：下次复习该卡抽新题
     } else {
       explainBtn.classList.add("hidden");
@@ -1255,7 +1265,7 @@ $("rc-explain")?.addEventListener("click", () => {
   openReviewExplain(btn.dataset.cardId, btn.dataset.topic);
 });
 
-// 复习讲解代际：关闭弹窗/重新打开时递增，过期流回调丢弃（与学习讲解 sdGen 同模式——
+// 复习讲解代际：关闭弹窗/重新打开时递增，过期流回调丢弃（与学习讲解 studyDetailState.gen 同模式——
 // 曾存在同类竞态：关闭讲解后旧流继续写 rex-body，20-60s 内再开另一张卡讲解会被旧流覆盖）
 let rexGen = 0;
 async function openReviewExplain(cardId, topic) {
@@ -1460,7 +1470,9 @@ async function loadStudyPlan() {
   const st = studyStateFilter;
   const stateOf = (it) => {
     if (it.reviewDue) return "review";           // 复习卡到期 → 待复习（闭环最优先）
-    if (it.done) return "mastered";              // 完成且卡未到期 → 已掌握
+    // 清单完成语义自动判定工单任务 2：两级语义——已学（done，讲解过/勾选）vs 已掌握（mastery ≥ 80）
+    if (it.done && it.mastered) return "mastered"; // 完成且已掌握（面试/复习答对）→ 已掌握
+    if (it.done) return "learned";                 // 完成但未掌握 → 已学（讲解过）
     if (it.hasFile) return "learning";           // 打开过讲解 → 学习中
     return "todo";                               // 未开始 → 待学习
   };
@@ -1490,13 +1502,14 @@ async function loadStudyPlan() {
       <span class="track"><i style="width:${pct}%"></i></span>
       <b>${doneN}/${total}（${pct}%）</b>`;
   }
-  // 状态流分组（产品语义：待学 → 学习中 → 待复习 → 已掌握）
-  const groups = { todo: [], learning: [], review: [], mastered: [] };
+  // 状态流分组（产品语义：待学 → 学习中 → 已学 → 待复习 → 已掌握）
+  const groups = { todo: [], learning: [], learned: [], review: [], mastered: [] };
   for (const it of filtered) groups[stateOf(it)].push(it);
   const masteredN = groups.mastered.length;
   list.innerHTML = renderStateGroups([
     { key: "todo", label: "📥 待学习", items: groups.todo },
     { key: "learning", label: "📖 学习中", items: groups.learning },
+    { key: "learned", label: "✅ 已学（讲解过）", items: groups.learned },
     { key: "review", label: "🔁 待复习（复习卡到期）", items: groups.review, cls: "lv-adv" },
   ]);
   bindPlanItems(list, false); // 主列表绑定：学习/讲解按钮 + 勾选 + 组头折叠（此前缺失 → 点学习没反应）
@@ -1601,6 +1614,10 @@ function bindPlanItems(root, _isDone) {
       const r = await window.kanban.studyCheck(el.dataset.id, e.target.checked);
       // 勾选/取消后重新渲染（完成项移入/移出"已完成"折叠区）
       loadStudyPlan();
+      // 薄弱点消灭进度可视化工单任务 2：勾选完成清除薄弱点 → 正反馈 toast
+      if (e.target.checked && r?.clearedWeak) {
+        window.kanban.notify("🎉 薄弱点已消灭", `「${String(r.clearedWeak).slice(0, 20)}」学完已清除——继续加油！`);
+      }
       // 真白情感反馈（庆祝/安慰）+ 语音：显示中文，播日语预设场景台词
       if (r?.emotion) {
         window.kanban.notify("🎀 真白", r.emotion);
@@ -1703,7 +1720,7 @@ clusterBtn().addEventListener("click", async () => {
 
 // 归并结果弹层（复用学习弹层，流式显示）
 async function showClusterResult(ids) {
-  sdCurrentId = "cluster-" + ids.join("-");
+  studyDetailState.currentId = "cluster-" + ids.join("-");
   sdOverlay().classList.remove("hidden");
   $("sd-modal-title").textContent = "🔗 归并中...";
   sdBody().innerHTML = '<div style="color:#6a6790;font-size:13px;padding:12px">📚 正在归并多个讲解为主题簇综合讲解（去重合并 + 扩展关联考点）...</div>';
@@ -1716,7 +1733,7 @@ async function showClusterResult(ids) {
     });
     const name = r?.clusterName || "综合讲解";
     $("sd-modal-title").textContent = "🔗 " + name;
-    studyDetailCache[sdCurrentId] = { content: merged, topic: name };
+    studyDetailCache[studyDetailState.currentId] = { content: merged, topic: name };
     sdBody().innerHTML = renderMd(merged);
     buildToc(); // 锚点目录（归并版）
     sdBody().scrollTop = 0;
@@ -1730,16 +1747,21 @@ async function showClusterResult(ids) {
 }
 
 // ============ 学习详情：全屏弹层展开讲解 + 追问补充 ============
+// 原生面板状态收敛工单任务 2：sdGen/sdStreaming/sdGeneratingId/sdCurrentId → panelState.studyDetailState.*
+// （模块级状态对象——生命周期集中管理，复位走 resetStudyDetail()）
 let studyDetailCache = {}; // id -> { content, topic }
-let sdCurrentId = null;    // 当前弹层打开的条目 id
-let sdGen = 0;             // 讲解请求代际：切换条目/关闭弹层时递增，过期流式回调直接丢弃
                            //（竞态修复：快速点击不同讲解时旧流仍持续到达，曾把 A 内容渲染进 B 弹窗）
+                           // 流式生成中：遮罩点击不关闭（防误触关掉正在生成的讲解——鼠标移到弹窗
+                           // 边缘落在遮罩上点击会触发"点遮罩关闭"，生成中的讲解被误关需重新生成）
 const sdOverlay = () => $("study-detail-overlay");
 const sdBody = () => $("sd-modal-body");
 
 async function showStudyDetail(id) {
-  const gen = ++sdGen;
-  sdCurrentId = id;
+  const gen = ++studyDetailState.gen;
+  studyDetailState.currentId = id;
+  studyDetailState.streaming = false; // 每次打开重置（缓存命中路径保持 false；流式开始前置 true）
+  followupChains.clear(); // 第三步 C1：新条目清空追问链（不同条目链不混淆）
+  pendingRef = null; // 引用状态复位
   // 显示弹层 + 加载态
   sdOverlay().classList.remove("hidden");
   sdBody().innerHTML = '<div style="color:#6a6790;font-size:13px;padding:12px">📖 加载讲解中...</div>';
@@ -1753,12 +1775,13 @@ async function showStudyDetail(id) {
       return;
     }
     // 流式获取（SSE）：逐段渲染，无文件条目也能边生成边看
+    studyDetailState.streaming = true; // 流式生成中：遮罩点击不关闭（防误触）
     const result = await streamStudyDetail(id, (content) => {
-      if (gen !== sdGen) return; // 已切到别的条目/已关闭：丢弃过期流内容
+      if (gen !== studyDetailState.gen) return; // 已切到别的条目/已关闭：丢弃过期流内容
       sdBody().innerHTML = renderMd(content) + '<div class="sd-streaming">⏳ 生成中...</div>';
       sdBody().scrollTop = sdBody().scrollHeight; // 生成中跟随最新内容
     });
-    if (gen !== sdGen) return; // 生成期间被切换：结果属于旧条目，不渲染
+    if (gen !== studyDetailState.gen) return; // 生成期间被切换：结果属于旧条目，不渲染
     const topic = typeof result === "string" ? result : (result?.topic || "讲解");
     // 同知识点复用提示（如「版本号数组排序」复用了「版本号比较」的讲解）
     if (result?.similarFrom?.topic && result.similarFrom.topic !== topic) {
@@ -1805,7 +1828,7 @@ async function showStudyDetail(id) {
     // 生成完成：回到顶部（从头阅读，不留在末尾）
     sdBody().scrollTop = 0;
   } catch (e) {
-    if (gen !== sdGen) return;
+    if (gen !== studyDetailState.gen) return;
     sdBody().innerHTML = `<div style="color:#c05050;font-size:13px;padding:12px">⚠️ ${esc(e.message)}</div>`;
   }
 }
@@ -1814,7 +1837,7 @@ async function showStudyDetail(id) {
 let sdAsking = false;
 async function askStudyDetail() {
   const question = $("sd-ask-input").value.trim();
-  if (!question || !sdCurrentId) return;
+  if (!question || !studyDetailState.currentId) return;
   if (sdAsking) {
     // 防重入但给提示（修复：上次流式挂起时 sdAsking 卡 true——用户再点被静默拒绝，
     // 问题留在输入框像"没发出去"；明确提示 + 60s 超时后自动恢复可重试）
@@ -1825,22 +1848,28 @@ async function askStudyDetail() {
     sdBody().scrollTop = sdBody().scrollHeight;
     return;
   }
-  const id = sdCurrentId;     // 捕获：切换条目后旧追问不得污染新条目缓存（曾用全局 sdCurrentId 写错条目）
-  const gen = sdGen;          // 捕获代际：切换/关闭后过期流回调直接丢弃
+  const id = studyDetailState.currentId;     // 捕获：切换条目后旧追问不得污染新条目缓存（曾用全局 studyDetailState.currentId 写错条目）
+  const gen = studyDetailState.gen;          // 捕获代际：切换/关闭后过期流回调直接丢弃
   sdAsking = true;
   const btn = $("sd-ask-btn");
   btn.disabled = true;
   btn.textContent = "补充中...";
+  // 讲解追问交互增强工单第二步 B1：引用段落（"基于此段追问"——简化版：取当前滚动位置段落）
+  const ref = pendingRef;
+  pendingRef = null;
   $("sd-ask-input").value = "";
+  $("sd-ask-input").placeholder = "继续追问：如「常见 Hook 有哪些？useState 和 useReducer 的区别？」";
+  const refBtn = $("sd-ref-btn");
+  if (refBtn) refBtn.textContent = "📌 基于此段追问";
   try {
     // 初始内容（未生成时先生成）
     if (!studyDetailCache[id]?.content) {
       const topic = await streamStudyDetail(id, (c) => {
-        if (gen !== sdGen) return;
+        if (gen !== studyDetailState.gen) return;
         sdBody().innerHTML = renderMd(c) + '<div class="sd-streaming">⏳ 生成中...</div>';
         sdBody().scrollTop = sdBody().scrollHeight;
       });
-      if (gen !== sdGen) return;
+      if (gen !== studyDetailState.gen) return;
       $("sd-modal-title").textContent = "📖 " + topic;
     }
     const base = studyDetailCache[id]?.content || "";
@@ -1860,12 +1889,12 @@ async function askStudyDetail() {
       }
     };
     await window.kanban.studyDetailAppend(id, question, (delta) => {
-      if (gen !== sdGen) return; // 已切换/关闭：丢弃过期追问流
+      if (gen !== studyDetailState.gen) return; // 已切换/关闭：丢弃过期追问流
       extra += delta;
       sdBody().innerHTML = renderMd(base) + `<div class="sd-ask-q">💬 追问：${esc(question)}</div>` + renderMd(extra) + '<div class="sd-streaming">⏳ 补充中...</div>';
       sdBody().scrollTop = sdBody().scrollHeight;
-    }, onEvent);
-    if (gen !== sdGen) return; // 生成期间被切换：不写缓存不渲染
+    }, onEvent, ref);
+    if (gen !== studyDetailState.gen) return; // 生成期间被切换：不写缓存不渲染
     // 完成：更新缓存（下次打开能看到补充内容）
     const topic = studyDetailCache[id]?.topic || "讲解";
     if (cacheHit) {
@@ -1873,9 +1902,13 @@ async function askStudyDetail() {
       $("sd-modal-title").textContent = "📖 " + topic + "（命中历史回答）";
     } else {
       studyDetailCache[id] = { content: base + `\n\n## 💬 追问：${question}\n\n` + extra, topic };
+      // 讲解追问交互增强工单第三步 C1：记录追问链（引用段落 → 链；无引用 → 文档级链）
+      const chainKey = ref?.source ? ref.source : "__doc__";
+      if (!followupChains.has(chainKey)) followupChains.set(chainKey, []);
+      followupChains.get(chainKey).push({ q: question, a: extra });
       sdBody().innerHTML = renderMd(studyDetailCache[id].content);
     }
-    buildToc(); // 锚点目录（含新追问章节）
+    buildToc(); // 锚点目录（含新追问章节）——foldFollowups 内按链挂载就地折叠
     sdBody().scrollTop = sdBody().scrollHeight; // 停留在补充处
   } catch (e) {
     const box = document.createElement("div");
@@ -1892,10 +1925,130 @@ async function askStudyDetail() {
 $("sd-ask-btn").addEventListener("click", askStudyDetail);
 $("sd-ask-input").addEventListener("keydown", (e) => { if (e.key === "Enter") askStudyDetail(); });
 
+// 讲解追问交互增强工单第二步 B1：引用追问（简化版先行——"基于当前段落追问"）
+// 取当前滚动位置可见的段落（最近的上方标题 + 段落文本，截断 500 字）→ 追问携带引用段
+let pendingRef = null; // { text, source }——下次追问携带的引用段落
+// 第三步 C1：追问链（引用段落 → 链；无引用 → 文档级链）——就地折叠/侧栏抽屉的地基
+const followupChains = new Map(); // chainKey（"主文「XX」"/"第 N 轮追问"/"__doc__"）→ [{q, a}]
+// 第三步 C3：侧栏抽屉状态（当前抽屉的引用段落）
+let drawerRef = null; // { text, source }——抽屉当前引用的段落
+$("sd-ref-btn")?.addEventListener("click", () => {
+  const body = sdBody();
+  if (!body) return;
+  // 找当前滚动位置最近的段落：遍历 .sd-h 标题 + 段落，取 scrollTop 上方最近的
+  const heads = [...body.querySelectorAll(".sd-h")];
+  const scrollTop = body.scrollTop;
+  let cur = null;
+  for (const h of heads) {
+    if (h.offsetTop <= scrollTop + 40) cur = h; // 视口上方的最近标题
+    else break;
+  }
+  if (!cur) { window.kanban.notify("📌 引用追问", "先滚动到想引用的段落附近再点"); return; }
+  // 提取段落文本（标题 + 后续内容直到下一个标题，截断 500）
+  const isFu = /💬\s*追问/.test(cur.textContent || "");
+  const source = isFu ? `第 ${cur.closest("details.sd-fu")?.dataset.round || "?"} 轮追问` : `主文「${(cur.textContent || "").trim().slice(0, 20)}」`;
+  let text = (cur.textContent || "").trim();
+  let el = cur.nextElementSibling;
+  while (el && !el.classList.contains("sd-h") && text.length < 500) {
+    text += "\n" + (el.textContent || "").trim();
+    el = el.nextElementSibling;
+  }
+  // 第三步 C3：打开侧栏抽屉（对话式查看——追问 + 回答流式显示，对话气泡式）
+  openDrawer({ text: text.slice(0, 500), source });
+});
+
+// ---------- 第三步 C3：侧栏抽屉（对话式查看） ----------
+// 选中段落 → 右侧滑出追问面板（追问 + 回答流式显示，对话气泡式）；
+// 抽屉内显示该段落的追问链（含历史轮次）；新追问就地追加到链尾
+function openDrawer(ref) {
+  const drawer = $("sd-drawer");
+  if (!drawer) return;
+  drawerRef = ref;
+  genAtDrawer = studyDetailState.gen; // 捕获代际：切换/关闭后过期流丢弃
+  drawer.classList.remove("hidden");
+  $("sd-drawer-title").textContent = `💬 追问 · ${ref.source}`;
+  renderDrawerChain();
+  const input = $("sd-drawer-input");
+  if (input) { input.value = ""; input.focus(); }
+}
+
+function closeDrawer() {
+  const drawer = $("sd-drawer");
+  if (drawer) drawer.classList.add("hidden");
+  drawerRef = null;
+}
+
+/** 渲染抽屉内追问链（历史轮次气泡 + 空态引导） */
+function renderDrawerChain() {
+  const body = $("sd-drawer-body");
+  if (!body) return;
+  const chain = drawerRef ? (followupChains.get(drawerRef.source) || []) : [];
+  if (!chain.length) {
+    body.innerHTML = `<div style="color:#9a97b8;font-size:12px;padding:12px;text-align:center;">基于「${esc(drawerRef?.source || "")}」追问——回答会明确针对该段内容</div>`;
+    return;
+  }
+  body.innerHTML = chain.map((c, i) => `
+    <div class="sd-drawer-msg">
+      <div class="sd-drawer-q">Q${i + 1}：${esc(c.q)}</div>
+      <div class="sd-drawer-a">${esc(c.a.slice(0, 600))}${c.a.length > 600 ? "…" : ""}</div>
+    </div>`).join("");
+  body.scrollTop = body.scrollHeight;
+}
+
+/** 抽屉内追问：流式回答追加到链尾气泡（复用 studyDetailAppend——与主区追问同链路） */
+let drawerAsking = false;
+async function askInDrawer() {
+  const input = $("sd-drawer-input");
+  const question = (input?.value || "").trim();
+  if (!question || drawerAsking) return;
+  const id = studyDetailState.currentId;
+  if (!id || !drawerRef) return;
+  drawerAsking = true;
+  const send = $("sd-drawer-send");
+  if (send) send.disabled = true;
+  input.value = "";
+  // 追加提问气泡 + 流式回答气泡
+  const body = $("sd-drawer-body");
+  const chain = followupChains.get(drawerRef.source) || [];
+  const qIdx = chain.length;
+  const qBubble = document.createElement("div");
+  qBubble.className = "sd-drawer-msg";
+  qBubble.innerHTML = `<div class="sd-drawer-q">Q${qIdx + 1}：${esc(question)}</div><div class="sd-drawer-a sd-drawer-streaming">⏳ 回答生成中…</div>`;
+  body.appendChild(qBubble);
+  body.scrollTop = body.scrollHeight;
+  const aEl = qBubble.querySelector(".sd-drawer-a");
+  let extra = "";
+  try {
+    await window.kanban.studyDetailAppend(id, question, (delta) => {
+      if (studyDetailState.gen !== genAtDrawer) return; // 已切换/关闭：丢弃过期流
+      extra += delta;
+      aEl.textContent = extra;
+      body.scrollTop = body.scrollHeight;
+    }, () => {}, drawerRef);
+    if (studyDetailState.gen !== genAtDrawer) return;
+    aEl.classList.remove("sd-drawer-streaming");
+    // 链记录（与就地折叠共用 C1 元数据）
+    if (!followupChains.has(drawerRef.source)) followupChains.set(drawerRef.source, []);
+    followupChains.get(drawerRef.source).push({ q: question, a: extra });
+  } catch (e) {
+    aEl.textContent = "⚠️ " + String(e?.message || e).slice(0, 80);
+    aEl.classList.remove("sd-drawer-streaming");
+  } finally {
+    drawerAsking = false;
+    if (send) send.disabled = false;
+    input.focus();
+  }
+}
+let genAtDrawer = 0; // 抽屉追问的代际捕获（切换/关闭后丢弃过期流）
+
+$("sd-drawer-send")?.addEventListener("click", askInDrawer);
+$("sd-drawer-input")?.addEventListener("keydown", (e) => { if (e.key === "Enter") askInDrawer(); });
+$("sd-drawer-close")?.addEventListener("click", closeDrawer);
+
 // 重新生成：删除本地讲解存档 → 清缓存 → 重新流式生成
 // 用户诉求：生成内容错误/不满意时要有处理手段（此前只能干看着错误内容）
 $("sd-regenerate-btn").addEventListener("click", async () => {
-  const id = sdCurrentId;
+  const id = studyDetailState.currentId;
   if (!id) return;
   const topic = studyDetailCache[id]?.topic || "该条目";
   if (!confirm(`删除「${topic}」的本地讲解存档并重新生成？\n原讲解与全部追问记录删除后不可恢复。`)) return;
@@ -1910,7 +2063,7 @@ $("sd-regenerate-btn").addEventListener("click", async () => {
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || "重置失败");
     delete studyDetailCache[id];
-    sdGen++; // 中断可能还在跑的旧流（若有）
+    studyDetailState.gen++; // 中断可能还在跑的旧流（若有）
     sdForceRegen = true; // 强制生成本条自己的讲解（原逻辑重置后仍复用相似错档，重新生成不生效）
     try {
       await showStudyDetail(id); // 重新流式生成
@@ -1929,9 +2082,9 @@ $("sd-regenerate-btn").addEventListener("click", async () => {
 // 整理全文：把原始讲解 + 多轮追问整合成结构统一的完整讲解（流式显示 + 写回文件）
 let sdConsolidating = false;
 async function consolidateStudyDetail() {
-  if (!sdCurrentId || sdConsolidating) return;
-  const id = sdCurrentId;
-  const gen = sdGen; // 捕获代际：切换/关闭后过期流丢弃
+  if (!studyDetailState.currentId || sdConsolidating) return;
+  const id = studyDetailState.currentId;
+  const gen = studyDetailState.gen; // 捕获代际：切换/关闭后过期流丢弃
   sdConsolidating = true;
   const btn = $("sd-consolidate-btn");
   btn.disabled = true;
@@ -1940,23 +2093,23 @@ async function consolidateStudyDetail() {
     // 初始内容（未生成时先生成）
     if (!studyDetailCache[id]?.content) {
       const topic = await streamStudyDetail(id, (c) => {
-        if (gen !== sdGen) return;
+        if (gen !== studyDetailState.gen) return;
         sdBody().innerHTML = renderMd(c) + '<div class="sd-streaming">⏳ 生成中...</div>';
         sdBody().scrollTop = sdBody().scrollHeight;
       });
-      if (gen !== sdGen) return;
+      if (gen !== studyDetailState.gen) return;
       $("sd-modal-title").textContent = "📖 " + topic;
     }
     sdBody().innerHTML = '<div style="color:#6a6790;font-size:13px;padding:12px">📚 正在整合全文（去重合并、统一结构）...</div>';
     // 流式整合
     let merged = "";
     await window.kanban.studyConsolidate(id, (delta) => {
-      if (gen !== sdGen) return;
+      if (gen !== studyDetailState.gen) return;
       merged += delta;
       sdBody().innerHTML = renderMd(merged) + '<div class="sd-streaming">⏳ 整合中...</div>';
       sdBody().scrollTop = sdBody().scrollHeight;
     });
-    if (gen !== sdGen) return;
+    if (gen !== studyDetailState.gen) return;
     // 完成：更新缓存（下次打开看到整理版）
     const topic = studyDetailCache[id]?.topic || "讲解";
     studyDetailCache[id] = { content: merged, topic };
@@ -1965,7 +2118,7 @@ async function consolidateStudyDetail() {
     buildToc(); // 锚点目录（整理版）
     sdBody().scrollTop = 0; // 从头阅读整理版
   } catch (e) {
-    if (gen !== sdGen) return;
+    if (gen !== studyDetailState.gen) return;
     const box = document.createElement("div");
     box.style.cssText = "color:#c05050;font-size:12px;padding:8px";
     box.textContent = "⚠️ " + e.message;
@@ -1983,10 +2136,9 @@ $("sd-consolidate-btn").addEventListener("click", consolidateStudyDetail);
 // sdForceRegen：重新生成入口置 true → 请求带 noSimilar=1，强制生成自己的讲解（不复用相似错档）
 let sdForceRegen = false;
 // 流式链路超时统一修复工单任务 3①：detail 生成防重入（同一条目连点"生成"会并发流式——SSE 通道冲突；
-// 按条目维度——切换条目允许（代际 sdGen 丢弃旧流），同条目连点拒绝）
-let sdGeneratingId = null;
+// 按条目维度——切换条目允许（代际 studyDetailState.gen 丢弃旧流），同条目连点拒绝）
 async function streamStudyDetail(id, onUpdate) {
-  if (sdGeneratingId === id) {
+  if (studyDetailState.generatingId === id) {
     // 防重入但给提示（复用追问模式——不静默拒绝；60s 超时后自动恢复可重试）
     const box = document.createElement("div");
     box.style.cssText = "color:#b8860b;font-size:12px;padding:6px 8px;background:rgba(184,134,11,.08);border-radius:6px;margin:4px 0;";
@@ -1995,7 +2147,7 @@ async function streamStudyDetail(id, onUpdate) {
     sdBody().scrollTop = sdBody().scrollHeight;
     throw new Error("讲解生成中，请稍候");
   }
-  sdGeneratingId = id;
+  studyDetailState.generatingId = id;
   try {
     let content = "";
     let topic = "讲解";
@@ -2013,13 +2165,17 @@ async function streamStudyDetail(id, onUpdate) {
     studyDetailCache[id] = { content, topic };
     return { topic, similarFrom: result?.similarFrom || null };
   } finally {
-    if (sdGeneratingId === id) sdGeneratingId = null; // 成功/失败/超时/取消都恢复（防重入标志卡死）
+    // 成功/失败/超时/取消都恢复（防重入标志卡死）；studyDetailState.streaming 同条件复位——
+    // 防重入 throw（另有流式在进行）时保持 true，不误复位正在进行的流式
+    if (studyDetailState.generatingId === id) { studyDetailState.generatingId = null; studyDetailState.streaming = false; }
   }
 }
 
-$("sd-modal-close").addEventListener("click", () => { sdGen++; sdOverlay().classList.add("hidden"); }); // 关闭 → 过期流丢弃
+// 原生面板状态收敛工单任务 2：关闭路径复位收敛为 resetStudyDetail()（代际递增 + streaming 复位 + 事件通知）
+$("sd-modal-close").addEventListener("click", () => { resetStudyDetail(); sdOverlay().classList.add("hidden"); }); // 关闭 → 过期流丢弃
 sdOverlay().addEventListener("click", (e) => {
-  if (e.target === sdOverlay()) { sdGen++; sdOverlay().classList.add("hidden"); } // 点遮罩关闭
+  // 点遮罩关闭——流式生成中不响应（防误触关掉正在生成的讲解；生成完成/失败后恢复标准行为）
+  if (e.target === sdOverlay() && !studyDetailState.streaming) { resetStudyDetail(); sdOverlay().classList.add("hidden"); }
 });
 
 // 轻量 Markdown 渲染：标题/代码块/列表/表格/引用/加粗/斜体/行内代码/分隔线
@@ -2027,20 +2183,27 @@ let tocSeq = 0; // 锚点 id 计数器（讲解内容标题用）
 
 /**
  * 构建讲解锚点目录：扫描弹层内的标题（.sd-h）与追问块（.sd-ask-q），
- * 生成可点击 chips（横向滚动），点击平滑滚动定位 + 高亮闪烁
+ * 生成可点击列表（纵向——讲解追问交互增强工单第一步 C），点击平滑滚动定位 + 高亮闪烁
+ * 追问项显示"第 N 轮 + 问题摘要"（截断 20 字），主文项按 ## 标题，追问项缩进区分层级
  */
 function buildToc() {
   const body = sdBody();
   const toc = $("sd-toc");
   if (!body || !toc) return;
+  // 讲解追问交互增强工单第一步 A：渲染后折叠追问段（默认只显示主文——长文可读化）
+  foldFollowups();
   const items = [];
+  let fuCount = 0;
   body.querySelectorAll(".sd-h, .sd-ask-q").forEach((el) => {
     if (!el.id) { tocSeq++; el.id = `sd-anchor-${tocSeq}`; }
-    const isQ = el.classList.contains("sd-ask-q");
+    const isQ = el.classList.contains("sd-ask-q") || (el.classList.contains("sd-h") && /💬\s*追问/.test(el.textContent || ""));
     const hl = isQ ? 1 : Number(el.dataset.hl || 1);
     let text = (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 26);
-    if (isQ) text = text.replace(/^💬\s*追问[：:]\s*/, ""); // 目录已有 💬 图标，去掉前缀
-    items.push({ id: el.id, text, hl, q: isQ });
+    if (isQ) {
+      fuCount++;
+      text = text.replace(/^💬\s*追问[：:]\s*/, "").slice(0, 20); // 问题摘要（截断 20 字）
+    }
+    items.push({ id: el.id, text, hl, q: isQ, round: isQ ? fuCount : 0 });
   });
   if (items.length <= 1) {
     toc.classList.add("hidden");
@@ -2048,27 +2211,128 @@ function buildToc() {
     return;
   }
   toc.classList.remove("hidden");
-  // 滚轮横向滚动（chips 横向容器用滚轮滚动，绑定一次）
-  if (!toc.dataset.wheelBound) {
-    toc.dataset.wheelBound = "1";
-    toc.addEventListener("wheel", (e) => {
-      if (e.deltaY && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        toc.scrollLeft += e.deltaY;
-        e.preventDefault();
-      }
-    }, { passive: false });
-  }
+  // 纵向列表（第一步 C：从横向滚动条改纵向——滚轮滚动不再需要）
   toc.innerHTML = items.map((it) => `
-    <button class="sd-toc-item" data-target="${it.id}" data-hl="${it.hl}" title="${esc(it.text)}">${it.q ? "💬 " : ""}${esc(it.text)}</button>`).join("");
+    <button class="sd-toc-item${it.q ? " sd-toc-q" : ""}" data-target="${it.id}" data-hl="${it.hl}" title="${esc(it.text)}"
+      style="display:block;width:100%;text-align:left;${it.q ? "padding-left:18px;font-size:11px;color:#6d4fd8;" : ""}">
+      ${it.q ? `💬 第 ${it.round} 轮：` : ""}${esc(it.text)}
+    </button>`).join("");
   toc.querySelectorAll(".sd-toc-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       const target = document.getElementById(btn.dataset.target);
       if (!target) return;
+      // 目录联动（第一步 A）：目标是折叠追问段 → 先展开再跳转
+      const details = target.closest("details.sd-fu");
+      if (details && !details.open) details.open = true;
       target.scrollIntoView({ behavior: "smooth", block: "start" });
       target.classList.add("sd-anchor-flash");
       setTimeout(() => target.classList.remove("sd-anchor-flash"), 1600);
     });
   });
+}
+
+/**
+ * 讲解追问交互增强工单第一步 A：追问段落折叠——默认只显示主文，
+ * 追问段折叠成列表（"💬 追问 N：摘要"），点开展开；"展开全部"按钮与 consolidate 入口相邻
+ */
+function foldFollowups() {
+  const body = sdBody();
+  if (!body) return;
+  // 已折叠过且内容未变（sd-fu 存在）→ 跳过；内容重渲染（innerHTML 替换）后 sd-fu 消失 → 重新折叠
+  if (body.querySelector("details.sd-fu")) return;
+  const heads = [...body.querySelectorAll(".sd-h")];
+  let fuCount = 0;
+  for (let i = 0; i < heads.length; i++) {
+    const h = heads[i];
+    if (!/💬\s*追问/.test(h.textContent || "")) continue;
+    fuCount++;
+    // 收集后续兄弟直到下一个标题
+    const nodes = [];
+    let el = h.nextElementSibling;
+    while (el && !(el.classList.contains("sd-h") || el.classList.contains("sd-ask-q"))) {
+      nodes.push(el);
+      el = el.nextElementSibling;
+    }
+    const summary = (h.textContent || "").replace(/💬\s*追问[：:]\s*/, "").trim().slice(0, 20);
+    const details = document.createElement("details");
+    details.className = "sd-fu";
+    details.dataset.round = String(fuCount);
+    const sum = document.createElement("summary");
+    sum.className = "sd-fu-summary";
+    sum.textContent = `💬 追问 ${fuCount}：${summary}`;
+    details.appendChild(sum);
+    // 把标题 + 后续节点移入 details
+    h.parentNode.insertBefore(details, h);
+    details.appendChild(h);
+    for (const n of nodes) details.appendChild(n);
+  }
+  // "展开全部"按钮（与 consolidate 入口相邻——防折叠后入口不可见）
+  const askBar = document.querySelector(".sd-modal-ask");
+  if (fuCount > 0 && askBar && !document.getElementById("sd-fu-expand")) {
+    const btn = document.createElement("button");
+    btn.id = "sd-fu-expand";
+    btn.className = "secondary";
+    btn.textContent = `🔽 展开全部追问（${fuCount}）`;
+    btn.style.cssText = "font-size:11px;padding:2px 8px;";
+    btn.addEventListener("click", () => {
+      const all = body.querySelectorAll("details.sd-fu");
+      const anyClosed = [...all].some((d) => !d.open);
+      all.forEach((d) => { d.open = anyClosed; });
+      btn.textContent = anyClosed ? `🔼 收起全部追问` : `🔽 展开全部追问（${fuCount}）`;
+    });
+    askBar.insertBefore(btn, askBar.firstChild);
+  }
+  // 第三步 C2：就地折叠——追问段按链挂载到对应主文段落下方（同链合并 + 链内轮次 + 流式展开）
+  mountFollowupChains(body);
+}
+
+/**
+ * 第三步 C2：就地折叠——追问段从"尾部列表"挂载到对应主文段落下方
+ * 同一段落多次追问 → 链内按轮次展示（Q1→A1→Q2→A2），默认折叠为"💬 追问链（N 轮）▸"；
+ * 流式生成中自动展开（生成中的回答必须可见）；无引用追问挂文档级（尾部区域）
+ */
+function mountFollowupChains(body) {
+  const fus = [...body.querySelectorAll("details.sd-fu")];
+  if (!fus.length) return;
+  // 按链分组：追问段标题的问题文本 → followupChains 里找含该问题的链
+  const byChain = new Map(); // chainKey → [details]
+  for (const d of fus) {
+    const qText = (d.querySelector("summary")?.textContent || "").replace(/^💬 追问 \d+：/, "").trim();
+    let key = "__doc__";
+    for (const [k, chain] of followupChains) {
+      if (chain.some((c) => c.q === qText)) { key = k; break; }
+    }
+    if (!byChain.has(key)) byChain.set(key, []);
+    byChain.get(key).push(d);
+  }
+  // 同链合并：第一个 details 保留，其余内容移入；链内轮次编号
+  for (const [key, details] of byChain) {
+    if (details.length <= 1) continue;
+    const first = details[0];
+    for (const d of details.slice(1)) {
+      while (d.firstChild) first.appendChild(d.firstChild);
+      d.remove();
+    }
+    const chain = followupChains.get(key) || [];
+    const sum = first.querySelector("summary");
+    if (sum) sum.textContent = `💬 追问链（${chain.length} 轮）▸`;
+    first.dataset.chain = String(chain.length);
+  }
+  // 挂载：有引用的链 → 挂到对应主文段落下方（标题匹配）
+  for (const [key, details] of byChain) {
+    if (key === "__doc__") continue;
+    const title = key.replace(/^主文「/, "").replace(/」$/, "").trim();
+    if (!title) continue;
+    const target = [...body.querySelectorAll(".sd-h")].find((h) => (h.textContent || "").trim().startsWith(title));
+    if (target) {
+      const d = details[0];
+      target.parentNode.insertBefore(d, target.nextSibling);
+    }
+  }
+  // 流式生成中：自动展开（生成中的回答必须可见）
+  if (body.querySelector(".sd-streaming")) {
+    body.querySelectorAll("details.sd-fu").forEach((d) => { d.open = true; });
+  }
 }
 
 function renderMd(md) {

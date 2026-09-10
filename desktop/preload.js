@@ -74,8 +74,8 @@ contextBridge.exposeInMainWorld("kanban", /** @type {import("./kanban-api").Kanb
   studyDetailStream: (id, onChunk, opts = {}) => streamPromise({
     channel: "study-detail-chunk", invokeName: "widget:study-detail-stream", args: { id, noSimilar: !!opts.noSimilar }, onChunk, jsonMode: true,
   }),
-  studyDetailAppend: (id, question, onChunk, onEvent) => streamPromise({
-    channel: "study-append-chunk", invokeName: "widget:study-append-stream", args: { id, question }, onChunk, onEvent,
+  studyDetailAppend: (id, question, onChunk, onEvent, ref) => streamPromise({
+    channel: "study-append-chunk", invokeName: "widget:study-append-stream", args: { id, question, ref }, onChunk, onEvent,
   }),
   studyConsolidate: (id, onChunk) => streamPromise({
     channel: "study-consolidate-chunk", invokeName: "widget:study-consolidate-stream", args: { id }, onChunk,

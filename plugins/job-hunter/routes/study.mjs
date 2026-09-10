@@ -7,8 +7,9 @@ import * as reviewApi from "#lib/review.mjs";
 import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
 import { findStudyFile, studyNotesDir, sanitizeFilename, normName } from "#lib/study-files.mjs";
 import { isSimilarTopicForArchive } from "#lib/memory.mjs";
-import { queryFollowupCache } from "#lib/followup-cache.mjs";
+import { queryFollowupCache, loadFollowupCache } from "#lib/followup-cache.mjs";
 import { readBody } from "#lib/widget-core.mjs";
+import { db } from "#lib/db.mjs";
 import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
 import { createSSEPush, withContract } from "#lib/routes/contract.mjs";
 import { StudyStreamEvent } from "#lib/contracts/sse.mjs";
@@ -162,6 +163,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
   router.route("/api/study-note/reset", "POST", (req, res) => {
     // 讲解重置：删除该条目的本地讲解存档（study_notes/{topic}.md）
     // 用户诉求：生成错误/内容不满意时无法处理 → 提供"重新生成"入口（删除后前端重新流式生成）
+    // 重新生成带追问整合工单任务 1：删除前保存追问段落（settings）——重新生成时注入 prompt（原题+追问整合）
     readBody(req, res, (body) => {
       try {
         const { id } = JSON.parse(body || "{}");
@@ -170,7 +172,18 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
         if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
         const f = path.join(studyNotesDir(), `${sanitizeFilename(item.topic)}.md`);
         let deleted = false;
-        if (existsSync(f)) { rmSync(f, { force: true }); deleted = true; }
+        if (existsSync(f)) {
+          // 保存追问段落（重新生成时整合——追问深度内容不丢）
+          try {
+            const followups = loadFollowupCache(item.topic);
+            if (followups.length) {
+              db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
+                .run(`study_followups_${String(id)}`, JSON.stringify(followups), Date.now());
+            }
+          } catch { /* 追问保存失败不影响重置 */ }
+          rmSync(f, { force: true });
+          deleted = true;
+        }
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ok: true, deleted, topic: item.topic }));
       } catch (e) {
@@ -249,13 +262,28 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
       const sourceBlock = sourceText
         ? `\n\n【原始面经内容（来自 ${item.source}，仅作讲解对象；原文可能含来源表述的方向词，不按它改编方向——从知识本身讲）】\n${safeExternalBlock(sourceText)}`
         : "";
+      // 重新生成带追问整合工单任务 1：读 reset 前保存的追问段落（settings）→ 注入 prompt
+      // 重新生成 = 原题 + 追问整合（不是从头）——追问深度内容不丢；≤2000 字截断（防塞爆）
+      let followupBlock = "";
+      try {
+        const saved = db.prepare("SELECT value FROM settings WHERE key=?").get(`study_followups_${String(item.id)}`);
+        if (saved?.value) {
+          const followups = JSON.parse(String(saved.value));
+          const parts = (Array.isArray(followups) ? followups : [])
+            .map((fu) => `追问：${String(fu.question || "").slice(0, 120)}\n回答要点：${String(fu.answer || "").slice(0, 500)}`)
+            .filter((p) => p.length > 10);
+          if (parts.length) {
+            followupBlock = `\n\n【已有追问（重新生成时整合进讲解——这些是之前讲解后用户追问的深度内容，新讲解必须覆盖）】\n${parts.join("\n---\n").slice(0, 2000)}`;
+          }
+        }
+      } catch { /* 追问读取失败按无追问 */ }
       // 流式链路超时统一修复工单任务 2①：solveQuestionStream 包 withLLMTimeout——
       // 空闲超时（activity.touch 在 delta 回调重置——流式输出中不超时；LLM 挂起无输出才 60s 中断）
       const activity = { touch: () => {} };
       full = await /** @type {any} */ (withLLMTimeout(
         solveQuestionStream({
           title: ep.title,
-          text: `${ep.text}${projCtx}${sourceBlock}`,
+          text: `${ep.text}${projCtx}${sourceBlock}${followupBlock}`,
           company: "真白讲解",
           position: "面试", // 修复：position 硬编码"前端"诱导 LLM 硬套前端视角（"前端场景的特殊约束"）——通用"面试"，从知识本身讲
           sourceUrl: "学习清单",
@@ -282,6 +310,10 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
         const header = archiveHeader(item);
         writeFileSync(savePath, header + full.slice(0, 50000), "utf8");
         savedPath = savePath;
+        // 重新生成带追问整合工单任务 1：生成成功 → 清除暂存的追问（已整合进新讲解，不重复注入）
+        try {
+          db.prepare("DELETE FROM settings WHERE key=?").run(`study_followups_${String(item.id)}`);
+        } catch { /* ignore */ }
       } catch { /* ignore */ }
       // 讲解生成完成 → 自动建复习卡（学过的知识点进间隔复习，不必等勾选）
       try {
@@ -310,9 +342,12 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
 
   router.route("/api/study-append-stream", (req, res) => {
     // 讲解追问补充：基于已有讲解内容 + 用户问题，流式生成补充章节并追加存档
+    // 讲解追问交互增强工单第二步 B：ref 参数（引用段落——"基于此追问"）——缓存键含引用 + 存档标注
     const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
     const id = u.searchParams.get("id") || "";
     const question = u.searchParams.get("question") || "";
+    const refText = u.searchParams.get("ref") || "";       // 被引用段落文本（截断 500）
+    const refSource = u.searchParams.get("refSource") || ""; // 来源标注（"主文 XX 节 / 第 N 轮追问"）
     if (!question.trim()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "question required" })); return; }
     const item = (studyApi.getPlan().items || []).find((i) => i.id === id);
     if (!item) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
@@ -322,9 +357,11 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
     if (filePath) {
       try { existing = readFileSync(filePath, "utf8"); } catch { /* ignore */ }
     }
+    // 引用段落（B2②：缓存键含引用——同一问题引用不同段落是不同语义，防命中错误缓存）
+    const ref = refText ? { text: decodeURIComponent(refText).slice(0, 500), source: decodeURIComponent(refSource || "讲解正文").slice(0, 60) } : null;
     // 轻量语义缓存：同一知识点历史追问过语义相似的问题 → 直接返回已有回答（零 LLM 请求）
     // （省成本：重复/近似追问不再花钱；命中时前端提示来源，避免用户误以为回答是新的）
-    const cached = queryFollowupCache(item.topic, question);
+    const cached = queryFollowupCache(item.topic, question, 0.72, ref);
     if (cached) {
       res.writeHead(200, sseHeaders(req));
       res.on("error", () => {});
@@ -341,7 +378,10 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
         const f2 = findStudyFile(item);
         const inNotes = f2 && f2.startsWith(notesDir);
         const savePath = inNotes ? f2 : path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
-        const appendBlock = `\n\n---\n\n## 💬 追问：${question}\n\n${String(cached.answer || "").slice(0, 8000)}\n`;
+        // B2③：引用追问的存档保留引用标注（段落摘要——与 followup-cache 缓存键一致：
+        // 同一问题引用不同段落是不同语义，防命中错误缓存）
+        const refNote = ref ? `<!-- ref:${ref.text.slice(0, 40)} -->\n` : "";
+        const appendBlock = `\n\n---\n\n## 💬 追问：${question}\n\n${refNote}${String(cached.answer || "").slice(0, 8000)}\n`;
         if (existsSync(savePath)) {
           appendFileSync(savePath, appendBlock, "utf8");
           savedPath = savePath;
@@ -369,6 +409,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
             topic: item.topic,
             existing: (existing || `（暂无已有讲解，围绕知识点直接回答）${item.verify_question || item.topic}`) + projCtx,
             question,
+            ref, // B2①：引用段落注入【你引用的内容】段（tail 区——前缀稳定不破坏）
           }, (delta) => {
             full += delta;
             activity.touch(); // 流式活动——重置空闲超时
@@ -391,7 +432,9 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
         mkdirSync(notesDir, { recursive: true });
         const inNotes = filePath && filePath.startsWith(notesDir);
         const savePath = inNotes ? filePath : path.join(notesDir, `${sanitizeFilename(item.topic)}.md`);
-        const appendBlock = `\n\n---\n\n## 💬 追问：${question}\n\n${full.slice(0, 8000)}\n`;
+        // B2③：引用追问的存档保留引用标注（段落摘要——与 followup-cache 缓存键一致）
+        const refNote = ref ? `<!-- ref:${ref.text.slice(0, 40)} -->\n` : "";
+        const appendBlock = `\n\n---\n\n## 💬 追问：${question}\n\n${refNote}${full.slice(0, 8000)}\n`;
         // 追加（存档存在则 append；不存在则**直接回答但不存档**——修复：此前"拒绝追问"让用户觉得
         // "追问不起效果"；直接流式回答已推给用户（delta），但不写"伪讲解"（header + 追问回答当主体——
         // 原始讲解丢失时污染），提示先点「💡 讲解」生成后再追问会追加存档）

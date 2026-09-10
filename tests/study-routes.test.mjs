@@ -257,3 +257,45 @@ test("⑪ /api/study-plan 返回 mastered 标记（两级语义：已学 vs 已�
   }
 });
 
+// ---------- 重新生成带追问整合工单：reset 保存追问 + 重新生成注入 ----------
+test("⑫ reset 前有追问 → settings 保存（重新生成时整合）", async () => {
+  const item = getPlan().items[0];
+  const f = path.join(notesDir(), "事件循环.md");
+  writeFileSync(f, "# 事件循环\n\n## 题目\n讲解内容\n\n## 💬 追问：宏任务和微任务谁先执行\n\n微任务先执行。\n---\n## 💬 追问：setTimeout 为什么不准时\n\n因为宏任务队列。\n", "utf8");
+  const req = mockReq("/api/study-note/reset", JSON.stringify({ id: item.id }));
+  const res = mockRes();
+  const handler = router.resolve("/api/study-note/reset", "POST").fn;
+  await runHandler(handler, req, res);
+  req._emitBody();
+  assert.equal(existsSync(f), false, "旧档已删");
+  const { db } = await import("../lib/db.mjs");
+  const row = db.prepare("SELECT value FROM settings WHERE key=?").get(`study_followups_${item.id}`);
+  assert.ok(row, "追问已保存到 settings");
+  const followups = JSON.parse(row.value);
+  assert.equal(followups.length, 2, "两条追问都保存");
+  assert.ok(String(followups[0].question).includes("宏任务"), "追问内容完整");
+});
+
+test("⑬ 重新生成（noSimilar=1）→ prompt 注入追问段落（原题+追问整合）", async () => {
+  const item = getPlan().items[0];
+  // 模拟 reset 已保存追问
+  const { db } = await import("../lib/db.mjs");
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
+    .run(`study_followups_${item.id}`, JSON.stringify([{ question: "宏任务和微任务谁先执行", answer: "微任务先执行。" }]), Date.now());
+  setLlmResponses("## 结论\n事件循环分宏微任务\n## 原理\n宏任务先执行完再清微任务队列\n## 实现JS\n```js\nconsole.log(1)\n```\n## 边界\n异常/性能/兼容性".repeat(3));
+  const res = mockRes();
+  const handler = router.resolve("/api/study-detail-stream", null).fn;
+  await runHandler(handler, { url: `/api/study-detail-stream?id=${item.id}&noSimilar=1` }, res);
+  const evs = events(res);
+  const done = evs.find((e) => e.type === "done");
+  assert.ok(done && done.saved, "重新生成成功");
+  // prompt 注入追问（getLastMessages 检查 user 消息）
+  const { getLastMessages } = await import("./helpers.mjs");
+  const user = getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(user.includes("已有追问"), "prompt 含追问注入标记");
+  assert.ok(user.includes("宏任务和微任务谁先执行"), "追问内容注入 prompt");
+  // 生成成功后 settings 清除（不重复注入）
+  const row = db.prepare("SELECT value FROM settings WHERE key=?").get(`study_followups_${item.id}`);
+  assert.equal(row, undefined, "生成后追问暂存已清除");
+});
+

@@ -208,6 +208,36 @@ test("solveAppendStream 追问补充流式", async () => {
   assert.equal(full, received);
 });
 
+// ---------- 讲解追问交互增强工单第二步 B2①：引用追问（前缀稳定 + 来源标注） ----------
+test("solveAppendStream 引用追问：prompt 含【你引用的内容】段 + 来源标注（tail 区——主文前缀不变）", async () => {
+  setLlmResponses("补充内容：针对引用段的具体回答。");
+  const { getLastMessages } = await import("./helpers.mjs");
+  const existing = "## 结论\n主文内容恒定不变。\n\n## 原理\n原理内容。\n\n---\n\n## 💬 追问：旧问题\n旧回答。\n";
+  await ai.solveAppendStream(
+    { topic: "事件循环", existing, question: "再讲讲这个", ref: { text: "被引用的段落文本内容", source: "主文「原理」" } },
+    () => {}
+  );
+  const user = getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(user.includes("【你引用的内容】"), "prompt 含引用段标记");
+  assert.ok(user.includes("主文「原理」"), "引用段含来源标注（可溯源）");
+  assert.ok(user.includes("被引用的段落文本内容"), "引用段文本注入");
+  // 前缀稳定：主文完整保留在最前（splitExplain 主文优先——命中前缀缓存）
+  const mainIdx = user.indexOf("## 结论\n主文内容恒定不变。");
+  const refIdx = user.indexOf("【你引用的内容】");
+  assert.ok(mainIdx >= 0 && refIdx > mainIdx, "主文在前、引用段在后（tail 区）");
+});
+
+test("solveAppendStream 无引用追问：prompt 不含引用段（行为不变）", async () => {
+  setLlmResponses("补充内容。");
+  const { getLastMessages } = await import("./helpers.mjs");
+  await ai.solveAppendStream(
+    { topic: "事件循环", existing: "## 结论\n主文。", question: "普通追问" },
+    () => {}
+  );
+  const user = getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(!user.includes("【你引用的内容】"), "无引用不注入");
+});
+
 test("consolidateStudyStream 多轮问答整理成完整讲解", async () => {
   setLlmResponses("## 完整讲解\n这是整理后的内容，覆盖所有轮次。");
   let received = "";
@@ -453,4 +483,44 @@ test("任务4强化②：非时效性题自评缺省达标 → 零补全（现�
   const md = await ai.solveQuestion({ title: "事件循环", text: "宏任务微任务", company: "c", position: "前端", sourceUrl: "" });
   assert.ok(!md.includes("自评补全"), "缺省达标不补全");
   assert.ok(md.includes("## 结论"), "原内容保留");
+});
+
+// ---------- 薄弱点闭环工单任务 2：讲解薄弱点注入（getWeakPointContext） ----------
+test("任务2①：薄弱点命中 → prompt 含【用户薄弱点上下文】段（深度信号）", async () => {
+  const { memory } = await import("../lib/memory.mjs");
+  const { resetMemoryState } = await import("./helpers.mjs");
+  resetMemoryState(memory);
+  memory.addWeakPoint("事件循环", "复习答错", "agent", {});
+  memory.addWeakPoint("闭包", "复习答错", "agent", {});
+  setLlmResponses("## 结论\n事件循环\n## 原理\n宏任务微任务机制…\n## 边界\n- 异常：…\n- 性能：…\n- 兼容性：…\n## 追问\nQ1…\nQ2…\nQ3…");
+  await ai.solveQuestion({ title: "事件循环与微任务", text: "宏任务微任务", company: "c", position: "前端", sourceUrl: "" });
+  const { getLastMessages } = await import("./helpers.mjs");
+  const user = getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(user.includes("【用户薄弱点上下文】"), "prompt 含薄弱点上下文段");
+  assert.ok(user.includes("事件循环"), "薄弱点 topic 注入");
+  assert.ok(user.includes("重点讲透"), "深度信号语义（重点讲透）");
+  assert.ok(user.includes("从知识本身讲"), "视角不变约束（深度信号不是视角信号）");
+});
+
+test("任务2②：薄弱点未命中 → 零注入（行为不变）", async () => {
+  const { memory } = await import("../lib/memory.mjs");
+  const { resetMemoryState } = await import("./helpers.mjs");
+  resetMemoryState(memory);
+  memory.addWeakPoint("防抖节流", "复习答错", "agent", {});
+  setLlmResponses("## 结论\n事件循环\n## 原理\n宏任务微任务机制…\n## 边界\n- 异常：…\n- 性能：…\n- 兼容性：…\n## 追问\nQ1…\nQ2…\nQ3…");
+  await ai.solveQuestion({ title: "事件循环", text: "宏任务微任务", company: "c", position: "前端", sourceUrl: "" });
+  const { getLastMessages } = await import("./helpers.mjs");
+  const user = getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(!user.includes("【用户薄弱点上下文】"), "未命中不注入");
+});
+
+test("任务2③：无薄弱点 → 零注入（空库不注入）", async () => {
+  const { memory } = await import("../lib/memory.mjs");
+  const { resetMemoryState } = await import("./helpers.mjs");
+  resetMemoryState(memory);
+  setLlmResponses("## 结论\n事件循环\n## 原理\n宏任务微任务机制…\n## 边界\n- 异常：…\n- 性能：…\n- 兼容性：…\n## 追问\nQ1…\nQ2…\nQ3…");
+  await ai.solveQuestion({ title: "事件循环", text: "宏任务微任务", company: "c", position: "前端", sourceUrl: "" });
+  const { getLastMessages } = await import("./helpers.mjs");
+  const user = getLastMessages().map((m) => m.content).join("\n");
+  assert.ok(!user.includes("【用户薄弱点上下文】"), "空库不注入");
 });

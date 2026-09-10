@@ -513,10 +513,11 @@ safeHandle("widget:study-detail-stream", (e, { id, noSimilar, __streamToken: tok
   })
 );
 // 讲解追问补充：main 转发 widget append-stream SSE → 渲染层（独立事件通道）
-safeHandle("widget:study-append-stream", (e, { id, question, __streamToken: token }) =>
+// 讲解追问交互增强工单第二步 B：ref 参数（引用段落——"基于此段追问"）
+safeHandle("widget:study-append-stream", (e, { id, question, ref, __streamToken: token }) =>
   streamForward(e, {
     channel: "study-append-chunk",
-    pathname: `/api/study-append-stream?id=${encodeURIComponent(id)}&question=${encodeURIComponent(question)}`,
+    pathname: `/api/study-append-stream?id=${encodeURIComponent(id)}&question=${encodeURIComponent(question)}${ref?.text ? `&ref=${encodeURIComponent(ref.text)}&refSource=${encodeURIComponent(ref.source || "讲解正文")}` : ""}`,
     token,
   })
 );

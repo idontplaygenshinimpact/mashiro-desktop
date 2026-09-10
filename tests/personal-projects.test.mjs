@@ -67,6 +67,27 @@ test("未配置项目 → 返回空串不崩溃", async () => {
   savePersonalProjects([{ name: "低代码平台", dir: projDir }]); // 恢复
 });
 
+// ---------- 项目关联场景分流工单：标注隔离 + 技术栈过滤 + 面试强化 ----------
+test("任务1：路径 2 注入带「可选参考」标注（学习场景——知识主体不变）", async () => {
+  // topic 非项目名 → 路径 2（技术点匹配）：源码搜"拖拽引擎"命中 → 注入带可选参考标注
+  const ctx = await getProjectArchiveContext("拖拽引擎", "");
+  assert.ok(ctx.includes("可选参考"), "学习场景标注可选参考");
+  assert.ok(ctx.includes("拖拽引擎"), "注入源码片段");
+});
+
+test("任务2：通用语言机制词（闭包/事件循环）→ 路径 2 跳过（不注入项目片段）", async () => {
+  const ctx = await getProjectArchiveContext("闭包与作用域", "");
+  assert.equal(ctx, "", "通用机制词不注入");
+  const ctx2 = await getProjectArchiveContext("事件循环与微任务", "");
+  assert.equal(ctx2, "", "事件循环不注入");
+});
+
+test("任务3：面试场景（scene=interview）→ 路径 2 注入升级为「面试重点」标注", async () => {
+  const ctx = await getProjectArchiveContext("拖拽引擎", "", false, "interview");
+  assert.ok(ctx.includes("面试重点"), "面试场景标注面试重点");
+  assert.ok(!ctx.includes("可选参考"), "面试场景不用可选参考标注");
+});
+
 test("项目档案进知识库：开启 RAG 后 searchKnowledge 可检索到（对话/复习可引用）", async () => {
   // 开启 RAG（searchKnowledge 受 rag_enabled 控制）
   const { db } = await import("../lib/db.mjs");

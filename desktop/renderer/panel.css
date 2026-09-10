@@ -547,6 +547,47 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
   font-size: var(--sd-fs-sm); background: rgba(255,255,255,0.9); color: #2d2a45; outline: none;
 }
 .sd-modal-ask input:focus { border-color: #8a5adc; }
+/* 讲解追问交互增强工单第三步 C3：侧栏抽屉（对话式查看——右侧滑出追问面板） */
+.sd-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 340px; z-index: 1000;
+  display: flex; flex-direction: column;
+  background: linear-gradient(160deg, #faf8ff, #f2eefb);
+  border-left: 1px solid rgba(109, 79, 216, 0.2);
+  box-shadow: -4px 0 16px rgba(60, 40, 120, 0.12);
+  animation: sd-drawer-in 0.22s ease;
+}
+.sd-drawer.hidden { display: none; }
+@keyframes sd-drawer-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.sd-drawer-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; border-bottom: 1px solid rgba(109, 79, 216, 0.15);
+  background: rgba(255, 255, 255, 0.7); flex-shrink: 0;
+}
+.sd-drawer-head b { color: #4a3a9d; font-size: 13px; }
+.sd-drawer-body { flex: 1; overflow-y: auto; padding: 10px 12px; }
+.sd-drawer-body::-webkit-scrollbar { width: 6px; }
+.sd-drawer-body::-webkit-scrollbar-thumb { background: rgba(109, 79, 216, 0.35); border-radius: 3px; }
+.sd-drawer-msg { margin-bottom: 10px; }
+.sd-drawer-q {
+  font-size: 12px; font-weight: 600; color: #4a3a9d; margin-bottom: 4px;
+  padding: 6px 10px; background: rgba(109, 79, 216, 0.08); border-radius: 8px 8px 2px 8px;
+}
+.sd-drawer-a {
+  font-size: 12px; color: #3a3a5a; line-height: 1.6; white-space: pre-wrap;
+  padding: 6px 10px; background: rgba(255, 255, 255, 0.85); border-radius: 8px 8px 8px 2px;
+  border: 1px solid rgba(109, 79, 216, 0.12);
+}
+.sd-drawer-streaming { color: #6a6790; animation: sd-pulse 1.2s infinite; }
+.sd-drawer-ask {
+  display: flex; gap: 6px; padding: 10px 12px;
+  border-top: 1px solid rgba(109, 79, 216, 0.15);
+  background: rgba(255, 255, 255, 0.7); flex-shrink: 0;
+}
+.sd-drawer-ask input {
+  flex: 1; padding: 8px 10px; border: 1px solid rgba(109,79,216,0.25); border-radius: 8px;
+  font-size: 12px; background: rgba(255,255,255,0.9); color: #2d2a45; outline: none;
+}
+.sd-drawer-ask input:focus { border-color: #8a5adc; }
 @keyframes sd-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 .review-box { margin-top: 12px; }
 .rq { margin-bottom: 12px; }

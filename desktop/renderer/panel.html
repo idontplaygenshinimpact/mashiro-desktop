@@ -351,9 +351,38 @@
         <div id="sd-toc" class="sd-toc hidden"></div>
         <div class="sd-modal-body" id="sd-modal-body">加载中...</div>
         <div class="sd-modal-ask">
+          <button id="sd-ref-btn" class="secondary" title="基于当前滚动位置的段落追问（引用该段内容——回答明确针对它）">📌 基于此段追问</button>
           <input id="sd-ask-input" type="text" placeholder="继续追问：如「常见 Hook 有哪些？useState 和 useReducer 的区别？」" />
           <button id="sd-ask-btn" class="primary">💬 追问</button>
           <button id="sd-consolidate-btn" class="secondary" title="把原始讲解+所有追问整理成一篇结构统一的完整讲解">📚 整理</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 讲解追问交互增强工单第三步 C3：侧栏抽屉（对话式查看——选中段落 → 右侧滑出追问面板） -->
+    <div id="sd-drawer" class="sd-drawer hidden">
+      <div class="sd-drawer-head">
+        <b id="sd-drawer-title">💬 追问</b>
+        <button id="sd-drawer-close" class="sd-close" title="关闭">✕</button>
+      </div>
+      <div id="sd-drawer-body" class="sd-drawer-body"></div>
+      <div class="sd-drawer-ask">
+        <input id="sd-drawer-input" type="text" placeholder="基于该段落追问…（Enter 发送）" />
+        <button id="sd-drawer-send" class="primary">发送</button>
+      </div>
+    </div>
+
+    <!-- ========== 薄弱点闭环工单任务 1：5 分钟摸底自评弹窗（冷启动画像） ========== -->
+    <div id="self-assess-overlay" class="sd-overlay hidden">
+      <div class="sd-modal" style="max-width:640px;">
+        <div class="sd-modal-head">
+          <b id="sa-title">🧭 5 分钟摸底（建立你的薄弱点画像）</b>
+          <button id="sa-close" class="sd-close" title="关闭">✕</button>
+        </div>
+        <div id="sa-body" class="sd-modal-body" style="max-height:60vh;overflow-y:auto;">加载中...</div>
+        <div class="sd-modal-ask">
+          <span id="sa-status" style="font-size:11px;color:#6a6790;flex:1;"></span>
+          <button id="sa-submit" class="primary">✅ 提交摸底</button>
         </div>
       </div>
     </div>
@@ -892,6 +921,7 @@
 
   <!-- 纵向拆分：panel.js → 5 个模块文件（普通 script 共享全局作用域，加载顺序不可变） -->
   <script src="speech-queue.bundle.js"></script>
+  <script src="panel-state.js"></script>
   <script src="panel-core.js"></script>
   <script src="panel-study.js"></script>
   <script src="panel-chat.js"></script>

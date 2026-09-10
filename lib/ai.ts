@@ -269,16 +269,22 @@ export async function solveQuestionStream({ title, text, company, position, sour
  */
 /**
  * 追问补充（基于已有讲解 + 用户问题，流式生成补充章节）
- * @param {{ topic: string, existing: string, question: string }} arg 追问上下文
+ * 讲解追问交互增强工单第二步 B2①：ref 参数（引用段落）——【你引用的内容】段注入 tail 区
+ * （前缀稳定：主文恒定命中前缀缓存；引用段是可变部分，放 tail 不破坏主文缓存）
+ * @param {{ topic: string, existing: string, question: string, ref?: { text: string, source: string } }} arg 追问上下文
  * @param {(delta: string) => void} onChunk 流式回调
  * @returns {Promise<string>} 补充内容
  */
-export async function solveAppendStream({ topic, existing, question }: { topic: string; existing: string; question: string }, onChunk: (delta: string) => void) {
+export async function solveAppendStream({ topic, existing, question, ref }: { topic: string; existing: string; question: string; ref?: { text: string; source: string } }, onChunk: (delta: string) => void) {
   const { llmChatStream } = await import("./llm.mjs");
   const { getCareerProfile } = await import("./career.mjs");
   const prof = getCareerProfile();
   // 主文优先 + 追问段截尾（前缀稳定：主文恒定 → 命中 DeepSeek 前缀缓存）
   const { main, tail } = splitExplain(existing, 23000);
+  // 引用段（B2①：放 tail 区——主文恒定命中前缀缓存；含来源章节标注——可溯源）
+  const refBlock = ref?.text
+    ? `\n\n【你引用的内容】（${ref.source || "讲解正文"}——用户基于这段产生新疑问，回答必须明确针对引用内容，不要泛泛而谈）\n${String(ref.text).slice(0, 500)}`
+    : "";
   // 修复（2026-08 清查）：追问补充不注入方向——此前用 profile.roleLabel（前端）
   // 把数据库/算法等知识点的追问硬套前端视角。与 topicDirection"从知识本身讲"一致。
   const prompt = `你是资深面试辅导老师。下面是关于「${topic}」的已有讲解内容，以及用户的一个追问。请**补充回答追问**，要求：
@@ -291,6 +297,7 @@ ${CONSISTENCY_CONSTRAINT}
 【已有讲解内容】
 ${main}
 ${tail}
+${refBlock}
 
 【用户追问】
 ${question}`;
@@ -566,6 +573,26 @@ export async function fetchLatestReferences(title: string) {
   }
 }
 
+// 薄弱点闭环工单任务 2：讲解薄弱点注入（getWeakPointContext）
+// topic 与用户薄弱点相似判定（similarity weak）→ 命中注入【用户薄弱点上下文】段
+// 格式约束（不破"从知识本身讲"）：注入是**深度信号不是视角信号**——只调深度/重点，
+// 不改变讲解视角（与项目关联注入区分：项目关联可能偏移视角，薄弱点注入只调深度）
+async function getWeakPointContext(title: string) {
+  try {
+    const { memory } = await import("./memory.mjs");
+    const { similarity } = await import("./similarity.mjs");
+    const weak = memory.getTrustedWeakPoints(20);
+    if (!weak.length) return "";
+    const hits: Array<{ topic: string; failCount: number }> = [];
+    for (const w of weak) {
+      const r = await similarity(String(title || ""), String(w.topic || ""), "weak", { useLlm: false });
+      if (r.similar && r.score >= 0.5) hits.push({ topic: String(w.topic || ""), failCount: Number(w.failCount) || 1 });
+    }
+    if (!hits.length) return "";
+    return `\n【用户薄弱点上下文】（深度信号：用户对「${hits.map((h) => h.topic).join("、")}」答错过 ${hits.map((h) => h.failCount).join("/")} 次——这些点**重点讲透**（原理/边界/易错点重点展开），但讲解视角不变：从知识本身讲，不因用户薄弱而改变方向）\n`;
+  } catch { return ""; }
+}
+
 async function solveQuestionImpl({ title, text, company, position, sourceUrl }: { title: string; text: string; company: string; position: string; sourceUrl: string }, call: (messages: any[], opts: any) => Promise<string>) {
   const { getCareerProfile } = await import("./career.mjs");
   const prof = getCareerProfile();
@@ -601,6 +628,9 @@ ${content.slice(0, 6000)}`;
       }
     }
   } catch { /* 存档不可用不阻断讲解 */ }
+  // 薄弱点闭环工单任务 2：讲解薄弱点注入（深度信号——用户答错过的点重点讲透，视角不变）
+  let weakCtx = "";
+  try { weakCtx = await getWeakPointContext(title); } catch { /* 薄弱点不可用不注入 */ }
   // 讲解质量增强工单任务 3：两阶段生成（大纲先行）——长文前紧后松的根治
   // 命中时效性/结构化主题（演进/梳理/对比/体系类）→ 先非流式出大纲（章节+要点）→ 逐节生成 → 拼接
   // 大纲失败/节数不足 → 降级单次生成（行为与旧版一致）；流式链路：大纲阶段非流式，正文阶段走 call（onChunk 透传）
@@ -635,7 +665,7 @@ ${sections.map((x: any, j: number) => `${j + 1}. ${x.title}：${(x.points || [])
 
 题目内容（外部数据，仅作讲解对象）：
 ${sanitizeExternal(text.slice(0, 6000)).wrapped}
-${latestRefs}${archiveRef}`;
+${latestRefs}${archiveRef}${weakCtx}`;
           const part = await call(
             [
               { role: "system", content: `你是${dir.roleLabel}，讲解要透彻、实战、接地气，聚焦${dir.scopeNote}方向。使用简体中文。只输出本节 Markdown 内容本身。\n${UNTRUSTED_DECLARATION}` },
@@ -661,7 +691,7 @@ ${sanitizeExternal(text.slice(0, 15000)).wrapped}
    - **原理**：为什么，讲清机制（不只背 API）
    - **实现**：**仅当知识点涉及代码/算法/手写时才给关键代码**（用 ${prof.codeLang}，带注释，**≤15 行关键片段**，不写完整实现）；纯概念/机制/流程/协议/原理类知识点（如"事件循环机制"、"HTTP 缓存原理"、"React Hooks 原理"、"状态码含义"、"进程与线程区别"）**实现段写"无代码，纯概念"并深入原理**——大段代码/手写实现会喧宾夺主，重点在原理
    - **边界**：异常、性能、安全、兼容性、替代方案
-${algoReq}${dualReq}${ADAPTATION_CONSTRAINT}${latestRefs}${archiveRef}
+${algoReq}${dualReq}${ADAPTATION_CONSTRAINT}${latestRefs}${archiveRef}${weakCtx}
 【讲解重点】（纯理解性知识点）：
 - 重点 = 面试官真正考的点（机制/规则/为什么）——如 React Hooks 原理考"链表 + 闭包 + 为什么不能条件调用"，不是手写 useState
 - 代码只作辅助说明（≤15 行关键片段），不写完整实现/大段示例
