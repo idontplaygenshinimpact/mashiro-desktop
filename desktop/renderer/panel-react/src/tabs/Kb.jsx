@@ -9,14 +9,14 @@ const KIND_LABEL = { mianjing: "📄 面经", jiaocheng: "📘 教程", job: "�
 
 const S = {
   wrap: { display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: "#e8e6f5" },
-  card: { background: "#241f3a", border: "1px solid #4a4568", borderRadius: 10, padding: 12 },
+  // 批次 2：深色内联已收敛为 panel.css 的 .rf-card（内嵌浅色主题只在 CSS 定义一次）
   head: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 },
   title: { fontSize: 13, fontWeight: 700 },
   muted: { fontSize: 11, color: "#a8a3c8" },
-  input: { flex: 1, minWidth: 180, background: "#241f3a", color: "#e8e6f5", border: "1px solid #3a3558", borderRadius: 6, padding: "8px 10px", fontSize: 13, outline: "none" },
-  hit: { background: "#1f1a31", border: "1px solid #4a4568", borderRadius: 8, padding: 10, marginTop: 6 },
+  input: { flex: 1, minWidth: 180 },
+  hit: { marginTop: 6 },
   hitHead: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginBottom: 4 },
-  badge: { background: "#2a2540", border: "1px solid #4a4568", borderRadius: 4, padding: "1px 6px", fontSize: 10, color: "#8fc7ff" },
+  badge: { fontSize: 10 },
   body: { fontSize: 12, lineHeight: 1.7, color: "#e8e6f5", whiteSpace: "pre-wrap" },
 };
 
@@ -83,19 +83,19 @@ export function KbPanel() {
 
   return (
     <div style={S.wrap}>
-      <div style={S.card}>
+      <div className="rf-card">
         <div style={S.head}>
           <span style={S.title}>🧠 本地知识库 · React 版</span>
           {(busy || pending) && <span style={S.muted}>🔍 检索中…</span>}
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           <input
-            style={S.input}
+            className="rf-input rf-muted" style={S.input}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索：事件循环 / React Hooks / 防抖节流 / 某公司面经..."
+            placeholder="搜索：事件循环 / React Hooks / 防抖节流 / 某公司面经..." aria-label="知识库检索关键词"
           />
-          <button style={{ ...S.badge, cursor: "pointer", padding: "6px 12px" }} onClick={() => setQ("")}>清空</button>
+          <button type="button" className="rf-btn" onClick={() => setQ("")}>清空</button>
         </div>
         <div style={{ ...S.muted, marginTop: 6 }}>
           {stats
@@ -105,7 +105,7 @@ export function KbPanel() {
         {err && <div style={{ ...S.muted, color: "#e8c04a", marginTop: 6 }}>⚠️ {err}</div>}
       </div>
 
-      <div style={S.card}>
+      <div className="rf-card">
         {disabled ? (
           <div style={S.muted}>📭 知识库未启用——到「⚙️ 设置」开启后可搜索</div>
         ) : hits.length === 0 ? (
@@ -118,9 +118,9 @@ export function KbPanel() {
               命中 {hits.length} 段（{stats?.docs ?? 0} 篇文档 · {stats?.followups ?? 0} 段追问）{fu ? ` · 追问段 ${fu} 段优先` : ""}
             </div>
             {hits.map((h, i) => (
-              <div key={`${h.docId}-${i}`} style={S.hit}>
+              <div key={`${h.docId}-${i}`} className="rf-sub" style={S.hit}>
                 <div style={S.hitHead}>
-                  <span style={S.badge}>{h.kind === "followup" ? "💬 追问" : "📝 讲解"}</span>
+                  <span className="rf-chip" style={S.badge}>{h.kind === "followup" ? "💬 追问" : "📝 讲解"}</span>
                   <b>{h.docId}{h.section ? ` · ${h.section}` : ""}</b>
                 </div>
                 <Highlight text={h.content?.slice(0, 220)} terms={terms} />

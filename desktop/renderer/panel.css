@@ -1285,6 +1285,25 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 .renderer-compare-btn.active { background: rgba(109,79,216,.15); border-style: solid; font-weight: 700; }
 .renderer-compare-btn:hover { filter: brightness(1.05); }
 
+/* ============ 框架版共享样式词汇（UI 批量优化批次 2） ============
+   背景：框架版组件把深色主题内联在 JSX 里，内嵌时靠 [style*="rgb(36,31,58)"] !important 重绘——
+   脆（值一改就失配）、散（每个 Tab 复制一套）、且独立窗口/内嵌两种上下文互相牵制。
+   收敛路径：组件改用这些语义类，颜色只在 CSS 里定义一次；框架版自身主题靠容器类切换。 */
+.rf-card { background: linear-gradient(135deg, rgba(109,79,216,.08), rgba(109,79,216,.03)); border: 1px solid rgba(109,79,216,.18); border-radius: 10px; padding: 12px; }
+.rf-sub { background: rgba(109,79,216,.05); border: 1px solid rgba(109,79,216,.16); border-radius: 8px; padding: 10px; }
+.rf-chip { background: rgba(255,255,255,.85); border: 1px solid rgba(109,79,216,.25); border-radius: 4px; padding: 1px 6px; font-size: 10px; color: #5d48b8; white-space: nowrap; }
+.rf-chip-warn { color: #9a7b1a; }
+.rf-chip-ok { color: #2f7d4e; }
+.rf-btn { background: rgba(255,255,255,.85); color: #5d48b8; border: 1px solid rgba(109,79,216,.25); border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
+.rf-btn:hover { filter: brightness(1.04); }
+.rf-btn:disabled { opacity: .55; cursor: not-allowed; }
+.rf-btn:focus-visible, .rf-input:focus-visible, .renderer-compare-btn:focus-visible, .renderer-switch-btn:focus-visible { outline: 2px solid rgba(109,79,216,.55); outline-offset: 1px; }
+.rf-btn-primary { background: linear-gradient(135deg, #8a5adc, #6d4fd8); color: #fff; border: none; font-weight: 700; }
+.rf-input { background: rgba(255,255,255,.9); color: #2d2a45; border: 1px solid rgba(109,79,216,.25); border-radius: 6px; padding: 7px 10px; font-size: 12px; }
+.rf-muted { font-size: 11px; color: #5a5678; }
+.rf-row { display: flex; align-items: flex-start; gap: 8px; background: rgba(109,79,216,.05); border: 1px solid rgba(109,79,216,.16); border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
+.rf-row:hover { background: rgba(109,79,216,.09); }
+
 /* 渲染层容器（同窗内嵌：React/Vue 版挂载点——布局约束防内容溢出错位 + 背景协调）
    .renderer-framework = initRendererSwitches 建的框架容器类（任务 2 起所有 Tab 统一用它，
    panel.html 手写的 #interview-react / #review-vue 也带此类） */
