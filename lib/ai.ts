@@ -445,7 +445,7 @@ const AGENT_TOPIC_RE = /agent|工具调用|function\s*calling|tool\s*binding|mcp
 // 暴力→优化演进/示例验证；面试官必问"有没有更优解"）
 // 组合词化（统一层 match-utils）：裸正则 test 会把"技术栈"（含"栈"）误判为算法题注入
 // 约束——改用词列表 + kwHit 独立成词检测（组合词表一处维护全局生效）
-import { kwHit } from "./match-utils.mjs";
+import { kwHit } from "./match-utils.ts";
 const ALGO_TOPIC_WORDS = ["合并", "排序", "链表", "数组", "二叉树", "动态规划", "双指针", "滑动窗口", "回溯", "贪心", "哈希", "栈", "队列", "堆", "递归", "dfs", "bfs", "二分", "前缀和", "拓扑", "并查集", "单调栈", "字符串匹配", "kmp", "lru", "lfu", "topk", "第k", "中位数", "反转", "旋转", "去重", "子序列", "子数组", "岛屿", "路径", "排列", "组合", "背包", "手写", "手撕", "算法"];
 function isAlgoTopic(text: string) {
   const t = String(text || "").toLowerCase();

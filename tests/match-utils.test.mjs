@@ -2,7 +2,7 @@
 // 覆盖 7 类已知误命中 + 潜在场景：组合词/独立成词/词边界/n-gram/特异性门槛/正则生成器
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { kwHit, hasWordBoundary, grams, compoundRegex, hasSpecificKw, COMPOUND_EXCLUDE } from "../lib/match-utils.mjs";
+import { kwHit, hasWordBoundary, grams, compoundRegex, hasSpecificKw, COMPOUND_EXCLUDE } from "../lib/match-utils.ts";
 
 // ---------- 1) 组合词 vs 独立词（study-groups 技术栈 vs 栈 类） ----------
 test("kwHit：组合词不触发强语义词，独立词正常触发", () => {
