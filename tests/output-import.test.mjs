@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { saveImportedPost } from "../lib/output-import.mjs";
+import { saveImportedPost } from "../lib/output-import.ts";
 
 function tempOutput() {
   const dir = mkdtempSync(path.join(tmpdir(), "import-out-"));
