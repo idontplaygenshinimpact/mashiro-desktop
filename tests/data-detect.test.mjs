@@ -6,7 +6,7 @@ import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const { candidateDataDirs, detectDataDir, resolveDataDir } = await import("../lib/data-detect.mjs");
+const { candidateDataDirs, detectDataDir, resolveDataDir } = await import("../lib/data-detect.ts");
 const dirs = [];
 function tmp(seed = false) {
   const d = mkdtempSync(path.join(tmpdir(), "dd-"));

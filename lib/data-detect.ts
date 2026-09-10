@@ -3,6 +3,7 @@
 // MCP 默认=~/.mashiro/data）——默认目录不一致导致用户必须手动配置。
 // 修复：按优先级探测"已存在的桌宠数据目录"（含 mianshi.db 视为有效），命中即用——
 // 已有桌宠的用户装包即连零配置；干净用户回落 ~/.mashiro/data（自建）。
+// 全量 TS 升级工单叶子批次 C：lib/data-detect.mjs → .ts（函数签名已带 JSDoc 注解，strict 零报错即迁完）
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";

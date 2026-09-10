@@ -9,7 +9,7 @@
 import path from "node:path";
 import { homedir } from "node:os";
 import { mkdirSync } from "node:fs";
-import { resolveDataDir } from "../lib/data-detect.mjs";
+import { resolveDataDir } from "../lib/data-detect.ts";
 
 if (!process.env.MIANSHI_DATA_DIR) {
   process.env.MIANSHI_DATA_DIR = resolveDataDir();
