@@ -95,7 +95,14 @@ const tinyText = all.filter((e) => e.tagName !== "SUP" && e.tagName !== "SUB" &&
       const bgOf = (el) => { // 向上找第一个**基本不透明**（alpha ≥ 0.95）的背景；找不到视为白底
         let n = el;
         while (n && n !== document.documentElement) {
-          const bg = getComputedStyle(n).backgroundColor;
+          const cs = getComputedStyle(n);
+          // 渐变背景（如主按钮 linear-gradient）的 backgroundColor 是透明的——取首个色标，
+          // 否则会误判成白底（"白字配白底" ratio=1 的假阳性，抽检时抓到过）
+          if (cs.backgroundImage && cs.backgroundImage.includes("gradient")) {
+            const g = cs.backgroundImage.match(/rgba?\([\d.]+,\s*[\d.]+,\s*[\d.]+(?:,\s*[\d.]+)?\)/);
+            if (g && parseRgb(g[0]) && bgAlpha(g[0]) >= 0.95) return parseRgb(g[0]);
+          }
+          const bg = cs.backgroundColor;
           if (parseRgb(bg) && bgAlpha(bg) >= 0.95) return parseRgb(bg);
           n = n.parentElement;
         }

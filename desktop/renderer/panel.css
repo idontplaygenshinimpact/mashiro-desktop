@@ -1348,3 +1348,5 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 .rf-bar-review { background: #6d4fd8; }
 .rf-bar-challenge { background: #3a5bd5; }
 .rf-mark { background: rgba(109,79,216,.18); color: #2d2a45; border-radius: 2px; }
+/* 触达尺寸：勾选框按 WCAG 2.5.8 给 24×24 命中区（原 13px 原生尺寸过小） */
+.rf-row input[type="checkbox"] { width: 24px; height: 24px; margin: 0 2px 0 0; accent-color: #6d4fd8; }
