@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { discoverPlugins, validateManifest, loadPlugin, loadAllPlugins } from "../lib/plugin-loader.mjs";
+import { discoverPlugins, validateManifest, loadPlugin, loadAllPlugins } from "../lib/plugin-loader.ts";
 
 function tempPluginsDir() {
   const dir = mkdtempSync(path.join(tmpdir(), "plugins-"));
@@ -112,7 +112,7 @@ test("示例插件模板：加载成功 + init 默认设置 + settings 前缀隔
   assert.ok(row?.value, "init 默认设置已写入（前缀隔离）");
   assert.ok(JSON.parse(String(row.value)).includes("真白"), "默认问候语");
   // settings 命名空间读写
-  const { loadPlugin: loadAgain } = await import("../lib/plugin-loader.mjs");
+  const { loadPlugin: loadAgain } = await import("../lib/plugin-loader.ts");
   const api = { router, db, getCorsOrigin: () => "*", laneSubmit: (fn) => fn(), log: () => {} };
   await loadAgain(tmpl, api);
   // 通过 server 注册的路由表验证（不直接测 settings 对象——路由已注册即可）

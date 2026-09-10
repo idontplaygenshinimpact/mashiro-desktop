@@ -48,7 +48,7 @@ test("全部域路由注册齐全（原版 55 条内联路径一个不少；业�
   register({ router, db: null, getCorsOrigin: () => "*", laneSubmit: (fn) => fn() });
   registerCoreRoutes(router); // runtime 全用默认空实现，注册本身不依赖 widget 运行时
   // 示例插件模板（阶段 2：新插件路由也应注册）
-  const { loadPlugin, discoverPlugins } = await import("../lib/plugin-loader.mjs");
+  const { loadPlugin, discoverPlugins } = await import("../lib/plugin-loader.ts");
   const tmpl = discoverPlugins().find((p) => p.manifest.id === "plugin-template");
   if (tmpl) await loadPlugin(tmpl, { router, db: null, getCorsOrigin: () => "*", laneSubmit: (fn) => fn(), log: () => {} });
 
