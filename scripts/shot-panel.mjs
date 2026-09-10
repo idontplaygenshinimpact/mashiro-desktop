@@ -42,8 +42,10 @@ await page.addInitScript(() => {
     stats: { chats: 4, reviewsDone: 7, interviewsDone: 2 }, review: { total: 9 },
     hits: [ { kind: "followup", docId: "事件循环", section: "宏任务与微任务", content: "先同步代码，再清空微任务队列，然后取下一个宏任务。" } ],
     history: [], weak: [], mastery: [], trend: [], total: 12, enabled: true, byKind: [{ kind: "note", n: 7 }], docs: 3, followups: 2, date: "2026-09-01" };
-  window.kanban = new Proxy({}, { get: () => async () => stub });
-  window.fetch = async (url) => ({ ok: true, json: async () => (String(url).includes("/paragraphs/search") ? { hits: stub.hits, stats: { docs: 3, followups: 2 } } : stub) });
+  // 面板通过 preload 注入的 IPC 桥（浏览器里由本脚本注入 mock）——显式声明，不靠 any
+  /** @type {{ kanban?: unknown }} */ (/** @type {unknown} */ (window)).kanban = new Proxy({}, { get: () => async () => stub });
+  // mock fetch：只实现脚本用到的 ok/json 两个成员——断言成 fetch 类型（真实 Response 更宽，这里是最小实现）
+  window.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (async (url) => ({ ok: true, json: async () => (String(url).includes("/paragraphs/search") ? { hits: stub.hits, stats: { docs: 3, followups: 2 } } : stub) })));
 });
 
 await page.goto("file:///" + PANEL.replace(/\\/g, "/"), { waitUntil: "load" });
@@ -52,7 +54,7 @@ await page.waitForTimeout(600);
 const report = [];
 for (const [tab, mode] of TABS) {
   try {
-    await page.evaluate(([t, m]) => { window.switchTab?.(t); window.switchRenderer?.(t, m); }, [tab, mode]);
+    await page.evaluate(([t, m]) => { const w = /** @type {{ switchTab?: (tab: string) => void, switchRenderer?: (tab: string, mode: string) => void }} */ (/** @type {unknown} */ (window)); w.switchTab?.(t); w.switchRenderer?.(t, m); }, [tab, mode]);
     await page.waitForTimeout(500);
     const sel = `#${tab}-${mode}`;
     const el = await page.$(sel);

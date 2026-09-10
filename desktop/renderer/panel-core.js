@@ -139,9 +139,11 @@ async function switchRenderer(tab, mode) {
   }
   rendererState[tab] = mode;
   saveRendererPref(tab, mode);
-  // 按钮高亮同步
+  // 按钮高亮同步 + aria-pressed（可访问性：读屏能听出当前生效的渲染层）
   document.querySelectorAll(`#tab-${tab} .renderer-switch-btn`).forEach((b) => {
-    b.classList.toggle("active", b.dataset.mode === mode);
+    const on = b.dataset.mode === mode;
+    b.classList.toggle("active", on);
+    if (b.dataset.mode) b.setAttribute("aria-pressed", String(on));
   });
 }
 
@@ -198,14 +200,20 @@ function initRendererSwitches() {
       if (bar.querySelector(`.renderer-switch-btn[data-mode="${mode}"]`)) continue;
       const b = document.createElement("button");
       b.className = "renderer-switch-btn";
+      b.type = "button";
       b.dataset.mode = mode;
       b.textContent = text;
+      b.setAttribute("aria-pressed", "false"); // 初始态（switchRenderer 成功切换后按当前模式改写）
       b.addEventListener("click", () => switchRenderer(tab, b.dataset.mode));
       bar.appendChild(b);
     }
     // 初始高亮：无偏好时为原生（restoreRendererPrefs 恢复成功后会改写）
     const cur = rendererState[tab] || "native";
-    bar.querySelectorAll(".renderer-switch-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === cur));
+    bar.querySelectorAll(".renderer-switch-btn").forEach((b) => {
+      const on = b.dataset.mode === cur;
+      b.classList.toggle("active", on);
+      if (b.dataset.mode) b.setAttribute("aria-pressed", String(on));
+    });
     // 框架版容器（任务 2）：按登记创建——必须在 native 包裹之外（否则切原生隐藏 native 时把框架版一起藏了）
     // interview/react 与 review/vue 的容器是 panel.html 手写的，这里只补缺失
     for (const mode of ["react", "vue"]) {
@@ -267,10 +275,16 @@ function initRendererCompare() {
     // 独立类：不复用 .renderer-switch-btn——否则会混进"三态按钮"枚举，且切换模式时的高亮同步
     // （按 data-mode 匹配）会把打开着的对比按钮取消高亮
     btn.className = "renderer-compare-btn";
+    btn.type = "button";
     btn.textContent = "📊 三态对比";
     btn.setAttribute("aria-expanded", "false");
     const cardEl = document.createElement("div");
     cardEl.className = "renderer-compare-card";
+    cardEl.id = `renderer-compare-${bar.closest(".tab-panel")?.id || "panel"}`;
+    cardEl.setAttribute("role", "region");                                  // 可访问性：读屏可定位这块对比信息
+    cardEl.setAttribute("aria-label", "三态实现对比（包体积/渲染方式/状态管理/框架特色）");
+    btn.setAttribute("aria-controls", cardEl.id);
+    btn.title = "查看原生/React/Vue 三态对比（体积实测 + 范式差异）";
     cardEl.style.cssText = "display:none;margin:6px 0 8px;padding:8px 10px;border:1px solid rgba(109,79,216,.14);border-radius:10px;background:rgba(242,239,251,.5);";
     cardEl.innerHTML = rendererCompareHtml();
     btn.addEventListener("click", () => {

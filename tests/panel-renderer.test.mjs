@@ -55,6 +55,10 @@ test("任务1①：8 个 Tab 都有三态切换按钮（interview/review 手写�
       const active = panel.querySelectorAll(".renderer-switch-btn.active");
       assert.equal(active.length, 1, `Tab ${tab} 恰有一个高亮`);
       assert.equal(active[0].dataset.mode, "native", `Tab ${tab} 初始高亮为原生`);
+      // 可访问性（UI 优化批次 1）：三态按钮声明 aria-pressed，且恰有一个为 true
+      const pressed = [...panel.querySelectorAll(".renderer-switch-btn[aria-pressed]")];
+      assert.equal(pressed.length, 3, `Tab ${tab} 三个模式按钮都有 aria-pressed`);
+      assert.equal(pressed.filter((b) => b.getAttribute("aria-pressed") === "true").length, 1, `Tab ${tab} 恰有一个 aria-pressed=true`);
     }
     // 任务 2：已登记框架版的 Tab 必须有挂载容器（在 native 之外——否则切原生会把框架版一起藏了）
     for (const [tab, mode] of [["interview", "react"], ["dashboard", "react"], ["kb", "react"], ["study", "react"], ["crawl", "react"], ["review", "vue"]]) {
@@ -185,6 +189,12 @@ test("任务4：三态对比卡（切换入口旁可见 + 实测体积 + 三态�
     assert.equal(card.style.display, "none", "默认收起（不干扰主界面）");
     btn.click();
     assert.equal(card.style.display, "", "点开可见");
+    // 可访问性（UI 优化批次 1）：读屏可定位卡片 + 入口声明展开态与所控区域
+    assert.equal(btn.getAttribute("aria-expanded"), "true", "展开态对读屏可见");
+    assert.equal(btn.getAttribute("aria-controls"), card.id, "入口声明所控区域");
+    assert.equal(card.getAttribute("role"), "region", "卡片有 region 语义");
+    assert.ok((card.getAttribute("aria-label") || "").includes("三态实现对比"), "卡片有可读标签");
+    assert.ok(btn.title, "入口有 title 提示（鼠标悬停可读）");
     const t = card.textContent;
     for (const kw of ["包体积", "渲染方式", "状态管理", "框架特色", "命令式 DOM", "虚拟 DOM", "响应式模板", "gzip"]) {
       assert.ok(t.includes(kw), `对比卡含「${kw}」`);
