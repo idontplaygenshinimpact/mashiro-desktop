@@ -6,14 +6,14 @@
 // 需要时切回原生渲染层再打开——功能等价，不做第二套流式 UI。
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
-const card = { background: "#241f3a", border: "1px solid #4a4568", borderRadius: 10, padding: 12 };
-const muted = { fontSize: 11, color: "#a8a3c8" };
-const btn = { background: "#2a2540", color: "#e8e6f5", border: "1px solid #4a4568", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12 };
+// 批次 2：深色内联已收敛为 panel.css 的 .rf-* 语义类（card/row/chip/btn/input/track/muted）
+const muted = {};
+const btn = {};
 const btnPrimary = { background: "#8fc7ff", color: "#171322", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 };
-const input = { background: "#241f3a", color: "#e8e6f5", border: "1px solid #3a3558", borderRadius: 6, padding: "7px 10px", fontSize: 12, outline: "none" };
+const input = {};
 const select = { ...input, padding: "6px 8px" };
-const row = { display: "flex", alignItems: "flex-start", gap: 8, background: "#1f1a31", border: "1px solid #4a4568", borderRadius: 8, padding: "8px 10px", marginTop: 6 };
-const chip = { background: "#2a2540", border: "1px solid #4a4568", borderRadius: 4, padding: "1px 6px", fontSize: 10, color: "#8fc7ff", whiteSpace: "nowrap" };
+const row = { display: "flex", gap: 8 };
+const chip = {};
 
 /** 清单状态流（与原生 loadStudyPlan 的 stateOf 同口径）：待复习 > 已掌握 > 已学 > 学习中 > 待学习 */
 function stateOf(it) {
@@ -114,60 +114,60 @@ export function StudyPanel() {
   const mastered = groups.mastered || [];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: "#e8e6f5" }}>
-      <div style={card}>
+    <div className="rf-stack">
+      <div className="rf-card">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-          <b style={{ fontSize: 13 }}>📋 学习清单 · React 版</b>
+          <b className="rf-title">📋 学习清单 · React 版</b>
           <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            {plan?.date && <span style={muted}>{plan.date}</span>}
-            <button style={btnPrimary} onClick={generate} disabled={busy}>{busy ? "生成中…" : "✨ 从产出生成清单"}</button>
+            {plan?.date && <span className="rf-muted">{plan.date}</span>}
+            <button type="button" className="rf-btn rf-btn-primary" onClick={generate} disabled={busy}>{busy ? "生成中…" : "✨ 从产出生成清单"}</button>
           </span>
         </div>
         {/* 进度（总进度，不受筛选影响——与原生同口径） */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={muted}>📋 学习进度</span>
-          <span style={{ flex: 1, height: 6, background: "#1f1a31", borderRadius: 3, overflow: "hidden" }}>
-            <i style={{ display: "block", height: "100%", width: `${pct}%`, background: "#8fc7ff", borderRadius: 3 }} />
+          <span className="rf-muted">📋 学习进度</span>
+          <span className="rf-track rf-grow">
+            <i className="rf-fill" style={{ width: `${pct}%` }} />
           </span>
           <b style={{ fontSize: 11 }}>{doneN}/{items.length}（{pct}%）</b>
         </div>
         {/* 搜索 + 筛选（useDeferredValue：输入即时，过滤延后） */}
         <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
           <input
-            style={{ ...input, flex: 1, minWidth: 160 }}
+            className="rf-input rf-grow"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="搜索知识点 / 学习理由…"
           />
-          <select style={select} value={lv} onChange={(e) => setLv(e.target.value)}>
+          <select className="rf-input" value={lv} onChange={(e) => setLv(e.target.value)}>
             <option value="">全部级别</option>
             <option value="必会">必会</option>
             <option value="进阶">进阶</option>
             <option value="拓展">拓展</option>
           </select>
-          <select style={select} value={st} onChange={(e) => setSt(e.target.value)}>
+          <select className="rf-input" value={st} onChange={(e) => setSt(e.target.value)}>
             <option value="">全部状态</option>
             {STATE_LABELS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
-          {filtering && <span style={muted}>匹配 {matched}/{items.length}</span>}
+          {filtering && <span className="rf-muted">匹配 {matched}/{items.length}</span>}
         </div>
-        {err && <div style={{ ...muted, color: "#e8c04a", marginTop: 6 }}>⚠️ {err}</div>}
+        {err && <div className="rf-muted rf-chip-warn" style={{ marginTop: 6 }}>⚠️ {err}</div>}
       </div>
 
       {items.length === 0 ? (
-        <div style={{ ...card, ...muted }}>未生成，点「✨ 从产出生成清单」</div>
+        <div className="rf-card rf-muted">未生成，点「✨ 从产出生成清单」</div>
       ) : (
         mainStates.map((s) => {
           const list = groups[s.key] || [];
           if (!list.length) return null;
           return (
-            <div key={s.key} style={card}>
+            <div key={s.key} className="rf-card">
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <b style={{ fontSize: 12 }}>{s.label}</b>
-                <span style={chip}>{list.length}</span>
+                <b className="rf-title">{s.label}</b>
+                <span className="rf-chip">{list.length}</span>
               </div>
               {list.map((it) => (
-                <div key={it.id} style={row}>
+                <div key={it.id} className="rf-row rf-row-start">
                   <input
                     type="checkbox"
                     checked={!!it.done}
@@ -177,15 +177,15 @@ export function StudyPanel() {
                   />
                   <span style={{ flex: 1 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <b style={{ fontSize: 12, textDecoration: it.done ? "line-through" : "none", opacity: it.done ? 0.75 : 1 }}>{it.topic}</b>
-                      {it.level && <span style={chip}>{it.level}</span>}
-                      {it.grp && <span style={{ ...chip, color: "#a8a3c8" }}>{it.grp}</span>}
-                      {it.fromInterview && <span style={{ ...chip, color: "#e8c04a" }}>面试</span>}
-                      {it.reviewDue && <span style={{ ...chip, color: "#3a8a5a" }}>待复习</span>}
+                      <b className="rf-title" style={{ textDecoration: it.done ? "line-through" : "none", opacity: it.done ? 0.75 : 1 }}>{it.topic}</b>
+                      {it.level && <span className="rf-chip">{it.level}</span>}
+                      {it.grp && <span className="rf-chip rf-chip-plain">{it.grp}</span>}
+                      {it.fromInterview && <span className="rf-chip rf-chip-warn">面试</span>}
+                      {it.reviewDue && <span className="rf-chip rf-chip-ok">待复习</span>}
                     </span>
-                    {it.why && <div style={{ ...muted, marginTop: 3 }}>{it.why}</div>}
+                    {it.why && <div className="rf-muted" style={{ marginTop: 3 }}>{it.why}</div>}
                   </span>
-                  <button style={btn} onClick={() => explain(it.id)} title="打开讲解（复用原生弹窗：流式 + 追问）">💡 讲解</button>
+                  <button type="button" className="rf-btn" onClick={() => explain(it.id)} title="打开讲解（复用原生弹窗：流式 + 追问）">💡 讲解</button>
                 </div>
               ))}
             </div>
@@ -195,32 +195,32 @@ export function StudyPanel() {
 
       {/* 已掌握折叠区：控制行独立于被折叠内容（否则按钮在折叠块里 → 永远点不开） */}
       {mastered.length > 0 && (
-        <div style={card}>
+        <div className="rf-card">
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <b style={{ fontSize: 12 }}>🏆 已掌握</b>
-            <span style={chip}>{mastered.length}</span>
-            <button style={{ ...btn, padding: "1px 8px" }} onClick={() => setShowMastered((v) => !v)}>
+            <span className="rf-chip">{mastered.length}</span>
+            <button type="button" className="rf-btn" onClick={() => setShowMastered((v) => !v)}>
               {showMastered ? "收起" : "展开"}
             </button>
           </div>
           {showMastered && mastered.map((it) => (
-            <div key={it.id} style={row}>
+            <div key={it.id} className="rf-row rf-row-start">
               <input type="checkbox" checked readOnly title="已达成（取消勾选可退回学习中）" style={{ marginTop: 2 }} />
               <span style={{ flex: 1 }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <b style={{ fontSize: 12 }}>{it.topic}</b>
-                  {it.level && <span style={chip}>{it.level}</span>}
-                  {it.grp && <span style={{ ...chip, color: "#a8a3c8" }}>{it.grp}</span>}
+                  <b className="rf-title">{it.topic}</b>
+                  {it.level && <span className="rf-chip">{it.level}</span>}
+                  {it.grp && <span className="rf-chip rf-chip-plain">{it.grp}</span>}
                 </span>
-                {it.why && <div style={{ ...muted, marginTop: 3 }}>{it.why}</div>}
+                {it.why && <div className="rf-muted" style={{ marginTop: 3 }}>{it.why}</div>}
               </span>
-              <button style={btn} onClick={() => explain(it.id)}>💡 讲解</button>
+              <button type="button" className="rf-btn" onClick={() => explain(it.id)}>💡 讲解</button>
             </div>
           ))}
         </div>
       )}
 
-      <div style={muted}>
+      <div className="rf-muted">
         ⚛️ React 特性：useDeferredValue 搜索过滤 + useMemo 状态流分组（状态驱动差量更新）；讲解/追问复用同一实现
       </div>
     </div>

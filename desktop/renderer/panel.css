@@ -1333,4 +1333,6 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 .rf-chip-info { color: #3a5bd5; }
 .rf-title { font-size: 13px; font-weight: 700; color: #2d2a45; }
 .rf-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-.rf-stack { display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: #2d2a45; }
+.rf-stack { display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: #2d2a45; }.rf-chip-plain { color: #5a5678; }
+.rf-row-start { align-items: flex-start; }
+.rf-grow { flex: 1; }
