@@ -66,7 +66,7 @@ const vueApps = new Map();    // tab → Vue app
 // 登记即由 initRendererSwitches 建容器；不登记则切过去只提示，不会留下空容器骗过后续判断
 const FRAMEWORK_TABS = {
   react: ["interview", "dashboard", "kb", "study", "crawl", "jobs", "chat"], // S1：驾驶舱/知识库；S2：清单/爬取；S3：校招；S4：对话
-  vue: ["review", "dashboard", "kb", "study"], // 任务 3：Vue 全 Tab（已：复习/驾驶舱/知识库/清单）
+  vue: ["review", "dashboard", "kb", "study", "crawl"], // 任务 3：Vue 全 Tab（已：复习/驾驶舱/知识库/清单/爬取）
 };
 function hasFrameworkTab(tab, mode) {
   return (FRAMEWORK_TABS[mode] || []).includes(tab);
