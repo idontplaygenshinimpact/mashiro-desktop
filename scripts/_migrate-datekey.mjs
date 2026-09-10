@@ -10,7 +10,7 @@ const REPLACES = [
   ["lib/autonomy.mjs", 'new Date(now()).toISOString().slice(0, 10)', 'localDateKey(now())'],
   ["lib/dreaming.mjs", 'new Date(now).toISOString().slice(0, 10)', 'localDateKey(now)'],
   ["lib/patrol.mjs", 'new Date().toISOString().slice(0, 10)', 'localDateKey()'],
-  ["lib/study-plan.mjs", 'new Date().toISOString().slice(0, 10)', 'localDateKey()'],
+  ["lib/study-plan.ts", 'new Date().toISOString().slice(0, 10)', 'localDateKey()'],
 ];
 
 for (const [file, old, neu] of REPLACES) {

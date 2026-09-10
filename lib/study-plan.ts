@@ -1,7 +1,7 @@
 // 学习清单：生成/勾选/同步/回填——复引 store/topic/groups
 // 职责边界（L8 命名澄清，不重命名）：
 //   study.mjs        —— 学习清单的"数据 + 领域逻辑"（桶 re-export）
-//   study-plan.mjs   —— 学习清单的"生成/勾选/同步/回填"编排（本文件：调 study 子域 + LLM 生成计划）
+//   study-plan.ts   —— 学习清单的"生成/勾选/同步/回填"编排（本文件：调 study 子域 + LLM 生成计划）
 //   learning-plan.mjs—— 长期学习计划引擎（领域无关：计划实体 + 学习事件流 + 趋势聚合，study 之外的另一套）
 // 纵向拆分第 4 刀第二步
 import { localDateKey } from "./date-utils.ts";
@@ -15,6 +15,7 @@ import { getAllPoints } from "./knowledge.mjs";
 import { getCareerProfile } from "./career.mjs";
 import { sanitizeFilename } from "./study-files.mjs"; // 存档文件名统一（与 routes/study.mjs 同源，防双份实现漂移）
 import { loadPlan, savePlan, newPlanId } from "./study-store.ts";
+import type { PlanItem, StudyPlan } from "./study-store.ts";
 import { normalizeGroup, normalizeGroupName, EXTRA_GROUP_RULES } from "./study-groups.ts";
 import { normalizeTopic, isSimilarTopic } from "./study-topic.ts";
 
@@ -25,7 +26,7 @@ import { normalizeTopic, isSimilarTopic } from "./study-topic.ts";
 // 生产（widget/desktop/脚本）默认开启；批量导入脚本可显式关闭省 LLM 调用。
 let autoPlanCoverage = process.env.MIANSHI_TEST !== "1";
 /** 开关：新条目自动补卡（默认开；测试环境默认关）。返回当前值 */
-export function setAutoPlanCoverage(enabled) {
+export function setAutoPlanCoverage(enabled: unknown): boolean {
   autoPlanCoverage = !!enabled;
   return autoPlanCoverage;
 }
@@ -40,8 +41,8 @@ export async function generateStudyPlan() {
   if (!existsSync(outDir)) return { date: "", items: [], error: "暂无产出" };
 
   // 收集最近的产出文件内容
-  const files = [];
-  const collect = (dir, depth = 0) => {
+  const files: { name: string; path: string }[] = [];
+  const collect = (dir: string, depth = 0): void => {
     if (depth > 3) return;
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
@@ -79,7 +80,7 @@ export async function generateStudyPlan() {
   // group 大类动态生成：知识树分类 + 兜底规则（跟随当前方向模板）
   const groupNamesText = [
     ...new Set([
-      ...getAllPoints().map((p) => p.categoryTitle),
+      ...getAllPoints().map((p: { categoryTitle: string }) => p.categoryTitle),
       ...EXTRA_GROUP_RULES.map((r) => r.g),
     ]),
   ].join('" / "');
@@ -125,21 +126,22 @@ ${excerpts.map((x) => safeExternalBlock(x)).join("\n\n---\n\n").slice(0, 20000)}
 
   // 解析 LLM 返回：空 items（宁缺毋滥）与解析失败区分；解析失败自动重试一次
   // 修复 LOW-7：空数组是合法结果（=无新知识点），不再误判为解析失败白重试一次
-  let items = null;
+  let items: PlanItem[] | null = null;
   let parseFailed = false;
   let lastRaw = "";
   for (let attempt = 0; attempt < 2 && !items && !parseFailed; attempt++) {
     const raw = getReplyText(data);
     lastRaw = raw;
     try {
-      const parsed = extractJson(raw);
-      const list = (parsed?.items || []).map((it) => ({
+      // LLM 返回的 JSON：形状是提示词契约（非类型保证）——边界处显式声明，字段全部可选
+      const parsed = extractJson(raw) as { items?: Array<{ topic?: unknown; why?: unknown; source?: unknown; verify_question?: unknown; level?: unknown; group?: unknown }> } | null;
+      const list: PlanItem[] = (parsed?.items || []).map((it) => ({
         id: newPlanId(),
         topic: String(it.topic || "").trim(), // 修复 LOW-6：空 topic 条目跳过（下方过滤），不落 "undefined" 字面量
-        why: it.why,
-        source: it.source,
-        verify_question: it.verify_question,
-        level: ["必会", "进阶", "拓展"].includes(it.level) ? it.level : "必会",
+        why: String(it.why || ""),
+        source: String(it.source || ""),
+        verify_question: String(it.verify_question || ""),
+        level: ["必会", "进阶", "拓展"].includes(String(it.level)) ? String(it.level) : "必会",
         grp: normalizeGroup(it.topic, it.group, it.why), // 固定大类（React/Vue/网络…），不再依赖 LLM 自由簇名
         done: false,
         reviewed: false,
@@ -172,8 +174,8 @@ ${excerpts.map((x) => safeExternalBlock(x)).join("\n\n---\n\n").slice(0, 20000)}
 
   // 合并保留：不覆盖旧清单——所有已有条目保留（含已完成——学习记录不应被"生成"删除），
   // 新生成条目做归一化去重（防 topic 表述漂移导致重复 + 层级降级）
-  const merged = [];
-  const seenTopics = new Set(); // 旧条目原始 topic
+  const merged: PlanItem[] = [];
+  const seenTopics = new Set<string>(); // 旧条目原始 topic
   for (const it of existing.items || []) {
     merged.push(it);
     seenTopics.add(it.topic);
@@ -191,7 +193,7 @@ ${excerpts.map((x) => safeExternalBlock(x)).join("\n\n---\n\n").slice(0, 20000)}
     seenTopics.add(it.topic);
     addedCount++;
   }
-  const plan = { date: localDateKey(), items: merged };
+  const plan: StudyPlan & { skippedSimilar?: number; skippedExact?: number; addedCount?: number } = { date: localDateKey(), items: merged };
   savePlan(plan);
   if (skippedSimilar > 0) plan.skippedSimilar = skippedSimilar;
   if (skippedExact > 0) plan.skippedExact = skippedExact;
@@ -204,29 +206,37 @@ export function getPlan() {
   return loadPlan();
 }
 
+/** 追加条目的入参（来源多样：面试实录/模拟面试/牛客错题/对话回流——字段可有可无、类型不定，
+ * 统一在函数体 String()/!! 收口；不假装调用方一定给全且类型正确） */
+export interface PlanItemInput {
+  topic?: unknown; why?: unknown; source?: unknown; verify_question?: unknown;
+  level?: unknown; group?: unknown; grp?: unknown; fromInterview?: unknown;
+}
+
 // 从面试复盘等来源追加知识点（不重复；支持 group 分组）
 // fromInterview 由调用方透传（修复：原硬编码 true → 简历拷打/真题/loop 等全部误标"面试"徽标）
-export function addPlanItems(items) {
+export function addPlanItems(items: readonly PlanItemInput[] | null | undefined): { ok: true; added: number; existing: number } {
   const plan = loadPlan();
   let added = 0;
+  let existing = 0; // 已在清单（跳过）计数——loop.mjs 一直读 r.existing，此前从未返回（恒 undefined→0）
   for (const it of items || []) {
     const topic = String(it?.topic || "").trim(); // 修复 LOW-8：trim 后去重（"事件循环 " 与 "事件循环" 不再并存）
     if (!topic) continue;
     const exists = plan.items.find((x) => x.topic === topic);
-    if (exists) continue; // 已有则跳过（保持原状态）
+    if (exists) { existing++; continue; } // 已有则跳过（保持原状态）
     plan.items.push({
       id: newPlanId(),
       topic,
-      why: it.why || "来自模拟面试复盘",
-      source: it.source || "模拟面试",
-      verify_question: it.verify_question || `请简述：${it.topic} 的核心要点`,
-      level: it.level || "必会", // 面试答错默认必会（优先补强）
+      why: String(it.why || "来自模拟面试复盘"),
+      source: String(it.source || "模拟面试"),
+      verify_question: String(it.verify_question || `请简述：${topic} 的核心要点`),
+      level: String(it.level || "必会"), // 面试答错默认必会（优先补强）
       done: false,
       reviewed: false,
       fromInterview: !!it.fromInterview, // 仅面试复盘调用方传 true（面板"面试"徽标依据）
       // 分类：显式 group 优先，缺省自动归类（知识树/规则——面试实录/模拟面试/对话回流
       // 此前不带 group → grp 全空、分类失效；与 generateStudyPlan 同口径）
-      grp: normalizeGroupName(it?.group || it?.grp) || normalizeGroup(String(it?.topic || ""), "", it?.why || ""),
+      grp: normalizeGroupName(String(it.group || it.grp || "")) || normalizeGroup(topic, "", String(it.why || "")),
     });
     added++;
   }
@@ -237,12 +247,12 @@ export function addPlanItems(items) {
       import("./review.mjs").then(({ ensurePlanCoverage }) => ensurePlanCoverage()).catch(() => { /* 补卡失败不阻断 */ });
     } catch { /* ignore */ }
   }
-  return { ok: true, added };
+  return { ok: true, added, existing };
 }
 
 // 简历项目同步：简历更新后删除过时条目（source=简历拷打、项目不在当前简历、且未完成——
 // 已完成条目保留为学习记录）。返回删除数
-export function syncResumeProjectItems(currentNames) {
+export function syncResumeProjectItems(currentNames: readonly unknown[] | null | undefined): { ok: true; removed: number; skipped?: string; topics?: Array<string | undefined> } {
   const plan = loadPlan();
   const names = new Set((currentNames || []).map((n) => String(n || "").trim()).filter(Boolean));
   // 防误删：完全没提取出项目（LLM 提取失败/全漏）时放弃删除——按空名单删除会把
@@ -251,7 +261,7 @@ export function syncResumeProjectItems(currentNames) {
   if (!names.size) {
     return { ok: true, removed: 0, skipped: "未提取到项目，放弃删除（防误删）" };
   }
-  const removed = [];
+  const removed: PlanItem[] = [];
   for (const it of plan.items) {
     if (it.source !== "简历拷打") continue;
     const name = String(it.topic || "").replace(/^项目·/, "").trim();
@@ -281,11 +291,11 @@ export function backfillPlanGroups() {
 }
 
 /** 勾选/取消勾选清单条目（完成 → 学习进度回流 + 复习卡建卡；取消 → 对称删卡） */
-export async function checkItem(id, done) {
+export async function checkItem(id: string, done: unknown): Promise<{ ok: boolean; error?: string; item?: PlanItem; clearedWeak?: string | null }> {
   const plan = loadPlan();
   const item = plan.items.find((i) => i.id === id);
   if (!item) return { ok: false, error: "未找到条目" };
-  let clearedWeak = null; // 薄弱点消灭进度可视化工单任务 2：勾选清除时记录（函数级作用域——return 使用）
+  let clearedWeak: string | null = null; // 薄弱点消灭进度可视化工单任务 2：勾选清除时记录（函数级作用域——return 使用）
   item.done = !!done;
   if (item.done) {
     item.doneAt = new Date().toISOString();
@@ -296,7 +306,9 @@ export async function checkItem(id, done) {
       // 薄弱点闭环补全工单任务 2①：清单勾选完成 → 对应薄弱点自动清除（"学掉"即消灭——
       // 薄弱点从只能积累变可消灭，用户获得正反馈；面试优先队列不再反复考同一个点）
       // 薄弱点消灭进度可视化工单任务 2：清除时记录 topic——前端 toast 正反馈
-      const hadWeak = memory.getWeakPoints().some((w) => w.topic === item.topic);
+      // memory 模块未迁移（.mjs，无类型声明）——薄弱点形状在此显式声明（返回数组推断为 never[]）
+      const weaks = memory.getWeakPoints() as Array<{ topic?: unknown }>;
+      const hadWeak = weaks.some((w) => w.topic === item.topic);
       memory.clearWeakPoint(item.topic);
       if (hadWeak) clearedWeak = item.topic;
     } catch { /* ignore */ }
@@ -319,13 +331,14 @@ export async function checkItem(id, done) {
         const f = path.join(config.outputDir, "study_notes", `${sanitizeFilename(item.topic)}.md`);
         if (existsSync(f)) answer = smartSlice(readFileSync(f, "utf8"));
       } catch { /* ignore */ }
-      const r = /** @type {any} */ (review.addCard({
+      // review.addCard 返回卡对象或错误对象（.mjs 无类型）——失败分支只看 ok===false
+      const r = review.addCard({
         topic: item.topic,
         question,
         answer,
         source: "学习清单",
         priority: item.level === "必会" ? "必会" : (item.level === "进阶" ? "进阶" : "拓展"), // 复习卡强化激活工单任务 1③：level → priority
-      }));
+      }) as { ok?: boolean; topic?: string } | null;
       if (r && r.ok === false) console.warn(`[study-plan] 复习卡建卡失败: ${r.topic}`);
     } catch { /* ignore */ }
   } else {

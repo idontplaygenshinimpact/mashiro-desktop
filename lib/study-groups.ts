@@ -51,8 +51,9 @@ const normGroup = (g: string): string => GROUP_ALIAS[g] || g;
 /** 分组名归一（导出——addPlanItems 写入前归一，防碎片组进清单） */
 export const normalizeGroupName: (g: string) => string = normGroup;
 
-/** 归一化主题簇：手写/算法强信号（topic）→ 知识树分类（topic，按命中关键词数最多选点，避免泛词抢先）→ 知识树匹配 why（项目条目按技术栈归类）→ 兜底规则 → similarity 规则层 → 其他 */
-export function normalizeGroup(topic: unknown, grp = "", why = ""): string {
+/** 归一化主题簇：手写/算法强信号（topic）→ 知识树分类（topic，按命中关键词数最多选点，避免泛词抢先）→ 知识树匹配 why（项目条目按技术栈归类）→ 兜底规则 → similarity 规则层 → 其他
+ * grp/why 放宽为 unknown：调用方（LLM JSON / DB 行 / 调用入参）本就会传非字符串，函数体统一 String() 收口 */
+export function normalizeGroup(topic: unknown, grp: unknown = "", why: unknown = ""): string {
   const t = String(topic || "").toLowerCase();
   const g = String(grp || "").toLowerCase();
   const w = String(why || "").toLowerCase();
@@ -86,7 +87,7 @@ export function normalizeGroup(topic: unknown, grp = "", why = ""): string {
     const catW = treeHit(w);
     if (catW) return catW;
     // 保留原分组但过 normGroup（碎片组名归一——"JS 基础"等手动 group → 规范名）
-    return g ? normGroup(grp) : "其他";
+    return g ? normGroup(String(grp)) : "其他";
   }
   const catT = treeHit(t);
   if (catT) return catT;
@@ -140,7 +141,7 @@ export function similarityGroupRule(topic: unknown): string | null {
 
 /** 分类判定相似度引擎工单任务 1：async 版本（规则层 + LLM 模糊地带）——供异步调用方（addPlanItems 等）
  * 规则层未命中（"其他"）→ LLM 语义层判定"这个 topic 属于哪个组"（低频——模糊地带才触发） */
-export async function normalizeGroupAsync(topic: unknown, grp = "", why = ""): Promise<string> {
+export async function normalizeGroupAsync(topic: unknown, grp: unknown = "", why: unknown = ""): Promise<string> {
   const sync = normalizeGroup(topic, grp, why);
   if (sync !== "其他") return sync;
   try {

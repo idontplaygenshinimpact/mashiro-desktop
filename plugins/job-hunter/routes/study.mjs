@@ -328,7 +328,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
       // 语义：done = "已学"（讲解过）——区别于"已掌握"（面试/复习答对，mastery 标记）
       if (savedPath) {
         try {
-          const { checkItem } = await import("#lib/study-plan.mjs");
+          const { checkItem } = await import("#lib/study-plan.ts");
           await checkItem(item.id, true);
         } catch { /* 自动标记失败不影响讲解 */ }
       }
