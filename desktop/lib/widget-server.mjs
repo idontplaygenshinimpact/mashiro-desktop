@@ -2,7 +2,7 @@
 // 启动/复用 widget.mjs + 持续探测守护（挂了自动拉起）+ 退出清理（只杀本实例拉起的进程）
 // 打包模式：asar 内代码普通 node 读不了 → 用 ELECTRON_RUN_AS_NODE 模式（process.execPath 即
 // Electron 的 node，可读 asar）；数据/产出/插件目录由主进程 env 重定向到可写位置
-// 依赖注入：widgetFetch（带 token 的 fetch，来自 widget-auth.mjs）+ healthUrl；无 electron 依赖
+// 依赖注入：widgetFetch（带 token 的 fetch，来自 widget-auth.ts）+ healthUrl；无 electron 依赖
 import { spawn, spawnSync } from "node:child_process";
 
 /** 安全 spawn：始终挂 error 处理器，避免子进程 'error' 未捕获导致主进程崩溃 */

@@ -28,10 +28,10 @@ const nodeFs = { readFileSync };
  *   - 裸字符串（旧版 widget 直接写 token，或 JSON 字符串 "..."）
  * 损坏 JSON（以 { / [ / " 开头却解析失败）与空对象等垃圾 → 返回 ""。
  */
-export function extractToken(raw) {
+export function extractToken(raw: unknown): string {
   const text = String(raw ?? "").trim();
   if (!text) return "";
-  let parsed;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
@@ -42,13 +42,14 @@ export function extractToken(raw) {
   }
   if (typeof parsed === "string") return parsed;
   if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-    const t = parsed.token || parsed.value || "";
+    const obj = parsed as { token?: unknown; value?: unknown };
+    const t = obj.token || obj.value || "";
     return typeof t === "string" ? t : "";
   }
   return "";
 }
 
-function sleep(ms) {
+function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -63,9 +64,9 @@ function sleep(ms) {
  *   onLoaded       token 成功读取后的回调（可选，便于测试/埋点）
  */
 export async function loadTokenFromFile(
-  tokenFile,
-  { pollIntervalMs = 500, fsImpl = nodeFs, onLoaded = null } = {}
-) {
+  tokenFile: string,
+  { pollIntervalMs = 500, fsImpl = nodeFs, onLoaded = null }: { pollIntervalMs?: number; fsImpl?: typeof nodeFs; onLoaded?: ((token: string) => void) | null } = {}
+): Promise<string> {
   for (;;) {
     let token = "";
     try {
@@ -85,7 +86,7 @@ export async function loadTokenFromFile(
  * 判断是否应对某请求注入 Authorization 头。
  * 仅当 token 非空 且 url 指向 8899 的 widget 服务（127.0.0.1 或 localhost）时才注入。
  */
-export function shouldInjectAuth(url, token) {
+export function shouldInjectAuth(url: unknown, token: unknown): boolean {
   if (!token) return false;
   const u = String(url || "");
   return u.startsWith(WIDGET_URL) || u.startsWith("http://localhost:8899");
@@ -96,8 +97,8 @@ export function shouldInjectAuth(url, token) {
  * 关键：主进程 fetch 不经过 webRequest 注入 → 必须显式带 header，否则全部 401。
  * 纯函数：注入 fake fetchImpl 即可捕获 header 断言。
  */
-export function widgetFetchFactory(token, fetchImpl) {
-  return (url, opts = {}) => {
+export function widgetFetchFactory(token: string | null | undefined, fetchImpl: typeof fetch) {
+  return (url: string, opts: { headers?: Record<string, string> } & Record<string, unknown> = {}) => {
     const headers = { ...(opts.headers || {}) };
     if (token) headers["Authorization"] = "Bearer " + token;
     return fetchImpl(url, { ...opts, headers });

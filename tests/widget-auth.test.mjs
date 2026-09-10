@@ -1,4 +1,4 @@
-// widget-auth.mjs 单测：token 提取 / 轮询 / 注入判断 / fetch 包装 / 健康探测 URL
+// widget-auth.ts 单测：token 提取 / 轮询 / 注入判断 / fetch 包装 / 健康探测 URL
 // 全 fake（fsImpl / fetchImpl），无网络、无 Electron。
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
@@ -11,7 +11,7 @@ import {
   shouldInjectAuth,
   widgetFetchFactory,
   healthUrl,
-} from "../lib/widget-auth.mjs";
+} from "../lib/widget-auth.ts";
 
 // ---------- 常量契约 ----------
 test("WIDGET_URL 固定为 127.0.0.1:8899，HEALTH_PATH 为 /api/health", () => {

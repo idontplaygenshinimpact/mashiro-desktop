@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import { writeFileSync, readFileSync, createWriteStream, existsSync } from "node:fs";
-import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, healthUrl } from "../lib/widget-auth.mjs";
+import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, healthUrl } from "../lib/widget-auth.ts";
 // 纵向拆分：widget 服务守护 / 窗口位置持久化 / 重启设施（desktop/lib/*.mjs，无 electron 依赖可单测）
 import { safeSpawn, createWidgetServer } from "./lib/widget-server.mjs";
 import { readWindowState as readWinState, scheduleSaveWindowState as scheduleSaveWinState, isOnScreen as isRectOnScreen } from "./lib/window-state.mjs";
@@ -1355,7 +1355,7 @@ function startFocusSupervision() {
 }
 
 // ---------- widget 鉴权：给面板/桌宠对 8899 的请求注入 Bearer token ----------
-// 核心逻辑抽到 lib/widget-auth.mjs（纯函数、可单测）：token 轮询 / 注入判断 / fetch 包装 / 健康探测 URL。
+// 核心逻辑抽到 lib/widget-auth.ts（纯函数、可单测）：token 轮询 / 注入判断 / fetch 包装 / 健康探测 URL。
 // 主进程这里只保留 Electron 相关的 session API 绑定与 token 变量。
 let widgetToken = "";
 async function loadWidgetToken() {
