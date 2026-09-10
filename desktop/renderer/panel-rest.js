@@ -227,22 +227,23 @@ async function kbSearch() {
   if (!q) { list.innerHTML = ""; return; }
   list.innerHTML = '<div class="empty-hint">🔍 检索中…</div>';
   try {
-    const res = await fetch(API_BASE + "/api/knowledge/search", {
+    // 个人学习知识库工单任务 1：段落级混合检索（BM25 + 向量 + RRF——追问段落优先）
+    const res = await fetch(API_BASE + "/api/knowledge/paragraphs/search", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: q, topK: 8 }),
     });
     const j = await res.json();
-    if (j.disabled) { list.innerHTML = `<div class="empty-hint">📭 知识库未启用——到「⚙️ 设置」开启后即可搜索（纯关键词检索，秒级构建）</div>`; return; }
+    if (j.disabled) { list.innerHTML = `<div class="empty-hint">📭 知识库未启用——到「⚙️ 设置」开启后即可搜索</div>`; return; }
     if (!j.hits?.length) { list.innerHTML = '<div class="empty-hint">没有命中——换个说法，或点「🔄 重建索引」</div>'; return; }
-    list.innerHTML = `<div style="font-size:11px;color:#6a6790;margin:2px 0 6px;">命中 ${j.hits.length} 条（关键词检索）</div>` +
+    const fu = j.hits.filter((h) => h.kind === "followup").length;
+    list.innerHTML = `<div style="font-size:11px;color:#6a6790;margin:2px 0 6px;">命中 ${j.hits.length} 段（${j.stats?.docs || 0} 篇文档 · ${j.stats?.followups || 0} 段追问 · 混合检索）${fu ? ` · 追问段 ${fu} 段优先` : ""}</div>` +
       j.hits.map((h) => `
       <div class="job-item">
         <div class="job-head">
-          <span class="job-badge">${KIND_LABEL[h.kind] || h.kind}</span>
-          <b style="font-size:12px;">${esc(h.title)}</b>
-          ${h.ftsScore ? `<span class="job-badge" style="background:rgba(120,180,120,.15);color:#2f7a4a;">关键词</span>` : ""}
+          <span class="job-badge">${h.kind === "followup" ? "💬 追问" : "📝 讲解"}</span>
+          <b style="font-size:12px;">${esc(h.docId)}${h.section ? " · " + esc(h.section) : ""}</b>
         </div>
-        <div class="job-summary">${esc(h.content.slice(0, 150))}${h.content.length > 150 ? "…" : ""}</div>
+        <div class="job-summary">${esc(h.content.slice(0, 180))}${h.content.length > 180 ? "…" : ""}</div>
       </div>`).join("");
   } catch (e) {
     list.innerHTML = '<div class="empty-hint">⚠️ ' + esc(e.message) + "</div>";
