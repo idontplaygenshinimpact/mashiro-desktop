@@ -166,7 +166,7 @@ function SetupView({ config, setConfig, busy, onStart, resumable, onResume, hist
       </div>
 
       {resumable && (
-        <div style={{ background: "#241f3a", border: "1px solid #8fc7ff66", borderRadius: 8, padding: 12, display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="rf-card" style={{ borderColor: "rgba(109,79,216,.35)", display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 13 }}>🔄 检测到未完成的面试（第 {Number(resumable.round) || 1} 轮）</span>
           <button onClick={onResume} disabled={busy} style={btnPrimary}>继续上一场</button>
         </div>
@@ -174,17 +174,17 @@ function SetupView({ config, setConfig, busy, onStart, resumable, onResume, hist
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <label style={lbl}>目标岗位</label>
-        <input value={config.position} onChange={set("position")} style={input} />
+        <input value={config.position} onChange={set("position")} className="rf-input" aria-label="目标岗位" />
         <label style={lbl}>面试官风格</label>
-        <select value={config.role} onChange={set("role")} style={input}>
+        <select value={config.role} onChange={set("role")} className="rf-input" aria-label="面试官风格">
           {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
         <label style={lbl}>重点方向（可选）</label>
-        <input value={config.focus} onChange={set("focus")} placeholder="如：React / 事件循环 / 项目拷打" style={input} />
+        <input value={config.focus} onChange={set("focus")} placeholder="如：React / 事件循环 / 项目拷打" className="rf-input" aria-label="重点方向" />
         <label style={lbl}>简历（可选——面试官基于真实项目拷打）</label>
         <textarea value={config.resume || ""} onChange={set("resume")} rows={4}
           placeholder="粘贴简历（至少 40 字；留空自动使用设置中心存档简历）"
-          style={{ ...input, resize: "vertical", lineHeight: 1.5 }} />
+          className="rf-input" style={{ resize: "vertical", lineHeight: 1.5 }} />
       </div>
 
       <button onClick={onStart} disabled={busy} style={{ ...btnPrimary, padding: "12px 0", fontSize: 15 }}>
@@ -197,7 +197,7 @@ function SetupView({ config, setConfig, busy, onStart, resumable, onResume, hist
           <div style={{ fontSize: 13, color: "#a8a3c8", marginBottom: 8 }}>历史复盘（{history.length}）</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto" }}>
             {history.slice(0, 20).map((h, i) => (
-              <div key={i} onClick={() => onOpen(h)} style={{ background: "#241f3a", borderRadius: 6, padding: "8px 12px", cursor: "pointer", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
+              <div key={i} onClick={() => onOpen(h)} className="rf-row" style={{ cursor: "pointer", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span>{h.position || "面试"} · {h.rounds || 0} 轮</span>
                 <span style={{ color: "#a8a3c8" }}>{h.date ? String(h.date).slice(0, 16) : ""}</span>
               </div>
