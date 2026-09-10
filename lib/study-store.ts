@@ -1,26 +1,47 @@
 // 学习清单：存储层（study_plan_items 表读写）——只依赖 db
 // 纵向拆分第 4 刀第二步
+// 全量 TS 升级工单阶段 1⑨：lib/study-store.ts → .ts（SQL 结果类型在边界处显式声明——已踩坑④）
 import { randomUUID } from "node:crypto";
 import { db, withTx } from "./db.mjs";
 
+/** 复习卡到期判定用的窄行（只需字段子集） */
+interface DueRow { topic?: unknown; fsrs_due?: unknown; created_at?: unknown }
+/** study_plan_items 行（查询列与下方 SELECT 一一对应） */
+interface PlanRow {
+  id: string; topic: string; why: string | null; source: string | null; verify_question: string | null;
+  done: number; reviewed: number; done_at: string | null; reviewed_at: string | null;
+  level: string | null; from_interview: number; grp: string | null;
+}
+/** 清单条目（对外形状：DB 蛇形 → camelCase + 布尔化 + reviewDue 派生）
+ * doneAt/reviewedAt/reviewDue 可选：loadPlan 一定给全，但 addPlanItems 新建条目时只给必要字段——
+ * 类型如实反映两侧用法，而不是逼调用方补空值 */
+export interface PlanItem {
+  id: string; topic: string; why?: string | null; source?: string | null; verify_question?: string | null;
+  done: boolean; reviewed: boolean; doneAt?: string | null; reviewedAt?: string | null;
+  level?: string | null; fromInterview?: boolean; grp?: string; reviewDue?: boolean;
+}
+/** 学习清单（date + 条目数组） */
+export interface StudyPlan { date: string; items: PlanItem[] }
+
 // 清单条目 id：时间戳 + 随机后缀，保证同步循环/跨次生成/跨来源都不碰撞
 // （旧实现 `s${i+1}` 会在重新生成时与已有条目 id 冲突 → INSERT OR REPLACE 抹掉完成进度）
-export function newPlanId() {
+export function newPlanId(): string {
   return `s${Date.now().toString(36)}${randomUUID().slice(0, 8)}`;
 }
 
-export function loadPlan() {
-  const plan = { date: "", items: [] };
-  const dateRow = db.prepare("SELECT DISTINCT date FROM study_plan_items ORDER BY date DESC LIMIT 1").get();
+export function loadPlan(): StudyPlan {
+  const plan: StudyPlan = { date: "", items: [] };
+  const dateRow = db.prepare("SELECT DISTINCT date FROM study_plan_items ORDER BY date DESC LIMIT 1").get() as { date?: unknown } | undefined;
   plan.date = String(dateRow?.date || "");
   // 复习卡到期映射（topic → 是否待复习）：面板"待复习/复习到期"分组依赖此字段
   // 修复1：原查询引用不存在的 done 列 → 抛异常被吞 → reviewDue 恒 false → UI 断链
   // 修复2：新卡（从未复习）fsrs_due=0，需按"创建超 1 天"判断到期（与 review.getDueCards 同口径）
-  let dueByTopic = new Map();
+  const dueByTopic = new Map<string, boolean>();
   try {
     const now = Date.now();
     const DAY = 24 * 60 * 60 * 1000;
-    const rows = db.prepare("SELECT topic, fsrs_due, created_at FROM review_cards").all();
+    // node:sqlite 的行是 Record<string, SQLOutputValue>——列形状是运行时契约，边界处显式收口
+    const rows = db.prepare("SELECT topic, fsrs_due, created_at FROM review_cards").all() as unknown as DueRow[];
     for (const r of rows) {
       const due = Number(r.fsrs_due) > 0
         ? Number(r.fsrs_due) <= now                       // 复习过：fsrs_due 到期
@@ -29,8 +50,8 @@ export function loadPlan() {
     }
   } catch { /* 复习表暂不可用 */ }
   // 也把最近复习过的（reviewed_at 近 3 天）算"不久待复习"？——保持简单：只按到期卡
-  plan.items = db.prepare(`SELECT id, topic, why, source, verify_question, done, reviewed, done_at, reviewed_at, level, from_interview, grp
-    FROM study_plan_items ORDER BY rowid`).all().map((r) => ({
+  plan.items = (db.prepare(`SELECT id, topic, why, source, verify_question, done, reviewed, done_at, reviewed_at, level, from_interview, grp
+    FROM study_plan_items ORDER BY rowid`).all() as unknown as PlanRow[]).map((r) => ({
     id: r.id, topic: r.topic, why: r.why, source: r.source,
     verify_question: r.verify_question,
     done: !!r.done, reviewed: !!r.reviewed,
@@ -41,7 +62,7 @@ export function loadPlan() {
   return plan;
 }
 
-export function savePlan(plan) {
+export function savePlan(plan: Partial<StudyPlan>): boolean {
   // 全量重写：先清空再插入（调用方负责传入合并后的完整 items；generateStudyPlan 已合并保留旧未完成项）
   // 包事务：crash/强杀在 DELETE 与 INSERT 之间不会丢整份清单
   try {
@@ -63,7 +84,9 @@ export function savePlan(plan) {
     return true;
   } catch (e) {
     // 修复 S7：学习清单唯一持久化入口——失败必须可观测（此前静默吞错，用户清单丢失无感知）
-    console.error(`[study-store] savePlan 写库失败: ${String(e?.message || e).slice(0, 120)}`);
+    // strict：catch 变量是 unknown——instanceof 收窄（不靠 e?.message 的动态访问）
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[study-store] savePlan 写库失败: ${msg.slice(0, 120)}`);
     return false;
   }
 }

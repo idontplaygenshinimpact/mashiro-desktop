@@ -1,8 +1,8 @@
-// study-topic.mjs 测试：topic 归一化 + 相似判定（零依赖零 mock——纯函数独立直测）
+// study-topic.ts 测试：topic 归一化 + 相似判定（零依赖零 mock——纯函数独立直测）
 // 纵向拆分第 4 刀：纯函数域拆出后的零 mock 直测
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeTopic, isSimilarTopic } from "../lib/study-topic.mjs";
+import { normalizeTopic, isSimilarTopic } from "../lib/study-topic.ts";
 
 test("normalizeTopic：去括号内容/标点/连词/修饰后缀", () => {
   assert.equal(normalizeTopic("事件循环（含宏任务与微任务）"), "事件循环", "括号及内容整体删除");

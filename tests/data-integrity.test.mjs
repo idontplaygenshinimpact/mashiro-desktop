@@ -61,7 +61,7 @@ test("S6：addCard 写库失败 → 返回 {ok:false}（不静默返回成功卡
 
 // ---------- S7：savePlan 失败可观测（console.error + 返回 false） ----------
 test("S7：savePlan 写库失败 → 返回 false（可观测）", async () => {
-  const { savePlan } = await import("../lib/study-store.mjs");
+  const { savePlan } = await import("../lib/study-store.ts");
   const { db } = await import("../lib/db.mjs");
   db.exec("ALTER TABLE study_plan_items RENAME TO study_plan_items_bak");
   try {

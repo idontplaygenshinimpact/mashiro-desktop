@@ -1,11 +1,13 @@
 // 学习清单：topic 归一化/相似判定（零依赖纯函数——拆出后无需 mockLLM 即可直测）
 // 纵向拆分第 4 刀第一步：纯函数域先拆（原在 study.mjs 被 LLM 生成函数同文件绑架）
+// 全量 TS 升级工单阶段 1⑧：lib/study-topic.ts → .ts（零依赖纯函数；入参放宽 unknowns 如实反映
+// 调用方传 null/undefined 的既有用法）
 
 /**
  * topic 归一化：去括号/标点，去常见词尾（原理/机制/优化等），小写
  * 用于生成清单时的相似去重（防表述漂移导致重复条目 + 层级降级）
  */
-export function normalizeTopic(t) {
+export function normalizeTopic(t: unknown): string {
   return String(t || "")
     .toLowerCase()
     .replace(/[（(].*?[)）]/g, "")        // 去括号内容
@@ -22,10 +24,11 @@ export function normalizeTopic(t) {
  * "事件循环"⊂"事件循环微任务"（后一位是"微"=中文，算边界→相似）✓
  * "css"⊂"css3"（后一位是数字=字母数字，不算边界→不相似）✓
  * "react"⊂"reactnative"（后一位是 n，不算边界→不相似）✓ */
-export function isSimilarTopic(a, b) {
+export function isSimilarTopic(a: unknown, b: unknown): boolean {
   if (!a || !b) return false;
-  if (a === b) return true;
-  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  const sa = String(a), sb = String(b);
+  if (sa === sb) return true;
+  const [short, long] = sa.length <= sb.length ? [sa, sb] : [sb, sa];
   const idx = long.indexOf(short);
   if (idx < 0) return false;
   // 词边界：短串结尾后的字符不能是字母/数字（否则是词中间拼接，如 css3/https/reactnative）
