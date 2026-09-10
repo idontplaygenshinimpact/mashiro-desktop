@@ -53,6 +53,8 @@ export function useReview() {
   const error = ref("");
   const feedback = ref({ today: 0, mastered: 0, retry: 0 }); // 复习反馈（强化复习工单任务 2③）
   const retryQueue = ref([]);     // 错题重练队列（任务 2②）
+  const lastRating = ref(null);   // 复习首刷不计 fail 工单任务 2：最近一次评分（答错 → 讲解按钮强引导）
+  const lastIsFirst = ref(false); // 是否首刷（答错引导更强）
 
   async function load() {
     loading.value = true;
@@ -142,6 +144,13 @@ export function useReview() {
       try {
         const submit = await window.kanban.reviewSubmit(prev.id, RATING_GRADE[ratingKey]);
         if (submit && submit.ok === false) error.value = String(submit.error || "复习提交失败");
+        // 复习首刷不计 fail 工单任务 2：记录答错状态（讲解按钮强引导——首刷"先学再复习"）
+        lastRating.value = RATING_GRADE[ratingKey] < 2 ? ratingKey : null;
+        lastIsFirst.value = !!submit?.isFirst;
+        // 薄弱点消灭进度可视化工单任务 2：答对清除薄弱点 → 正反馈 toast
+        if (submit?.clearedWeak) {
+          try { window.kanban.notify("🎉 薄弱点已消灭", `「${String(submit.clearedWeak).slice(0, 20)}」已清除——继续加油！`); } catch { /* ignore */ }
+        }
       } catch (e) {
         error.value = "复习提交失败：" + String(e?.message || e).slice(0, 80);
       }
@@ -297,9 +306,19 @@ export function useReview() {
     }
   }
 
+  // ---- 薄弱点消灭进度（可视化工单任务 1：已消灭 N 条——累计清除可感知） ----
+  const clearedCount = ref(0);
+  async function loadClearedCount() {
+    try {
+      const r = await api("/api/weak-points");
+      clearedCount.value = r.clearedCount || 0;
+    } catch { clearedCount.value = 0; }
+  }
+
   return { cards, current, flipped, history, loading, error, remaining, feedback, retryQueue, load, rate, next, setCards,
     quiz, loadQuiz, pickQuizOption, submitQuiz, resetQuiz,
     explain, explainCard, closeExplain,
     wrongBook, loadWrongBook, mastery, loadMastery,
-    stats, trend, captureStatsAndTrend, toPlanMsg, addWeakToPlan };
+    stats, trend, captureStatsAndTrend, toPlanMsg, addWeakToPlan, clearedCount, loadClearedCount,
+    lastRating, lastIsFirst };
 }

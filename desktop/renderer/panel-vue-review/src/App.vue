@@ -34,10 +34,10 @@
       <!-- 评分：算法题 → 多维自评映射四级；概念题 → 四级按钮 -->
       <RatingButtons :flipped="flipped" :card-type="current.type" @rate="onRate" />
 
-      <!-- 答错即学（功能补全任务 2①）：💡 讲解按钮 → SSE 流式讲解 -->
+      <!-- 答错即学（功能补全任务 2①）：💡 讲解按钮 → SSE 流式讲解；复习首刷不计 fail 工单任务 2：答错后强引导 -->
       <div class="vr-explain">
-        <button class="vr-explain-btn" @click="onExplain" :disabled="explain.loading">
-          {{ explain.loading ? "⏳ 讲解生成中…" : "💡 讲解（答错即学）" }}
+        <button class="vr-explain-btn" :class="{ 'vr-explain-hot': lastRating }" @click="onExplain" :disabled="explain.loading">
+          {{ explain.loading ? "⏳ 讲解生成中…" : (lastRating ? (lastIsFirst ? "📖 先学再复习——让真白讲一遍" : "💡 答错了？让真白讲一遍") : "💡 讲解（答错即学）") }}
         </button>
         <div v-if="explain.text" class="vr-explain-body">
           <div class="vr-explain-head">
@@ -78,6 +78,8 @@
 
     <div v-else class="vr-done-panel">
       <div class="vr-hint vr-done">🎉 本组复习完成（{{ history.length }} 张已调度）</div>
+      <!-- 薄弱点消灭进度（可视化工单任务 1：已消灭 N 条——累计清除可感知） -->
+      <div v-if="clearedCount > 0" class="vr-cleared">🏆 已消灭薄弱点 <b>{{ clearedCount }}</b> 条——进步看得见！</div>
       <!-- 面试检验（功能补全任务 2②）：复习完 → 跳转面试 -->
       <button class="vr-interview-btn" @click="goInterview">🎯 面试检验（复习完去面试）</button>
       <!-- 薄弱点一键入清单（功能补全任务 4） -->
@@ -142,7 +144,8 @@ const { current, flipped, history, loading, error, remaining, feedback, retryQue
   quiz, loadQuiz, pickQuizOption, submitQuiz, resetQuiz,
   explain, explainCard, closeExplain,
   wrongBook, loadWrongBook, mastery, loadMastery,
-  stats, trend, captureStatsAndTrend, toPlanMsg, addWeakToPlan } = useReview();
+  stats, trend, captureStatsAndTrend, toPlanMsg, addWeakToPlan, clearedCount, loadClearedCount,
+  lastRating, lastIsFirst } = useReview();
 
 onMounted(async () => {
   await load();
@@ -150,6 +153,7 @@ onMounted(async () => {
   // 错题本 + 掌握度独立加载
   loadWrongBook();
   loadMastery();
+  loadClearedCount(); // 薄弱点消灭进度（可视化工单任务 1）
 });
 
 function onRate(key) {
@@ -247,6 +251,11 @@ const trendMax = computed(() => Math.max(1, ...(trend.value || []).map((t) => t.
   background: rgba(58,125,213,.10); color: #2f6fb0; border: 1px solid rgba(58,125,213,.3); font-weight: 600;
 }
 .vr-explain-btn:hover { background: rgba(58,125,213,.16); }
+.vr-explain-hot {
+  background: rgba(229,72,77,.12); color: #c0392b; border-color: rgba(229,72,77,.4);
+  animation: vr-pulse 1.2s ease infinite;
+}
+@keyframes vr-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(229,72,77,.25); } 50% { box-shadow: 0 0 0 4px rgba(229,72,77,.08); } }
 .vr-explain-body {
   margin-top: 6px; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.6;
   background: rgba(58,125,213,.05); border: 1px solid rgba(58,125,213,.15); color: #3a3a5a;
@@ -284,6 +293,11 @@ const trendMax = computed(() => Math.max(1, ...(trend.value || []).map((t) => t.
 
 /* 完成面板 */
 .vr-done-panel { display: flex; flex-direction: column; gap: 8px; }
+.vr-cleared {
+  padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #2f7a4a;
+  background: linear-gradient(135deg, rgba(47,122,74,.10), rgba(80,160,255,.05));
+  border: 1px solid rgba(47,122,74,.2);
+}
 .vr-interview-btn {
   font-size: 12px; padding: 6px 14px; border-radius: 6px; cursor: pointer;
   background: rgba(229,72,77,.10); color: #c0392b; border: 1px solid rgba(229,72,77,.3); font-weight: 600;
