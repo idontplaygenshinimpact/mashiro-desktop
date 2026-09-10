@@ -81,11 +81,11 @@ test("任务1②：未实现的框架版 → 提示开发中（整 Tab 未实现
     const notes = [];
     kanban.notify = (t, m) => notes.push(m);
     const click = (sel) => window.document.querySelector(sel).click();
-    // ① 整 Tab 的框架版都没做（jobs 无 Vue 版——任务 3 后续补）
-    click('#tab-jobs .renderer-switch-btn[data-mode="vue"]');
+    // ① 整 Tab 的框架版都没做（chat 无 Vue 版——任务 3 后续补）
+    click('#tab-chat .renderer-switch-btn[data-mode="vue"]');
     await settle();
     assert.ok(notes.some((m) => m.includes("开发中")), "未实现 Tab 提示开发中");
-    assert.equal(window.document.getElementById("jobs-native").style.display, "", "原生容器不受影响");
+    assert.equal(window.document.getElementById("chat-native").style.display, "", "原生容器不受影响");
     // ② 只有单个框架版缺（面试缺 Vue / 复习缺 React——任务 2/3 补全前）
     notes.length = 0;
     click('#tab-interview .renderer-switch-btn[data-mode="vue"]');
