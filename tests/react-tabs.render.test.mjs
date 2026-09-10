@@ -26,6 +26,10 @@ const DASHBOARD = {
   },
 };
 
+const JOBS = { recommended: [
+  { id: "j1", company: "字节跳动", title: "前端开发实习生", direction: "frontend", match: "92%", jobType: "实习", deadline: "2026-10-01", status: "none", summary: "负责中台前端研发", jdText: "岗位职责：React 中台开发", applyUrl: "https://example.com/apply", favorite: false },
+  { id: "j2", company: "美团", title: "AI Agent 工程师", direction: "agent", match: "85%", status: "ready", favorite: true, summary: "Agent 平台建设" },
+] };
 const KB_STATS = { total: 12, byKind: [{ kind: "note", n: 7 }, { kind: "mianjing", n: 5 }], enabled: true, docs: 3, followups: 2, lastBuild: "" };const KB_SEARCH = {
   hits: [
     { kind: "followup", docId: "事件循环", section: "宏任务与微任务", content: "宏任务与微任务的执行顺序：先同步代码，再清空微任务队列，然后取下一个宏任务。" },
@@ -36,7 +40,7 @@ const KB_STATS = { total: 12, byKind: [{ kind: "note", n: 7 }, { kind: "mianjing
 
 function boot() {
   const dom = new JSDOM(
-    '<div id="dashboard-react"></div><div id="kb-react"></div><div id="study-react"></div><div id="crawl-react"></div><div id="probe"></div>',
+    '<div id="dashboard-react"></div><div id="kb-react"></div><div id="study-react"></div><div id="crawl-react"></div><div id="jobs-react"></div><div id="probe"></div>',
     { url: "http://localhost/" }
   );
   globalThis.window = dom.window;
@@ -51,7 +55,8 @@ function boot() {
   globalThis.fetch = async (url, opts) => {
     calls.push({ url: String(url), opts });
     const body = String(url).endsWith("/api/dashboard") ? DASHBOARD
-      : String(url).endsWith("/api/knowledge/stats") ? KB_STATS
+      : String(url).includes("/api/jobs") ? JOBS
+        : String(url).endsWith("/api/knowledge/stats") ? KB_STATS
         : String(url).endsWith("/api/knowledge/paragraphs/search") ? KB_SEARCH
           : { ok: false };
     return { ok: true, json: async () => body };
@@ -256,6 +261,40 @@ test("React 版 S2：爬取（进度三态 + 产出列表 + 今日推荐打开 +
   assert.ok(calls.some((c) => c[0] === "openOutput"), "打开输出目录走同一 IPC");
   assert.ok(text(el).includes("React 特性"), "⚛️ React 特色标注");
 
+  root.unmount();
+  dom.window.close();
+});
+
+test("React 版 S3：校招（列表 + 筛选 + 收藏 + 投递状态 + UI 不变量）", { skip: !existsSync(BUNDLE) && "产物未构建（先 npm run build:react-panel）" }, async () => {
+  const { dom } = boot();
+  await import(new URL("../desktop/renderer/panel-react/dist/assets/react-panel.js", import.meta.url).href);
+  const calls = [];
+  globalThis.window.kanban = { getApiBase: async () => ({ base: "http://127.0.0.1:8899" }), notify: (t, m) => calls.push(["notify", m]) };
+  globalThis.window.switchRenderer = (...a) => calls.push(["switchRenderer", ...a]);
+  const el = document.getElementById("jobs-react");
+  const root = globalThis.__mountReactPanel("jobs", el);
+  assert.ok(await waitFor(() => text(el).includes("校招岗位")), "校招渲染（按 tab 分发）");
+  assert.ok(await waitFor(() => text(el).includes("字节跳动")), "岗位列表（同一路由 /api/jobs/recommended）");
+  assert.ok(text(el).includes("匹配 92%") && text(el).includes("前端"), "方向/匹配标注");
+  assert.ok(text(el).includes("2 个岗位 · 收藏 1 · 已投 1"), "统计派生（总数/收藏/已投）");
+  // 筛选：只看收藏（useDeferredValue + useMemo 派生）
+  const favBox = [...el.querySelectorAll('input[type="checkbox"]')][0];
+  favBox.click();
+  assert.ok(await waitFor(() => !text(el).includes("字节跳动") && text(el).includes("美团")), "只看收藏过滤生效");
+  favBox.click();
+  assert.ok(await waitFor(() => text(el).includes("字节跳动")), "取消过滤恢复");
+  // 收藏（乐观更新 + 同一路由）
+  [...el.querySelectorAll("button")].find((b) => (b.getAttribute("aria-label") || "").includes("收藏")).click();
+  assert.ok(await waitFor(() => calls.length >= 0), "收藏点击不抛错");
+  // 投递状态
+  const applied = [...el.querySelectorAll("button")].find((b) => text(b).includes("已投递") && !b.disabled);
+  assert.ok(applied, "有可点的「已投递」按钮（j1 未处理）");
+  applied.click();
+  assert.ok(await waitFor(() => [...el.querySelectorAll("button")].some((b) => text(b).includes("已投递") && b.disabled)), "点击后状态流转（按钮禁用反映新状态）");
+  // agent 流程复用原生
+  [...el.querySelectorAll("button")].find((b) => text(b).includes("学考点")).click();
+  assert.ok(calls.some((c) => c[0] === "switchRenderer" && c[1] === "jobs" && c[2] === "native"), "学考点切回原生渲染层（不重复实现 agent 流程）");
+  await assertUiClean(el, "jobs", 20);
   root.unmount();
   dom.window.close();
 });

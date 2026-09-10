@@ -6,6 +6,7 @@ import { DashboardPanel } from "./tabs/Dashboard.jsx";
 import { KbPanel } from "./tabs/Kb.jsx";
 import { StudyPanel } from "./tabs/Study.jsx";
 import { CrawlPanel } from "./tabs/Crawl.jsx";
+import { JobsPanel } from "./tabs/Jobs.jsx";
 
 // 开发模式（vite dev，浏览器打开）：window.kanban 由 Electron preload 注入；
 // 浏览器无 preload → 注入 dev mock（仅 DEV 生效，生产构建不含）
@@ -37,6 +38,7 @@ const TABS = {
   kb: KbPanel,
   study: StudyPanel,
   crawl: CrawlPanel,
+  jobs: JobsPanel,
 };
 
 /** 按 Tab 挂载 React 版（未登记的 Tab 直接抛错——由 panel-core 捕获并提示，不静默白屏） */

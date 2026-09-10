@@ -48,11 +48,11 @@ test("业务层零改动：interview.mjs 不感知 React 渲染层", () => {
 // ---------- 前端三态并行展示工单任务 2（S1：驾驶舱/知识库） ----------
 
 test("S1/S2 Tab 组件存在且按 tab 分发（驾驶舱/知识库/清单/爬取 + 数据入口）", () => {
-  for (const f of ["tabs/Dashboard.jsx", "tabs/Kb.jsx", "tabs/Study.jsx", "tabs/Crawl.jsx", "api.js"]) {
+  for (const f of ["tabs/Dashboard.jsx", "tabs/Kb.jsx", "tabs/Study.jsx", "tabs/Crawl.jsx", "tabs/Jobs.jsx", "api.js"]) {
     assert.ok(existsSync(R("desktop/renderer/panel-react/src/" + f)), `src/${f} 存在`);
   }
   const main = readFileSync(R("desktop/renderer/panel-react/src/main.jsx"), "utf8");
-  assert.ok(/const TABS = \{[\s\S]*?interview:[\s\S]*?dashboard: DashboardPanel[\s\S]*?kb: KbPanel[\s\S]*?study: StudyPanel[\s\S]*?crawl: CrawlPanel/.test(main), "TABS 注册表含 interview/dashboard/kb/study/crawl");
+  assert.ok(/const TABS = \{[\s\S]*?interview:[\s\S]*?dashboard: DashboardPanel[\s\S]*?kb: KbPanel[\s\S]*?study: StudyPanel[\s\S]*?crawl: CrawlPanel[\s\S]*?jobs: JobsPanel/.test(main), "TABS 注册表含 interview/dashboard/kb/study/crawl/jobs");
   assert.ok(main.includes("mountReactTab"), "按 tab 挂载（未登记 Tab 抛错，不静默白屏）");
   assert.ok(/__mountReactPanel = \(tab, container\)/.test(main), "挂载点保持 (tab, container) 签名");
 });
@@ -74,11 +74,13 @@ test("React 版 Tab 走同一数据源（HTTP 路由 / IPC 桥）+ 不 import �
   const kb = readFileSync(R("desktop/renderer/panel-react/src/tabs/Kb.jsx"), "utf8");
   const study = readFileSync(R("desktop/renderer/panel-react/src/tabs/Study.jsx"), "utf8");
   const crawl = readFileSync(R("desktop/renderer/panel-react/src/tabs/Crawl.jsx"), "utf8");
+  const jobs = readFileSync(R("desktop/renderer/panel-react/src/tabs/Jobs.jsx"), "utf8");
   assert.ok(dash.includes('api("/api/dashboard")'), "驾驶舱与原 panel-jobs.js 同接口 /api/dashboard");
   assert.ok(kb.includes('api("/api/knowledge/stats")') && kb.includes('api("/api/knowledge/paragraphs/search"'), "知识库与原 panel-rest.js 同接口");
   assert.ok(study.includes("window.kanban.studyPlan") && study.includes("window.kanban.studyCheck") && study.includes("window.kanban.studyGenerate"), "清单与原 panel-study.js 同 IPC 桥");
   assert.ok(crawl.includes("window.kanban.getData") && crawl.includes("window.kanban.runDiscover") && crawl.includes("window.kanban.openOutput"), "爬取与原 panel-chat.js 同 IPC 桥");
-  for (const [name, src] of [["Dashboard", dash], ["Kb", kb], ["Study", study], ["Crawl", crawl]]) {
+  assert.ok(jobs.includes('api("/api/jobs/recommended")') && jobs.includes('api("/api/jobs/favorite"') && jobs.includes('api("/api/jobs/status"') && jobs.includes('api(`/api/jobs?status='), "校招与原 panel-jobs.js 同路由（列表/收藏/状态）");
+  for (const [name, src] of [["Dashboard", dash], ["Kb", kb], ["Study", study], ["Crawl", crawl], ["Jobs", jobs]]) {
     assert.ok(!src.includes("8899"), `${name} 不硬编码端口（复用 api-client 单一来源）`);
     assert.ok(!src.includes('from "../../../lib/'), `${name} 不 import 业务层`);
   }
@@ -87,4 +89,5 @@ test("React 版 Tab 走同一数据源（HTTP 路由 / IPC 桥）+ 不 import �
   assert.ok(kb.includes("useDeferredValue") && kb.includes("React 特性"), "知识库用 useDeferredValue 并标注");
   assert.ok(study.includes("useDeferredValue") && study.includes("React 特性"), "清单用 useDeferredValue 并标注");
   assert.ok(crawl.includes("useMemo") && crawl.includes("React 特性"), "爬取用 useMemo 派生并标注");
+  assert.ok(jobs.includes("useDeferredValue") && jobs.includes("React 特性"), "校招用 useDeferredValue 并标注");
 });
