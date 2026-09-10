@@ -220,6 +220,70 @@ function initRendererSwitches() {
   }
 }
 
+// 前端三态并行展示工单任务 4：三态对比卡（切换入口旁）
+// 数据来源：renderer-sizes.js（scripts/gen-renderer-sizes.mjs 对 dist 产物 + 原生 panel-*.js 实测，含 gzip）——
+// 卡片只展示实测数字，不写死；测试 tests/renderer-sizes.test.mjs 校验它与磁盘实测一致。
+const COMPARE_PARADIGMS = [
+  ["渲染方式", "命令式 DOM（document/innerHTML 直接改）", "虚拟 DOM（组件树 diff，jsx → React 元素）", "响应式模板（编译期生成 render，依赖追踪）"],
+  ["状态管理", "模块单例 + 事件广播（panelState/emitPanelEvent）", "useReducer 状态机 + useState + useMemo 派生", "ref 响应式 + computed 派生 + watch 侦听"],
+  ["框架特色", "无依赖零构建（script 直引，改完即生效）", "useDeferredValue 延后渲染 / useMemo 缓存 / 对称卸载", "Transition 动画 / watch 链 / v-model"],
+  ["体积（dist 实测）", "见上表", "含 React 运行时", "含 Vue 运行时"],
+];
+function compareKb(n) { return (n / 1024).toFixed(1) + "KB"; }
+function rendererCompareHtml() {
+  const S = window.__RENDERER_SIZES;
+  if (!S) return `<div style="font-size:11px;color:#6a6790;">📊 对比数据缺失——请先跑 <code>node scripts/gen-renderer-sizes.mjs</code></div>`;
+  const sizeCell = (m) => (m ? `<b>${compareKb(m.bytes)}</b><span style="color:#6a6790;">（gzip ${compareKb(m.gzip)}）</span>` : '<span style="color:#a06a2a;">未构建</span>');
+  const rows = COMPARE_PARADIGMS.map(([k, a, b, c]) => `
+    <tr>
+      <td style="padding:4px 8px;color:#6a6790;white-space:nowrap;">${k}</td>
+      <td style="padding:4px 8px;">🎨 ${a}</td>
+      <td style="padding:4px 8px;">⚛️ ${b}</td>
+      <td style="padding:4px 8px;">🟢 ${c}</td>
+    </tr>`).join("");
+  return `
+    <div style="font-size:11px;font-weight:700;margin-bottom:6px;">📊 三态对比（实测于 ${S.measuredAt}）</div>
+    <table style="border-collapse:collapse;font-size:11px;color:#3a3658;background:rgba(255,255,255,.7);border-radius:8px;overflow:hidden;">
+      <tr style="background:rgba(109,79,216,.08);">
+        <th style="padding:4px 8px;text-align:left;"></th>
+        <th style="padding:4px 8px;text-align:left;">🎨 原生</th>
+        <th style="padding:4px 8px;text-align:left;">⚛️ React 版</th>
+        <th style="padding:4px 8px;text-align:left;">🟢 Vue 版</th>
+      </tr>
+      <tr>
+        <td style="padding:4px 8px;color:#6a6790;white-space:nowrap;">包体积</td>
+        <td style="padding:4px 8px;">${sizeCell(S.native)}<span style="color:#6a6790;"> · ${S.native?.files ?? 0} 个 script 直引</span></td>
+        <td style="padding:4px 8px;">${sizeCell(S.react)}</td>
+        <td style="padding:4px 8px;">${sizeCell(S.vue)}</td>
+      </tr>
+      ${rows}
+    </table>
+    <div style="font-size:10px;color:#6a6790;margin-top:6px;">口径：${S.unit} · 同一 preload IPC 桥 + 同一业务层（lib/）——三态只换渲染层</div>`;
+}
+function initRendererCompare() {
+  document.querySelectorAll(".renderer-switch-bar").forEach((bar) => {
+    if (bar.querySelector(".renderer-compare-btn")) return;
+    const btn = document.createElement("button");
+    // 独立类：不复用 .renderer-switch-btn——否则会混进"三态按钮"枚举，且切换模式时的高亮同步
+    // （按 data-mode 匹配）会把打开着的对比按钮取消高亮
+    btn.className = "renderer-compare-btn";
+    btn.textContent = "📊 三态对比";
+    btn.setAttribute("aria-expanded", "false");
+    const cardEl = document.createElement("div");
+    cardEl.className = "renderer-compare-card";
+    cardEl.style.cssText = "display:none;margin:6px 0 8px;padding:8px 10px;border:1px solid rgba(109,79,216,.14);border-radius:10px;background:rgba(242,239,251,.5);";
+    cardEl.innerHTML = rendererCompareHtml();
+    btn.addEventListener("click", () => {
+      const open = cardEl.style.display !== "none";
+      cardEl.style.display = open ? "none" : "";
+      btn.setAttribute("aria-expanded", String(!open));
+      btn.classList.toggle("active", !open);
+    });
+    bar.appendChild(btn);
+    bar.insertAdjacentElement("afterend", cardEl);
+  });
+}
+
 // 切换按钮绑定（面试 Tab：原生/React；复习 Tab：原生/Vue）
 document.getElementById("iv-renderer-switch")?.addEventListener("click", () => switchRenderer("interview", "native"));
 document.getElementById("iv-renderer-react")?.addEventListener("click", () => switchRenderer("interview", "react"));
@@ -379,6 +443,7 @@ initPluginTabs();
 
 // 前端三态并行展示工单任务 1：全 Tab 切换按钮 + 偏好恢复（刷新/重启保持）
 initRendererSwitches();
+initRendererCompare(); // 任务 4：三态对比卡（挂在每个切换条旁）
 restoreRendererPrefs();
 
 

@@ -1280,6 +1280,10 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 .renderer-switch-btn { font-size: 11px; padding: 2px 10px; border-radius: 6px; border: 1px solid rgba(109,79,216,.25); background: rgba(255,255,255,.7); color: #5d48b8; cursor: pointer; }
 .renderer-switch-btn.active { background: rgba(109,79,216,.15); border-color: rgba(109,79,216,.5); font-weight: 700; }
 .renderer-switch-btn:hover { filter: brightness(1.05); }
+/* 三态对比入口（任务 4）：与切换按钮同款视觉，但独立类——不参与"三态按钮"枚举与高亮同步 */
+.renderer-compare-btn { font-size: 11px; padding: 2px 10px; border-radius: 6px; border: 1px dashed rgba(109,79,216,.35); background: rgba(255,255,255,.7); color: #5d48b8; cursor: pointer; margin-left: auto; }
+.renderer-compare-btn.active { background: rgba(109,79,216,.15); border-style: solid; font-weight: 700; }
+.renderer-compare-btn:hover { filter: brightness(1.05); }
 
 /* 渲染层容器（同窗内嵌：React/Vue 版挂载点——布局约束防内容溢出错位 + 背景协调）
    .renderer-framework = initRendererSwitches 建的框架容器类（任务 2 起所有 Tab 统一用它，

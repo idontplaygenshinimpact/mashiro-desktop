@@ -49,6 +49,7 @@
     "coverage": "node --experimental-test-module-mocks --experimental-test-coverage --test \"tests/*.test.mjs\"",
     "dist": "electron-builder --win --publish never",
     "dist:portable": "electron-builder --win portable --publish never",
+    "gen:sizes": "node scripts/gen-renderer-sizes.mjs",
     "build:renderer": "esbuild desktop/renderer/app.js --bundle --format=esm --outfile=desktop/renderer/app.bundle.js --log-level=warning",
     "build:react-panel": "npm run build --prefix desktop/renderer/panel-react",
     "dev:react-panel": "npm run dev --prefix desktop/renderer/panel-react",

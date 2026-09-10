@@ -9,7 +9,7 @@ import { JSDOM } from "jsdom";
 
 const renderer = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "desktop", "renderer");
 const html = readFileSync(path.join(renderer, "panel.html"), "utf8");
-const SCRIPTS = ["panel-state.js", "panel-core.js", "panel-study.js", "panel-chat.js", "panel-jobs.js", "panel-rest.js"];
+const SCRIPTS = ["panel-state.js", "renderer-sizes.js", "panel-core.js", "panel-study.js", "panel-chat.js", "panel-jobs.js", "panel-rest.js"];
 const srcs = SCRIPTS.map((f) => readFileSync(path.join(renderer, f), "utf8"));
 // 面板启动时有异步尾巴（fetch 存根/启动加载）——关闭前必须等它们 settle，否则 close() 后回调读 document 报错
 const settle = () => new Promise((r) => setTimeout(r, 30));
@@ -170,6 +170,30 @@ test("任务1④：挂载点参数化（__mountReactPanel/__mountVueReview 接�
     assert.equal(r.tab, "interview", "React 挂载点接受 tab 参数");
     const v = window.__mountVueReview("review", window.document.createElement("div"));
     assert.equal(v.tab, "review", "Vue 挂载点接受 tab 参数");
+  } finally { await settle(); window.clearAllTimers(); dom.window.close(); }
+});
+
+test("任务4：三态对比卡（切换入口旁可见 + 实测体积 + 三态范式并列）", async () => {
+  const { dom, window } = boot();
+  try {
+    const bar = window.document.querySelector("#tab-interview .renderer-switch-bar");
+    const btn = bar.querySelector(".renderer-compare-btn");
+    assert.ok(btn, "切换条旁有对比入口");
+    assert.ok(!btn.classList.contains("renderer-switch-btn"), "对比入口不混进三态按钮枚举");
+    const card = bar.nextElementSibling;
+    assert.ok(card?.classList.contains("renderer-compare-card"), "对比卡紧跟在切换条之后（入口旁可见）");
+    assert.equal(card.style.display, "none", "默认收起（不干扰主界面）");
+    btn.click();
+    assert.equal(card.style.display, "", "点开可见");
+    const t = card.textContent;
+    for (const kw of ["包体积", "渲染方式", "状态管理", "框架特色", "命令式 DOM", "虚拟 DOM", "响应式模板", "gzip"]) {
+      assert.ok(t.includes(kw), `对比卡含「${kw}」`);
+    }
+    // 实测数字（来自 renderer-sizes.js）——不是写死的占位
+    const kb = window.__RENDERER_SIZES;
+    assert.ok(kb?.react?.bytes > 0 && kb?.native?.bytes > 0, "对比数据来自实测文件");
+    assert.ok(t.includes((kb.react.bytes / 1024).toFixed(1)), `React 实测体积上卡（${(kb.react.bytes / 1024).toFixed(1)}KB）`);
+    assert.ok(t.includes(String(kb.native.files)), "原生文件数上卡");
   } finally { await settle(); window.clearAllTimers(); dom.window.close(); }
 });
 
