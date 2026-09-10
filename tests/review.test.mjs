@@ -158,12 +158,14 @@ test("reviewCard(0) Again：不清除薄弱点", () => {
 });
 
 test("reviewCard 答错（Again/Hard）：薄弱点 failCount 累加（闭环回流）", () => {
+  const card = review.addCard({ topic: "事件循环", question: "讲事件循环顺序" });
+  // 复习首刷不计 fail 工单：先首刷答对（变非首刷）——首刷答错不计 fail 的新语义
+  review.reviewCard(card.id, 2);
   memory.addWeakPoint("事件循环", "测试", "agent");
   const before = memory.getWeakPoints().find((w) => w.topic === "事件循环").failCount;
-  const card = review.addCard({ topic: "事件循环", question: "讲事件循环顺序" });
-  review.reviewCard(card.id, 0); // Again 答错
+  review.reviewCard(card.id, 0); // 非首刷 Again 答错
   const after = memory.getWeakPoints().find((w) => w.topic === "事件循环");
-  assert.ok(after.failCount > before, "答错 → 薄弱点 failCount+1");
+  assert.ok(after.failCount > before, "非首刷答错 → 薄弱点 failCount+1");
   // 答对（Good）→ 薄弱点清除
   review.reviewCard(card.id, 2);
   assert.equal(memory.getWeakPoints().find((w) => w.topic === "事件循环"), undefined, "答对清除薄弱点");
@@ -246,9 +248,12 @@ test("getDueCards 按遗忘概率排序：最可能忘的先复习，新卡最�
 test("getWrongCards：答错 2 次进错题本，1 次不进", () => {
   const w = review.addCard({ topic: "防抖节流", question: "手写防抖" });
   const ok = review.addCard({ topic: "事件循环", question: "讲事件循环" });
-  review.reviewCard(w.id, 0); // 错 1
-  review.reviewCard(w.id, 1); // 错 2（Hard 也算错）
-  review.reviewCard(ok.id, 0); // 错 1 次
+  // 复习首刷不计 fail 工单：先首刷答对（变非首刷）——首刷答错不计入错题本
+  review.reviewCard(w.id, 2);
+  review.reviewCard(ok.id, 2);
+  review.reviewCard(w.id, 0); // 非首刷错 1
+  review.reviewCard(w.id, 1); // 非首刷错 2（Hard 也算错）
+  review.reviewCard(ok.id, 0); // 非首刷错 1 次
   review.reviewCard(ok.id, 2); // 对 1 次
   const wrong = review.getWrongCards();
   assert.equal(wrong.length, 1);
@@ -379,4 +384,40 @@ test("激活④：generateMultiAngle prompt 必须携带条目列表（防 mock 
   await ensurePlanCoverage();
   const user = getLastMessages().map((m) => m.content).join("\n");
   assert.ok(user.includes("事件循环"), "prompt 携带条目列表（此前漏拼 list——真实 LLM 不知道提炼什么，全 fallback 成占位卡）");
+});
+
+// ---------- 复习首刷不计 fail 工单任务 1：首刷答错不污染薄弱点/错题本 ----------
+test("首刷（state 0）答错 → 不进薄弱点 + is_first 标记 + 错题本排除", async () => {
+  const card = review.addCard({ topic: "首刷题", question: "q", answer: "a" });
+  assert.equal(card.fsrs.state, 0, "新卡 state 0（首刷）");
+  const r = review.reviewCard(card.id, 0); // Again 答错
+  assert.equal(r.ok, true);
+  assert.equal(r.isFirst, true, "响应标记首刷");
+  assert.equal(memory.getWeakPoints().length, 0, "首刷答错不进薄弱点");
+  // card_reviews 带 is_first=1
+  const row = db.prepare("SELECT is_first FROM card_reviews WHERE card_id=?").get(card.id);
+  assert.equal(row.is_first, 1, "首刷记录标记");
+  // 错题本排除首刷（答错 1 次不足 2 次——再答错一次非首刷验证）
+  const wrong = review.getWrongCards(10);
+  assert.ok(!wrong.some((w) => w.topic === "首刷题"), "首刷答错不进错题本");
+});
+
+test("非首刷答错 → 正常进薄弱点 + is_first=0", async () => {
+  const card = review.addCard({ topic: "非首刷题", question: "q", answer: "a" });
+  review.reviewCard(card.id, 2); // 首刷答对 → state 变化（非首刷）
+  assert.equal(memory.getWeakPoints().length, 0, "首刷答对无薄弱点");
+  const r2 = review.reviewCard(card.id, 0); // 非首刷答错
+  assert.equal(r2.isFirst, false, "非首刷标记");
+  assert.ok(memory.getWeakPoints().some((w) => w.topic === "非首刷题"), "非首刷答错进薄弱点");
+  const row = db.prepare("SELECT is_first FROM card_reviews WHERE card_id=? ORDER BY id DESC LIMIT 1").get(card.id);
+  assert.equal(row.is_first, 0, "非首刷记录 is_first=0");
+});
+
+test("首刷答对 → 正常（good 调度 + 无薄弱点）", async () => {
+  const card = review.addCard({ topic: "首刷答对题", question: "q", answer: "a" });
+  const r = review.reviewCard(card.id, 2);
+  assert.equal(r.ok, true);
+  assert.equal(r.isFirst, true, "首刷答对也标记首刷");
+  assert.equal(memory.getWeakPoints().length, 0, "答对无薄弱点");
+  assert.ok(r.card.fsrs.due, "FSRS 调度正常");
 });
