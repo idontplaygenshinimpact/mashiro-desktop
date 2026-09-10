@@ -80,9 +80,48 @@ const tinyText = all.filter((e) => e.tagName !== "SUP" && e.tagName !== "SUB" &&
         for (const e of all) { const v = get(getComputedStyle(e)); if (!v) continue; m.set(v, (m.get(v) || 0) + 1); }
         return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([v, n]) => `${v}×${n}`);
       };
+      // 客观视觉检查（不依赖视觉模型）：WCAG 对比度 / 点击目标尺寸 / 横向裁切
+      const parseRgb = (s) => {
+        const m = String(s).match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/);
+        return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+      };
+      const lum = ([r, g, b]) => {
+        const f = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      // 背景解析必须**透明度感知**：面板大量使用半透明紫叠加（如 .rf-stat 的 rgba(109,79,216,.05)），
+      // 若把它当作不透明背景，会把"紫字配紫底"算成 ratio=1 的假阳性（抽检时发现并修正）
+      const bgAlpha = (s) => { const m = String(s).match(/rgba\([\d.]+,\s*[\d.]+,\s*[\d.]+,\s*([\d.]+)\)/); return m ? Number(m[1]) : 1; };
+      const bgOf = (el) => { // 向上找第一个**基本不透明**（alpha ≥ 0.95）的背景；找不到视为白底
+        let n = el;
+        while (n && n !== document.documentElement) {
+          const bg = getComputedStyle(n).backgroundColor;
+          if (parseRgb(bg) && bgAlpha(bg) >= 0.95) return parseRgb(bg);
+          n = n.parentElement;
+        }
+        return [255, 255, 255];
+      };
+      const leaves = all.filter((e) => e.children.length === 0 && (e.textContent || "").trim() && e.tagName !== "SUP" && e.tagName !== "SUB");
+      const lowContrast = leaves.filter((e) => {
+        const st = getComputedStyle(e);
+        const fg = parseRgb(st.color); if (!fg) return false;
+        const size = parseFloat(st.fontSize), bold = Number(st.fontWeight) >= 700;
+        const large = size >= 24 || (size >= 18.66 && bold);
+        const L1 = lum(fg), L2 = lum(bgOf(e));
+        const ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+        return ratio < (large ? 3 : 4.5); // WCAG AA：正文 4.5:1 / 大字号 3:1
+      }).length;
+      const smallTargets = clickable.filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.width < 24 || r.height < 24); }).length;
+      const clipped = all.filter((e) => {
+        const st = getComputedStyle(e);
+        if (st.position === "absolute" || st.position === "fixed") return false; // 刻意覆盖不算
+        const r = e.getBoundingClientRect(), p = e.parentElement?.getBoundingClientRect();
+        return Boolean(p && r.width > 0 && (r.right > p.right + 2 || r.left < p.left - 2));
+      }).length;
       return {
         nodes: all.length, inlineDarkStyles: inlineDark, clickable: clickable.length,
         clickableWithoutLabel: noLabel, textBelow11px: tinyText, possibleOverflowX: overflowX, imgWithoutAlt: noAltImg,
+        lowContrast, smallTargets, clipped,
         scrollH: root.scrollHeight, clientH: root.clientHeight,
         fontSizes: tally((s) => s.fontSize),
         textColors: tally((s) => s.color),
