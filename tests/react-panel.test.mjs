@@ -67,6 +67,14 @@ test("三态登记一致性：panel-core 的 FRAMEWORK_TABS 与 React TABS 注�
   const reactTabs = [...registry.matchAll(/^\s*(\w+):\s*\w+Panel/gm)].map((m) => m[1]).sort();
   // 不同步 = 按钮说"有 React 版"但组件不存在（或反之：组件写了却切不过去）
   assert.deepEqual(coreTabs, reactTabs, "登记表与组件表一致（新增 Tab 必须两边同步）");
+  // 任务 3：Vue 侧同样校验（panel-core 的 FRAMEWORK_TABS.vue ↔ panel-vue-review/src/main.js 的 TABS）
+  const vueDeclared = (core.match(/vue:\s*\[([^\]]*)\]/) || [])[1];
+  assert.ok(vueDeclared !== undefined, "panel-core 有 FRAMEWORK_TABS.vue 登记");
+  const coreVue = vueDeclared.split(",").map((s) => s.trim().replace(/["']/g, "")).filter(Boolean).sort();
+  const vueMain = readFileSync(R("desktop/renderer/panel-vue-review/src/main.js"), "utf8");
+  const vueRegistry = (vueMain.match(/const TABS = \{([\s\S]*?)\};/) || [])[1] || "";
+  const vueTabs = [...vueRegistry.matchAll(/(\w+):\s*\w+/g)].map((m) => m[1]).sort();
+  assert.deepEqual(coreVue, vueTabs, "Vue 侧登记表与组件表一致");
 });
 
 test("React 版 Tab 走同一数据源（HTTP 路由 / IPC 桥）+ 不 import 业务层", () => {

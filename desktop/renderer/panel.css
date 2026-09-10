@@ -1343,3 +1343,7 @@ input, select, textarea { background: rgba(255,255,255,.62); backdrop-filter: bl
 .rf-day-today { color: #6d4fd8; font-weight: 700; }
 .rf-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .rf-dir { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-bar { width: 6px; border-radius: 2px; display: inline-block; }
+.rf-bar-study { background: #2f7d4e; }
+.rf-bar-review { background: #6d4fd8; }
+.rf-bar-challenge { background: #3a5bd5; }

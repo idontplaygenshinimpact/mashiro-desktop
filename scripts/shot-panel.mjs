@@ -13,7 +13,7 @@ const OUT = path.resolve(process.argv[2] || path.join(ROOT, "output", "ui-shots"
 const PANEL = path.join(ROOT, "desktop", "renderer", "panel.html");
 const TABS = [
   ["dashboard", "react"], ["kb", "react"], ["study", "react"], ["crawl", "react"],
-  ["interview", "react"], ["review", "vue"],
+  ["interview", "react"], ["review", "vue"], ["dashboard", "vue"],
 ];
 
 if (!existsSync(PANEL)) { console.error("panel.html 不存在"); process.exit(1); }
