@@ -3,9 +3,12 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const ROOT = path.join(import.meta.dirname, "..");
+// 全量 TS 升级工单：lib 里 .mjs 与 .ts 混存（迁移进行中）——两种都要扫，
+// 只按 .mjs 过滤会把已迁移模块从依赖矩阵里漏掉（审计静默失效）
+const isLibModule = (f) => (f.endsWith(".mjs") || f.endsWith(".ts")) && !f.endsWith(".d.ts");
 const TARGETS = [
-  ...readdirSync(path.join(ROOT, "lib")).filter((f) => f.endsWith(".mjs")).map((f) => `lib/${f}`),
-  ...readdirSync(path.join(ROOT, "lib", "platforms")).filter((f) => f.endsWith(".mjs")).map((f) => `lib/platforms/${f}`),
+  ...readdirSync(path.join(ROOT, "lib")).filter(isLibModule).map((f) => `lib/${f}`),
+  ...readdirSync(path.join(ROOT, "lib", "platforms")).filter(isLibModule).map((f) => `lib/platforms/${f}`),
   "widget.mjs", "discover.mjs", "run.mjs", "mcp-server.mjs", "config.mjs",
   "desktop/main.mjs", "desktop/preload.js", "desktop/renderer/app.js", "desktop/renderer/panel.js",
   "desktop/foreground.mjs",

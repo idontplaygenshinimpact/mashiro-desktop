@@ -1,11 +1,11 @@
-// atomic-json.mjs 单测：原子写入 + 安全读取
+// atomic-json.ts 单测：原子写入 + 安全读取
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const { writeJsonAtomic, readJsonSafe } = await import("../lib/atomic-json.mjs");
+const { writeJsonAtomic, readJsonSafe } = await import("../lib/atomic-json.ts");
 
 function tempDir() {
   return mkdtempSync(path.join(tmpdir(), "atomic-test-"));

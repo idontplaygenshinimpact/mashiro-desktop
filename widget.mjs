@@ -178,7 +178,7 @@ async function runDiscoverHidden() {
       const logPath = path.join(config.outputDir, "..", "widget-run.log");
       // M7：写前轮转（10MB × 5 份）
       try {
-        const { rotateIfBig } = await import("./lib/log-rotate.mjs");
+        const { rotateIfBig } = await import("./lib/log-rotate.ts");
         rotateIfBig(logPath, 10);
       } catch { /* ignore */ }
       const logFd = openSync(logPath, "a");

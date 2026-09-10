@@ -49,7 +49,7 @@ try {
   // M7：日志轮转（10MB × 5 份——每小时检查，防 append 无轮转磁盘膨胀）
   const LOG_PATH = path.join(process.env.MIANSHI_DATA_DIR || path.join(ROOT, "data"), "desktop-main.log");
   setInterval(() => {
-    import("../lib/log-rotate.mjs").then(({ rotateIfBig }) => {
+    import("../lib/log-rotate.ts").then(({ rotateIfBig }) => {
       if (rotateIfBig(LOG_PATH, 10)) console.log("[main] desktop-main.log 已轮转");
     }).catch(() => {});
   }, 3600 * 1000);
