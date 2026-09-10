@@ -56,7 +56,7 @@ document.querySelectorAll(".tab").forEach((btn) => {
 });
 
 // ---------- 渲染层同窗切换（方案 D：互斥容器，不叠加；挂载/卸载对称防事件泄漏） ----------
-const rendererState = { interview: "native", review: "native" };
+const rendererState = { interview: "native", review: "native", study: "native", chat: "native", crawl: "native", jobs: "native", dashboard: "native", kb: "native" };
 const reactRoot = { current: null }; // React root 引用（对称卸载）
 const vueApp = { current: null };    // Vue app 引用（对称卸载）
 
@@ -76,55 +76,125 @@ async function ensureBundle(kind) {
 }
 
 async function switchRenderer(tab, mode) {
-  if (tab === "interview") {
-    const native = document.getElementById("interview-native");
-    const react = document.getElementById("interview-react");
-    if (!native || !react) return;
-    if (mode === "react") {
-      const ready = await ensureBundle("react");
-      if (!ready) { window.kanban?.notify?.("🎨 渲染层", "React 版加载失败，请刷新面板重试"); return; }
-      native.style.display = "none";
-      react.style.display = "";
-      if (!reactRoot.current) {
-        try { reactRoot.current = window.__mountReactPanel(react); }
-        catch (e) { window.kanban?.notify?.("🎨 渲染层", "React 版挂载失败: " + (e?.message || e)); }
-      }
-    } else {
-      react.style.display = "none";
-      native.style.display = "";
-      if (reactRoot.current) {
-        try { reactRoot.current.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
-        reactRoot.current = null; // 无论卸载成败都清引用（防"切不回来"：引用残留 → 再切 React 不重新挂载）
-      }
-    }
-    rendererState.interview = mode;
-  } else if (tab === "review") {
-    const native = document.getElementById("review-native");
-    const vue = document.getElementById("review-vue");
-    if (!native || !vue) return;
-    if (mode === "vue") {
-      const ready = await ensureBundle("vue");
-      if (!ready) { window.kanban?.notify?.("🎨 渲染层", "Vue 版加载失败，请刷新面板重试"); return; }
-      native.style.display = "none";
-      vue.style.display = "";
-      if (!vueApp.current) {
-        try { vueApp.current = window.__mountVueReview(vue); }
-        catch (e) { window.kanban?.notify?.("🎨 渲染层", "Vue 版挂载失败: " + (e?.message || e)); }
-      }
-    } else {
-      vue.style.display = "none";
-      native.style.display = "";
-      if (vueApp.current) {
-        try { vueApp.current.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
-        vueApp.current = null; // 无论卸载成败都清引用（防"切不回来"）
-      }
-    }
-    rendererState.review = mode;
+  const native = document.getElementById(`${tab}-native`);
+  const react = document.getElementById(`${tab}-react`);
+  const vue = document.getElementById(`${tab}-vue`);
+  if (!native) return;
+  // 框架容器不存在（该 Tab 的框架版未实现）→ 提示开发中（S1→S4 推进）
+  if (mode === "react" && !react) {
+    window.kanban?.notify?.("🎨 渲染层", `「${TAB_LABELS[tab] || tab}」的 React 版开发中（按 S1→S4 推进）`);
+    return;
   }
+  if (mode === "vue" && !vue) {
+    window.kanban?.notify?.("🎨 渲染层", `「${TAB_LABELS[tab] || tab}」的 Vue 版开发中（按 S1→S4 推进）`);
+    return;
+  }
+  if (mode === "react") {
+    const ready = await ensureBundle("react");
+    if (!ready) { window.kanban?.notify?.("🎨 渲染层", "React 版加载失败，请刷新面板重试"); return; }
+    native.style.display = "none";
+    react.style.display = "";
+    if (!reactRoot.current) {
+      try { reactRoot.current = window.__mountReactPanel(tab, react); }
+      catch (e) { window.kanban?.notify?.("🎨 渲染层", "React 版挂载失败: " + (e?.message || e)); }
+    }
+  } else if (mode === "vue") {
+    const ready = await ensureBundle("vue");
+    if (!ready) { window.kanban?.notify?.("🎨 渲染层", "Vue 版加载失败，请刷新面板重试"); return; }
+    native.style.display = "none";
+    vue.style.display = "";
+    if (!vueApp.current) {
+      try { vueApp.current = window.__mountVueReview(tab, vue); }
+      catch (e) { window.kanban?.notify?.("🎨 渲染层", "Vue 版挂载失败: " + (e?.message || e)); }
+    }
+  } else {
+    if (react) react.style.display = "none";
+    if (vue) vue.style.display = "none";
+    native.style.display = "";
+    if (reactRoot.current) {
+      try { reactRoot.current.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
+      reactRoot.current = null; // 无论卸载成败都清引用（防"切不回来"：引用残留 → 再切 React 不重新挂载）
+    }
+    if (vueApp.current) {
+      try { vueApp.current.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
+      vueApp.current = null; // 无论卸载成败都清引用（防"切不回来"）
+    }
+  }
+  // 任务1 实现项 4：切换时状态处理——原生面板流式进行中切走：DOM 只隐藏不销毁（内容/滚动位置保留），
+  // 后台任务本来也不依赖渲染层，这里只需明确告知"切换不中断"，避免用户误以为切走=取消
+  if (mode !== "native" && window.panelState?.studyDetailState?.streaming) {
+    window.kanban?.notify?.("🎨 渲染层", "讲解仍在后台生成：切回「原生」可见完整内容（切换不中断任务）");
+  }
+  rendererState[tab] = mode;
+  saveRendererPref(tab, mode);
   // 按钮高亮同步
   document.querySelectorAll(`#tab-${tab} .renderer-switch-btn`).forEach((b) => {
     b.classList.toggle("active", b.dataset.mode === mode);
   });
+}
+
+// 前端三态并行展示工单任务 1：偏好持久化（localStorage——刷新/重启保持）
+// 工单原文写 settings.renderer_pref（后端设置表），这里改落 localStorage 的理由：渲染层偏好是"本客户端显示哪套 UI"，
+// 归属前端；且 preload 没有通用 settingsGet/Set 桥（只有 ragConfig 这类专用通道），为一条 UI 偏好新增 IPC 通道不划算。
+// Electron 的 localStorage 落在 userData 内，刷新/重启同样保持；后端 settings 表继续只放业务配置（薄弱点计数/追问缓存）。
+const RENDERER_PREF_KEY = "renderer_pref";
+/** 读偏好（损坏/非对象 → 空表：脏数据不阻塞切换，下次保存自动重建） */
+function readRendererPrefs() {
+  try {
+    const prefs = JSON.parse(localStorage.getItem(RENDERER_PREF_KEY) || "{}");
+    return prefs && typeof prefs === "object" ? prefs : {};
+  } catch { return {}; }
+}
+function saveRendererPref(tab, mode) {
+  try {
+    const prefs = readRendererPrefs();
+    prefs[tab] = mode;
+    localStorage.setItem(RENDERER_PREF_KEY, JSON.stringify(prefs));
+  } catch { /* localStorage 不可用（隐私模式/配额满）忽略——渲染层偏好非关键路径 */ }
+}
+/** 启动时恢复各 Tab 渲染层偏好（刷新/重启保持） */
+function restoreRendererPrefs() {
+  for (const [tab, mode] of Object.entries(readRendererPrefs())) {
+    if (mode === "native") continue;
+    if (document.getElementById(`${tab}-${mode}`)) switchRenderer(tab, mode);
+  }
+}
+
+// 前端三态并行展示工单任务 1：全 Tab 三态切换按钮（interview/review 手写条只含已实现的框架版——这里补齐到统一三态）
+const TAB_LABELS = { interview: "面试", review: "复习", study: "清单", chat: "对话", crawl: "爬取", jobs: "校招", dashboard: "驾驶舱", kb: "知识库" };
+const RENDERER_MODES = [["native", "🎨 原生"], ["react", "⚛️ React 版"], ["vue", "🟢 Vue 版"]];
+function initRendererSwitches() {
+  for (const [tab, label] of Object.entries(TAB_LABELS)) {
+    const panel = document.getElementById(`tab-${tab}`);
+    if (!panel) continue;
+    let bar = panel.querySelector(".renderer-switch-bar");
+    if (!bar) {
+      // 无手写切换条的 Tab：包 native 容器（切换时只隐藏不销毁）+ 新建切换条
+      const native = document.createElement("div");
+      native.id = `${tab}-native`;
+      while (panel.firstChild) native.appendChild(panel.firstChild);
+      bar = document.createElement("div");
+      bar.className = "renderer-switch-bar";
+      bar.innerHTML = `<span class="renderer-switch-label">渲染层：</span>`;
+      panel.appendChild(bar);
+      panel.appendChild(native);
+    }
+    bar.setAttribute("aria-label", `${label} 渲染层切换`);
+    // 补齐缺失的模式按钮（如面试缺 Vue、复习缺 React）——点进去由 switchRenderer 提示"开发中"
+    // 注意：手写按钮的点击绑定已在下方各自注册，这里只给新建按钮绑（避免重复监听）
+    for (const [mode, text] of RENDERER_MODES) {
+      if (bar.querySelector(`.renderer-switch-btn[data-mode="${mode}"]`)) continue;
+      const b = document.createElement("button");
+      b.className = "renderer-switch-btn";
+      b.dataset.mode = mode;
+      b.textContent = text;
+      b.addEventListener("click", () => switchRenderer(tab, b.dataset.mode));
+      bar.appendChild(b);
+    }
+    // 初始高亮：无偏好时为原生（restoreRendererPrefs 恢复成功后会改写）
+    const cur = rendererState[tab] || "native";
+    bar.querySelectorAll(".renderer-switch-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === cur));
+  }
 }
 
 // 切换按钮绑定（面试 Tab：原生/React；复习 Tab：原生/Vue）
@@ -283,6 +353,10 @@ async function initPluginTabs() {
   } catch { /* 后台服务未启动 → 插件 tab 不渲染（不打扰面板） */ }
 }
 initPluginTabs();
+
+// 前端三态并行展示工单任务 1：全 Tab 切换按钮 + 偏好恢复（刷新/重启保持）
+initRendererSwitches();
+restoreRendererPrefs();
 
 
 

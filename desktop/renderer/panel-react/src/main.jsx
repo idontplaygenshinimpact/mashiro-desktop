@@ -17,7 +17,9 @@ if (!globalThis.window.kanban && import.meta.env.DEV) {
   console.log("[react-panel] dev mock IPC 桥已注入（浏览器开发模式）");
 }
 
-/** 挂载面试面板到指定容器（同窗内嵌用；返回 root 供对称卸载） */
+/** 挂载面试面板到指定容器（同窗内嵌用；返回 root 供对称卸载）
+ * 前端三态并行展示工单任务 1：挂载点参数化——tab 参数决定渲染哪个 Tab 组件
+ * （现状 interview；S1→S4 推进时扩展各 Tab 组件） */
 export function mountInterviewPanel(container) {
   const root = createRoot(container);
   root.render(<InterviewPanel />);
@@ -29,4 +31,5 @@ const autoEl = document.getElementById("root");
 if (autoEl) mountInterviewPanel(autoEl);
 
 // 同窗内嵌：暴露全局挂载函数（panel-core 的 switchRenderer 调用；卸载用返回的 root.unmount()）
-globalThis.__mountReactPanel = mountInterviewPanel;
+// tab 参数：当前仅 interview（S1→S4 推进时按 tab 渲染对应组件）
+globalThis.__mountReactPanel = (tab, container) => mountInterviewPanel(container);

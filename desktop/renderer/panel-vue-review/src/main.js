@@ -14,4 +14,5 @@ const autoEl = document.getElementById("vue-review-root") || document.getElement
 if (autoEl) mountReviewPanel(autoEl);
 
 // 同窗内嵌：暴露全局挂载函数（panel-core 的 switchRenderer 调用；卸载用返回的 app.unmount()）
-globalThis.__mountVueReview = mountReviewPanel;
+// 前端三态并行展示工单任务 1：挂载点参数化——tab 参数（现状 review；S1→S4 推进时扩展各 Tab 组件）
+globalThis.__mountVueReview = (tab, container) => mountReviewPanel(container);
