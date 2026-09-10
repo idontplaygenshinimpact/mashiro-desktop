@@ -7,7 +7,18 @@
 // 返回 { similar, score, reason, layer: "rule"|"llm" }（可解释）
 // 方案决策：跳过 embedding 层（细粒度区分是向量相似度已知短板 + 800MB 成本）——
 // 规则 + LLM 分层是业界标准组合的务实版。
+// 全量 TS 升级工单阶段 1①：lib/similarity.mjs → .ts（node 22 type stripping 直接运行；纯函数多、
+// 被 memory/rag/study 引用——先迁它下游受益。JSDoc @param 在 .ts 不生效，改显式注解）
 import { editSimilarity, bigramJaccard } from "./followup-cache.mjs"; // semantic 编辑距离（纯函数，无循环）
+
+/** 严格度：weak 薄弱点合并 / strict 讲解复用 / semantic 追问缓存 */
+export type SimMode = "weak" | "strict" | "semantic";
+/** 规则层判定结果（fuzzy 标记 = 落在模糊区间，async 入口可再走 LLM） */
+export interface RuleResult { similar: boolean; score: number; reason: string; layer: "rule"; fuzzy?: boolean }
+/** 统一判定结果（layer 标明结论来自规则层还是 LLM 语义层） */
+export interface SimResult { similar: boolean; score: number; reason: string; layer: "rule" | "llm" }
+/** 硬判结果（hit=false 时 reason 无意义） */
+interface Mismatch { hit: boolean; reason?: string }
 
 // ---------- 词表集中（不再散落） ----------
 // 泛词 3-gram：共享不代表知识点相似（"NSP 与 MLM 的区别" vs "LangChain 和 LangGraph 的区别和应用"）
@@ -25,11 +36,11 @@ export const TONE_WORDS = ["再讲讲", "讲讲", "详细", "具体", "一下", 
 
 // ---------- 归一化 ----------
 /** 中文连续段提取（去标点/英文/数字/空格——相似度基于中文内容） */
-export function zhText(s) {
+export function zhText(s: unknown): string {
   return String(s || "").replace(/[^\u4e00-\u9fff]+/g, "");
 }
 /** 追问归一化（semantic：去空白/标点/语气词，小写） */
-export function normalizeQuestion(q) {
+export function normalizeQuestion(q: unknown): string {
   return String(q || "")
     .toLowerCase()
     .replace(/[\s，。？！、：；,.?!:;'"“”‘’（）()【】[\]<>《》\-_/\\|·~～+*=]/g, "")
@@ -38,23 +49,23 @@ export function normalizeQuestion(q) {
 }
 
 // ---------- L1：归一化相等 ----------
-function normEqual(a, b) {
+function normEqual(a: unknown, b: unknown): boolean {
   const za = zhText(a), zb = zhText(b);
   // 空中文串（全英文/数字）不判相等；<4 字不判（与现有 short<4 门槛一致——"点0" vs "点1" 归一化都是"点"）
   return za.length >= 4 && za === zb;
 }
 
 // ---------- L2：结构词/变体词硬判 ----------
-function structOf(s) {
+function structOf(s: string): string | null {
   for (const w of STRUCT_WORDS) if (s.includes(w)) return w; // 最长优先（二叉树 在 树 前）
   return null;
 }
-function variantOf(s) {
+function variantOf(s: string): string[] | null {
   const hits = VARIANT_WORDS.filter((w) => s.includes(w));
   return hits.length ? hits : null;
 }
 /** 结构词/变体词不同 → 硬不相似（层序 vs 前序/锯齿——解法不同） */
-function hardMismatch(a, b) {
+function hardMismatch(a: string, b: string): Mismatch {
   const sa = structOf(a), sb = structOf(b);
   if (sa && sb && sa !== sb) return { hit: true, reason: `结构词不同（${sa} vs ${sb}）` };
   const va = variantOf(a), vb = variantOf(b);
@@ -70,14 +81,14 @@ function hardMismatch(a, b) {
 }
 
 // ---------- L3：内容重叠（3-gram 强相似 + 2-gram 重叠率） ----------
-function grams(s, n) {
-  const out = new Set();
+function grams(s: string, n: number): Set<string> {
+  const out = new Set<string>();
   for (let i = 0; i + n <= s.length; i++) out.add(s.slice(i, i + n));
   return out;
 }
 /** 2-gram 重叠率：短者 2-gram 在长者中的比例（0-1）；短者 <4 字 → 0（与现有 short<4 门槛一致——
  * "可信点" vs "不可信点" 3 字内不判——防 untrusted 误并） */
-export function gramOverlap(a, b) {
+export function gramOverlap(a: unknown, b: unknown): number {
   const za = zhText(a), zb = zhText(b);
   if (!za || !zb) return 0;
   const [short, long] = za.length <= zb.length ? [za, zb] : [zb, za];
@@ -88,7 +99,7 @@ export function gramOverlap(a, b) {
   return overlap / g2s.size;
 }
 /** 3-gram 强相似：共享有意义 3-gram（排除泛词） */
-export function strongGram3(a, b) {
+export function strongGram3(a: unknown, b: unknown): boolean {
   const za = zhText(a), zb = zhText(b);
   if (!za || !zb) return false;
   const [short, long] = za.length <= zb.length ? [za, zb] : [zb, za];
@@ -98,7 +109,7 @@ export function strongGram3(a, b) {
 }
 /** 共享 3-gram 但全是泛词 → 不相似（"NSP 与 MLM 的区别" vs "LangChain 和 LangGraph 的区别和应用"——
  * 共享"的区别"不代表知识点相似；现有 isSimilarWeakTopic 同规则：泛词共享直接判否） */
-export function genericGram3Shared(a, b) {
+export function genericGram3Shared(a: unknown, b: unknown): boolean {
   const za = zhText(a), zb = zhText(b);
   if (!za || !zb) return false;
   const [short, long] = za.length <= zb.length ? [za, zb] : [zb, za];
@@ -110,7 +121,7 @@ export function genericGram3Shared(a, b) {
 
 // ---------- semantic：否定/角度/短问长历史 ----------
 /** semantic 硬判：否定词/角度词差异 → 不相似（追问缓存防误命中） */
-function semanticMismatch(a, b) {
+function semanticMismatch(a: string, b: string): Mismatch {
   const na = NEGATION_WORDS.filter((w) => a.includes(w));
   const nb = NEGATION_WORDS.filter((w) => b.includes(w));
   if (na.length && !nb.length) return { hit: true, reason: `否定词差异（${na.join("/")}）` };
@@ -126,20 +137,20 @@ function semanticMismatch(a, b) {
 
 // ---------- LLM 语义层（模糊地带兜底） ----------
 // 缓存：同 topic 对判定结果（幂等，防重复调 LLM）
-const llmCache = new Map();
+const llmCache = new Map<string, { similar: boolean; reason: string }>();
 /** 清空 LLM 判定缓存（测试隔离用） */
-export function clearSimilarityLlmCache() { llmCache.clear(); }
+export function clearSimilarityLlmCache(): void { llmCache.clear(); }
 /**
  * 模糊地带 LLM 判定："这两个是同一知识点吗"（是/否 + 理由）
  * 失败降级：LLM 不可用 → 不相似（保守——防误命中优先）
- * @param {string} a 知识点 A
- * @param {string} b 知识点 B
- * @param {string} [ctx] 上下文（来源/类型）
- * @returns {Promise<{similar: boolean, reason: string}>}
+ * @param a 知识点 A
+ * @param b 知识点 B
+ * @param ctx 上下文（来源/类型）
  */
-export async function llmSimilarity(a, b, ctx = "") {
+export async function llmSimilarity(a: string, b: string, ctx = ""): Promise<{ similar: boolean; reason: string }> {
   const key = `${a}\u0000${b}`;
-  if (llmCache.has(key)) return llmCache.get(key);
+  const cached = llmCache.get(key);
+  if (cached) return cached;
   try {
     const { llmChat, getReplyText, extractJson } = await import("./llm.mjs");
     const data = await llmChat(
@@ -154,7 +165,7 @@ B：${b}
       ],
       { maxTokens: 200, temperature: 0, role: "similarity" }
     );
-    const parsed = extractJson(getReplyText(data));
+    const parsed = extractJson(getReplyText(data)) as { similar?: unknown; reason?: unknown } | null;
     const similar = parsed?.similar === true;
     const result = { similar, reason: String(parsed?.reason || "").slice(0, 80) };
     llmCache.set(key, result);
@@ -168,12 +179,11 @@ B：${b}
 // ---------- 统一入口 ----------
 /**
  * 同步规则层（weak/strict/semantic 不走 LLM——同步调用方用；模糊区间返回 similar:false + fuzzy 标记）
- * @param {string} a 知识点/追问 A
- * @param {string} b 知识点/追问 B
- * @param {"weak"|"strict"|"semantic"} [mode] 严格度
- * @returns {{similar: boolean, score: number, reason: string, layer: "rule", fuzzy?: boolean}}
+ * @param a 知识点/追问 A
+ * @param b 知识点/追问 B
+ * @param mode 严格度
  */
-export function similarityRule(a, b, mode = "strict") {
+export function similarityRule(a: unknown, b: unknown, mode: SimMode = "strict"): RuleResult {
   const A = String(a || "").trim(), B = String(b || "").trim();
   if (!A || !B) return { similar: false, score: 0, reason: "空输入", layer: "rule" };
   if (A === B) return { similar: true, score: 1, reason: "完全相等", layer: "rule" };
@@ -182,11 +192,11 @@ export function similarityRule(a, b, mode = "strict") {
   // semantic：否定/角度硬判（追问缓存）
   if (mode === "semantic") {
     const sm = semanticMismatch(A, B);
-    if (sm.hit) return { similar: false, score: 0, reason: sm.reason, layer: "rule" };
+    if (sm.hit) return { similar: false, score: 0, reason: sm.reason || "", layer: "rule" };
   }
   // L2 结构词/变体词硬判
   const hm = hardMismatch(A, B);
-  if (hm.hit) return { similar: false, score: 0, reason: hm.reason, layer: "rule" };
+  if (hm.hit) return { similar: false, score: 0, reason: hm.reason || "", layer: "rule" };
   // L2b 泛词 3-gram 共享 → 不相似（"的区别"共享不代表知识点相似）
   if (genericGram3Shared(A, B)) return { similar: false, score: 0, reason: "仅泛词 3-gram 共享", layer: "rule" };
   // L3 内容重叠
@@ -217,13 +227,17 @@ export function similarityRule(a, b, mode = "strict") {
 
 /**
  * 相似度判定（统一引擎，async——模糊区间走 LLM 语义层）
- * @param {string} a 知识点/追问 A
- * @param {string} b 知识点/追问 B
- * @param {"weak"|"strict"|"semantic"} [mode] 严格度
- * @param {object} [opts] { ctx?: string, useLlm?: boolean }
- * @returns {Promise<{similar: boolean, score: number, reason: string, layer: "rule"|"llm"}>}
+ * @param a 知识点/追问 A
+ * @param b 知识点/追问 B
+ * @param mode 严格度
+ * @param opts ctx 上下文（来源/类型）；useLlm=false 时模糊区间直接降级为不相似
  */
-export async function similarity(a, b, mode = "strict", { ctx = "", useLlm = true } = {}) {
+export async function similarity(
+  a: unknown,
+  b: unknown,
+  mode: SimMode = "strict",
+  { ctx = "", useLlm = true }: { ctx?: string; useLlm?: boolean } = {}
+): Promise<SimResult> {
   const r = similarityRule(a, b, mode);
   if (!r.fuzzy) return r;
   // 模糊区间（strict 0.5-0.6）→ LLM 语义层

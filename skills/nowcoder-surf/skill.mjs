@@ -34,7 +34,7 @@ async function surfNowcoder({ userId, goal = "秋招面经", maxPages = 5 }) {
   for (const m of judged.highValue) {
     try {
       const { addPlanItems } = await import("../../lib/study.mjs");
-      const { similarityRule } = await import("../../lib/similarity.mjs");
+      const { similarityRule } = await import("../../lib/similarity.ts");
       const weakHit = weakTopics.some((w) => {
         const r = similarityRule(String(m.topic || ""), String(w || ""), "weak");
         return r.similar && r.score >= 0.5;

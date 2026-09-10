@@ -6,7 +6,7 @@ import { setupTempDb, cleanupTempDb, mockLLM, setLlmResponses } from "./helpers.
 
 const dbDir = setupTempDb("similarity");
 mockLLM(); // 模糊区间走 LLM 的测试需要
-const { similarity, clearSimilarityLlmCache } = await import("../lib/similarity.mjs");
+const { similarity, clearSimilarityLlmCache } = await import("../lib/similarity.ts");
 after(() => { cleanupTempDb(dbDir); });
 beforeEach(() => { clearSimilarityLlmCache(); });
 

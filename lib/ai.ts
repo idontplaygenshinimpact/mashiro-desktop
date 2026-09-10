@@ -580,7 +580,7 @@ export async function fetchLatestReferences(title: string) {
 async function getWeakPointContext(title: string) {
   try {
     const { memory } = await import("./memory.mjs");
-    const { similarity } = await import("./similarity.mjs");
+    const { similarity } = await import("./similarity.ts");
     const weak = memory.getTrustedWeakPoints(20);
     if (!weak.length) return "";
     const hits: Array<{ topic: string; failCount: number }> = [];
