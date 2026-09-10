@@ -4,14 +4,14 @@ window.__RENDERER_SIZES = {
   "measuredAt": "2026-09-10",
   "unit": "KB（1KB = 1024 字节；gzip = zlib 压缩后大小，与浏览器传输量同口径）",
   "native": {
-    "bytes": 346738,
-    "gzip": 105175,
+    "bytes": 346730,
+    "gzip": 105182,
     "files": 6,
     "note": "panel-*.js 直引，无打包无依赖"
   },
   "react": {
-    "bytes": 241500,
-    "gzip": 76341,
+    "bytes": 245584,
+    "gzip": 77411,
     "note": "Vite 构建的 react-panel.js（含 React 运行时）"
   },
   "vue": {

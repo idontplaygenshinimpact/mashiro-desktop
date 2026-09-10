@@ -142,7 +142,7 @@ test("React 版 S1：驾驶舱/知识库按 tab 挂载，功能等价（同一 H
   await assertUiClean(kbEl, "kb", 8);
   kbRoot.unmount();
   // 未登记 Tab：抛错而非静默白屏（panel-core 捕获后提示"挂载失败"）
-  assert.throws(() => globalThis.__mountReactPanel("review", document.getElementById("probe")), /未实现/, "未登记 Tab 抛错（review 只有 Vue 版）");
+  assert.throws(() => globalThis.__mountReactPanel("__nope__", document.getElementById("probe")), /未实现/, "未登记 Tab 抛错（三态矩阵满格后仅剩该守卫路径）");
   dom.window.close();
 });
 

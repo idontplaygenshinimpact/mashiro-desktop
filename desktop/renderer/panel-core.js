@@ -65,7 +65,7 @@ const vueApps = new Map();    // tab → Vue app
 // 前端三态并行展示工单任务 2：哪些 Tab 已有框架版（S1→S4 逐 Tab 登记——未登记的模式提示"开发中"）
 // 登记即由 initRendererSwitches 建容器；不登记则切过去只提示，不会留下空容器骗过后续判断
 const FRAMEWORK_TABS = {
-  react: ["interview", "dashboard", "kb", "study", "crawl", "jobs", "chat"], // S1：驾驶舱/知识库；S2：清单/爬取；S3：校招；S4：对话
+  react: ["interview", "dashboard", "kb", "study", "crawl", "jobs", "chat", "review"], // S1→S4 + 复习卡补全（三态矩阵 8×2 满格）
   vue: ["review", "dashboard", "kb", "study", "crawl", "jobs", "chat", "interview"], // 任务 3：Vue 全 Tab（8/8 完成）
 };
 function hasFrameworkTab(tab, mode) {

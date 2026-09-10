@@ -68,36 +68,32 @@ test("任务1①：8 个 Tab 都有三态切换按钮（interview/review 手写�
       assert.ok(!native.contains(box), `${tab} 的 ${mode} 容器在 native 之外（不随原生隐藏）`);
       assert.equal(box.style.display, "none", `${tab} 的 ${mode} 容器默认隐藏`);
     }
-    // 未登记框架版的 Tab 不该有空容器（否则"容器存在"会被当成"已实现"）
-    for (const tab of ["review"]) {  // Vue 侧已 8/8；React 侧只差 review
-      assert.ok(!window.document.getElementById(`${tab}-react`), `${tab} 无 React 容器（未实现不建空壳）`);
+    // 三态矩阵满格（8 Tab × 2 框架）：每个 Tab 都应有 react + vue 容器（原"未实现不建空壳"的负向断言失效）
+    for (const tab of ["interview", "review", "study", "chat", "crawl", "jobs", "dashboard", "kb"]) {
+      assert.ok(window.document.getElementById(`${tab}-react`), `${tab} 有 React 容器`);
+      assert.ok(window.document.getElementById(`${tab}-vue`), `${tab} 有 Vue 容器`);
     }
   } finally { await settle(); window.clearAllTimers(); dom.window.close(); }
 });
 
-test("任务1②：未实现的框架版 → 提示开发中（整 Tab 未实现 / 单个框架版缺失，均不崩）", async () => {
+test("任务1②：容器缺失不静默（三态矩阵满格后，仅剩该守卫路径可测）", async () => {
   const { dom, window, kanban } = boot();
   try {
     const notes = [];
     kanban.notify = (t, m) => notes.push(m);
-    const click = (sel) => window.document.querySelector(sel).click();
-    // ① 整 Tab 的框架版都没做（review 无 React 版——Vue 侧已 8/8，这是唯一剩下的未实现组合）
-    click('#tab-review .renderer-switch-btn[data-mode="react"]');
+    // 人为移除 review 的 React 容器 → 点 React 按钮：应提示（不静默、不崩），原生视图不受影响
+    window.document.getElementById("review-react")?.remove();
+    window.document.querySelector('#tab-review .renderer-switch-btn[data-mode="react"]').click();
     await settle();
-    assert.ok(notes.some((m) => m.includes("开发中")), "未实现 Tab 提示开发中");
+    assert.ok(notes.some((m) => m.includes("容器缺失") || m.includes("开发中")), "容器缺失有提示（不静默失败）");
     assert.equal(window.document.getElementById("review-native").style.display, "", "原生容器不受影响");
-    // ② 只有单个框架版缺（面试缺 Vue / 复习缺 React——任务 2/3 补全前）
-    notes.length = 0;
-    click('#tab-review .renderer-switch-btn[data-mode="react"]');
-    click('#tab-review .renderer-switch-btn[data-mode="react"]');
+    // 未登记的 Tab 名不产生副作用（switchRenderer 的兜底守卫）
+    const before = notes.length;
+    window.switchRenderer?.("__nope__", "react");
     await settle();
-    assert.equal(notes.filter((m) => m.includes("开发中")).length, 2, "缺失的框架版各自提示开发中");
-    assert.equal(window.document.getElementById("interview-native").style.display, "", "面试原生不受影响");
-    assert.equal(window.document.getElementById("review-native").style.display, "", "复习原生不受影响");
-    assert.equal(window.document.querySelector("#tab-interview .renderer-switch-btn.active").dataset.mode, "native", "高亮保持原生");
+    assert.equal(notes.length, before, "未知 Tab 名不产生提示/副作用（守卫直接返回）");
   } finally { await settle(); window.clearAllTimers(); dom.window.close(); }
 });
-
 test("任务1⑤（实现项 4）：切换时状态处理（流式进行中切走 → 提示不中断，原生 DOM 保留）", async () => {
   const { dom, window, kanban, mountCalls } = boot({ mountStub: true });
   try {
