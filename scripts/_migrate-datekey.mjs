@@ -18,9 +18,9 @@ for (const [file, old, neu] of REPLACES) {
   if (!t.includes(old)) { console.log(`SKIP ${file}: ${old.slice(0, 40)}`); continue; }
   t = t.split(old).join(neu);
   // import 注入（幂等）
-  if (!t.includes('from "./date-utils.mjs"')) {
+  if (!t.includes('from "./date-utils.ts"')) {
     const m = t.match(/^import .*$/m);
-    if (m) t = t.slice(0, m.index) + 'import { localDateKey } from "./date-utils.mjs";\n' + t.slice(m.index);
+    if (m) t = t.slice(0, m.index) + 'import { localDateKey } from "./date-utils.ts";\n' + t.slice(m.index);
   }
   writeFileSync(file, t);
   console.log(`OK ${file}: ${old.slice(0, 50)}`);

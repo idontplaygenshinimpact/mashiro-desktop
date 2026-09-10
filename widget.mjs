@@ -488,7 +488,7 @@ try {
 // 播报内容：计划今日配额 / 复习卡到期 / 薄弱点 / 面试建议（与面板聚合卡同一数据源 today-brief）
 try {
   const { buildTodayBrief } = await import("./lib/today-brief.mjs");
-  const { localDateKey } = await import("./lib/date-utils.mjs");
+  const { localDateKey } = await import("./lib/date-utils.ts");
   const today = localDateKey();
   const last = (() => {
     try { return String(db.prepare("SELECT value FROM settings WHERE key='last_brief_date'").get()?.value || ""); } catch { return ""; }

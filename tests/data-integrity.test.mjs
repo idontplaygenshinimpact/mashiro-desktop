@@ -5,7 +5,7 @@ import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, setLlmResponses } 
 
 const dbDir = setupTempDb("data-integrity");
 mockLLM();
-const { localDateKey } = await import("../lib/date-utils.mjs");
+const { localDateKey } = await import("../lib/date-utils.ts");
 
 beforeEach(async () => { await clearAllTables(); });
 after(() => { cleanupTempDb(dbDir); });
