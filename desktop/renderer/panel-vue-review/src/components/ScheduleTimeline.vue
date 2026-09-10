@@ -32,7 +32,7 @@ const labelOf = (k) => LABELS[k] || k;
 .st-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .st-dot { border: 1.5px solid; border-radius: 8px; padding: 3px 8px; background: rgba(255,255,255,.8); text-align: center; }
 .st-rating { font-size: 11px; font-weight: 700; }
-.st-int { font-size: 10px; color: #6a6790; }
+.st-int { font-size: 11px; color: #6a6790; }
 .st-arrow { color: #9a97b8; font-size: 12px; }
 .st-foot { margin-top: 6px; font-size: 11px; color: #6a6790; }
 </style>

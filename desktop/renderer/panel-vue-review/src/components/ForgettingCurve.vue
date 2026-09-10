@@ -62,6 +62,6 @@ const gridY = computed(() => [PAD_T + (H - PAD_T - PAD_B) / 2, H - PAD_B]);
 .fc-grid { stroke: rgba(109,79,216,.12); stroke-width: 1; }
 .fc-cur { stroke: #6d4fd8; stroke-width: 2; fill: none; }
 .fc-hist { stroke: rgba(61,180,140,.55); stroke-width: 1.4; fill: none; stroke-dasharray: 4 3; }
-.fc-axis { font-size: 9px; fill: #9a97b8; }
+.fc-axis { font-size: 11px; fill: #9a97b8; }
 .fc-note { font-size: 11px; color: #9a97b8; margin-top: 2px; }
 </style>

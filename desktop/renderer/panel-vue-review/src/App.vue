@@ -227,7 +227,7 @@ const trendMax = computed(() => Math.max(1, ...(trend.value || []).map((t) => t.
 .vr-wrap { padding: 10px 12px; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
 .vr-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .vr-title { font-weight: 700; color: #5d48b8; font-size: 14px; }
-.vr-sub { font-size: 10px; color: #9a97b8; margin-bottom: 6px; }
+.vr-sub { font-size: 11px; color: #9a97b8; margin-bottom: 6px; }
 .vr-count { font-size: 12px; color: #6a6790; }
 .vr-hint { color: #6a6790; font-size: 12px; padding: 16px 0; text-align: center; }
 .vr-err { color: #b91c1c; }
@@ -316,18 +316,18 @@ const trendMax = computed(() => Math.max(1, ...(trend.value || []).map((t) => t.
 .vr-stats-row { display: flex; gap: 12px; font-size: 11px; color: #5a5678; margin-bottom: 6px; }
 .vr-progress { height: 6px; border-radius: 3px; background: #e8e4f5; overflow: hidden; }
 .vr-progress-bar { height: 100%; background: linear-gradient(90deg, #5d48b8, #7a6ad0); border-radius: 3px; }
-.vr-progress-label { font-size: 10px; color: #6a6790; margin-top: 3px; }
+.vr-progress-label { font-size: 11px; color: #6a6790; margin-top: 3px; }
 
 /* 趋势 */
 .vr-trend-bars { display: flex; align-items: flex-end; gap: 6px; height: 60px; }
 .vr-trend-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
 .vr-trend-bar { width: 70%; background: linear-gradient(180deg, #7a6ad0, #5d48b8); border-radius: 3px 3px 0 0; min-height: 2px; }
-.vr-trend-day { font-size: 9px; color: #6a6790; margin-top: 2px; }
+.vr-trend-day { font-size: 11px; color: #6a6790; margin-top: 2px; }
 
 /* 错题本 */
 .vr-wrong-item { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-size: 12px; color: #3a3a5a; }
 .vr-wrong-btn {
-  font-size: 10px; padding: 1px 8px; border-radius: 5px; cursor: pointer;
+  font-size: 11px; padding: 1px 8px; border-radius: 5px; cursor: pointer;
   background: rgba(229,72,77,.10); color: #c0392b; border: 1px solid rgba(229,72,77,.3);
 }
 

@@ -69,7 +69,8 @@ for (const [tab, mode] of TABS) {
       const inlineDark = all.filter((e) => { const st = e.getAttribute("style") || ""; return /rgb\(36, 31, 58\)|rgb\(31, 26, 49\)|rgb\(42, 37, 64\)|#241f3a|#1f1a31|#2a2540/.test(st); }).length;
       const clickable = all.filter((e) => e.tagName === "BUTTON" || e.tagName === "A" || e.tagName === "INPUT" || e.tagName === "SELECT");
       const noLabel = clickable.filter((e) => !e.getAttribute("aria-label") && !e.getAttribute("title") && !e.getAttribute("placeholder") && !(e.textContent || "").trim()).length;
-      const tinyText = all.filter((e) => e.children.length === 0 && (e.textContent || "").trim() && parseFloat(getComputedStyle(e).fontSize) < 11).length;
+      // 口径：正文文字 <11px 计为过小；SUP/SUB（上标/下标，如遗忘曲线里的 10^-0.5）是排版约定，不算可读性问题
+const tinyText = all.filter((e) => e.tagName !== "SUP" && e.tagName !== "SUB" && e.children.length === 0 && (e.textContent || "").trim() && parseFloat(getComputedStyle(e).fontSize) < 11).length;
       const overflowX = all.filter((e) => e.scrollWidth > e.clientWidth + 2 && getComputedStyle(e).overflowX !== "auto" && getComputedStyle(e).overflowX !== "scroll").length;
       const noAltImg = all.filter((e) => e.tagName === "IMG" && !e.getAttribute("alt")).length;
       // 视觉一致性度量（UI 批次 2 输入）：字号/文字色/背景色/圆角取值集合——原生 Tab 与框架版做差集
