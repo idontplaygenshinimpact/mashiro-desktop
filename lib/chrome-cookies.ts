@@ -21,7 +21,7 @@ const BROWSERS = {
 };
 
 /** DPAPI 解密（PowerShell ProtectedData，当前用户上下文） */
-function dpapiDecrypt(data) {
+function dpapiDecrypt(data: Buffer): Buffer {
   const b64 = data.toString("base64");
   const script = `Add-Type -AssemblyName System.Security;$raw=[Convert]::FromBase64String('${b64}');$c=$raw[5..($raw.Length-1)];$k=[System.Security.Cryptography.ProtectedData]::Unprotect($c,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser);([BitConverter]::ToString($k)).Replace('-','')`;
   const out = execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", timeout: 20000 });
@@ -29,7 +29,7 @@ function dpapiDecrypt(data) {
 }
 
 /** 读取 AES key（Local State → encrypted_key → DPAPI） */
-function getAesKey(userData) {
+function getAesKey(userData: string): Buffer {
   const localState = path.join(userData, "Local State");
   if (!existsSync(localState)) throw new Error("Local State 不存在");
   const state = JSON.parse(readFileSync(localState, "utf8"));
@@ -41,7 +41,7 @@ function getAesKey(userData) {
 }
 
 /** AES-128-GCM 解密单个 cookie 值（v10/v11 格式；v20 app-bound 暂不支持） */
-function decryptCookieValue(encrypted, key) {
+function decryptCookieValue(encrypted: Uint8Array | string, key: Buffer): string {
   const buf = Buffer.from(encrypted);
   if (buf.length < 15) return "";
   const prefix = buf.subarray(0, 3).toString();
@@ -62,8 +62,8 @@ function decryptCookieValue(encrypted, key) {
  * @param {"edge"|"chrome"} [browser] 指定浏览器；缺省自动检测（先 Edge 后 Chrome）
  * @returns {Promise<{name:string, value:string, domain:string, path:string}[] | null>} null = 读取失败
  */
-export async function readBrowserCookies(domainLike, browser) {
-  const candidates = browser ? [browser] : ["edge", "chrome"];
+export async function readBrowserCookies(domainLike: string, browser?: "edge" | "chrome"): Promise<Array<{ name: string; value: string; domain: string; path: string }> | null> {
+  const candidates: Array<"edge" | "chrome"> = browser ? [browser] : ["edge", "chrome"];
   for (const b of candidates) {
     const cfg = BROWSERS[b];
     try {
@@ -96,12 +96,14 @@ export async function readBrowserCookies(domainLike, browser) {
               }
             }
           }
-          const rows = db.prepare(
+          // node:sqlite 行值类型在边界处收口（已踩坑④）：cookie 表列形状运行时契约
+          const rows = (db as DatabaseSync).prepare(
             "SELECT host_key, name, encrypted_value, path FROM cookies WHERE host_key LIKE ?"
-          ).all(domainLike);
-          db.close();
+          ).all(domainLike) as unknown as Array<{ host_key?: unknown; name?: unknown; encrypted_value?: Uint8Array | string | null; path?: unknown }>;
+          (db as DatabaseSync).close();
           const out = [];
           for (const r of rows) {
+            if (!r.encrypted_value) continue;
             const value = decryptCookieValue(r.encrypted_value, key);
             if (value) out.push({ name: String(r.name), value, domain: String(r.host_key), path: String(r.path) });
           }
@@ -111,7 +113,7 @@ export async function readBrowserCookies(domainLike, browser) {
         }
       }
     } catch (e) {
-      console.log(`[browser-cookies] ${cfg?.name || b} 读取失败: ${String(e.message).slice(0, 80)}`);
+      console.log(`[browser-cookies] ${cfg?.name || b} 读取失败: ${(e instanceof Error ? e.message : String(e)).slice(0, 80)}`);
     }
   }
   return null;
@@ -122,7 +124,7 @@ export async function readBrowserCookies(domainLike, browser) {
  * @param {"edge"|"chrome"} [browser] 指定浏览器；缺省自动检测（先 Edge 后 Chrome）
  * @returns {Promise<{name:string, value:string, domain:string, path:string}[] | null>} null = 读取失败
  */
-export async function readNowcoderCookies(browser) {
+export async function readNowcoderCookies(browser?: "edge" | "chrome") {
   return readBrowserCookies("%nowcoder.com", browser);
 }
 

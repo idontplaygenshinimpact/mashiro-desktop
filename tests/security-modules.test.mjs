@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildToastScript } from "../lib/win-toast.ts";
-import { readBrowserCookies } from "../lib/chrome-cookies.mjs";
+import { readBrowserCookies } from "../lib/chrome-cookies.ts";
 import { truthScore, truthAdjacent, TRUTH_LABEL_SCORE } from "../lib/eval-scoring.mjs";
 
 // ---------- win-toast：特殊字符/引号不逃逸（base64 编码天然防注入） ----------
