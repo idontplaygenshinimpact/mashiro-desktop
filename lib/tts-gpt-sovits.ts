@@ -9,7 +9,7 @@ function base() {
 }
 
 function headers() {
-  const h = { "Content-Type": "application/json" };
+  const h: Record<string, string> = { "Content-Type": "application/json" };
   if (TOKEN) h.Authorization = `Bearer ${TOKEN}`;
   return h;
 }
@@ -18,7 +18,7 @@ function headers() {
  * @param {string} text
  * @param {{ timeoutMs?: number, signal?: AbortSignal }} [opts]
  */
-export async function synthesize(text, { timeoutMs = DEFAULT_TIMEOUT_MS, signal } = {}) {
+export async function synthesize(text: unknown, { timeoutMs = DEFAULT_TIMEOUT_MS, signal }: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<Record<string, unknown>> {
   const clean = String(text || "").trim().slice(0, 60);
   if (!clean) return { ok: false, error: "empty text" };
   try {
@@ -40,7 +40,7 @@ export async function synthesize(text, { timeoutMs = DEFAULT_TIMEOUT_MS, signal 
       signal?.removeEventListener("abort", onAbort);
     }
   } catch (e) {
-    return { ok: false, error: String(e?.message || e).slice(0, 120) };
+    return { ok: false, error: (e instanceof Error ? e.message : String(e)).slice(0, 120) };
   }
 }
 

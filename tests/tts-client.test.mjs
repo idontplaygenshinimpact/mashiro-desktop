@@ -34,7 +34,7 @@ before(async () => {
 after(() => { server.close(); delete process.env.MIANSHI_TTS_URL; delete process.env.MIANSHI_TTS_TOKEN; });
 
 test("synthesize 成功：返回 wav/sr/ms + 携带 Bearer", async () => {
-  const { synthesize } = await import("../lib/tts-gpt-sovits.mjs");
+  const { synthesize } = await import("../lib/tts-gpt-sovits.ts");
   const r = await synthesize("こんにちは");
   assert.equal(r.ok, true);
   assert.equal(r.wav, "V0FWRU1PQ0s=");
@@ -46,21 +46,21 @@ test("synthesize 成功：返回 wav/sr/ms + 携带 Bearer", async () => {
 });
 
 test("synthesize 空文本：直接失败不请求", async () => {
-  const { synthesize } = await import("../lib/tts-gpt-sovits.mjs");
+  const { synthesize } = await import("../lib/tts-gpt-sovits.ts");
   const r = await synthesize("   ");
   assert.equal(r.ok, false);
   assert.equal(r.error, "empty text");
 });
 
 test("synthesize 服务端失败：透传 error", async () => {
-  const { synthesize } = await import("../lib/tts-gpt-sovits.mjs");
+  const { synthesize } = await import("../lib/tts-gpt-sovits.ts");
   const r = await synthesize("FAIL");
   assert.equal(r.ok, false);
   assert.equal(r.error, "synthesize failed");
 });
 
 test("synthesize 超长文本：截断到 60 字", async () => {
-  const { synthesize } = await import("../lib/tts-gpt-sovits.mjs");
+  const { synthesize } = await import("../lib/tts-gpt-sovits.ts");
   const r = await synthesize("あ".repeat(100));
   const req = requests.filter((x) => x.url === "/api/tts/synthesize").at(-1);
   assert.equal(req.body.text.length, 60);
@@ -68,7 +68,7 @@ test("synthesize 超长文本：截断到 60 字", async () => {
 });
 
 test("synthesize 服务不可达：返回 ok:false 不抛异常", async () => {
-  const { synthesize } = await import("../lib/tts-gpt-sovits.mjs");
+  const { synthesize } = await import("../lib/tts-gpt-sovits.ts");
   const old = process.env.MIANSHI_TTS_URL;
   process.env.MIANSHI_TTS_URL = "http://127.0.0.1:1";
   const r = await synthesize("こんにちは");
@@ -78,14 +78,14 @@ test("synthesize 服务不可达：返回 ok:false 不抛异常", async () => {
 });
 
 test("status：读取加载状态与队列", async () => {
-  const { status } = await import("../lib/tts-gpt-sovits.mjs");
+  const { status } = await import("../lib/tts-gpt-sovits.ts");
   const s = await status();
   assert.equal(s.loaded, true);
   assert.equal(s.modelMs, 1234);
 });
 
 test("abort：POST 到 abort 端点", async () => {
-  const { abort } = await import("../lib/tts-gpt-sovits.mjs");
+  const { abort } = await import("../lib/tts-gpt-sovits.ts");
   await abort();
   assert.ok(requests.some((x) => x.url === "/api/tts/abort"));
 });
