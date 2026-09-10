@@ -4,10 +4,11 @@
 import { bodyTokens } from "./ai-compact.mjs";
 
 const BUDGET = 64000; // 展示用参考窗口（deepseek-v4 系典型窗口量级；实际以模型为准）
-const history = []; // 最近 N 次快照 {tokens, messages, at, rounds}
+interface UsageSnapshot { tokens: number; messages: number; at: number; rounds: number }
+const history: UsageSnapshot[] = []; // 最近 N 次快照
 
 /** 记录一次快照（agent 每轮调用） */
-export function recordContextUsage(messages, rounds = 0) {
+export function recordContextUsage(messages: readonly unknown[], rounds = 0) {
   let tokens = 0;
   try { tokens = bodyTokens(messages); } catch { /* ignore */ }
   const snap = { tokens, messages: messages.length, at: Date.now(), rounds };

@@ -1,10 +1,10 @@
-// lane.mjs 测试：串行执行/错误隔离/状态
+// lane.ts 测试：串行执行/错误隔离/状态
 // 2026-09：用 createLane 独立实例——lane 是全局单例，测试文件并发时其他测试的
 // submit 会污染队列（CI flaky：慢任务耗时断言 <100ms——队列被并发任务干扰）
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { submit, laneStatus } = await import("../lib/lane.mjs").then((m) => m.createLane());
+const { submit, laneStatus } = await import("../lib/lane.ts").then((m) => m.createLane());
 
 test("串行执行：任务按提交顺序完成，前一个完成后才下一个", async () => {
   const order = [];

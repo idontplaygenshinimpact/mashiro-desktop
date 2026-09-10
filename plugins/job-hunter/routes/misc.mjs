@@ -1,6 +1,6 @@
 // 杂项域路由（纵向拆分：对话历史/上下文计量/待办/闭环建议/问候语/自检/招聘平台/技能/专注目标/驾驶舱/提问）
 import { memory } from "#lib/memory.mjs";
-import { getContextUsage } from "#lib/context-meter.mjs";
+import { getContextUsage } from "#lib/context-meter.ts";
 import { getTodo } from "#lib/todo.mjs";
 import { loopSuggest, suggestFocusGoal } from "#lib/loop.mjs";
 import { getPendingAsks, answerAsk } from "#lib/ask-user.mjs";

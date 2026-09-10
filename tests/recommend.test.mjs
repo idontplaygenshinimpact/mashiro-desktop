@@ -3,7 +3,7 @@
 //       轮转 pick 在目录只有 1 个文件时同一文件重复推荐（堆叠）
 import test from "node:test";
 import assert from "node:assert/strict";
-import { classifyStudyFiles, pickDistinct } from "../lib/recommend.mjs";
+import { classifyStudyFiles, pickDistinct } from "../lib/recommend.ts";
 
 test("classifyStudyFiles：笔试 vs 面经（discover 目录是面经不是笔试）", () => {
   const files = [

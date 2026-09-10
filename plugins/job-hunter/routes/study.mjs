@@ -4,7 +4,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync, rmS
 import path from "node:path";
 import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
-import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
+import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.ts";
 import { findStudyFile, studyNotesDir, sanitizeFilename, normName } from "#lib/study-files.ts";
 import { isSimilarTopicForArchive } from "#lib/memory.mjs";
 import { queryFollowupCache, loadFollowupCache } from "#lib/followup-cache.mjs";

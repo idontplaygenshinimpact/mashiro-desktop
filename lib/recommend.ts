@@ -1,4 +1,4 @@
-// lib/recommend.mjs —— 今日推荐分类与轮转（纯函数，可单测）
+// lib/recommend.ts —— 今日推荐分类与轮转（纯函数，可单测）
 // 背景：旧分类 `f.dir.includes("discover")` 把巡检产出的面经全归为笔试（实测 30/30 错分）；
 //       轮转 pick 在目录只有 1 个文件时同一文件重复推荐（堆叠）
 
@@ -9,7 +9,7 @@
  * @param {Array<{file: string, dir: string}>} files
  * @returns {{ bishi: Array, mianshi: Array }}
  */
-export function classifyStudyFiles(files) {
+export function classifyStudyFiles<T extends { file?: string }>(files: readonly T[]): { bishi: T[]; mianshi: T[] } {
   const bishi = files.filter((f) => /笔试|bishi|机试/.test(f.file || ""));
   const mianshi = files.filter((f) => !bishi.includes(f));
   return { bishi, mianshi };
@@ -22,7 +22,7 @@ export function classifyStudyFiles(files) {
  * @param {number} seed 当天日期数字（同一天内推荐稳定）
  * @returns {Array}
  */
-export function pickDistinct(arr, n, seed) {
+export function pickDistinct<T extends { path?: string; file?: string }>(arr: readonly T[], n: number, seed: number): T[] {
   if (!arr?.length || n <= 0) return [];
   const out = [];
   const seen = new Set();

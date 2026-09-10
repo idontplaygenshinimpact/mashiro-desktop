@@ -1,8 +1,8 @@
-// emotions.mjs 单测
+// emotions.ts 单测
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { EMOTIONS, pick } = await import("../lib/emotions.mjs");
+const { EMOTIONS, pick } = await import("../lib/emotions.ts");
 
 test("EMOTIONS 各组非空且有内容", () => {
   for (const [k, arr] of Object.entries(EMOTIONS)) {

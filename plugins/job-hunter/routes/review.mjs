@@ -1,8 +1,8 @@
 // 复习域路由（纵向拆分：原 widget.mjs /api/review/*）
-// 依赖：lib/review.mjs（FSRS 调度）/ lib/quiz.mjs（选择题）/ lib/emotions.mjs（真白情感反馈）
+// 依赖：lib/review.mjs（FSRS 调度）/ lib/quiz.mjs（选择题）/ lib/emotions.ts（真白情感反馈）
 import * as reviewApi from "#lib/review.mjs";
 import { ensureQuiz, drawQuiz, submitQuiz, getQuizStats } from "#lib/quiz.mjs";
-import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.mjs";
+import { pick as pickEmotion, EMOTIONS } from "#lib/emotions.ts";
 import { memory } from "#lib/memory.mjs";
 import { readBody } from "#lib/widget-core.mjs";
 import { createSSEPush, withContract } from "#lib/routes/contract.mjs";

@@ -560,7 +560,7 @@ safeHandle("widget:notify", async (e, { title, message }) => {
   // 安全：参数经 base64 + -EncodedCommand 传递（旧实现直接拼 PS 字符串有注入面）
   console.log(`[kanban] 通知: ${title} — ${String(message || "").slice(0, 40)}`);
   try {
-    const { buildToastScript, encodePowerShellCommand } = await import("../lib/win-toast.mjs");
+    const { buildToastScript, encodePowerShellCommand } = await import("../lib/win-toast.ts");
     const ps = buildToastScript(title, message);
     safeSpawn("powershell", ["-NoProfile", "-NonInteractive", "-EncodedCommand", encodePowerShellCommand(ps)]);
   } catch { /* ignore */ }

@@ -1,7 +1,7 @@
 // 安全模块最小用例集（测试与 CI 工单任务 3①）：win-toast 注入 / chrome-cookies 失败可见 / eval-scoring 一致性
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildToastScript } from "../lib/win-toast.mjs";
+import { buildToastScript } from "../lib/win-toast.ts";
 import { readBrowserCookies } from "../lib/chrome-cookies.mjs";
 import { truthScore, truthAdjacent, TRUTH_LABEL_SCORE } from "../lib/eval-scoring.mjs";
 

@@ -43,7 +43,7 @@ test("clearTodo：清空", async () => {
 
 // ---------- context-meter ----------
 test("recordContextUsage + getContextUsage：估算 tokens/消息/轮次", async () => {
-  const { recordContextUsage, getContextUsage, resetContextMeter } = await import("../lib/context-meter.mjs");
+  const { recordContextUsage, getContextUsage, resetContextMeter } = await import("../lib/context-meter.ts");
   resetContextMeter();
   const msgs = [
     { role: "system", content: "你是真白" },
@@ -61,7 +61,7 @@ test("recordContextUsage + getContextUsage：估算 tokens/消息/轮次", async
 });
 
 test("getContextUsage：无记录时返回零值不抛", async () => {
-  const { getContextUsage, resetContextMeter } = await import("../lib/context-meter.mjs");
+  const { getContextUsage, resetContextMeter } = await import("../lib/context-meter.ts");
   resetContextMeter();
   const u = getContextUsage();
   assert.equal(u.current, 0);
