@@ -438,20 +438,20 @@ export function getReplyText(data: LLMResponse | null | undefined): string {
 
 /**
  * 流式调用 chat/completions（SSE，带 failover）
- * @returns 完整文本
+ * @returns 完整文本；流式工具调用路径返回 {choices:[{message:{content, tool_calls}}]}（与 llmChat 一致）
  */
-export async function llmChatStream(messages: LLMMessage[], opts: LLMChatOpts = {}, onChunk: ((delta: string) => void) | null = null): Promise<string> {
+export async function llmChatStream(messages: LLMMessage[], opts: LLMChatOpts = {}, onChunk: ((delta: string) => void) | null = null): Promise<string | LLMResponse> {
   const start = Date.now();
   const usedEp: UsedEndpoint = {}; // 架构 P1-2：实际命中端点（llmFetch 写入）——审计真实 failover 目标
   try {
-    const full = (await llmFetch(messages, opts, true, onChunk, usedEp)) as string;
+    const full = (await llmFetch(messages, opts, true, onChunk, usedEp)) as string | LLMResponse;
     try {
       const { traceLLM } = await import("./trace.mjs");
       traceLLM({
         role: opts.role || "agent",
         model: usedEp.model || config.model,
         stream: true,
-        outputTokens: full ? Math.round(full.length / 4) : null, // 流式无 usage，估算
+        outputTokens: typeof full === "string" ? Math.round(full.length / 4) : null, // 流式无 usage，估算
         durationMs: Date.now() - start,
         ok: true,
         endpoint: usedEp.url || config.baseUrl,

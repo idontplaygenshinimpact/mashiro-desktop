@@ -256,7 +256,9 @@ export async function solveQuestion({ title, text, company, position, sourceUrl 
 export async function solveQuestionStream({ title, text, company, position, sourceUrl }: { title: string; text: string; company: string; position: string; sourceUrl: string }, onChunk: (delta: string) => void) {
   const { llmChatStream } = await import("./llm.mjs");
   return await solveQuestionImpl({ title, text, company, position, sourceUrl }, async (messages, opts) => {
-    return await llmChatStream(messages, opts, onChunk);
+    // llmChatStream 可返回 {choices}（工具调用路径）；讲解场景恒为纯文本——收窄后按文本处理
+    const r = await llmChatStream(messages, opts, onChunk);
+    return typeof r === "string" ? r : (r.choices?.[0]?.message?.content ?? "");
   });
 }
 
