@@ -79,10 +79,10 @@ body::before {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
 }
 
-/* 主区域 */
-main { flex: 1; overflow-y: auto; padding: 14px; scrollbar-width: thin; scrollbar-color: rgba(109,79,216,0.35) transparent; }
-main::-webkit-scrollbar { width: 6px; }
-main::-webkit-scrollbar-thumb { background: rgba(109,79,216,0.35); border-radius: 3px; }
+/* 主区域（滚动条可见性：此前 0.35 透明度过低，用户"不知道能滚"——提到 0.6 并留出稳定槽位） */
+main { flex: 1; overflow-y: auto; padding: 14px; scrollbar-width: thin; scrollbar-gutter: stable; scrollbar-color: rgba(109,79,216,0.6) rgba(109,79,216,0.10); }
+main::-webkit-scrollbar { width: 8px; }
+main::-webkit-scrollbar-thumb { background: rgba(109,79,216,0.6); border-radius: 4px; }
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 h4 { color: #5d48b8; font-size: var(--sd-fs-md); margin: 14px 0 8px; }
@@ -259,7 +259,10 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .rc-src { font-size: var(--sd-fs-xs); color: #6a6790; margin-bottom: 6px; }
 .rc-topic { font-size: var(--sd-fs-sm); color: #9a5b00; font-weight: 600; margin-bottom: 8px; }
 .rc-question { font-size: var(--sd-fs-lg); line-height: 1.7; margin-bottom: 10px; white-space: pre-wrap; }
-.rc-answer { font-size: var(--sd-fs-sm); color: #6a6790; background: rgba(109,79,216,0.06); border-radius: 8px; padding: 10px; margin-bottom: 10px; white-space: pre-wrap; }
+/* 答案区限高可滚（实测：420-480px 宽的面板里，4000 字讲解存档把卡片撑到 2100-2500px，
+   评分按钮落到首屏下方 2000+px——用户"读到一半就没了、也找不到按钮"）。
+   限高 46vh + 自带滚动条：答案可在框内滚完，评分按钮始终在首屏附近。 */
+.rc-answer { font-size: var(--sd-fs-sm); color: #6a6790; background: rgba(109,79,216,0.06); border-radius: 8px; padding: 10px; margin-bottom: 10px; white-space: pre-wrap; max-height: 46vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(109,79,216,0.6) rgba(109,79,216,0.10); }
 .rc-buttons { display: flex; gap: 6px; margin-top: 10px; }
 .rc-btn { flex: 1; padding: 8px 0; border: 1px solid rgba(109,79,216,0.2); border-radius: 8px; font-size: var(--sd-fs-sm); cursor: pointer; background: rgba(255,255,255,0.7); color: #4a3a9d; }
 .rc-btn:hover { background: rgba(255,255,255,0.95); }

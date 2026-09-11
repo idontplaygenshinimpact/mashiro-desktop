@@ -460,6 +460,25 @@ initRendererSwitches();
 initRendererCompare(); // 任务 4：三态对比卡（挂在每个切换条旁）
 restoreRendererPrefs();
 
+// ============ 滚动兜底：固定浮层不该成为滚轮"死区" ============
+// 实测（2026-09-11，真实 Chromium）：滚轮只滚"指针下元素最近的可滚动祖先"，而底部告警卡
+// #service-warn / 顶部审批条 .approval-bar 是 position:fixed（祖先链是 body{overflow:hidden}）
+// → 指针落在它们覆盖的区域时滚轮完全无效（main.scrollTop 0→0 纹丝不动）——用户表现为
+// "答案读到一半就没了、也滚不动"（浮层同时挡住内容）。
+// 兜底规则：指针下没有可滚祖先时，把滚动量转发给主滚动容器 main；有可滚祖先时保持默认行为
+// （含原生滚动链：内层滚到底会自然接力到 main，不重复处理）。
+document.addEventListener("wheel", (e) => {
+  if (e.ctrlKey) return; // Ctrl+滚轮 = 缩放，不拦
+  for (let el = e.target instanceof Element ? e.target : null; el && el !== document.body; el = el.parentElement) {
+    const cs = getComputedStyle(el);
+    if ((cs.overflowY === "auto" || cs.overflowY === "scroll") && el.scrollHeight > el.clientHeight + 2) return;
+  }
+  const main = document.querySelector("main");
+  if (!main || main.scrollHeight <= main.clientHeight + 2) return;
+  main.scrollTop += e.deltaY;
+  e.preventDefault();
+}, { passive: false });
+
 
 
 
