@@ -17,12 +17,14 @@ test("渲染产物新鲜度：源码内容哈希与 bundle-hashes.json 记录一
   assert.ok(existsSync(HASH_FILE), "bundle-hashes.json 存在（由 npm run build:renderer 生成）");
   const hashes = JSON.parse(readFileSync(HASH_FILE, "utf8"));
 
+  // 注意：app.bundle.js 不入库（构建产物，CI 里由 build:renderer 生成，且构建步骤在测试之后），
+  // 所以这里**只校验「源码内容 ↔ 记录哈希」**——bundle 缺失在 fresh clone 上是正常状态，不能断言存在。
+  // （2026-09-11 CI 实测踩到：断言 app.bundle.js 存在 → fresh clone 上必红）
   const groups = [
-    { key: "app", bundle: "app.bundle.js", sources: ["app.js", "index.html", "style.css"] },
-    { key: "speechQueue", bundle: "speech-queue.bundle.js", sources: ["speech-queue.mjs"] },
+    { key: "app", sources: ["app.js", "index.html", "style.css"] },
+    { key: "speechQueue", sources: ["speech-queue.mjs"] },
   ];
   for (const g of groups) {
-    assert.ok(existsSync(path.join(RENDERER, g.bundle)), `${g.bundle} 存在`);
     assert.ok(hashes[g.key]?.sources, `哈希记录含 ${g.key} 组`);
     for (const name of g.sources) {
       const p = path.join(RENDERER, name);
@@ -30,7 +32,7 @@ test("渲染产物新鲜度：源码内容哈希与 bundle-hashes.json 记录一
       assert.equal(
         hashes[g.key].sources[name],
         sha(p),
-        `${name} 内容变了但 ${g.bundle} 未重建 —— 跑 npm run build:renderer && npm run build:speech-queue`,
+        `${name} 内容变了但 bundle 未重建 —— 跑 npm run build:renderer && npm run build:speech-queue`,
       );
     }
   }
