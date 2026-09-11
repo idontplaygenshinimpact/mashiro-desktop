@@ -30,6 +30,7 @@ import { createPatrol } from "./lib/patrol.mjs";
 import { installInternalBridge, emitEvent, onEventDecision, enqueueExpression } from "./lib/events.mjs";
 import { createAutonomy } from "./lib/autonomy.ts";
 import { createAgentWatcher } from "./lib/adapters/agent-watcher.mjs";
+import { recordAgentEvent, backfillAgentSessions } from "./lib/agent-timeline.ts";
 // 场景装配（Phase P1）：事件 → 技能子集映射
 import { resolveEvent, getCurrentScenario } from "./lib/scenarios.ts";
 import { setActiveSkillSet } from "./lib/skills.mjs";
@@ -564,6 +565,9 @@ let currentSceneId = getCurrentScenario().id;
 // 自主决策（默认 notify：只播报外部事件；off 时 handle 直接不动作；full 才允许 LLM 精炼）
 const autonomy = createAutonomy();
 onEventDecision((ev) => {
+  // Agent 会话时间线（方向 A）：把感知层事件沉淀成可查数据（面板「驾驶舱」展示）——
+  // 播报被刹车砍掉 98%，但数据不该丢；记录失败不影响播报与场景
+  try { recordAgentEvent(ev); } catch { /* ignore */ }
   // scene:switched 是场景切换的结果事件——不再触发场景解析（防递归回跳），只走表达规则
   if (ev.type === "scene:switched" || ev.source === "scenarios") {
     autonomy.handle(ev);
@@ -591,6 +595,17 @@ if (!DISABLE_BACKGROUND && process.env.MIANSHI_AGENT_WATCH !== "0" && process.en
 }
 
 // ============ 周期任务 ============
+
+// Agent 会话时间线：启动后一次性历史回填（四源；幂等）+ 每 6 小时增量补齐
+registerTimer(() => {
+  try {
+    const r = backfillAgentSessions();
+    console.log(`[agent-timeline] 历史回填完成：共 ${r.total} 个会话（opencode ${r.opencode} / dsh ${r.dsh.sessions} / codex ${r.codex} / claude-code ${r["claude-code"]}）`);
+  } catch (e) { console.log(`[agent-timeline] 回填失败: ${String(e?.message || e).slice(0, 100)}`); }
+}, 9000);
+registerInterval(() => {
+  try { backfillAgentSessions({ dshLimit: 200 }); } catch { /* ignore */ }
+}, 6 * 3600 * 1000);
 
 // 初始扫描（不通知）
 registerTimer(checkTrends, 3000);

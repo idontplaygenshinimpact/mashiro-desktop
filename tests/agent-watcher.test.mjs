@@ -73,7 +73,11 @@ test("Codex 源：新文件 → session_started；增量 → 工具/回复；tas
   assert.ok(types.includes("agent:session_started"), "新 rollout → session_started");
   assert.equal(events.find((e) => e.type === "agent:session_started").source, "codex");
   assert.ok(types.includes("agent:tool_use"), "function_call → tool_use");
-  assert.deepEqual(events.find((e) => e.type === "agent:tool_use").payload, { tool: "apply_patch" });
+  assert.deepEqual(
+    { tool: events.find((e) => e.type === "agent:tool_use").payload.tool },
+    { tool: "apply_patch" },
+  );
+  assert.ok(events.find((e) => e.type === "agent:tool_use").payload.sessionId, "工具事件带 sessionId（时间线归集用）");
   assert.ok(types.includes("agent:assistant_reply"), "agent_message → assistant_reply");
   assert.ok(types.includes("agent:session_finished"), "task_complete → session_finished");
   assert.equal(events.find((e) => e.type === "agent:session_finished").payload.toolCount, 1, "工具计数");
@@ -137,7 +141,8 @@ test("DSH 源：新会话 → session_started（label=cwd 目录名）；seq0 �
   src.tick();
   const toolEvents = events.filter((e) => e.type === "agent:tool_use");
   assert.equal(toolEvents.length, 1, "追加帧 → 一次 tool_use");
-  assert.deepEqual(toolEvents[0].payload, { tool: "read_file" });
+  assert.equal(toolEvents[0].payload.tool, "read_file");
+  assert.ok(toolEvents[0].payload.sessionId, "DSH 工具事件带 sessionId");
   src.tick();
   src.tick();
   assert.equal(events.filter((e) => e.type === "agent:tool_use").length, 1, "重复 tick 幂等（seq0 去重）");
@@ -185,7 +190,7 @@ test("OpenCode 源：session 新行 → session_started；part 新行 → 工具
   assert.ok(started, "新 session 行 → session_started");
   assert.equal(started.source, "opencode");
   assert.equal(started.payload.label, "修 DSH 会话日志");
-  assert.deepEqual(events.find((e) => e.type === "agent:tool_use").payload, { tool: "edit" });
+  assert.equal(events.find((e) => e.type === "agent:tool_use").payload.tool, "edit");
   assert.equal(events.find((e) => e.type === "agent:assistant_reply").payload.replyLen, 3);
 
   const before = events.length;

@@ -576,8 +576,72 @@ document.getElementById("docs-check-btn")?.addEventListener("click", async () =>
   }
 });
 
+// ============ Agent 会话投入（多源感知沉淀：项目 × 时长 × 轮次 × 工具调用） ============
+// 背景：感知层（DSH/OpenCode/Codex/Claude Code）信号很密，但播报被刹车砍掉 98% 且零信息量 →
+// 改为把同一份信号落成可查数据（lib/agent-timeline.ts），这里只做展示。
+const AGENT_SRC_ICON = { dsh: "🧠", opencode: "🟣", codex: "⚫", "claude-code": "🟠" };
+const agentEsc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtAgentDur = (min) => (min >= 60 ? `${Math.round((min / 60) * 10) / 10}h` : `${Math.round(min)}m`);
+
+async function loadAgentTimeline() {
+  const box = $("agent-totals");
+  if (!box) return;
+  try {
+    const r = await fetch(API_BASE + "/api/agent/timeline?days=7");
+    const j = await r.json();
+    if (!j?.ok) { box.innerHTML = `<div class="stat-chip">⚠️ ${agentEsc(j?.error || "加载失败")}</div>`; return; }
+    const t = j.totals || {};
+    box.innerHTML = `
+      <div class="stat-chip">🗂️ 会话 <b>${t.sessions ?? 0}</b></div>
+      <div class="stat-chip" title="存在活跃会话的时段并集（并行 agent 会叠加到接近全天），不是工作时长">⏱️ 覆盖时段 <b>${fmtAgentDur(t.minutes || 0)}</b></div>
+      <div class="stat-chip">📅 活跃天数 <b>${t.activeDays ?? 0}</b></div>
+      <div class="stat-chip">🔁 轮次 <b>${t.turns ?? 0}</b></div>
+      <div class="stat-chip">🛠️ 工具调用 <b>${t.toolCalls ?? 0}</b></div>
+      <div class="stat-chip">📁 项目 <b>${t.projects ?? 0}</b></div>`;
+    const projects = j.byProject || [];
+    const maxMin = Math.max(...projects.map((p) => p.minutes), 0.1);
+    $("agent-projects").innerHTML = projects.length
+      ? '<div style="font-size:11px;color:#6a6790;margin:6px 0 4px;">📁 项目覆盖时长排行（条=区间去重叠后的覆盖时长；右侧=覆盖 · 轮次 · 工具 · 会话）</div>' +
+        projects.slice(0, 8).map((p) => `
+        <div style="display:flex;align-items:center;gap:8px;margin:3px 0;">
+          <div style="width:130px;font-size:12px;color:#3a3658;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${agentEsc(p.project)}">${agentEsc(p.project)}</div>
+          <div style="flex:1;background:#efeaf9;border-radius:4px;height:14px;">
+            <div style="width:${Math.max(3, Math.round((p.minutes / maxMin) * 100))}%;background:linear-gradient(90deg,#8b6ff0,#5f8cf7);height:100%;border-radius:4px;"></div>
+          </div>
+          <div style="font-size:11px;color:#6a6790;min-width:168px;text-align:right;">${(p.sources || []).map((s) => AGENT_SRC_ICON[s] || "").join("")} ${fmtAgentDur(p.minutes)} · ${p.turns} 轮 · ${p.toolCalls} 工具 · ${p.sessions} 会话</div>
+        </div>`).join("")
+      : '<div style="font-size:12px;color:#6a6790;">近 7 天没有记录——点「⬇️ 回填历史会话」拉历史，或再用几次 DSH/OpenCode 会自动进来</div>';
+    const tools = j.topTools || [];
+    $("agent-tools").innerHTML = tools.length
+      ? `<div style="font-size:11px;color:#6a6790;margin:8px 0 4px;">🛠️ 高频工具（近 7 天）</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${tools.map((x) => `<span class="stat-chip" style="font-size:11px;">${agentEsc(x.tool)} <b>${x.n}</b></span>`).join("")}</div>`
+      : "";
+    const recent = j.recent || [];
+    $("agent-recent").innerHTML = recent.length
+      ? `<div style="font-size:11px;color:#6a6790;margin:8px 0 4px;">🕒 最近会话</div>` + recent.slice(0, 8).map((s) => {
+        const dur = Math.max(0, (s.lastActivityAt - s.startedAt) / 60000);
+        const when = new Date(s.lastActivityAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+        const detail = s.partial ? ' · <span style="color:#9a94b8;">仅时长（历史回填）</span>' : ` · ${s.turns} 轮 / ${s.toolCalls} 工具`;
+        return `<div style="font-size:12px;color:#3a3658;margin:2px 0;">${AGENT_SRC_ICON[s.source] || "•"} <b>${agentEsc(s.project || "(未命名)")}</b> · ${agentEsc(when)} · ${fmtAgentDur(dur)}${detail}</div>`;
+      }).join("")
+      : "";
+  } catch (e) { box.innerHTML = `<div class="stat-chip">⚠️ ${agentEsc(e.message)}</div>`; }
+}
+
+async function backfillAgentTimeline() {
+  const btn = $("agent-backfill-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ 回填中…"; }
+  try {
+    const r = await fetch(API_BASE + "/api/agent/timeline/backfill", { method: "POST" });
+    const j = await r.json();
+    await loadAgentTimeline();
+    if (btn) btn.textContent = j?.ok ? `✅ 已回填 ${j.total} 个会话` : "⚠️ 回填失败";
+  } catch (e) { if (btn) btn.textContent = "⚠️ " + e.message; }
+  finally { if (btn) setTimeout(() => { btn.disabled = false; btn.textContent = "⬇️ 回填历史会话"; }, 2500); }
+}
+
 // ============ 求职驾驶舱（本周总览 + 7 天活动 + 累计进度 + 周报建议） ============
 async function loadDashboard() {
+  loadAgentTimeline(); // Agent 会话投入区块（独立接口，不阻塞求职部分）
   try {
     const r = await fetch(API_BASE + "/api/dashboard");
     const j = await r.json();
@@ -649,6 +713,7 @@ async function loadDashboard() {
   } catch { /* widget 未启动忽略 */ }
 }
 $("dashboard-refresh-btn")?.addEventListener("click", loadDashboard);
+$("agent-backfill-btn")?.addEventListener("click", backfillAgentTimeline);
 
 // 日程周期刷新（jobs Tab 停留时每分钟拉一次——邀约识别/岗位笔试随时可能新增）
 let jobsSchedTimer = null;

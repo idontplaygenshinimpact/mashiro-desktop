@@ -14,6 +14,7 @@ import { getResumeProfile } from "#lib/job-match.mjs";
 import { listPlatforms as listPlatformsApi, searchAndStoreJobs as searchAndStoreJobsApi, applyJobOnPlatform as applyJobOnPlatformApi } from "#lib/job-platforms.mjs";
 import { saveAccount as savePlatformAccount } from "#lib/platform-accounts.ts";
 import * as personalProjectsApi from "#lib/personal-projects.mjs";
+import * as agentTimelineApi from "#lib/agent-timeline.ts";
 import { runSelfCheck, getLastSelfCheck, saveSelfCheck } from "#lib/self-check.mjs";
 import { readBody } from "#lib/widget-core.mjs";
 import { withContract } from "#lib/routes/contract.mjs";
@@ -508,6 +509,28 @@ export function registerMiscRoutes(router) {
       const goals = suggestFocusGoal(3);
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ ok: true, goals }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+
+  // ---------- Agent 会话时间线 + 项目投入统计（多源感知沉淀；方向 A：把信号变数据而非播报） ----------
+  router.route("/api/agent/timeline", (req, res) => {
+    try {
+      const days = Number(new URL(req.url, "http://127.0.0.1").searchParams.get("days")) || 7;
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, ...agentTimelineApi.getAgentTimeline({ days: Math.max(1, Math.min(days, 90)) }) }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+  router.route("/api/agent/timeline/backfill", "POST", (req, res) => {
+    try {
+      const r = agentTimelineApi.backfillAgentSessions();
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, ...r, message: `已回填 ${r.total} 个会话（opencode ${r.opencode} / dsh ${r.dsh.sessions} / codex ${r.codex} / claude-code ${r["claude-code"]}）` }));
     } catch (e) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
