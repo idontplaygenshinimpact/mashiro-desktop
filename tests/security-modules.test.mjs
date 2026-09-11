@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildToastScript } from "../lib/win-toast.ts";
 import { readBrowserCookies } from "../lib/chrome-cookies.ts";
-import { truthScore, truthAdjacent, TRUTH_LABEL_SCORE } from "../lib/eval-scoring.mjs";
+import { truthScore, truthAdjacent, TRUTH_LABEL_SCORE } from "../lib/eval-scoring.ts";
 
 // ---------- win-toast：特殊字符/引号不逃逸（base64 编码天然防注入） ----------
 test("win-toast：特殊字符（引号/分号/美元括号）不直接进 PowerShell 脚本", () => {

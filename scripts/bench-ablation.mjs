@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { llmChat, getReplyText, startEvalMetrics, getEvalMetrics } from "../lib/llm.mjs";
 import { solveQuestion } from "../lib/ai.ts";
-import { judgeAnswer, judgeTruthfulness, coverageRate, truthScore } from "../lib/eval-scoring.mjs";
+import { judgeAnswer, judgeTruthfulness, coverageRate, truthScore } from "../lib/eval-scoring.ts";
 import { summarizeEvalCost, formatEvalCost } from "../lib/eval-cost.ts";
 import { appendEvalSummary } from "../lib/eval-summary.ts";
 import { computeDatasetHash } from "./validate-evaldata.mjs";

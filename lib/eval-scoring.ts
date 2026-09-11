@@ -2,27 +2,50 @@
 // LLM-as-Judge 双评 + CRAG 事实判官 + must_cover 覆盖度——消融 A/B 与主评测同口径
 import { llmChat, extractJson } from "./llm.mjs";
 
-export const TRUTH_LABEL_SCORE = { correct: 100, acceptable: 75, missing: 50, incorrect: 0 };
-export const TRUTH_LABEL_RANK = { correct: 0, acceptable: 1, missing: 2, incorrect: 3 };
-export function truthScore(label) { return TRUTH_LABEL_SCORE[label] ?? null; }
-export function truthAdjacent(a, b) {
+/** 评测题目最小形状（benchmark 数据集的 question 对象字段） */
+export interface QuestionLike {
+  title?: string;
+  must_cover?: string[];
+  context?: string;
+}
+
+/** LLM-as-Judge 四维评分（各 0-25，total=四维之和） */
+export interface JudgeResult {
+  conclusion: number;
+  principle: number;
+  implementation: number;
+  boundary: number;
+  total: number;
+}
+
+/** CRAG 真实性标签结果 */
+export interface TruthResult {
+  label: string;
+}
+
+export const TRUTH_LABEL_SCORE: Record<string, number> = { correct: 100, acceptable: 75, missing: 50, incorrect: 0 };
+export const TRUTH_LABEL_RANK: Record<string, number> = { correct: 0, acceptable: 1, missing: 2, incorrect: 3 };
+export function truthScore(label: string): number | null { return TRUTH_LABEL_SCORE[label] ?? null; }
+export function truthAdjacent(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b || TRUTH_LABEL_RANK[a] === undefined || TRUTH_LABEL_RANK[b] === undefined) return false;
   return Math.abs(TRUTH_LABEL_RANK[a] - TRUTH_LABEL_RANK[b]) <= 1;
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** must_cover 覆盖度（讲解文本命中必考要点） */
-export function coverageRate(text, mustCover) {
+export function coverageRate(text: string | null | undefined, mustCover: string[] | null | undefined): { hit: string[]; rate: number } {
   const t = String(text || "").toLowerCase();
-  const hit = (mustCover || []).filter((k) => t.includes(String(k).toLowerCase()));
-  return { hit, rate: (mustCover || []).length ? Math.round((hit.length / mustCover.length) * 100) : 0 };
+  const covers = mustCover || [];
+  const hit = covers.filter((k) => t.includes(String(k).toLowerCase()));
+  return { hit, rate: covers.length ? Math.round((hit.length / covers.length) * 100) : 0 };
 }
 
 /** 参考要点文本（CRAG 判官用） */
-export function refText(q) {
-  const parts = [];
-  if (q.must_cover?.length) parts.push("必考要点：" + q.must_cover.join("、"));
+export function refText(q: QuestionLike): string {
+  const parts: string[] = [];
+  const mc = q.must_cover;
+  if (mc?.length) parts.push("必考要点：" + mc.join("、"));
   if (q.context) parts.push("给定材料：" + String(q.context).slice(0, 3000));
   return parts.join("\n") || "（无参考要点，仅依据题目常识判断事实正误）";
 }
@@ -30,11 +53,11 @@ export function refText(q) {
 /**
  * LLM-as-Judge 四维双评（conclusion/principle/implementation/boundary，各 0-25）
  * 带重试+降级（3 次失败返回 null，评分按无 judge 处理）
- * @returns {Promise<{conclusion:number,principle:number,implementation:number,boundary:number,total:number}|null>}
+ * @returns 四维分数或 null（连试 3 次均无合法 JSON）
  */
 // 判官 prompt 输出 JSON（四维各 0-25）——评测模型为推理型（deepseek-v4-flash）时
 // 200-500 tokens 会被思考消耗殆尽 → 空响应重试/降级（judge 全失败）。预算抬到 2000。
-export async function judgeAnswer(q, answer) {
+export async function judgeAnswer(q: QuestionLike, answer: string): Promise<JudgeResult | null> {
   const prompt = `你是严格的前端面试官评委。下面是一道面试题和 AI 的讲解，请按四维打分（各 0-25）：
 - conclusion 结论：是否先给出清晰正确的结论
 - principle 原理：是否准确有深度
@@ -53,8 +76,8 @@ export async function judgeAnswer(q, answer) {
         { role: "user", content: prompt },
       ], { maxTokens: 8000, temperature: 0.2, tag: "judge" });
       const content = data?.choices?.[0]?.message?.content ?? "";
-      const parsed = extractJson(content);
-      if (parsed && typeof parsed.total === "number") return parsed;
+      const parsed = extractJson(content) as Partial<JudgeResult> | null;
+      if (parsed && typeof parsed.total === "number") return parsed as JudgeResult;
       if (attempt < 2) await sleep(1000 * (attempt + 1));
     } catch {
       if (attempt < 2) await sleep(1000 * (attempt + 1));
@@ -70,9 +93,9 @@ export async function judgeAnswer(q, answer) {
  *   1) 篇幅/详尽程度/代码示例一律不影响标签（长文是详尽不是错误）
  *   2) incorrect 只用于**可明确指出错误所在**的事实错误；措辞不严谨/细节未覆盖 → acceptable
  *   3) 未知表述不等于错误——与标准语义一致即可
- * @returns {Promise<{label:string}|null>}
+ * @returns 标签结果或 null（连试 3 次均无合法 JSON）
  */
-export async function judgeTruthfulness(q, answer) {
+export async function judgeTruthfulness(q: QuestionLike, answer: string): Promise<TruthResult | null> {
   const prompt = `你是事实核查员。下面是一道面试题、参考要点/材料，以及 AI 的讲解。请只判断讲解的**事实正确性**（不评判文笔/结构/详略），输出一个标签：
 - correct：讲解的事实全部正确，无错误陈述
 - acceptable：基本正确，但有个别不严谨或不完整的轻微瑕疵（不影响结论）
@@ -96,8 +119,9 @@ ${refText(q)}
         { role: "user", content: prompt },
       ], { maxTokens: 8000, temperature: 0.2, tag: "judge" });
       const content = data?.choices?.[0]?.message?.content ?? "";
-      const parsed = extractJson(content);
-      if (parsed && TRUTH_LABEL_SCORE[parsed.label] !== undefined) return parsed;
+      const parsed = extractJson(content) as { label?: unknown } | null;
+      const label = parsed?.label;
+      if (typeof label === "string" && TRUTH_LABEL_SCORE[label] !== undefined) return parsed as TruthResult;
       if (attempt < 2) await sleep(1000 * (attempt + 1));
     } catch {
       if (attempt < 2) await sleep(1000 * (attempt + 1));
