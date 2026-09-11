@@ -32,10 +32,11 @@ export const SCENARIOS: Scenario[] = [
     skills: ["interview-warmup", "resume-coach"],
   },
   {
-    id: "companion", name: "CC 陪伴",
+    id: "companion", name: "Agent 陪伴",
     when: (ev: unknown) => {
       const t = evType(ev);
-      return t !== undefined && t.startsWith("cc:");
+      // 多源统一命名 agent:*（Claude Code / Codex / OpenCode / DSH）；cc:* 为旧名兼容
+      return t !== undefined && (t.startsWith("agent:") || t.startsWith("cc:"));
     },
     skills: ["company-intel", "tech-compare"], // 陪伴期间可查询公司/对比技术
   },

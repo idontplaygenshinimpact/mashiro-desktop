@@ -28,7 +28,8 @@ test("matchScenario：事件→场景（含优先级与 default 兜底）", () =
   assert.equal(matchScenario(ev("interview:started")).id, "interview");
   assert.equal(matchScenario(ev("interview:answering")).id, "interview");
   assert.equal(matchScenario(ev("cc:session_started")).id, "companion");
-  assert.equal(matchScenario(ev("cc:tool_use")).id, "companion");
+  assert.equal(matchScenario(ev("agent:session_started")).id, "companion", "多源统一命名 agent:* 同样进陪伴场景");
+  assert.equal(matchScenario(ev("agent:tool_use")).id, "companion");
   assert.equal(matchScenario(ev("study:opened")).id, "study");
   assert.equal(matchScenario(ev("chat_done")).id, "default", "未匹配 → default 兜底");
   assert.equal(matchScenario({ type: "unknown" }).id, "default");

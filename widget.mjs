@@ -29,7 +29,7 @@ import { createPatrol } from "./lib/patrol.mjs";
 // 事件驱动内核（Phase 事件驱动内核 W1-W3）：事件总线 / 自主决策 / CC 会话 watcher
 import { installInternalBridge, emitEvent, onEventDecision, enqueueExpression } from "./lib/events.mjs";
 import { createAutonomy } from "./lib/autonomy.ts";
-import { createCcWatcher } from "./lib/adapters/cc-watcher.mjs";
+import { createAgentWatcher } from "./lib/adapters/agent-watcher.mjs";
 // 场景装配（Phase P1）：事件 → 技能子集映射
 import { resolveEvent, getCurrentScenario } from "./lib/scenarios.ts";
 import { setActiveSkillSet } from "./lib/skills.mjs";
@@ -578,16 +578,16 @@ onEventDecision((ev) => {
   }
   autonomy.handle(ev);
 });
-// CC 会话 watcher（零侵入感知源）：门控 = 非 DISABLE_BACKGROUND ∧ MIANSHI_CC_WATCH != 0 ∧ 非 autonomy=off
-const CC_WATCH = process.env.MIANSHI_CC_WATCH !== "0";
-if (!DISABLE_BACKGROUND && CC_WATCH && process.env.MIANSHI_AUTONOMY !== "off") {
-  const ccWatcher = createCcWatcher({ emit: (ev) => emitEvent(ev) });
+// agent 会话 watcher（零侵入感知源，多源：Claude Code / Codex / OpenCode / DSH）
+// 门控 = 非 DISABLE_BACKGROUND ∧ MIANSHI_AGENT_WATCH != 0 ∧ 非 autonomy=off（分源开关在 watcher 内）
+if (!DISABLE_BACKGROUND && process.env.MIANSHI_AGENT_WATCH !== "0" && process.env.MIANSHI_AUTONOMY !== "off") {
+  const agentWatcher = createAgentWatcher({ emit: (ev) => emitEvent(ev) });
   registerInterval(() => {
-    try { ccWatcher.tick(); } catch (e) { console.log(`[cc-watch] 扫描异常: ${String(e?.message || e).slice(0, 80)}`); }
+    try { agentWatcher.tick(); } catch (e) { console.log(`[agent-watch] 扫描异常: ${String(e?.message || e).slice(0, 80)}`); }
   }, 2000);
-  console.log("[widget] CC 会话 watcher 已启动（2s 增量扫描；MIANSHI_CC_WATCH=0 关闭；表达经 /api/pet-events 由主进程轮询播报）");
+  console.log(`[widget] agent 会话 watcher 已启动（2s 扫描：${agentWatcher.sources().join(" + ") || "无源"}；MIANSHI_AGENT_WATCH=0 总关；表达经 /api/pet-events 由主进程轮询播报）`);
 } else {
-  console.log("[widget] CC watcher 未启动（DISABLE_BACKGROUND / MIANSHI_CC_WATCH=0 / MIANSHI_AUTONOMY=off）");
+  console.log("[widget] agent watcher 未启动（DISABLE_BACKGROUND / MIANSHI_AGENT_WATCH=0 / MIANSHI_AUTONOMY=off）");
 }
 
 // ============ 周期任务 ============

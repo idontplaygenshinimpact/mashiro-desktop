@@ -43,7 +43,20 @@
   → 表达（petSay 气泡 + 语音）
 ```
 
-Claude Code 伴侣：桌宠能看到 CC 在干什么（会话开始/工具调用/回复/结束），用气泡陪伴播报——零侵入（只读 jsonl 会话文件元数据，不落正文内容）。**工具调用按防打扰策略静默**（`lib/autonomy.ts` 的 `cc:tool_use` 规则返回 null），只播报会话开始/出结果/结束。
+**Agent 伴侣（多源感知）**：桌宠能看到你正在用的编码 agent 在干什么（会话开始 / 工具调用 / 回复 / 结束），用气泡陪伴播报——零侵入（只读会话文件元数据，**不落正文**）。感知源覆盖四种（2026-09-11 从"只看 Claude Code"扩展而来，当时本机 `~/.claude/projects` 只有一个 7 月后不再更新的 jsonl → 感知层实战中等于没输入）：
+
+| 源 | 数据位置 | 读取方式 |
+|---|---|---|
+| **DSH**（DeepSeek Harness） | `~/.dsh/sessions/**/session.jsonl.zstd` | **zstd 多帧追加流**：stat 优先，变更时**从上次偏移精确解新帧**（实测 18.9MB / 37376 帧，idle tick 只 stat ≈ 50ms） |
+| OpenCode | `~/.local/share/opencode/opencode.db` | SQLite **只读 + rowid 游标**（库 1.7GB / 77624 条 part，不能全表扫） |
+| Codex | `~/.codex/sessions/**/rollout-*.jsonl` | 行增量（`task_started` / `agent_message` / `function_call` / `task_complete`） |
+| Claude Code | `~/.claude/projects/**/*.jsonl` | 行增量（字节偏移） |
+
+事件统一归一为 `agent:*`（`agent:session_started` / `tool_use` / `assistant_reply` / `session_finished`），气泡带来源与项目名（如"🎬 DSH 开跑了（mianshi-agent）"）。**工具调用按防打扰策略静默**（`lib/autonomy.ts` 规则返回 null），只播报开始 / 出结果 / 结束。开关：`MIANSHI_AGENT_WATCH=0` 总关，`MIANSHI_CC_WATCH` / `MIANSHI_CODEX_WATCH` / `MIANSHI_DSH_WATCH` / `MIANSHI_OPENCODE_WATCH` 分源关。
+
+> 真实语料实测（本机）：DSH 578 个会话文件 / 0.38GB、OpenCode 266 会话、Codex 与 Claude Code 各 1 个（都停在 7 月）——**只有 DSH 是活的**，这也是"扩展多源"的直接动因。踩到并修掉两个只有真实数据才暴露的坑：① 结束判定曾把静止历史会话误报成"刚结束"（本机 `decision_ledger` 128 条假审计记录的根因，现在要求**本进程内见过增长**）；② OpenCode 首扫用 `LIMIT` 分批会把历史积压当新事件重放（现在游标直接跳到 `MAX(rowid)`）。
+
+> **定位与局限（诚实口径，2026-09-11 自评）**：感知层信号其实很密——本机一段几小时的 DSH 会话里有 **537 次工具调用 + 324 条回复事件**，但**表达策略丢掉了其中 98% 以上**：工具调用按防打扰静默，回复类事件又被"5s 防抖 + 60s 寂静期 + 每日 20 条预算"压到每天最多 20 句，而文案是"出结果了，去看看"这种零信息量提示（你正看着屏幕，提醒你去看屏幕）。所以当前形态**是情绪价值/陪伴，不是效率工具**；真正可量化的收益在**场景技能裁剪**：全部 12 个技能 14.7KB → 当前场景只注入 1-2 个（1.8KB），**省约 88% 注入量**。要让感知层变成效率工具，方向是"会话时间线 + 项目投入统计"（项目 × 时长 × 轮次 × 工具调用）而不是气泡播报，见路线图。
 
 > **个人数据闭环**：简历/岗位/日程/学习进度 全链路互通，自动识别邮箱面试邀约、投递状态实时同步、笔试进入统一日程表——不用手动搬数据。
 
@@ -373,6 +386,7 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 - [x] 本地知识库混合检索：段落级索引（147 篇 → 1478 段）+ FTS5 BM25 + bge 向量 → RRF 融合 + 追问段加权；**2026-09-11 补齐索引期向量化**（此前 vector 列只读不写，混合检索实际退化成纯关键词：实测 35% → **55%**）+ 镜像支持（`MIANSHI_HF_ENDPOINT`）
 - [x] CI 全绿治理：js-yaml 高危 override、weekly-eval workflow 失效、node:test 协议通道污染（整文件假失败）、typecheck:desktop 配置缺失、渲染产物新鲜度改内容哈希
 - [ ] 全量 TS 迁移：阶段 1-3 已完成（lib 61 `.ts` / 49 `.mjs`，核心业务 + 编排层 + 服务入口），阶段 4（桌面 / 插件）进行中
+- [ ] 感知层价值升级：**会话时间线 + 项目投入统计**（项目 × 时长 × 轮次 × 工具调用，多源聚合已在 `lib/adapters/agent-watcher.mjs`）——替代零信息量气泡播报；并考虑"仅在窗口失焦/长任务结束时"才播报
 - [ ] 实时 TTS 句子级流水线（开发中：speech-queue + GPT-SoVITS 本地引擎）
 - [x] companion-poller 主进程接线（事件驱动表达 → 桌宠气泡；`desktop/main.mjs` 已 import `startCompanionPoller` 并在 `autonomy != off` 时启动，2s 拉 `pet-events`）
 - [ ] 开机自启（写注册表 / `app.setLoginItemSettings`，当前需手动双击启动或桌面快捷方式）

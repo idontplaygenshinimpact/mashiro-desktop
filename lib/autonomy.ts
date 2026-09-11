@@ -15,6 +15,22 @@ const REFINE_DAILY = 10;    // LLM 精炼每日次数上限（full 级）
 
 const fmtMin = (sec: number): string => (sec >= 60 ? `${Math.round(sec / 60)} 分钟` : `${sec} 秒`);
 
+/** 事件源 → 展示名（气泡文案；多源感知：claude-code / codex / opencode / dsh） */
+const SOURCE_LABEL: Record<string, string> = {
+  "claude-code": "Claude Code",
+  "cc-watcher": "Claude Code", // 兼容旧事件源名
+  codex: "Codex",
+  opencode: "OpenCode",
+  dsh: "DSH",
+};
+/** 气泡里的来源名（未知源回落 source 本身） */
+const srcLabel = (ev: UnifiedEvent): string => SOURCE_LABEL[String(ev.source || "")] || String(ev.source || "Agent");
+/** 气泡里的项目/会话名（感知层给的 label；没有就不显示） */
+const srcProject = (ev: UnifiedEvent): string => {
+  const l = ev.payload?.label;
+  return l ? `（${String(l).slice(0, 18)}）` : "";
+};
+
 /** 候选表达（规则输出契约；ttl 由 createAutonomy 补默认） */
 export interface ExpressionCandidate {
   text: string;
@@ -25,19 +41,24 @@ export interface ExpressionCandidate {
 
 /**
  * 规则表（纯函数可测）：事件 → 候选表达（null=不表达）
+ * 事件名：agent:* 为多源统一命名（claude-code / codex / opencode / dsh），cc:* 为旧名兼容
  */
 export function ruleFor(ev: UnifiedEvent | null | undefined): ExpressionCandidate | null {
   switch (ev?.type) {
+    case "agent:session_started":
     case "cc:session_started":
-      return { text: "🎬 Claude Code 开跑了", scene: "agent-start", level: "bubble" };
+      return { text: `🎬 ${srcLabel(ev!)} 开跑了${srcProject(ev!)}`, scene: "agent-start", level: "bubble" };
+    case "agent:tool_use":
     case "cc:tool_use":
       return null; // 工具调用静默（防打扰）
+    case "agent:assistant_reply":
     case "cc:assistant_reply":
-      return { text: "📝 CC 出结果了，去看看", scene: "agent-reply", level: "bubble" };
+      return { text: `📝 ${srcLabel(ev!)} 出结果了，去看看`, scene: "agent-reply", level: "bubble" };
+    case "agent:session_finished":
     case "cc:session_finished": {
-      const sec = Number(ev.payload?.durationSec) || 0;
-      const tools = Number(ev.payload?.toolCount) || 0;
-      return { text: `✅ CC 完成（${fmtMin(sec)}${tools ? `，用了 ${tools} 个工具` : ""}）`, scene: "agent-done", level: "bubble" };
+      const sec = Number(ev!.payload?.durationSec) || 0;
+      const tools = Number(ev!.payload?.toolCount) || 0;
+      return { text: `✅ ${srcLabel(ev!)} 完成（${fmtMin(sec)}${tools ? `，用了 ${tools} 个工具` : ""}）`, scene: "agent-done", level: "bubble" };
     }
     case "chat_done":
       return null; // 本地对话保持现状（不走表达队列）

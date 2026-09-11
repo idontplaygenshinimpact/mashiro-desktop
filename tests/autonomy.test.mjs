@@ -16,7 +16,15 @@ test("ruleFor：规则表（播报/静默/保持现状）", () => {
   assert.equal(ruleFor(ev("cc:session_started")).scene, "agent-start");
   assert.equal(ruleFor(ev("cc:tool_use")), null, "工具调用静默");
   assert.equal(ruleFor(ev("cc:assistant_reply")).level, "bubble");
-  assert.equal(ruleFor(ev("cc:session_finished", "cc-watcher", { durationSec: 240, toolCount: 5 })).text, "✅ CC 完成（4 分钟，用了 5 个工具）");
+  assert.equal(ruleFor(ev("cc:session_finished", "cc-watcher", { durationSec: 240, toolCount: 5 })).text, "✅ Claude Code 完成（4 分钟，用了 5 个工具）");
+  // 多源统一命名 agent:*（Claude Code / Codex / OpenCode / DSH）：气泡带来源名 + 项目/会话名
+  assert.equal(ruleFor(ev("agent:session_started", "dsh", { label: "mianshi-agent" })).text, "🎬 DSH 开跑了（mianshi-agent）");
+  assert.equal(ruleFor(ev("agent:session_started", "opencode")).text, "🎬 OpenCode 开跑了");
+  assert.equal(ruleFor(ev("agent:session_started", "codex")).text, "🎬 Codex 开跑了");
+  assert.equal(ruleFor(ev("agent:assistant_reply", "dsh")).text, "📝 DSH 出结果了，去看看");
+  assert.equal(ruleFor(ev("agent:session_finished", "codex", { durationSec: 30, toolCount: 0 })).text, "✅ Codex 完成（30 秒）");
+  assert.equal(ruleFor(ev("agent:tool_use", "dsh")), null, "工具调用静默（多源一致）");
+  assert.equal(ruleFor(ev("agent:session_started", "某未知源")).text, "🎬 某未知源 开跑了", "未知源回落 source 名");
   assert.equal(ruleFor(ev("chat_done")), null, "本地对话保持现状");
   assert.equal(ruleFor(ev("schedule_due")), null, "日程提醒沿用现有逻辑防重复");
   assert.equal(ruleFor(ev("unknown_type")), null);
@@ -102,7 +110,7 @@ test("full 级：LLM 精炼成功用精炼文案；失败降级模板（不允�
   const bad = createAutonomy({ mode: "full", emit: (e) => emitted.push(e), refine: async () => { throw new Error("LLM 挂了"); } });
   const r = await bad.handle(ev("cc:assistant_reply"));
   assert.ok(r, "LLM 失败仍表达（降级模板）");
-  assert.equal(r.text, "📝 CC 出结果了，去看看", "降级到规则模板");
+  assert.equal(r.text, "📝 Claude Code 出结果了，去看看", "降级到规则模板");
 });
 
 test("full 级：精炼日上限（REFINE_DAILY=10）内精炼，超限用模板", async () => {
