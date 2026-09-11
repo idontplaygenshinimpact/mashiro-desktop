@@ -40,7 +40,11 @@ jobs:
         run: npm run bench:quick
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-      - name: Dependency audit (npm audit, moderate+ 即失败; 本地实测 0 漏洞 2026-09)
+      # 坑（2026-09-11 定位）：本机用户级 registry=npmmirror 未实现 /-/npm/v1/security/* 接口，
+      # `npm audit` 会直接报 NOT_IMPLEMENTED 而不是报漏洞 —— 本地要复核 CI 结论必须加
+      # `--registry=https://registry.npmjs.org`，否则会误判成"0 漏洞"（本步骤红在 js-yaml 高危上
+      # 被漏掉数天，就是这个假绿导致的）。
+      - name: Dependency audit (npm audit, moderate+ 即失败; 对照官方 Advisory 库)
         run: npm audit --audit-level=moderate
       - name: Coverage report (lcov → artifact)
         run: |
