@@ -212,7 +212,7 @@ ${kbContext ? `本地知识库相关段落（仅作补充素材）：\n${kbConte
       try {
         if (rn <= 1) {
           emotion = pickEmotion(EMOTIONS.comfort);
-        } else if (rn >= 2 && r.card && r.card.fsrs && r.card.fsrs.stability >= 21) {
+        } else if (rn >= 2 && r.ok && r.card.fsrs && r.card.fsrs.stability >= 21) {
           emotion = pickEmotion(EMOTIONS.celebrate);
         }
       } catch { /* ignore */ }
