@@ -12,7 +12,7 @@ import { db } from "#lib/db.mjs";
 import { buildGreeting as buildGreetingText, polishGreeting as polishGreetingText } from "#lib/greeting.mjs";
 import { getResumeProfile } from "#lib/job-match.mjs";
 import { listPlatforms as listPlatformsApi, searchAndStoreJobs as searchAndStoreJobsApi, applyJobOnPlatform as applyJobOnPlatformApi } from "#lib/job-platforms.mjs";
-import { saveAccount as savePlatformAccount } from "#lib/platform-accounts.mjs";
+import { saveAccount as savePlatformAccount } from "#lib/platform-accounts.ts";
 import * as personalProjectsApi from "#lib/personal-projects.mjs";
 import { runSelfCheck, getLastSelfCheck, saveSelfCheck } from "#lib/self-check.mjs";
 import { readBody } from "#lib/widget-core.mjs";

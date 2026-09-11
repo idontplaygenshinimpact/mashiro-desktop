@@ -45,7 +45,7 @@ test("非法平台模块注册抛错", async () => {
 
 test("searchJobsOnPlatform：未启用被拦 → 启用后路由成功", async () => {
   const { searchJobsOnPlatform } = await import("../lib/job-platforms.mjs");
-  const { saveAccount } = await import("../lib/platform-accounts.mjs");
+  const { saveAccount } = await import("../lib/platform-accounts.ts");
   const r0 = await searchJobsOnPlatform("fakeplat", "前端");
   assert.ok(r0.error, "未启用被拦");
   saveAccount("fakeplat", { enabled: true });
@@ -56,7 +56,7 @@ test("searchJobsOnPlatform：未启用被拦 → 启用后路由成功", async (
 
 test("searchJobsOnPlatform：空关键词 / 平台抛错 → error 不抛", async () => {
   const { registerPlatform, searchJobsOnPlatform } = await import("../lib/job-platforms.mjs");
-  const { saveAccount } = await import("../lib/platform-accounts.mjs");
+  const { saveAccount } = await import("../lib/platform-accounts.ts");
   registerPlatform({ name: "errplat", label: "Err", async searchJobs() { throw new Error("boom"); } });
   saveAccount("errplat", { enabled: true });
   const r1 = await searchJobsOnPlatform("errplat", "  ");
@@ -67,7 +67,7 @@ test("searchJobsOnPlatform：空关键词 / 平台抛错 → error 不抛", asyn
 
 test("applyJobOnPlatform：频率限制优先 → 通过后执行并计数", async () => {
   const { registerPlatform, applyJobOnPlatform } = await import("../lib/job-platforms.mjs");
-  const { saveAccount, loadAccounts } = await import("../lib/platform-accounts.mjs");
+  const { saveAccount, loadAccounts } = await import("../lib/platform-accounts.ts");
   let calls = 0;
   registerPlatform({
     name: "applyplat",
@@ -103,7 +103,7 @@ test("applyJobOnPlatform：未启用 / 未知平台被拦", async () => {
 
 test("searchAndStoreJobs：direction/job_type 从 title 推断（修复：原硬编码 frontend/校招）", async () => {
   const { registerPlatform, searchAndStoreJobs } = await import("../lib/job-platforms.mjs");
-  const { saveAccount } = await import("../lib/platform-accounts.mjs");
+  const { saveAccount } = await import("../lib/platform-accounts.ts");
   const { db } = await import("../lib/db.mjs");
   registerPlatform({
     name: "inferplat",
