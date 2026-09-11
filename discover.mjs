@@ -8,7 +8,7 @@ import path from "node:path";
 import { config } from "./config.mjs";
 import { fetchPage, fetchPages, closeBrowser } from "./lib/fetch-page.mjs";
 import { classifyPage, solveQuestion, pickPosts, summarizeQiuzhao, detectQuestions } from "./lib/ai.ts";
-import { runPipeline, pipelineSummary } from "./lib/pipeline.mjs";
+import { runPipeline, pipelineSummary } from "./lib/pipeline.ts";
 
 const DEFAULT_STARTS = [
   // ===== 拼多多（PDD）笔试/面经专项——用户近期参加 =====
