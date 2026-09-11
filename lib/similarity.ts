@@ -9,7 +9,7 @@
 // 规则 + LLM 分层是业界标准组合的务实版。
 // 全量 TS 升级工单阶段 1①：lib/similarity.mjs → .ts（node 22 type stripping 直接运行；纯函数多、
 // 被 memory/rag/study 引用——先迁它下游受益。JSDoc @param 在 .ts 不生效，改显式注解）
-import { editSimilarity, bigramJaccard } from "./followup-cache.mjs"; // semantic 编辑距离（纯函数，无循环）
+import { editSimilarity, bigramJaccard } from "./followup-cache.ts"; // semantic 编辑距离（纯函数，无循环；TS 迁移后直连 .ts 不走桶）
 
 /** 严格度：weak 薄弱点合并 / strict 讲解复用 / semantic 追问缓存 */
 export type SimMode = "weak" | "strict" | "semantic";
