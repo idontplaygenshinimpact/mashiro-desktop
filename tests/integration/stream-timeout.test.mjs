@@ -49,7 +49,7 @@ before(async () => {
   });
   child.stderr.on("data", (d) => { childErr += d; });
   const ready = await waitReady();
-  if (!ready) console.log(`[hang-test] widget 未就绪: ${childErr.slice(0, 1000)}`);
+  if (!ready) console.error(`[hang-test] widget 未就绪: ${childErr.slice(0, 1000)}`); // stderr：stdout 是 node:test 协议通道
   assert.ok(ready, `widget ${BASE} 未就绪`);
   // 造清单条目 + 讲解存档（consolidate 需要 content ≥200 字；detail 用无存档条目走生成路径）
   const { DatabaseSync } = await import("node:sqlite");

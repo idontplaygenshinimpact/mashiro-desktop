@@ -36,7 +36,7 @@ test("read_dev_history：git 源（真实仓库只读）", async () => {
 });
 
 test("read_dev_history：opencode 源（readOnly 查询，无凭据字段）", async () => {
-  if (!existsSync(OPENCODE_DB)) { console.log("SKIP: opencode.db 不存在"); return; }
+  if (!existsSync(OPENCODE_DB)) { console.error("SKIP: opencode.db 不存在"); return; } // stderr：stdout 是 node:test 协议通道
   const r = await callSkillTool("skill__dev-history-guide__read_dev_history", { source: "opencode", limit: 5 });
   assert.equal(r.ok, true);
   assert.ok(Array.isArray(r.opencode?.sessions), "会话数组");

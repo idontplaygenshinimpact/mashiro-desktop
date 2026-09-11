@@ -49,7 +49,7 @@ before(async () => {
   });
   child.stderr.on("data", (d) => { childErr += d; });
   const ready = await waitReady();
-  if (!ready) console.log(`[path-test] widget 未就绪: ${childErr.slice(0, 1200)}`);
+  if (!ready) console.error(`[path-test] widget 未就绪: ${childErr.slice(0, 1200)}`); // stderr：stdout 是 node:test 协议通道
   assert.ok(ready, `widget 服务 ${BASE} 未就绪`);
   // 临时库导入样例题库（生产 91 题由 import 脚本导入；这里插 2 道够路径测试用）
   // 必须先切 MIANSHI_DB_PATH（与 widget 子进程同一临时库），避免写进生产库

@@ -57,7 +57,7 @@ before(async () => {
   child.stderr.on("data", (d) => { childErr += d; });
   const ready = await waitReady();
   if (!ready) {
-    console.log(`[集成测试] widget 未就绪，stderr: ${childErr.slice(0, 1500)}`);
+    console.error(`[集成测试] widget 未就绪，stderr: ${childErr.slice(0, 1500)}`); // stderr：stdout 是 node:test 的二进制协议通道（见 tests/protocol-guard.mjs）
   }
   assert.ok(ready, `widget 服务 ${BASE} 未在 90s 内就绪（并发跑时 playwright 加载慢）`);
 });
@@ -159,7 +159,9 @@ test("POST /api/study-check 不存在的 id → 错误不崩溃", async () => {
 test("POST /api/study-check 合法 id 勾选 → ok + 情感反馈", async () => {
   const plan = await (await api("/api/study-plan")).json();
   const item = plan.plan?.items?.[0];
-  if (!item) { console.log("  ⏭️ 无清单条目，跳过"); return; }
+  // 这行曾经把 CI 弄红：诊断文本落在 node:test 的协议帧边界上，中文首字节 >= 0x80 让父进程按
+  // 有符号读出的帧长变负数 → 反序列化崩溃 → 整个文件判失败（nodejs/node#64061）。诊断一律走 stderr。
+  if (!item) { console.error("  ⏭️ 无清单条目，跳过"); return; }
   const r = await (await api(`/api/study-check?id=${item.id}&done=1`)).json();
   assert.equal(r.ok, true);
   assert.equal(r.item.done, true);

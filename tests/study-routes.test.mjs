@@ -135,7 +135,7 @@ test("⑤ study-consolidate：正常 → consolidateStudyStream 返回整合内�
   const { consolidateStudyStream } = await import("#lib/ai.ts");
   const full = await consolidateStudyStream({ topic: item.topic, content: "素材".repeat(200) }, () => {});
    
-  console.log("⑤ full:", typeof full === "string" ? "len=" + full.length + " head=" + full.slice(0, 40) : full);
+  console.error("⑤ full:", typeof full === "string" ? "len=" + full.length + " head=" + full.slice(0, 40) : full); // stderr：stdout 是 node:test 协议通道
   assert.ok(String(full).length >= 200, "整理结果完整");
   assert.ok(String(full).includes("整理后的完整讲解"), "返回整合内容");
 });
