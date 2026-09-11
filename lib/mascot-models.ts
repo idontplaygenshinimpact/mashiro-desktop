@@ -2,22 +2,31 @@
 // 模型来源：node_modules/live2d-widget-model-* 包（model.json 深度扫描）
 // 持久化：data/mascot-model.json（主进程读取，渲染层 preload 传路径）
 import { readdirSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import type { Dirent } from "node:fs";
 import path from "node:path";
 
 // 测试隔离：MIANSHI_MASCOT_MODEL 指向临时文件（生产不设置则用默认路径）
 const MODELS_FILE = process.env.MIANSHI_MASCOT_MODEL
   || path.join(process.env.MIANSHI_DATA_DIR || path.join(import.meta.dirname, "..", "data"), "mascot-model.json");
 
-/** 扫描 node_modules 下全部 Live2D 模型（model.json），返回 [{id, name, package, path, url}] */
-export function scanMascotModels(root = path.join(import.meta.dirname, "..", "node_modules")) {
-  const out = [];
+/** 桌宠模型描述：id 稳定标识 / name 展示名 / package 来源包 / path 本地绝对路径 */
+export interface MascotModel {
+  id: string;
+  name: string;
+  package: string;
+  path: string;
+}
+
+/** 扫描 node_modules 下全部 Live2D 模型（model.json），返回 [{id, name, package, path}] */
+export function scanMascotModels(root: string = path.join(import.meta.dirname, "..", "node_modules")): MascotModel[] {
+  const out: MascotModel[] = [];
   if (!existsSync(root)) return out;
   for (const dir of readdirSync(root, { withFileTypes: true })) {
     if (!dir.isDirectory() || !dir.name.startsWith("live2d-widget-model-")) continue;
     const pkgDir = path.join(root, dir.name);
-    const walk = (d, depth = 0) => {
+    const walk = (d: string, depth = 0) => {
       if (depth > 4) return;
-      let entries;
+      let entries: Dirent[] = [];
       try { entries = readdirSync(d, { withFileTypes: true }); } catch { return; }
       for (const e of entries) {
         if (e.isDirectory()) { walk(path.join(d, e.name), depth + 1); continue; }
@@ -29,7 +38,7 @@ export function scanMascotModels(root = path.join(import.meta.dirname, "..", "no
           const parent = parts[parts.length - 2] || "";
           const isMashiro = dir.name.includes("mashiro");
           let name = fileBase;
-          const NAME_MAP = { ryoufuku: "旅行装", seifuku: "水手服", shifuku: "私服", mashiro: "真白" };
+          const NAME_MAP: Record<string, string> = { ryoufuku: "旅行装", seifuku: "水手服", shifuku: "私服", mashiro: "真白" };
           if (NAME_MAP[name]) name = NAME_MAP[name];
           else if (isMashiro && parent === "mashiro") name = parent; // Sakurasou/mashiro/*.model.json
           const display = isMashiro ? `真白·${name}` : dir.name.replace("live2d-widget-model-", "");
@@ -48,7 +57,7 @@ export function scanMascotModels(root = path.join(import.meta.dirname, "..", "no
 }
 
 /** 读当前形象路径（文件缺失/损坏 → 默认真白旅行装） */
-export function getCurrentModel(models = null) {
+export function getCurrentModel(models: MascotModel[] | null = null): string {
   const list = models || scanMascotModels();
   let saved = "";
   try {
@@ -62,7 +71,7 @@ export function getCurrentModel(models = null) {
 }
 
 /** 保存当前形象 */
-export function saveCurrentModel(modelPath) {
+export function saveCurrentModel(modelPath: string): boolean {
   try {
     mkdirSync(path.dirname(MODELS_FILE), { recursive: true });
     writeFileSync(MODELS_FILE, JSON.stringify({ path: String(modelPath), ts: Date.now() }, null, 2), "utf8");

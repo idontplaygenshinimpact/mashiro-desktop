@@ -56,7 +56,7 @@ try {
 } catch { /* 日志失败不影响运行 */ }
 
 // 启动时读取上次保存的桌宠形象（默认真白·旅行装；面板可切换并持久化）
-const { scanMascotModels, getCurrentModel } = await import("../lib/mascot-models.mjs");
+const { scanMascotModels, getCurrentModel } = await import("../lib/mascot-models.ts");
 const savedModelPath = getCurrentModel(scanMascotModels());
 
 let win = null;
@@ -281,7 +281,7 @@ async function buildTrayMenu() {
   if (!tray) return;
   /** @type {Electron.MenuItemConstructorOptions[]} */ let mascotItems;
   try {
-    const { scanMascotModels, getCurrentModel, saveCurrentModel } = await import("../lib/mascot-models.mjs");
+    const { scanMascotModels, getCurrentModel, saveCurrentModel } = await import("../lib/mascot-models.ts");
     const list = scanMascotModels();
     const cur = getCurrentModel(list);
     mascotItems = list.length
@@ -962,14 +962,14 @@ safeHandle("tts:speak-stop", () => {
 // ---------- 桌宠形象（Live2D 模型切换） ----------
 // 模型枚举/持久化在 lib/mascot-models.mjs（纯函数可测）；主进程只做 IPC 与广播
 safeHandle("mascot:models", async () => {
-  const { scanMascotModels, getCurrentModel } = await import("../lib/mascot-models.mjs");
+  const { scanMascotModels, getCurrentModel } = await import("../lib/mascot-models.ts");
   const list = scanMascotModels();
   return { ok: true, models: list, current: getCurrentModel(list) };
 });
 
 safeHandle("mascot:set-model", async (e, { path: modelPath }) => {
   try {
-    const { scanMascotModels, saveCurrentModel } = await import("../lib/mascot-models.mjs");
+    const { scanMascotModels, saveCurrentModel } = await import("../lib/mascot-models.ts");
     const list = scanMascotModels();
     const match = list.find((m) => m.path === String(modelPath || ""));
     if (!match) return { ok: false, error: "模型不在本地列表中" };

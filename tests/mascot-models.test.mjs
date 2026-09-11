@@ -24,7 +24,7 @@ before(() => {
 after(() => { delete process.env.MIANSHI_MASCOT_MODEL; rmSync(tmpDir, { recursive: true, force: true }); });
 
 test("scanMascotModels：只扫 live2d-widget-model-* 包，形象名映射（旅行装/水手服）", async () => {
-  const { scanMascotModels } = await import("../lib/mascot-models.mjs");
+  const { scanMascotModels } = await import("../lib/mascot-models.ts");
   const list = scanMascotModels(tmpDir);
   assert.equal(list.length, 3, "zamp 2 个 + shizuku 1 个");
   assert.ok(list.some((m) => m.name === "真白·旅行装"), "ryoufuku → 真白·旅行装");
@@ -37,7 +37,7 @@ test("scanMascotModels：只扫 live2d-widget-model-* 包，形象名映射（�
 });
 
 test("getCurrentModel：无保存 → 返回第一个；有保存 → 返回保存的", async () => {
-  const { scanMascotModels, getCurrentModel } = await import("../lib/mascot-models.mjs");
+  const { scanMascotModels, getCurrentModel } = await import("../lib/mascot-models.ts");
   const list = scanMascotModels(tmpDir);
   // 未保存 → 默认第一个（真白·旅行装排序在前）
   const def = getCurrentModel(list);
@@ -45,7 +45,7 @@ test("getCurrentModel：无保存 → 返回第一个；有保存 → 返回保�
 });
 
 test("saveCurrentModel + getCurrentModel 往返", async () => {
-  const { scanMascotModels, getCurrentModel, saveCurrentModel } = await import("../lib/mascot-models.mjs");
+  const { scanMascotModels, getCurrentModel, saveCurrentModel } = await import("../lib/mascot-models.ts");
   const list = scanMascotModels(tmpDir);
   const seifuku = list.find((m) => m.name === "真白·水手服");
   assert.equal(saveCurrentModel(seifuku.path), true);
