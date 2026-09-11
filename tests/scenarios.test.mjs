@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 // 场景状态文件指向项目 data/scene.json——测试通过临时目录注入：重写模块状态文件路径不可行，
 // 用 matchScenario/resolveEvent 纯逻辑 + 场景切换状态断言（持久化在 widget 接线层验证）
-const { SCENARIOS, matchScenario, resolveEvent, resetScenario, getCurrentScenario } = await import("../lib/scenarios.mjs");
+const { SCENARIOS, matchScenario, resolveEvent, resetScenario, getCurrentScenario } = await import("../lib/scenarios.ts");
 
 
 const ev = (type, source = "test") => ({ type, source, ts: Date.now(), payload: {} });
@@ -89,7 +89,7 @@ test("端到端：interview 场景下 agent prompt 含面试技能 hints、不�
   const _dbDir = setupTempDb("scenarios-e2e");
   const { setActiveSkillSet, getActiveSkillSet } = await import("../lib/skills.mjs");
   const { onEventDecision, emitEvent } = await import("../lib/events.mjs");
-  const { resolveEvent: resolve } = await import("../lib/scenarios.mjs");
+  const { resolveEvent: resolve } = await import("../lib/scenarios.ts");
   try {
     // 模拟 widget 接线：事件 → 场景解析 → 技能激活（scene:switched 跳过解析防递归）
     const off = onEventDecision((e) => {

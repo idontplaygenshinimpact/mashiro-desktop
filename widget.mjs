@@ -31,7 +31,7 @@ import { installInternalBridge, emitEvent, onEventDecision, enqueueExpression } 
 import { createAutonomy } from "./lib/autonomy.mjs";
 import { createCcWatcher } from "./lib/adapters/cc-watcher.mjs";
 // 场景装配（Phase P1）：事件 → 技能子集映射
-import { resolveEvent, getCurrentScenario } from "./lib/scenarios.mjs";
+import { resolveEvent, getCurrentScenario } from "./lib/scenarios.ts";
 import { setActiveSkillSet } from "./lib/skills.mjs";
 
 // 纵向拆分路由注册：核心基础设施域直注册；业务域（秋招助手）经插件加载器
