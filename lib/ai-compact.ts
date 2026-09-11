@@ -7,12 +7,20 @@ import { config } from "../config.mjs";
 import { UNTRUSTED_DECLARATION } from "./prompt-guard.mjs";
 
 /** Compaction 参数（可从 .env 配置：COMPACT_BUDGET / COMPACT_KEEP_RECENT） */
-export const COMPACT_CONFIG = {
+export const COMPACT_CONFIG: { budget: number; keepRecent: number } = {
   budget: Number(process.env.COMPACT_BUDGET) || config.compactBudget || 18000,
   keepRecent: Number(process.env.COMPACT_KEEP_RECENT) || config.compactKeepRecent || 4000,
 };
 
-export function estimateTokens(text) {
+/** 压缩参与消息（LLM 协议最小形状——tool_calls 只读 id 做边界完整性修复） */
+export interface CompactMessage {
+  role: string;
+  content?: string;
+  tool_calls?: Array<{ id: string }>;
+  tool_call_id?: string;
+}
+
+export function estimateTokens(text: unknown): number {
   if (!text) return 0;
   const str = String(text);
   const cn = (str.match(/[\u4e00-\u9fa5]/g) || []).length;
@@ -20,17 +28,17 @@ export function estimateTokens(text) {
   return cn + Math.ceil(other / 4);
 }
 
-export function msgTokens(m) {
+export function msgTokens(m: { content?: unknown; tool_calls?: unknown }): number {
   let t = estimateTokens(m.content);
   if (m.tool_calls) t += estimateTokens(JSON.stringify(m.tool_calls));
   return t + 4;
 }
 
-export function bodyTokens(body) {
+export function bodyTokens(body: Array<{ content?: unknown; tool_calls?: unknown }>): number {
   return body.reduce((sum, m) => sum + msgTokens(m), 0);
 }
 
-export async function compactMessages(messages) {
+export async function compactMessages(messages: CompactMessage[]): Promise<CompactMessage[]> {
   // 旧摘要 system 消息（上一轮压缩产物）不保留堆叠：并入 body 参与预算与压缩内容，
   // 压缩成功后由新摘要替换（否则多轮压缩后 system 区累积多条摘要，上下文静默膨胀）
   const realHead = messages.filter((m) => m.role === "system" && !String(m.content || "").startsWith("（此前对话摘要"));
@@ -42,7 +50,7 @@ export async function compactMessages(messages) {
   console.log(`[compact] 触发：body ${total} tok > 预算 ${COMPACT_CONFIG.budget}（含 ${oldSummaries.length} 条旧摘要）`);
 
   // 保留最近 keepRecent token 的完整消息
-  const keep = [];
+  const keep: CompactMessage[] = [];
   let keepTok = 0;
   for (let i = body.length - 1; i >= 0; i--) {
     const t = msgTokens(body[i]);
@@ -57,7 +65,7 @@ export async function compactMessages(messages) {
     const firstKeepIndex = body.indexOf(keep[0]);
     for (let i = firstKeepIndex - 1; i >= 0; i--) {
       const m = body[i];
-      if (m.role === "assistant" && Array.isArray(m.tool_calls) && m.tool_calls.some((tc) => tc.id === keep[0].tool_call_id)) {
+      if (m.role === "assistant" && Array.isArray(m.tool_calls) && m.tool_calls.some((tc) => tc.id === keep[0]?.tool_call_id)) {
         for (let j = firstKeepIndex - 1; j >= i; j--) {
           if (!keep.includes(body[j])) {
             keep.unshift(body[j]);
@@ -91,11 +99,11 @@ export async function compactMessages(messages) {
       if (summary.length >= 20) break;
       summary = "";
     } catch (e) {
-      console.log(`[compact] 尝试 ${attempt + 1} 失败: ${e.message.slice(0, 60)}`);
+      console.log(`[compact] 尝试 ${attempt + 1} 失败: ${e instanceof Error ? e.message.slice(0, 60) : String(e).slice(0, 60)}`);
     }
   }
 
-  let result;
+  let result: CompactMessage[];
   if (summary) {
     const ts = new Date().toLocaleString("zh-CN");
     // 用 realHead（不含旧摘要）——旧摘要已被新摘要取代（其内容已并入压缩输入）

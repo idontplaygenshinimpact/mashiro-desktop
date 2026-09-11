@@ -5,7 +5,7 @@ import { setupTempDb, mockLLM, setLlmResponses } from "./helpers.mjs";
 
 setupTempDb("ai-compact");
 mockLLM();
-const compact = await import("../lib/ai-compact.mjs");
+const compact = await import("../lib/ai-compact.ts");
 
 // ---------- compactMessages ----------
 test("compactMessages 不超预算不压缩", async () => {

@@ -548,8 +548,9 @@ export async function chatWithAgent(
     // 上下文压缩：消息超阈值时压缩旧历史（释放 context window，对标 Claude Code compaction）
     try {
       if (messages.filter((m) => m.role !== "system").length > 30) {
-        const { compactMessages } = await import("./ai-compact.mjs");
-        messages = await compactMessages(messages);
+        const { compactMessages } = await import("./ai-compact.ts");
+        // 压缩器返回其自身消息形状（tool_calls 只读 id）——形状兼容，边界断言回本文件形状
+        messages = (await compactMessages(messages)) as AgentMessage[];
       }
     } catch { /* 压缩失败不影响主流程 */ }
     // 上下文计量（面板运行监控实时可见当前对话用量；与压缩同口径估算）

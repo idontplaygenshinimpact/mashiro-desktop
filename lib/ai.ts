@@ -780,7 +780,7 @@ ${algoReq}${dualReq}${ADAPTATION_CONSTRAINT}${latestRefs}${archiveRef}${weakCtx}
 
 // 上下文压缩（纵向拆分第 1 刀：拆至 lib/ai-compact.mjs，此处薄桶 re-export）
 // 引用方（agent.mjs compactMessages / context-meter.ts bodyTokens）已直连 ai-compact.mjs
-export { COMPACT_CONFIG, estimateTokens, msgTokens, bodyTokens, compactMessages } from "./ai-compact.mjs";
+export { COMPACT_CONFIG, estimateTokens, msgTokens, bodyTokens, compactMessages } from "./ai-compact.ts";
 
 // ---------- 简历项目提取（简历拷打准备入口） ----------
 /** 从简历提取项目列表：{projects: [{name, tech_stack, description}]}
