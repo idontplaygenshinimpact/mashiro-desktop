@@ -282,7 +282,7 @@ export async function execTodoDone(args: { index?: number; content?: string; don
     try {
       const { advancePlan } = await import("../todo.mjs");
       const pr = advancePlan();
-      if (pr.ok) planHint = pr.done ? "——计划全部步骤已完成，可以总结收尾" : `（计划第 ${pr.plan.currentStep}/${pr.plan.steps.length} 步）`;
+      if (pr.ok && pr.plan) planHint = pr.done ? "——计划全部步骤已完成，可以总结收尾" : `（计划第 ${pr.plan.currentStep}/${pr.plan.steps.length} 步）`;
     } catch { /* 无计划/计划模块不可用不联动 */ }
     return { ok: true, items: r.items, hint: `清单进度已更新${planHint}` };
   } catch (e: any) {
