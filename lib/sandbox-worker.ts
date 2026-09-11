@@ -1,5 +1,7 @@
 // 判题执行 worker：接收 {userCode, testCode, skeleton}，在 vm 沙箱（worker 线程内）执行并回报结果
 // 本文件只在 worker 线程运行——即使 vm 逃逸，触达的也是本 worker 的进程对象（无用户数据、可被 terminate 回收）
+// 全量 TS 升级工单阶段 3：lib/sandbox-worker.mjs → .ts（worker 入口被 lib/sandbox-runner.ts 以 path 引用 →
+//   路径同步改；Electron/Node 内置类型擦除已验证可加载 .ts worker）
 import { parentPort, workerData } from "node:worker_threads";
 import vm from "node:vm";
 
@@ -24,13 +26,26 @@ for (const k of Object.keys(process.env)) {
   }
 }
 
-const { userCode, testCode, skeleton } = workerData || {};
-const tests = [];
-const logs = [];
+/** 主线程传入的判题数据 */
+interface JudgeWorkerData {
+  userCode?: string;
+  testCode?: string;
+  skeleton?: string;
+}
+
+/** 单条断言结果（主线程据此判定 success） */
+interface AssertResult {
+  passed: boolean;
+  label: string;
+}
+
+const { userCode, testCode, skeleton } = (workerData || {}) as JudgeWorkerData;
+const tests: AssertResult[] = [];
+const logs: string[] = [];
 const VM_TIMEOUT_MS = 25000; // vm 同步执行上限（主线程 terminate 是最终兜底）
 
-function buildExportArgs(skeleton) {
-  const names = [];
+function buildExportArgs(skeleton: unknown): string {
+  const names: string[] = [];
   for (const m of String(skeleton || "").matchAll(/(?:^|\n)\s*function\s+(\w+)/g)) names.push(m[1]);
   for (const m of String(skeleton || "").matchAll(/(?:^|\n)\s*class\s+(\w+)/g)) names.push(m[1]);
   for (const m of String(skeleton || "").matchAll(/(?:^|\n)\s*var\s+(\w+)\s*=\s*(?:async\s+)?function/g)) names.push(m[1]);
@@ -40,13 +55,13 @@ function buildExportArgs(skeleton) {
 (async () => {
   try {
     const exportArgs = buildExportArgs(skeleton);
-    const sandbox = {
+    const sandbox: Record<string, unknown> = {
       console: {
-        log: (...a) => logs.push(a.map(String).join(" ")),
-        error: (...a) => logs.push("[error] " + a.map(String).join(" ")),
-        warn: (...a) => logs.push("[warn] " + a.map(String).join(" ")),
+        log: (...a: unknown[]) => logs.push(a.map(String).join(" ")),
+        error: (...a: unknown[]) => logs.push("[error] " + a.map(String).join(" ")),
+        warn: (...a: unknown[]) => logs.push("[warn] " + a.map(String).join(" ")),
       },
-      __sleep__: (ms) => new Promise((r) => setTimeout(r, ms)), // 测试代码的时序辅助（防抖断言用）
+      __sleep__: (ms: number) => new Promise((r) => setTimeout(r, ms)), // 测试代码的时序辅助（防抖断言用）
       // 断言闭包在 worker 侧定义（引用 worker 的 tests 数组——vm 脚本内访问不到 worker 闭包）
       // 2026-09 再修（安全工单 S3）：断言可被用户代码伪造（sandbox 全局属性可写——
       // userCode 里 `__mashiroAssert9f3a__ = (c) => {}` 覆盖 → 断言静默失效）。
@@ -59,9 +74,9 @@ function buildExportArgs(skeleton) {
       structuredClone,
     };
     Object.defineProperty(sandbox, "__mashiroAssert9f3a__", {
-      value: (cond, label) => {
-        const l = label || "unnamed";
-        tests.push({ passed: !!cond, label: l });
+      value: (cond: unknown, label: unknown) => {
+        const l = String(label || "unnamed");
+        tests.push({ passed: Boolean(cond), label: l });
         if (!cond) throw new Error("FAIL: " + l);
       },
       writable: false,
@@ -81,7 +96,7 @@ function buildExportArgs(skeleton) {
       })(__mashiroAssert9f3a__);
     })()`;
     await vm.runInContext(script, sandbox, { timeout: VM_TIMEOUT_MS });
-    parentPort.postMessage({
+    parentPort!.postMessage({
       success: tests.length > 0 && tests.every((t) => t.passed),
       tests,
       logs,
@@ -89,11 +104,12 @@ function buildExportArgs(skeleton) {
       durationMs: 0,
     });
   } catch (e) {
-    parentPort.postMessage({
+    const err = e as Error;
+    parentPort!.postMessage({
       success: false,
       tests,
       logs,
-      error: String(e?.message || e).slice(0, 500),
+      error: String(err?.message || err).slice(0, 500),
       durationMs: 0,
     });
   }

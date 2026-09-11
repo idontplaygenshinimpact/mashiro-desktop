@@ -6,7 +6,7 @@
 // 安全模型：
 //   1. worker 是独立 JS 环境——无用户数据、无宿主句柄，逃逸最坏只能危害 worker 自身
 //      （2026-08 实测补强：worker 与主进程同进程（worker_threads），逃逸可触达 worker 的 process——
-//      process.exit 可杀主进程、process.env 可读 LLM key。已在 sandbox-worker.mjs 入口遮蔽+清理）
+//      process.exit 可杀主进程、process.env 可读 LLM key。已在 sandbox-worker.ts 入口遮蔽+清理）
 //   2. 超时由主线程 worker.terminate() 真正终止（vm 的 async 挂起/定时器无法被 Promise.race 取消）
 //   3. resourceLimits 限制栈/内存（防无限递归/大对象撑爆）——**已知边界（实测）**：
 //      stackSizeMb 有效（无限递归 → RangeError 被捕获）；maxOldGenerationSizeMb **非硬上限**，
@@ -17,7 +17,7 @@ import { Worker } from "node:worker_threads";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const WORKER_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "sandbox-worker.mjs");
+const WORKER_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "sandbox-worker.ts");
 
 /**
  * 在隔离 worker 中执行判题脚本

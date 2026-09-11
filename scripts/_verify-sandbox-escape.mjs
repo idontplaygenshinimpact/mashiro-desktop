@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const WORKER_FILE = path.join(__dirname, "..", "lib", "sandbox-worker.mjs");
+const WORKER_FILE = path.join(__dirname, "..", "lib", "sandbox-worker.ts");
 
 // 路径 A 调试：在 vm 沙箱内逐层探测
 const debugWorker = new Worker(`
