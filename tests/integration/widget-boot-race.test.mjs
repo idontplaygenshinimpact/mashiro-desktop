@@ -36,6 +36,10 @@ test("启动期请求不踩 TDZ：狂打 /api/patrol-config 不崩，且门闸�
       MIANSHI_DISABLE_PATROL: "1",     // 关巡检定时器，但 patrol 实例照建（TDZ 仍可触发）
       MIANSHI_DISABLE_BACKGROUND: "1", // 不再起 RAG/搜集等后台任务，缩短启动窗口
       MIANSHI_AGENT_WATCH: "0",
+      // 必须给 dummy key：widget 启动自检（config.mjs assertConfig）在无 key 时**明确退出 1**
+      // （CI 实测踩到：❌ 未找到 DeepSeek API Key！→ 本测试断言"进程存活"就红了）
+      DEEPSEEK_API_KEY: "sk-test-dummy",
+      MIANSHI_MOCK_LLM: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
