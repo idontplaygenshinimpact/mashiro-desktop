@@ -265,6 +265,9 @@ export function getAgentTimeline({ days = 7, limit = 40 } = {}): {
 }
 
 // ---------- 历史回填 ----------
+/** 跨平台取路径最后一段（会话数据里的 cwd/directory 可能是另一平台风格；path.basename 在 Linux 上不认反斜杠） */
+const baseName = (p: unknown): string => String(p || "").split(/[\\/]/).filter(Boolean).pop() || "";
+
 function listFilesRecursive(dir: string, match: (n: string) => boolean): string[] {
   if (!existsSync(dir)) return [];
   const out: string[] = [];
@@ -322,7 +325,7 @@ export function backfillFromOpenCode(dbPath: string): number {
         `opencode:${sid}`, "opencode", sid,
         // 归组用 **directory 目录名**（会话 title 是"项目浏览/问候"这类临时标题，会把统计打散）；
         // 目录缺失才回落 title
-        path.basename(String(s.directory || "")) || String(s.title || sid),
+        baseName(s.directory) || String(s.title || sid),
         String(s.directory || ""),
         created, updated, updated, turns.get(sid) || 0, tools.get(sid) || 0, 0, now,
       );
@@ -345,7 +348,7 @@ export function backfillFromDsh(dir: string, limit = 2000): { sessions: number; 
     let header: { id?: string; cwd?: string; createdAt?: number } | null = null;
     try { header = readDshSessionHeader(f); } catch { /* 头部损坏（DSH 有 zstd 日志损坏历史）→ 用目录名兜底 */ }
     const sid = header?.id || path.basename(path.dirname(f));
-    const project = header?.cwd ? path.basename(header.cwd) : path.basename(path.dirname(path.dirname(f))).replace(/^-+|-+$/g, "");
+    const project = header?.cwd ? baseName(header.cwd) : path.basename(path.dirname(path.dirname(f))).replace(/^-+|-+$/g, "");
     const started = Number(header?.createdAt) || st.mtimeMs;
     upsertBackfill.run(`dsh:${sid}`, "dsh", sid, project, header?.cwd || "", started, st.mtimeMs, st.mtimeMs, 0, 0, 1, now);
     done++;
