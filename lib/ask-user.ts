@@ -4,23 +4,57 @@
 import { randomUUID } from "node:crypto";
 
 const ASK_TIMEOUT_MS = 120000;
-const pending = new Map(); // id -> {id, question, options, multiSelect, kind, requestedAt, promise, resolve, timer}
+
+/** 提问选项（label 展示；description 补充说明） */
+export interface AskOption {
+  label: string;
+  description: string;
+}
+
+/** 提问请求（options 可传 string 或 {label, description?}——统一归一） */
+export interface AskRequest {
+  question: string;
+  options?: Array<{ label?: string; description?: string } | string>;
+  multiSelect?: boolean;
+  kind?: string;
+  timeoutMs?: number;
+}
+
+/** 提问结果（timeout=true 用户未答/取消；selected=选中 label 列表；reason 补充） */
+export interface AskResult {
+  timeout: boolean;
+  selected: string[];
+  reason?: string;
+}
+
+/** 待回答条目（pending Map 值） */
+interface PendingAsk {
+  id: string;
+  question: string;
+  options: AskOption[];
+  multiSelect: boolean;
+  kind: string;
+  requestedAt: number;
+  promise: Promise<AskResult>;
+  resolve: (result: AskResult) => void;
+  timer?: NodeJS.Timeout;
+}
+
+const pending = new Map<string, PendingAsk>(); // id -> 待回答条目
 
 /**
  * 发起一次提问（挂起直到用户回答或超时）
- * @param {{question: string, options?: Array<{label: string, description?: string}>, multiSelect?: boolean, kind?: string, timeoutMs?: number}} req
- * @returns {Promise<{timeout: boolean, selected: string[], reason?: string}>}
  */
-export function askUser({ question, options = [], multiSelect = false, kind = "question", timeoutMs = ASK_TIMEOUT_MS }) {
+export function askUser({ question, options = [], multiSelect = false, kind = "question", timeoutMs = ASK_TIMEOUT_MS }: AskRequest): Promise<AskResult> {
   const id = `ask_${Date.now().toString(36)}${randomUUID().slice(0, 6)}`;
-  let resolveFn;
-  const promise = new Promise((resolve) => { resolveFn = resolve; });
-  const entry = {
+  let resolveFn: (result: AskResult) => void = () => {};
+  const promise = new Promise<AskResult>((resolve) => { resolveFn = resolve; });
+  const entry: PendingAsk = {
     id,
     question: String(question || "").slice(0, 2000),
     options: (Array.isArray(options) ? options : []).slice(0, 8).map((o) => ({
-      label: String(o?.label ?? o ?? "").slice(0, 60),
-      description: String(o?.description ?? "").slice(0, 200),
+      label: String((o && typeof o === "object" ? o.label : o) ?? "").slice(0, 60),
+      description: String((o && typeof o === "object" ? o.description : "") ?? "").slice(0, 200),
     })),
     multiSelect: !!multiSelect,
     kind: String(kind || "question"),
@@ -41,7 +75,7 @@ export function askUser({ question, options = [], multiSelect = false, kind = "q
 }
 
 /** 面板查询：当前待回答的问题列表 */
-export function getPendingAsks() {
+export function getPendingAsks(): Array<{ id: string; question: string; options: AskOption[]; multiSelect: boolean; kind: string; requestedAt: number }> {
   return [...pending.values()].map((e) => ({
     id: e.id,
     question: e.question,
@@ -53,7 +87,7 @@ export function getPendingAsks() {
 }
 
 /** 用户回答：selected 为选项 label 列表；reason 可选补充说明 */
-export function answerAsk(id, { selected = [], reason = "" } = {}) {
+export function answerAsk(id: unknown, { selected = [], reason = "" }: { selected?: unknown; reason?: string } = {}): { ok: boolean; error?: string } {
   const entry = pending.get(String(id || ""));
   if (!entry) return { ok: false, error: `没有待回答的问题: ${id}` };
   const labels = (Array.isArray(selected) ? selected : [selected]).map((s) => String(s));
@@ -62,7 +96,7 @@ export function answerAsk(id, { selected = [], reason = "" } = {}) {
 }
 
 /** 取消提问（agent 主动放弃/超时清理） */
-export function cancelAsk(id) {
+export function cancelAsk(id: unknown): { ok: boolean } {
   const entry = pending.get(String(id || ""));
   if (!entry) return { ok: false };
   entry.resolve({ timeout: true, selected: [], reason: "提问被取消" });
@@ -70,6 +104,6 @@ export function cancelAsk(id) {
 }
 
 /** 当前待回答数量（widget 展示用） */
-export function pendingAskCount() {
+export function pendingAskCount(): number {
   return pending.size;
 }

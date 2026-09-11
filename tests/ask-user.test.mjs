@@ -12,7 +12,7 @@ after(() => cleanupTempDb(tmpDir));
 
 // ---------- 单元：askUser 服务 ----------
 test("askUser：挂起直到回答，返回 selected", async () => {
-  const { askUser, getPendingAsks, answerAsk } = await import("../lib/ask-user.mjs");
+  const { askUser, getPendingAsks, answerAsk } = await import("../lib/ask-user.ts");
   const p = askUser({ question: "今天先做什么？", options: [{ label: "学习" }, { label: "投递" }] });
   let settled = false;
   p.then(() => { settled = true; });
@@ -30,7 +30,7 @@ test("askUser：挂起直到回答，返回 selected", async () => {
 });
 
 test("askUser：超时返回 timeout（默认 120s 可注入短超时）", async () => {
-  const { askUser, getPendingAsks } = await import("../lib/ask-user.mjs");
+  const { askUser, getPendingAsks } = await import("../lib/ask-user.ts");
   const p = askUser({ question: "q", options: [{ label: "a" }, { label: "b" }], timeoutMs: 50 });
   const out = await p;
   assert.equal(out.timeout, true);
@@ -39,7 +39,7 @@ test("askUser：超时返回 timeout（默认 120s 可注入短超时）", async
 });
 
 test("answerAsk：不存在 id → error；cancelAsk 生效", async () => {
-  const { askUser, answerAsk, cancelAsk, getPendingAsks } = await import("../lib/ask-user.mjs");
+  const { askUser, answerAsk, cancelAsk, getPendingAsks } = await import("../lib/ask-user.ts");
   const r1 = answerAsk("nope", { selected: ["x"] });
   assert.equal(r1.ok, false);
   const p = askUser({ question: "q", options: [{ label: "a" }, { label: "b" }] });
@@ -51,7 +51,7 @@ test("answerAsk：不存在 id → error；cancelAsk 生效", async () => {
 // ---------- 集成：agent 工具 ----------
 test("chatWithAgent：ask_user 挂起 → 面板回答 → 继续完成", async () => {
   const { chatWithAgent } = await import("../lib/agent.mjs");
-  const { getPendingAsks, answerAsk } = await import("../lib/ask-user.mjs");
+  const { getPendingAsks, answerAsk } = await import("../lib/ask-user.ts");
   setLlmResponses(
     'TOOLCALL:{"name":"ask_user","arguments":"{\\"question\\":\\"先学还是先投？\\",\\"options\\":[{\\"label\\":\\"先学习\\"},{\\"label\\":\\"先投递\\"}]}"}',
     "好的，那我先帮你安排学习。"
@@ -72,7 +72,7 @@ test("chatWithAgent：ask_user 挂起 → 面板回答 → 继续完成", async 
 
 test("chatWithAgent：plan_mode 确认后执行；取消则不执行", async () => {
   const { chatWithAgent } = await import("../lib/agent.mjs");
-  const { getPendingAsks, answerAsk } = await import("../lib/ask-user.mjs");
+  const { getPendingAsks, answerAsk } = await import("../lib/ask-user.ts");
   // 场景 A：确认执行
   setLlmResponses(
     'TOOLCALL:{"name":"plan_mode","arguments":"{\\"plan\\":\\"1.搜索面经 2.提炼考点 3.生成清单\\"}"}',

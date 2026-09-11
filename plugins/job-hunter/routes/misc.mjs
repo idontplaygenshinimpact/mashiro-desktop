@@ -3,7 +3,7 @@ import { memory } from "#lib/memory.mjs";
 import { getContextUsage } from "#lib/context-meter.ts";
 import { getTodo } from "#lib/todo.mjs";
 import { loopSuggest, suggestFocusGoal } from "#lib/loop.mjs";
-import { getPendingAsks, answerAsk } from "#lib/ask-user.mjs";
+import { getPendingAsks, answerAsk } from "#lib/ask-user.ts";
 import * as studyApi from "#lib/study.mjs";
 import * as reviewApi from "#lib/review.mjs";
 import * as jobsApi from "#lib/jobs.mjs";

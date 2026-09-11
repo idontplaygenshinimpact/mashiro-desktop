@@ -198,7 +198,7 @@ export async function execSkillInspect() {
  */
 export async function execAskUser(args: { question?: string; options?: Array<{ label: string; description?: string }>; multiSelect?: boolean } = {}) {
   try {
-    const { askUser } = await import("../ask-user.mjs");
+    const { askUser } = await import("../ask-user.ts");
     const opts = (Array.isArray(args.options) ? args.options : [])
       .map((o) => ({ label: String(o?.label ?? o ?? "").slice(0, 60), description: String(o?.description ?? "").slice(0, 200) }))
       .filter((o) => o.label);
@@ -221,7 +221,7 @@ export async function execAskUser(args: { question?: string; options?: Array<{ l
  */
 export async function execPlanMode(args: { plan?: string } = {}) {
   try {
-    const { askUser } = await import("../ask-user.mjs");
+    const { askUser } = await import("../ask-user.ts");
     const plan = String(args.plan || "").trim().slice(0, 4000);
     if (!plan) return { error: "plan_mode 需要计划内容" };
     const r = await askUser({
