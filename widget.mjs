@@ -488,7 +488,7 @@ try {
 // 今日任务视图工单任务 1：桌宠每日播报（启动时 + 每日首次——跨天检测，settings 记 last_brief_date）
 // 播报内容：计划今日配额 / 复习卡到期 / 薄弱点 / 面试建议（与面板聚合卡同一数据源 today-brief）
 try {
-  const { buildTodayBrief } = await import("./lib/today-brief.mjs");
+  const { buildTodayBrief } = await import("./lib/today-brief.ts");
   const { localDateKey } = await import("./lib/date-utils.ts");
   const today = localDateKey();
   const last = (() => {

@@ -231,7 +231,7 @@ export function registerMiscRoutes(router) {
   // ---------- 今日任务聚合（今日任务视图工单：桌宠播报 + 面板聚合卡共用） ----------
   router.route("/api/today-brief", async (req, res) => {
     try {
-      const { buildTodayBrief } = await import("#lib/today-brief.mjs");
+      const { buildTodayBrief } = await import("#lib/today-brief.ts");
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(buildTodayBrief()));
     } catch (e) {

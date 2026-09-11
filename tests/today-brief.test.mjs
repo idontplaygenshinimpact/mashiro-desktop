@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { setupTempDb, cleanupTempDb, clearAllTables, resetMemoryState } from "./helpers.mjs";
 
 const dbDir = setupTempDb("today-brief");
-const { buildTodayBrief, buildBriefText } = await import("../lib/today-brief.mjs");
+const { buildTodayBrief, buildBriefText } = await import("../lib/today-brief.ts");
 const { db } = await import("../lib/db.mjs");
 const { memory } = await import("../lib/memory.mjs");
 const { review } = await import("../lib/review.mjs");
