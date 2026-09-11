@@ -34,11 +34,12 @@ export interface LLMTraceInfo {
   endpoint?: string | null;
 }
 
-/** OpenAI 兼容消息 */
+/** OpenAI 兼容消息（content 为 assistant/user 文本；tool 角色的 tool_call_id 由回填方写入） */
 export interface LLMMessage {
   role?: string;
   content?: string;
   tool_calls?: LLMToolCall[];
+  tool_call_id?: string;
 }
 
 /** 工具调用 */
