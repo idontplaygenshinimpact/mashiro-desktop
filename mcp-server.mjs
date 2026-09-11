@@ -106,7 +106,10 @@ server.tool(
       if (noKey) return { content: [{ type: "text", text: noKey }], isError: true };
       const { startInterview } = await import("./lib/interview.mjs");
       const r = await startInterview({ position, role: role || "技术深挖型", focus });
-      if (r.error) return { content: [{ type: "text", text: `⚠️ ${r.error}` }] };
+      // 联合类型收窄（2026-09-11 TS 迁移暴露）：startInterview 返回
+      // `{ok:true,...} | {error,session}`——原实现直接读 r.round/r.question，遇到 error 分支
+      // 会拼出"第 undefined 轮 / 问题：undefined"的假成功文案（真实缺陷，这里按分支处理）
+      if ("error" in r) return { content: [{ type: "text", text: `⚠️ ${r.error}` }] };
       return { content: [{ type: "text", text: `第 ${r.round} 轮\n🎯 维度：${r.dimension}\n📌 依据：${r.basis}\n✅ 合格标准：${r.criteria}\n\n问题：${r.question}` }] };
     } catch (e) {
       console.error(`[mcp] start_interview 失败: ${e && e.message ? e.message : String(e)}`);

@@ -1,6 +1,7 @@
 // 模拟面试：开始面试（会话初始化域）
 // 纵向拆分第 5 刀：startInterview 从 interview-session 独立（该模块 <500 行验收）
 // 参考学习清单 + 最近面经 + 薄弱点 + 多源优先考察聚合 → 初始化会话
+// 全量 TS 升级工单阶段 3：lib/interview-start.mjs → .ts（唯一调用方 lib/interview.mjs 桶 → 同步改导出路径）
 import { memory } from "./memory.mjs";
 import { extractJson } from "./llm.mjs";
 import { safeExternalBlock } from "./prompt-guard.mjs";
@@ -8,7 +9,54 @@ import { chat } from "./interview-agent.mjs";
 import { buildInterviewFocus } from "./interview-focus.ts";
 import { ROUND_PLAN, ROUND_SEQ, ROLES } from "./interview-config.ts";
 
-export async function startInterview({ position, role = "技术深挖型", resume = "", focus = "" }) {
+/** startInterview 入参（全部可选：未传时按画像/简历/关注点自动补齐） */
+export interface StartInterviewInput {
+  position?: string;
+  role?: string;
+  resume?: string;
+  focus?: string;
+}
+
+/** 优先考察条目（多源聚合：薄弱点/题库错题/复习错题/今日复习/到期卡/清单未完成） */
+interface FocusItem {
+  topic: string;
+  reason?: string;
+  score?: number;
+}
+
+/** 学习清单条目（study 模块返回的宽松实体） */
+interface PlanItem {
+  topic?: string;
+  done?: boolean;
+  reviewed?: boolean;
+  why?: string;
+}
+
+/** 个人项目档案（personal-projects 返回） */
+interface ProjectArchive {
+  content?: string;
+}
+
+/** 开始面试结果：已有进行中会话 → {error,session}；否则返回开场问题 */
+export type StartInterviewResult =
+  | { error: string; session: unknown }
+  | {
+      ok: true;
+      message: string;
+      question: string;
+      basis: string;
+      dimension: string;
+      criteria: string;
+      boundary: string;
+      round: number;
+      roundType: string;
+      totalRounds: number;
+      depth: number;
+      weakQueue: Array<{ topic: string; failCount: number; reason: string }>;
+      hint: string;
+    };
+
+export async function startInterview({ position, role = "技术深挖型", resume = "", focus = "" }: StartInterviewInput = {}): Promise<StartInterviewResult> {
   if (memory.getInterview()) {
     return { error: "已有一场面试进行中，先结束（end_interview）或继续回答", session: memory.getInterview() };
   }
@@ -17,7 +65,7 @@ export async function startInterview({ position, role = "技术深挖型", resum
   if (!resume) {
     try {
       const { getResumeRaw } = await import("./job-match.mjs");
-      const raw = getResumeRaw?.();
+      const raw = getResumeRaw?.() as { text?: string } | null | undefined;
       if (raw?.text) resume = String(raw.text);
     } catch { /* 无简历配置也能正常面试 */ }
   }
@@ -31,13 +79,13 @@ export async function startInterview({ position, role = "技术深挖型", resum
   const profile = memory.getProfileSummary();
   // 优先考察队列（多源聚合：薄弱点/题库错题/复习错题/今日复习/到期卡/清单未完成）
   // 修复：此前只含薄弱点——题库/复习的练习数据不自动进面试，需用户手动选重点
-  const focusItems = await buildInterviewFocus();
+  const focusItems = (await buildInterviewFocus()) as unknown as FocusItem[];
   // 用户手动指定重点 → 置顶（其余自动聚合的仍保留，作为补充考察方向）
   if (String(focus || "").trim()) {
     const manual = String(focus).trim().slice(0, 60);
     focusItems.unshift({ topic: manual, reason: "用户指定重点", score: 1000 });
     // 去重（手动指定与自动聚合同 topic 时保留手动）
-    const seen = new Set();
+    const seen = new Set<string>();
     for (let i = 0; i < focusItems.length; i++) {
       const k = String(focusItems[i].topic).toLowerCase();
       if (seen.has(k)) { focusItems.splice(i, 1); i--; } else seen.add(k);
@@ -45,7 +93,7 @@ export async function startInterview({ position, role = "技术深挖型", resum
   }
   // weakQueue 语义保留：asked 标记已考察（本场不重复出）
   const weakQueue = focusItems.slice(0, 12).map((w) => ({
-    topic: w.topic, failCount: w.score > 100 ? Math.min(Math.floor(w.score - 99), 10) : 1,
+    topic: w.topic, failCount: Number(w.score) > 100 ? Math.min(Math.floor(Number(w.score) - 99), 10) : 1,
     reason: w.reason, asked: false,
   }));
 
@@ -53,7 +101,7 @@ export async function startInterview({ position, role = "技术深挖型", resum
   let studyPlanText = "";
   try {
     const { getPlan } = await import("./study.mjs");
-    const plan = getPlan();
+    const plan = (getPlan() || {}) as { items?: PlanItem[] };
     if (plan?.items?.length) {
       studyPlanText = plan.items
         .filter((i) => !i.done)
@@ -69,8 +117,8 @@ export async function startInterview({ position, role = "技术深挖型", resum
     const { readdirSync, readFileSync, statSync } = await import("node:fs");
     const path = await import("node:path");
     const outDir = path.join(import.meta.dirname, "..", "output");
-    const files = [];
-    const walk = (dir, depth = 0) => {
+    const files: string[] = [];
+    const walk = (dir: string, depth = 0): void => {
       if (depth > 3) return;
       for (const e of readdirSync(dir, { withFileTypes: true })) {
         const p = path.join(dir, e.name);
@@ -99,7 +147,7 @@ export async function startInterview({ position, role = "技术深挖型", resum
     const projects = getPersonalProjects();
     if (projects.length) {
       // buildProjectArchive 已 async（2026-08 改造）——await 修复回归（此前 .content undefined → 档案段恒空）
-      const archives = await Promise.all(projects.map((p) => buildProjectArchive(p)));
+      const archives = await Promise.all(projects.map((p: unknown) => buildProjectArchive(p))) as ProjectArchive[];
       projectArchivesText = archives
         .map((a) => a?.content || "")
         .filter((c) => c.length > 200)
@@ -109,7 +157,7 @@ export async function startInterview({ position, role = "技术深挖型", resum
   } catch { /* 个人项目未配置/异常忽略 */ }
 
   const prompt = `你是${role}面试官，为"${position}"岗位面试候选人。
-面试官风格：${ROLES[role] || ROLES["技术深挖型"]}
+面试官风格：${ROLES[role as keyof typeof ROLES] || ROLES["技术深挖型"]}
 
 【面试流程】这是一场完整的${role}面试，按真实面试节奏编排（项目拷打为主线、八股穿插、手写收尾）：
 ${ROUND_PLAN.map((s) => `- ${s.name}（${s.rounds} 轮）：${s.desc}`).join("\n")}
@@ -136,7 +184,7 @@ ${projectArchivesText ? `【简历项目源码档案】（以下为候选人本�
 
   // 字段级兜底：LLM 返回合法但字段缺失的 JSON（如 `{}`）时逐字段回退（修复：原实现只兜底整体，
   // `{}` → question/basis/dimension 全 undefined，与 submitAnswer 的字段级兜底行为不一致）
-  const parsed = extractJson(raw) || {};
+  const parsed = (extractJson(raw) || {}) as Record<string, unknown>;
   const q = {
     question: String(parsed.question || "").trim() || "请介绍一下你自己和你最熟悉的项目。",
     basis: String(parsed.basis || "").trim() || "开场破冰",
@@ -160,7 +208,7 @@ ${projectArchivesText ? `【简历项目源码档案】（以下为候选人本�
     current: { question: q.question, basis: q.basis, dimension: q.dimension, criteria: q.criteria, boundary: q.boundary, depth: 0, round: 1 },
     weakQueue,
     finished: false,
-  });
+  } as unknown as Parameters<typeof memory.setInterview>[0]);
 
   // 场景装配事件（Phase P1）：面试开始 → interview 场景（激活 interview-warmup/resume-coach 技能）
   try {
