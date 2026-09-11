@@ -60,13 +60,17 @@ test("队列：串行播放，一句播完才播下一句（prepare/play 两阶�
   assert.equal(q.size, 0);
 });
 
-test("队列：预取（播放期间后台 prepare 下一句，总耗时显著短于串行）", async () => {
-  const order = [];
+test("队列：预取（播放期间后台 prepare 下一句——并行性用事件时序断言，不用挂钟）", async () => {
+  // 2026-09-11 修 flake：原断言 `elapsed < 160`（串行基线 ~180ms）在满负载/CI 并行下随机变红
+  // （每个 await 都可能被调度延迟，挂钟与并发度不成比例）。改为断言**预取语义本身**：
+  // 句2 的 prepare 必须在句1 的 play **结束之前**开始——这是"预取"的定义，与机器快慢无关；
+  // 若把预取去掉（严格串行），该断言必然失败。
+  const marks = [];
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const q = createSpeechQueue({
-    prepare: async (t) => { order.push(`P:${t}`); await new Promise((r) => setTimeout(r, 30)); return { path: t }; },
-    play: async (a) => { order.push(`L:${a.path}`); await new Promise((r) => setTimeout(r, 30)); },
+    prepare: async (t) => { marks.push({ ev: "P", t, at: Date.now(), done: 0 }); await sleep(30); marks[marks.length - 1].done = Date.now(); return { path: t }; },
+    play: async (a) => { marks.push({ ev: "L", t: a.path, at: Date.now(), done: 0 }); await sleep(30); marks[marks.length - 1].done = Date.now(); },
   });
-  const t0 = Date.now();
   q.push("一。");
   q.push("二。");
   q.push("三。");
@@ -74,13 +78,16 @@ test("队列：预取（播放期间后台 prepare 下一句，总耗时显著�
   await new Promise((resolve) => {
     const iv = setInterval(() => { if (!q.isSpeaking && q.size === 0) { clearInterval(iv); resolve(); } }, 5);
   });
-  const elapsed = Date.now() - t0;
-  // 串行基线 = (30+30)*3 = 180ms；预取并行 → 显著更短（首句 30 + 逐句播放 30 + 少量）
-  assert.ok(elapsed < 160, `预取应并行（实测 ${elapsed}ms，串行基线 ~180ms）`);
-  const p1 = order.indexOf("P:一。"), l1 = order.indexOf("L:一。"), p2 = order.indexOf("P:二。"), l2 = order.indexOf("L:二。");
-  assert.ok(p1 < l1, "句1 先准备后播放");
-  assert.ok(p2 < l2, "句2 先准备后播放");
-  assert.ok(p2 <= l1 + 1, "句2 准备已与句1 播放并行启动");
+  const find = (ev, t) => marks.find((m) => m.ev === ev && m.t === t);
+  const p2 = find("P", "二。"), l1 = find("L", "一。"), p3 = find("P", "三。"), l2 = find("L", "二。");
+  assert.ok(p2 && l1 && p3 && l2, "四步都已发生");
+  assert.ok(p2.at < l1.done, `句2 的准备应在句1 播放结束前启动（预取并行；P2@${p2.at} vs L1 结束@${l1.done}）`);
+  assert.ok(p3.at < l2.done, `句3 的准备应在句2 播放结束前启动（P3@${p3.at} vs L2 结束@${l2.done}）`);
+  // 播放仍严格串行（不重叠）
+  assert.ok(l2.at >= l1.done, `播放不得重叠（L2 起 ${l2.at} 应 ≥ L1 止 ${l1.done}）`);
+  const p1 = find("P", "一。"), l1b = find("L", "一。");
+  assert.ok(p1.at < l1b.at, "句1 先准备后播放");
+  assert.ok(p2.at <= l1b.at + 1, "句2 准备已与句1 播放并行启动（顺序表同步断言）");
 });
 
 test("队列：prepare 返回 null 跳过本句", async () => {
