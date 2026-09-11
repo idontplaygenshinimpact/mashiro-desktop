@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const { readWindowState, saveWindowState, scheduleSaveWindowState, isOnScreen } = await import("../desktop/lib/window-state.mjs");
-const { rendererBundleStale, rebuildRendererBundle } = await import("../desktop/lib/restart.mjs");
+const { rendererBundleStale, rebuildRendererBundle } = await import("../desktop/lib/restart.ts");
 
 test("window-state：读写 + 损坏文件容错", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "ws-"));

@@ -9,7 +9,7 @@ import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, he
 // 纵向拆分：widget 服务守护 / 窗口位置持久化 / 重启设施（desktop/lib/*.mjs，无 electron 依赖可单测）
 import { safeSpawn, createWidgetServer } from "./lib/widget-server.mjs";
 import { readWindowState as readWinState, scheduleSaveWindowState as scheduleSaveWinState, isOnScreen as isRectOnScreen } from "./lib/window-state.mjs";
-import { rendererBundleStale as bundleStale, rebuildRendererBundle as rebuildBundle, killAllWidgetProcesses as killAllWidgets } from "./lib/restart.mjs";
+import { rendererBundleStale as bundleStale, rebuildRendererBundle as rebuildBundle, killAllWidgetProcesses as killAllWidgets } from "./lib/restart.ts";
 // 事件驱动表达轮询（B6 接线：companion-poller 2s 拉 pet-events → petSay；autonomy=off 不启动）
 import { startCompanionPoller } from "./lib/companion-poller.mjs";
 
@@ -570,7 +570,7 @@ safeHandle("widget:notify", async (e, { title, message }) => {
 safeHandle("window:quit", () => app.quit());
 
 // 一键重启（面板按钮）：杀全部 widget 子进程（含外部残留）→ relaunch 自身
-// 渲染产物防呆 / 杀进程逻辑在 desktop/lib/restart.mjs（可单测）
+// 渲染产物防呆 / 杀进程逻辑在 desktop/lib/restart.ts（可单测）
 const RENDERER_DIR = path.join(__dirname, "renderer");
 const RENDERER_SRC = ["app.js", "index.html", "style.css"];
 
