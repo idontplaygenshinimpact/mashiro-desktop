@@ -736,7 +736,7 @@ safeHandle("voice:set", (e, enabled) => {
   return { ok: true, enabled: on };
 });
 // 语音输入：本地 ASR 转写（面板 🎤 → Float32Array → 文本）
-// 关键：ASR 推理跑在 worker 线程（lib/speech-worker.mjs）——WASM/ONNX 推理是同步计算，
+// 关键：ASR 推理跑在 worker 线程（lib/speech-worker.ts）——WASM/ONNX 推理是同步计算，
 // 放主进程会冻结整个 Electron 应用（历史卡顿根因）。worker 常驻，模型只加载一次。
 let asrWorker = null;
 let asrSeq = 0;
@@ -744,7 +744,7 @@ const asrPending = new Map(); // id → {resolve, reject}
 
 function getAsrWorker() {
   if (asrWorker) return asrWorker;
-  const w = new Worker(path.join(__dirname, "..", "lib", "speech-worker.mjs"));
+  const w = new Worker(path.join(__dirname, "..", "lib", "speech-worker.ts"));
   w.on("message", (m) => {
     const p = asrPending.get(m?.id);
     if (!p) return;
