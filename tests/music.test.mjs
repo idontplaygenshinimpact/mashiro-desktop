@@ -8,7 +8,7 @@ import path from "node:path";
 // 用临时音乐目录替换模块内的 MUSIC_DIR（动态 import + 注入）
 const fakeMusicDir = mkdtempSync(path.join(tmpdir(), "mianshi-music-"));
 process.env.MIANSHI_TEST_MUSIC_DIR = fakeMusicDir;
-const url = new URL("../lib/music.mjs", import.meta.url);
+const url = new URL("../lib/music.ts", import.meta.url);
 url.searchParams.set("t", Date.now().toString(36));
 const music = await import(url.href);
 

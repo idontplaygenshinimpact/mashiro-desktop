@@ -681,7 +681,7 @@ function saveMusicState(extra = {}) {
   } catch { /* ignore */ }
 }
 async function musicApi() {
-  return await import("../lib/music.mjs");
+  return await import("../lib/music.ts");
 }
 safeHandle("music:play", async (e, { file, loop } = /** @type {any} */ ({})) => {
   const m = await musicApi();

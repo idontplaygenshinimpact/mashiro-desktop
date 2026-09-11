@@ -4,40 +4,60 @@
 // 版权说明：不内置任何音乐文件，仅做目录扫描与播放控制；曲目来源建议见 assets/music/README.md
 // 状态（音量/自动播放）持久化由 main.mjs 负责（data/music-state.json），本模块只管播放
 import { readdirSync, existsSync, readFileSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { resolveFfplay } from "../desktop/voice-pack.mjs";
 
-export const MUSIC_DIR = process.env.MIANSHI_TEST_MUSIC_DIR || path.join(import.meta.dirname, "..", "assets", "music");
+/** 曲目（file 绝对路径；name 展示名——music.json 配置或文件名去后缀） */
+export interface MusicTrack {
+  file: string;
+  name: string;
+}
+
+/** 播放操作结果（成功带 playing/name/file；失败带 error） */
+export interface MusicResult {
+  ok: boolean;
+  error?: string;
+  playing?: boolean;
+  name?: string;
+  file?: string;
+  volume?: number;
+}
+
+/** 播放选项（volume 覆盖当前音量；loop 循环播放） */
+export interface PlayOpts {
+  volume?: number;
+  loop?: boolean;
+}
+
+export const MUSIC_DIR: string = process.env.MIANSHI_TEST_MUSIC_DIR || path.join(import.meta.dirname, "..", "assets", "music");
 const CONFIG_FILE = path.join(MUSIC_DIR, "music.json");
 const AUDIO_EXT = [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"];
 
 // 单实例播放：全局持有一个 ffplay 子进程（切歌/停止先杀旧的）
-let player = null;
-let playlist = [];      // [{file, name}]
+let player: ChildProcess | null = null;
+let playlist: MusicTrack[] = [];      // [{file, name}]
 let currentIndex = -1;
 let volume = 70;        // 0-100（main 启动时注入持久化值）
 let autoplayOn = false; // 自动播放开关（main 启动时注入持久化值）
-/**
- * 注入持久化状态（main 启动时调用）
- * @param {{volume?: number, autoplay?: boolean}} [prefs]
- */
-export function setMusicPrefs({ volume: v, autoplay: a } = {}) {
+
+/** 注入持久化状态（main 启动时调用） */
+export function setMusicPrefs({ volume: v, autoplay: a }: { volume?: number; autoplay?: boolean } = {}): void {
   if (typeof v === "number" && v >= 0 && v <= 100) volume = v;
   autoplayOn = !!a;
 }
 
 /** 曲目配置（music.json）：{ tracks: { "文件名.mp3": "曲名" } } */
-function loadTrackNames() {
+function loadTrackNames(): Record<string, string> {
   try {
     const j = JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
-    return j?.tracks && typeof j.tracks === "object" ? j.tracks : {};
+    return j?.tracks && typeof j.tracks === "object" ? j.tracks as Record<string, string> : {};
   } catch { /* 无配置用文件名 */ }
   return {};
 }
 
 /** 扫描音乐目录：按文件名排序，返回 [{file, name}] */
-export function scanMusic() {
+export function scanMusic(): MusicTrack[] {
   const names = loadTrackNames();
   try {
     if (!existsSync(MUSIC_DIR)) return [];
@@ -53,14 +73,14 @@ export function scanMusic() {
 }
 
 /** 刷新播放列表（保留当前曲目索引尽量不跳歌） */
-function refreshPlaylist() {
+function refreshPlaylist(): void {
   const old = playlist[currentIndex]?.file;
   playlist = scanMusic();
   currentIndex = old ? playlist.findIndex((t) => t.file === old) : -1;
 }
 
 /** 播放指定曲目（file 为空 → 第一首/当前曲）；切歌先杀旧进程 */
-export function playMusic(file = "", opts = {}) {
+export function playMusic(file = "", opts: PlayOpts = {}): MusicResult {
   refreshPlaylist();
   if (!playlist.length) return { ok: false, error: "assets/music/ 下没有音乐文件（放入 mp3/wav/m4a 即可，如樱花庄 OP/ED）" };
   let idx = file ? playlist.findIndex((t) => t.file === file) : currentIndex >= 0 ? currentIndex : 0;
@@ -70,7 +90,7 @@ export function playMusic(file = "", opts = {}) {
 }
 
 /** 播放下一首（循环列表） */
-export function nextMusic() {
+export function nextMusic(): MusicResult {
   refreshPlaylist();
   if (!playlist.length) return { ok: false, error: "没有音乐文件" };
   currentIndex = (currentIndex + 1) % playlist.length;
@@ -78,7 +98,7 @@ export function nextMusic() {
 }
 
 /** 停止播放（杀 ffplay 进程） */
-export function stopMusic() {
+export function stopMusic(): { ok: boolean; playing: boolean } {
   if (player) {
     try { player.kill(); } catch { /* ignore */ }
     player = null;
@@ -87,7 +107,7 @@ export function stopMusic() {
 }
 
 /** 播放状态 */
-export function getMusicState() {
+export function getMusicState(): { ok: boolean; playing: boolean; current: string | null; index: number; total: number; tracks: string[]; volume: number; autoplayOn: boolean } {
   const playing = !!(player && !player.killed);
   return {
     ok: true,
@@ -102,7 +122,7 @@ export function getMusicState() {
 }
 
 /** 音量（0-100，ffplay -volume；播放中即时重启生效） */
-export function setMusicVolume(v) {
+export function setMusicVolume(v: unknown): MusicResult {
   const n = Math.max(0, Math.min(100, Number(v) || 0));
   volume = n;
   if (player && !player.killed && currentIndex >= 0 && playlist[currentIndex]) {
@@ -114,13 +134,13 @@ export function setMusicVolume(v) {
 }
 
 /** 自动播放开关（仅内存；持久化由 main 负责） */
-export function setMusicAutoplay(on) {
+export function setMusicAutoplay(on: unknown): { ok: boolean; autoplayOn: boolean } {
   autoplayOn = !!on;
   return { ok: true, autoplayOn };
 }
 
 // 播放引擎：ffplay 单实例（-volume 音量；播完由 ffplay 自然结束）
-function startPlayer(track, opts = {}) {
+function startPlayer(track: MusicTrack, opts: PlayOpts = {}): MusicResult {
   const ff = resolveFfplay();
   if (!ff) return { ok: false, error: "ffplay 不可用，无法播放音乐" };
   stopMusic(); // 杀旧进程
@@ -129,7 +149,7 @@ function startPlayer(track, opts = {}) {
     if (opts.loop) args.push("-loop", "0");
     args.push(track.file);
     player = spawn(ff, args, { windowsHide: true, detached: true, stdio: "ignore" });
-    player.on("error", (err) => {
+    player.on("error", (err: Error) => {
       console.log(`[music] 播放失败: ${err.message}`);
       player = null;
     });
@@ -138,7 +158,7 @@ function startPlayer(track, opts = {}) {
     console.log(`[music] 🎵 播放 ${track.name}`);
     return { ok: true, playing: true, name: track.name, file: track.file };
   } catch (e) {
-    console.log(`[music] 播放异常: ${e.message}`);
-    return { ok: false, error: String(e.message || e).slice(0, 100) };
+    console.log(`[music] 播放异常: ${e instanceof Error ? e.message : String(e)}`);
+    return { ok: false, error: String(e instanceof Error ? e.message : e).slice(0, 100) };
   }
 }
