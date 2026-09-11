@@ -9,7 +9,7 @@ import * as reviewApi from "#lib/review.mjs";
 import * as jobsApi from "#lib/jobs.mjs";
 import * as jobMatchApi from "#lib/job-match.mjs";
 import { db } from "#lib/db.mjs";
-import { buildGreeting as buildGreetingText, polishGreeting as polishGreetingText } from "#lib/greeting.mjs";
+import { buildGreeting as buildGreetingText, polishGreeting as polishGreetingText } from "#lib/greeting.ts";
 import { getResumeProfile } from "#lib/job-match.mjs";
 import { listPlatforms as listPlatformsApi, searchAndStoreJobs as searchAndStoreJobsApi, applyJobOnPlatform as applyJobOnPlatformApi } from "#lib/job-platforms.mjs";
 import { saveAccount as savePlatformAccount } from "#lib/platform-accounts.ts";

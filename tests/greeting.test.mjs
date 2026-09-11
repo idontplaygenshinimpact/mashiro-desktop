@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
 
 const dbDir = setupTempDb("greeting");
-const g = await import("../lib/greeting.mjs");
+const g = await import("../lib/greeting.ts");
 const { db } = await import("../lib/db.mjs");
 
 const RESUME = `张三 前端工程师 ｜ 男 · 22 岁 ｜ 211 计算机本科

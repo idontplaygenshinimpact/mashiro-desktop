@@ -4,23 +4,38 @@
 import { db } from "./db.mjs";
 import { directionLabel } from "./career.mjs";
 
+/** 简历画像快照（技能标签/方向/原文——从 settings 聚合） */
+export interface ResumeSnapshot {
+  skills: string[];
+  directions: string[];
+  raw: string;
+}
+
 /** 读简历画像快照（无简历返回 null） */
-export function getResumeSnapshot() {
+export function getResumeSnapshot(): ResumeSnapshot | null {
   try {
-    const s = db.prepare("SELECT value FROM settings WHERE key='resume_skills'").get();
-    const raw = db.prepare("SELECT value FROM settings WHERE key='resume_raw'").get();
-    if (!s && !raw) return null;
+    const sRow = db.prepare("SELECT value FROM settings WHERE key='resume_skills'").get() as { value: unknown } | undefined;
+    const rawRow = db.prepare("SELECT value FROM settings WHERE key='resume_raw'").get() as { value: unknown } | undefined;
+    if (!sRow && !rawRow) return null;
     return {
-      skills: (() => { try { return JSON.parse(String(s.value)).skills || []; } catch { return []; } })(),
-      directions: (() => { try { return JSON.parse(String(s.value)).directions || []; } catch { return []; } })(),
-      raw: raw ? (JSON.parse(String(raw.value))?.text || "") : "",
+      skills: (() => { try { return JSON.parse(String(sRow?.value ?? "")).skills || []; } catch { return []; } })(),
+      directions: (() => { try { return JSON.parse(String(sRow?.value ?? "")).directions || []; } catch { return []; } })(),
+      raw: rawRow ? (JSON.parse(String(rawRow.value))?.text || "") : "",
     };
   } catch { return null; }
 }
 
+/** 从简历原文提取的亮点（正则规则，取第一个命中；空字段 = 无） */
+export interface ResumeHighlights {
+  school: string;
+  internCompany: string;
+  project: string;
+  quant: string;
+}
+
 /** 从简历原文提取亮点字段（规则正则，取第一个命中） */
-export function extractResumeHighlights(raw) {
-  const out = { school: "", internCompany: "", project: "", quant: "" };
+export function extractResumeHighlights(raw: string): ResumeHighlights {
+  const out: ResumeHighlights = { school: "", internCompany: "", project: "", quant: "" };
   if (!raw) return out;
   const s = raw.replace(/\s+/g, " ");
   // 学校：xx大学/学院；简历头部出现"211"则标注（如"211 计算机本科"）
@@ -43,12 +58,17 @@ export function extractResumeHighlights(raw) {
   return out;
 }
 
+/** 岗位信息（用于点名岗位） */
+export interface JobRef {
+  company?: string;
+  title?: string;
+}
+
 /**
  * 生成展示优势的投递招呼语（~120 字，BOSS 打招呼风格，1-3 句）
- * @param {{ company?: string, title?: string }} [job] 岗位信息（可选，用于点名岗位）
- * @returns {string} 招呼语文案；无简历时退回简洁默认
+ * @returns 招呼语文案；无简历时退回简洁默认
  */
-export function buildGreeting({ company = "", title = "" } = {}) {
+export function buildGreeting({ company = "", title = "" }: JobRef = {}): string {
   const snap = getResumeSnapshot();
   const dirLabel = directionLabel(); // 方向中文标签（转方向/开源自动跟随，不再写死"前端"）
   if (!snap) {
@@ -58,9 +78,9 @@ export function buildGreeting({ company = "", title = "" } = {}) {
   const skills = (snap.skills || []).slice(0, 4).join(" / ");
 
   // 逐句拼装（只放真实存在的优势，避免空话）
-  const parts = [];
+  const parts: string[] = [];
   // 1) 身份 + 教育 + 实习
-  const identity = [];
+  const identity: string[] = [];
   if (hl.school) identity.push(hl.school);
   if (hl.internCompany) identity.push(`${hl.internCompany}${dirLabel}实习`);
   else if (snap.directions?.length) identity.push(`${dirLabel}方向`);
@@ -84,10 +104,9 @@ export function buildGreeting({ company = "", title = "" } = {}) {
 
 /**
  * LLM 精修招呼语（可选：面板「✨ 生成」按钮用；投递链路默认走规则版，保证快且免费）
- * @param {{ company?: string, title?: string, summary?: string }} [job]
- * @returns {Promise<string>} 精修后的文案（LLM 失败时退回规则版）
+ * @returns 精修后的文案（LLM 失败时退回规则版）
  */
-export async function polishGreeting({ company = "", title = "", summary = "" } = {}) {
+export async function polishGreeting({ company = "", title = "", summary = "" }: JobRef & { summary?: string } = {}): Promise<string> {
   const base = buildGreeting({ company, title });
   try {
     const { llmChat, getReplyText } = await import("./llm.mjs");
