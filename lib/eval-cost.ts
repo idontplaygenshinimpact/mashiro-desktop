@@ -5,7 +5,40 @@
 const IN_PER_M = Number(process.env.EVAL_COST_IN_M) || 0.2;
 const OUT_PER_M = Number(process.env.EVAL_COST_OUT_M) || 0.4;
 
-function pct(arr, p) {
+/** 单次 LLM 调用指标（llm.mjs 评测计数器产出；tokens 可为 null——失败/流式中断） */
+export interface EvalMetric {
+  ts: number;
+  tag: string;
+  ok: boolean;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationMs: number;
+  model?: string;
+}
+
+/** 按 tag 分账（调用数/令牌/耗时/失败数） */
+export interface EvalTagAgg {
+  calls: number;
+  tokens: number;
+  ms: number;
+  fails: number;
+}
+
+/** summarizeEvalCost 汇总结果（成功调用计费；p50/p95 基于成功调用延迟） */
+export interface EvalCostSummary {
+  calls: number;
+  failCount: number;
+  costTokens: number;
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  p50Ms: number;
+  p95Ms: number;
+  byTag: Record<string, EvalTagAgg>;
+  model?: string;
+}
+
+function pct(arr: number[], p: number): number {
   if (!arr.length) return 0;
   const s = [...arr].sort((a, b) => a - b);
   const i = Math.min(s.length - 1, Math.floor((p / 100) * s.length));
@@ -14,15 +47,11 @@ function pct(arr, p) {
 
 /**
  * 汇总评测期 LLM 指标
- * @param {Array<{ts: number, tag: string, ok: boolean, inputTokens: number|null, outputTokens: number|null, durationMs: number, model?: string}>} metrics
- * @returns {{ calls: number, failCount: number, costTokens: number, costUsd: number,
- *   inputTokens: number, outputTokens: number, p50Ms: number, p95Ms: number,
- *   byTag: Record<string, {calls: number, tokens: number, ms: number}>, model?: string }}
+ * @returns 调用数/失败数/令牌与成本/延迟分位/按 tag 分账/首个出现的 model
  */
-export function summarizeEvalCost(metrics) {
+export function summarizeEvalCost(metrics: EvalMetric[] | null | undefined): EvalCostSummary {
   const list = Array.isArray(metrics) ? metrics : [];
-  /** @type {Record<string, {calls: number, tokens: number, ms: number, fails: number}>} */
-  const byTag = {};
+  const byTag: Record<string, EvalTagAgg> = {};
   for (const m of list) {
     const tag = m.tag || "misc";
     const t = byTag[tag] || (byTag[tag] = { calls: 0, tokens: 0, ms: 0, fails: 0 });
@@ -53,8 +82,8 @@ export function summarizeEvalCost(metrics) {
 }
 
 /** 成本/延迟的人话一行（benchmark 输出用） */
-export function formatEvalCost(sum) {
-  const tagParts = Object.entries(sum.byTag || {})
+export function formatEvalCost(sum: EvalCostSummary): string {
+  const tagParts = Object.entries(sum.byTag)
     .map(([tag, t]) => `${tag}:${t.calls}次/${t.tokens}tok`)
     .join(" ");
   return `LLM ${sum.calls} 次调用（${sum.failCount} 失败）· ${sum.costTokens.toLocaleString()} tokens ≈ $${sum.costUsd} · p50 ${sum.p50Ms}ms / p95 ${sum.p95Ms}ms · ${tagParts}`;

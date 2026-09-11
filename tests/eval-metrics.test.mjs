@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 
 // ---------- lib/eval-cost.mjs ----------
 test("summarizeEvalCost：成本/延迟/分账/失败计数", async () => {
-  const { summarizeEvalCost } = await import("../lib/eval-cost.mjs");
+  const { summarizeEvalCost } = await import("../lib/eval-cost.ts");
   const metrics = [
     { ts: 1, tag: "solver", ok: true, inputTokens: 1000, outputTokens: 500, durationMs: 1000 },
     { ts: 2, tag: "solver", ok: true, inputTokens: 2000, outputTokens: 1000, durationMs: 2000 },
