@@ -1,7 +1,7 @@
 // tool-policy.mjs 单测：工具策略分层（override > profile > default > builtin）+ 过滤/校验/序列化
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createToolPolicy, deserialize, DEFAULT_PROFILES } from "../lib/tool-policy.mjs";
+import { createToolPolicy, deserialize, DEFAULT_PROFILES } from "../lib/tool-policy.ts";
 
 /** 工具定义辅助：统一 OpenAI/DeepSeek function calling 格式 */
 const fn = (name) => ({ type: "function", function: { name } });

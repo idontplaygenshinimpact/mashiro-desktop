@@ -1,4 +1,3 @@
-// @ts-strict
 // 工具策略层（tool policy before prompt，对标 OpenClaw 的"策略先于提示词"）
 // 纯模块：零依赖、不 import 其他 lib 模块（自包含），后续 agent.mjs 接线时不会产生循环依赖。
 //
@@ -10,19 +9,25 @@
 // profile 支持 `*` 通配键：匹配该层未显式列出的任意工具，用于"仅白名单可见"类 profile
 // （如 interview 模式：只暴露面试相关工具，其余全部 deny）。
 
-/** 合法的工具权限等级（升序为可见性/权限递进） */
-export const LEVELS = Object.freeze(["allow", "confirm", "deny"]);
+/** 工具权限等级（升序为可见性/权限递进） */
+export type ToolLevel = "allow" | "confirm" | "deny";
+
+/** 合法的工具权限等级集合 */
+export const LEVELS: readonly ToolLevel[] = Object.freeze(["allow", "confirm", "deny"]);
 
 /** 未知工具的内置兜底等级：保守 confirm（schema 可见，但每次调用需审批） */
-export const BUILTIN_FALLBACK = "confirm";
+export const BUILTIN_FALLBACK: ToolLevel = "confirm";
 
-const isLevel = (v) => LEVELS.includes(v);
+const isLevel = (v: unknown): v is ToolLevel => (LEVELS as readonly unknown[]).includes(v);
+
+/** 单条工具策略映射（工具名或 `*` → 等级） */
+export type ToolLevelMap = Record<string, ToolLevel>;
 
 /**
  * 本应用预置 profile（createToolPolicy 不传 profiles 时使用；可被覆盖/扩展）。
  * 注意：default 层不设 `*` 通配，因此未列出工具走内置兜底 confirm。
  */
-export const DEFAULT_PROFILES = Object.freeze({
+export const DEFAULT_PROFILES: Readonly<Record<string, ToolLevelMap>> = Object.freeze({
   default: {
     // 网络 / 搜索工具
     web_search: "allow",
@@ -75,63 +80,77 @@ export const DEFAULT_PROFILES = Object.freeze({
   },
 });
 
+/** 生效等级决策（level + 来源 + 命中键 + 原因文案） */
+export interface PolicyDecision {
+  level: ToolLevel;
+  source: "override" | "profile" | "default" | "builtin";
+  key: string;
+  reason: string;
+}
+
 /**
  * 在某一层（profile 或 overrides）内查找工具等级。
  * 先精确匹配工具名，再退到 `*` 通配；都没有则返回 null（表示该层未决策）。
- * @param {Record<string, string>} map
- * @param {string} toolName
- * @returns {{ level: "allow"|"confirm"|"deny", key: string } | null}
  */
-function lookupLayer(map, toolName) {
+function lookupLayer(map: Record<string, unknown>, toolName: string): { level: ToolLevel; key: string } | null {
   if (!map || typeof map !== "object") return null;
   if (Object.prototype.hasOwnProperty.call(map, toolName)) {
-    return { level: /** @type {"allow"|"confirm"|"deny"} */ (map[toolName]), key: toolName };
+    return { level: map[toolName] as ToolLevel, key: toolName };
   }
   if (Object.prototype.hasOwnProperty.call(map, "*")) {
-    return { level: /** @type {"allow"|"confirm"|"deny"} */ (map["*"]), key: "*" };
+    return { level: map["*"] as ToolLevel, key: "*" };
   }
   return null;
 }
 
 /** 从工具条目（string / { name } / { function: { name } }）提取工具名 */
-function toolNameOf(tool) {
+function toolNameOf(tool: unknown): string | null {
   if (typeof tool === "string") return tool;
   if (!tool || typeof tool !== "object") return null;
-  if (tool.function && typeof tool.function.name === "string") return tool.function.name;
-  if (typeof tool.name === "string") return tool.name;
+  const t = tool as { function?: { name?: unknown }; name?: unknown };
+  if (t.function && typeof t.function.name === "string") return t.function.name;
+  if (typeof t.name === "string") return t.name;
   return null;
+}
+
+/** 策略对象（createToolPolicy 返回） */
+export interface ToolPolicy {
+  profiles: Record<string, ToolLevelMap>;
+  overrides: ToolLevelMap;
+  effectiveLevel: (toolName: string, opts?: { activeProfile?: string }) => PolicyDecision;
+  filterTools: (tools: unknown[], opts?: { activeProfile?: string }) => { allowed: unknown[]; hidden: unknown[]; hiddenCount: number };
+  validate: () => { ok: boolean; errors: string[] };
+  serialize: () => string;
+  deserialize: typeof deserialize;
 }
 
 /**
  * 创建工具策略对象。
- * @param {{ profiles?: Record<string, Record<string, string>>, overrides?: Record<string, string> }} [opts]
- *   profiles：命名 profile → 工具名到等级的映射；缺省用 DEFAULT_PROFILES。
- *   overrides：显式覆盖（最高优先级），同样支持 `*` 通配。
- * @returns 策略对象（含 effectiveLevel / filterTools / validate / serialize / deserialize）。
+ * @param opts.profiles 命名 profile → 工具名到等级的映射；缺省用 DEFAULT_PROFILES。
+ * @param opts.overrides 显式覆盖（最高优先级），同样支持 `*` 通配。
  */
-export function createToolPolicy({ profiles, overrides } = {}) {
+export function createToolPolicy({ profiles, overrides }: { profiles?: Record<string, Record<string, string>>; overrides?: Record<string, string> } = {}): ToolPolicy {
   // 注意区分"未传"（undefined → 用预置）与"显式传 null/非法"（保留给 validate 报错）
   const mergedProfiles = profiles === undefined ? DEFAULT_PROFILES : profiles;
   const mergedOverrides = overrides === undefined ? {} : overrides;
 
   // 内部拷贝，隔离外部后续修改（调用方拿到对象后再改不影响本策略）
-  const profileMap = {};
+  const profileMap: Record<string, ToolLevelMap> = {};
   if (mergedProfiles && typeof mergedProfiles === "object" && !Array.isArray(mergedProfiles)) {
     for (const [name, map] of Object.entries(mergedProfiles)) {
-      profileMap[name] = map && typeof map === "object" && !Array.isArray(map) ? { ...map } : {};
+      profileMap[name] = map && typeof map === "object" && !Array.isArray(map)
+        ? { ...(map as Record<string, unknown>) } as ToolLevelMap
+        : {};
     }
   }
-  const overrideMap = mergedOverrides && typeof mergedOverrides === "object" && !Array.isArray(mergedOverrides)
-    ? { ...mergedOverrides }
+  const overrideMap: ToolLevelMap = mergedOverrides && typeof mergedOverrides === "object" && !Array.isArray(mergedOverrides)
+    ? { ...(mergedOverrides as Record<string, unknown>) } as ToolLevelMap
     : {};
 
   /**
    * 计算某工具在当前激活 profile 下的生效等级。
-   * @param {string} toolName
-   * @param {{ activeProfile?: string }} [opts]
-   * @returns {{ level: "allow"|"confirm"|"deny", source: "override"|"profile"|"default"|"builtin", key: string, reason: string }}
    */
-  function effectiveLevel(toolName, { activeProfile } = {}) {
+  function effectiveLevel(toolName: string, { activeProfile }: { activeProfile?: string } = {}): PolicyDecision {
     const name = String(toolName);
 
     // 1. 显式 overrides（最高优先级）
@@ -161,14 +180,11 @@ export function createToolPolicy({ profiles, overrides } = {}) {
   /**
    * 过滤工具列表：deny 的工具被剔除（schema 不进 prompt），allow/confirm 保留。
    * 不修改原数组。
-   * @param {Array<{name?: string, function?: {name?: string}}|string>} tools
-   * @param {{ activeProfile?: string }} [opts]
-   * @returns {{ allowed: object[], hidden: object[], hiddenCount: number }}
    */
-  function filterTools(tools, { activeProfile } = {}) {
+  function filterTools(tools: unknown[], { activeProfile }: { activeProfile?: string } = {}): { allowed: unknown[]; hidden: unknown[]; hiddenCount: number } {
     const list = Array.isArray(tools) ? tools : [];
-    const allowed = [];
-    const hidden = [];
+    const allowed: unknown[] = [];
+    const hidden: unknown[] = [];
     for (const tool of list) {
       const name = toolNameOf(tool);
       // 无法识别名称的工具：保守保留（可见），避免误杀
@@ -185,10 +201,9 @@ export function createToolPolicy({ profiles, overrides } = {}) {
 
   /**
    * 校验 profiles / overrides 结构。返回 { ok, errors[] }。
-   * @returns {{ ok: boolean, errors: string[] }}
    */
-  function validate() {
-    const errors = [];
+  function validate(): { ok: boolean; errors: string[] } {
+    const errors: string[] = [];
     if (!mergedProfiles || typeof mergedProfiles !== "object" || Array.isArray(mergedProfiles)) {
       errors.push("profiles 必须是对象（{ name: { tool: level } }）");
     } else {
@@ -217,11 +232,11 @@ export function createToolPolicy({ profiles, overrides } = {}) {
   }
 
   /** 序列化为 JSON 字符串（用于持久化，如 widget settings）。 */
-  function serialize() {
+  function serialize(): string {
     return JSON.stringify({ profiles: profileMap, overrides: overrideMap });
   }
 
-  const policy = {
+  const policy: ToolPolicy = {
     profiles: profileMap,
     overrides: overrideMap,
     effectiveLevel,
@@ -235,12 +250,12 @@ export function createToolPolicy({ profiles, overrides } = {}) {
 
 /**
  * 从序列化 JSON 重建策略对象（顶层导出，供持久化恢复）。
- * @param {string | { profiles?: object, overrides?: object }} json
+ * @param json JSON 字符串或 { profiles, overrides } 对象
  */
-export function deserialize(json) {
+export function deserialize(json: string | { profiles?: Record<string, Record<string, string>>; overrides?: Record<string, string> } | null | undefined): ToolPolicy {
   const data = typeof json === "string" ? JSON.parse(json) : json;
   return createToolPolicy({
     profiles: data && data.profiles,
     overrides: data && data.overrides,
-  });
+  } as { profiles?: Record<string, Record<string, string>>; overrides?: Record<string, string> });
 }
