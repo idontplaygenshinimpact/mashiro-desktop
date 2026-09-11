@@ -11,7 +11,7 @@ import { safeSpawn, createWidgetServer } from "./lib/widget-server.mjs";
 import { readWindowState as readWinState, scheduleSaveWindowState as scheduleSaveWinState, isOnScreen as isRectOnScreen } from "./lib/window-state.ts";
 import { rendererBundleStale as bundleStale, rebuildRendererBundle as rebuildBundle, killAllWidgetProcesses as killAllWidgets } from "./lib/restart.ts";
 // 事件驱动表达轮询（B6 接线：companion-poller 2s 拉 pet-events → petSay；autonomy=off 不启动）
-import { startCompanionPoller } from "./lib/companion-poller.mjs";
+import { startCompanionPoller } from "./lib/companion-poller.ts";
 
 // ---------- 启动加速 ----------
 // 注意：透明窗口 + disable-gpu 会导致窗口不渲染（看不到）。
