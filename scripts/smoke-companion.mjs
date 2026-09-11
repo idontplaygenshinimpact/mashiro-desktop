@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, appendFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { installInternalBridge, emitEvent, onEventDecision, drainExpressions } from "../lib/events.mjs";
-import { createAutonomy } from "../lib/autonomy.mjs";
+import { createAutonomy } from "../lib/autonomy.ts";
 import { createCcWatcher } from "../lib/adapters/cc-watcher.mjs";
 
 const dir = mkdtempSync(path.join(tmpdir(), "cc-e2e-"));

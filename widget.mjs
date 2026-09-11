@@ -28,7 +28,7 @@ import { db } from "./lib/db.mjs";
 import { createPatrol } from "./lib/patrol.mjs";
 // 事件驱动内核（Phase 事件驱动内核 W1-W3）：事件总线 / 自主决策 / CC 会话 watcher
 import { installInternalBridge, emitEvent, onEventDecision, enqueueExpression } from "./lib/events.mjs";
-import { createAutonomy } from "./lib/autonomy.mjs";
+import { createAutonomy } from "./lib/autonomy.ts";
 import { createCcWatcher } from "./lib/adapters/cc-watcher.mjs";
 // 场景装配（Phase P1）：事件 → 技能子集映射
 import { resolveEvent, getCurrentScenario } from "./lib/scenarios.ts";

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
 
 const dbDir = setupTempDb("autonomy");
-const { ruleFor, createAutonomy } = await import("../lib/autonomy.mjs");
+const { ruleFor, createAutonomy } = await import("../lib/autonomy.ts");
 
 test.after(() => { cleanupTempDb(dbDir); });
 

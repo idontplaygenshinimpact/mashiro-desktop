@@ -3,7 +3,7 @@
 // 三级模式（env + 设置中心可配）：off | notify（默认，只播报外部事件）| full（可 LLM 精炼文案）
 // 刹车（与引擎一起交付）：防抖 5s / 寂静期 60s / 每日表达预算 / LLM 精炼日上限 / 审计 decision_ledger
 import { localDateKey } from "./date-utils.ts";
-import { enqueueExpression } from "./events.mjs";
+import { enqueueExpression, type UnifiedEvent } from "./events.mjs";
 import { recordDecision } from "./trace.mjs";
 
 const DEBOUNCE_MS = 5000;   // 同 source 同 type 5s 合并（jsonl 连续写入不刷屏）
@@ -13,13 +13,20 @@ const MODE = process.env.MIANSHI_AUTONOMY || "notify";
 const BUDGET_DAILY = Math.max(1, Number(process.env.MIANSHI_AUTONOMY_BUDGET) || 20);
 const REFINE_DAILY = 10;    // LLM 精炼每日次数上限（full 级）
 
-const fmtMin = (sec) => (sec >= 60 ? `${Math.round(sec / 60)} 分钟` : `${sec} 秒`);
+const fmtMin = (sec: number): string => (sec >= 60 ? `${Math.round(sec / 60)} 分钟` : `${sec} 秒`);
+
+/** 候选表达（规则输出契约；ttl 由 createAutonomy 补默认） */
+export interface ExpressionCandidate {
+  text: string;
+  scene: string;
+  level: string;
+  ttl?: number;
+}
 
 /**
  * 规则表（纯函数可测）：事件 → 候选表达（null=不表达）
- * 输出契约：{ text, scene, level: "bubble"|"bubble+voice", ttl }
  */
-export function ruleFor(ev) {
+export function ruleFor(ev: UnifiedEvent | null | undefined): ExpressionCandidate | null {
   switch (ev?.type) {
     case "cc:session_started":
       return { text: "🎬 Claude Code 开跑了", scene: "agent-start", level: "bubble" };
@@ -42,7 +49,7 @@ export function ruleFor(ev) {
 }
 
 /** LLM 精炼（仅 full 级；失败降级模板——不允许 LLM 失败阻塞播报） */
-async function refineText(template, ev) {
+async function refineText(template: string, ev: UnifiedEvent): Promise<string> {
   try {
     const { llmChat, getReplyText } = await import("./llm.mjs");
     const data = await llmChat([
@@ -54,23 +61,36 @@ async function refineText(template, ev) {
   } catch { return template; }
 }
 
+/** 自主决策器（handle 消费总线事件；state 观测内部状态） */
+export interface Autonomy {
+  handle: (ev: UnifiedEvent) => Promise<{ text: string; scene: string; level: string } | null>;
+  state: () => Record<string, unknown>;
+}
+
+/** createAutonomy 选项（全部可注入——测试用 fake 时钟/emit/refine） */
+export interface AutonomyOpts {
+  emit?: (e: { text: string; scene: string; level: string; ttl: number }) => void;
+  log?: (msg: string) => void;
+  mode?: string;
+  budgetDaily?: number;
+  now?: () => number;
+  refine?: (template: string, ev: UnifiedEvent) => Promise<string>;
+}
+
 /**
  * 创建自主决策器
- * @param {{ emit?: (e: {text: string, scene: string, level: string, ttl: number}) => void,
- *   log?: (msg: string) => void, mode?: string, budgetDaily?: number, now?: () => number,
- *   refine?: (template: string, ev: object) => Promise<string> }} [opts]
  */
 export function createAutonomy({
-  emit = (e) => enqueueExpression(/** @type {any} */ (e)),
+  emit = (e) => enqueueExpression(e),
   log = console.log,
   mode = MODE,
   budgetDaily = BUDGET_DAILY,
   now = () => Date.now(),
   refine = refineText,
-} = {}) {
+}: AutonomyOpts = {}): Autonomy {
   if (mode === "off") {
     return {
-      handle: () => null,
+      handle: async () => null,
       state: () => ({ mode: "off" }),
     };
   }
@@ -79,10 +99,9 @@ export function createAutonomy({
   let refined = 0;
   let refineDay = "";
   let lastExprAt = 0;
-  /** @type {Map<string, number>} */
-  const lastByKey = new Map();
+  const lastByKey = new Map<string, number>();
 
-  function rollDay() {
+  function rollDay(): void {
     const k = localDateKey(now());
     if (k !== dayKey) { dayKey = k; expressed = 0; }
     if (k !== refineDay) { refineDay = k; refined = 0; }
@@ -90,10 +109,9 @@ export function createAutonomy({
 
   /**
    * 处理一条总线事件：规则 → 刹车（防抖/寂静/预算）→ 表达入队 + 审计
-   * @param {object} ev {type, source, ts, payload}
-   * @returns {Promise<object|null>} 产出的表达（未表达返回 null）
+   * @returns 产出的表达（未表达返回 null）
    */
-  async function handle(ev) {
+  async function handle(ev: UnifiedEvent): Promise<{ text: string; scene: string; level: string } | null> {
     rollDay();
     const candidate = ruleFor(ev);
     if (!candidate) return null;
@@ -142,8 +160,8 @@ export function createAutonomy({
 }
 
 /** 模块级单例（widget 启动时创建；测试用 createAutonomy 独立实例） */
-let autonomyInstance = null;
-export function getAutonomy() {
+let autonomyInstance: Autonomy | null = null;
+export function getAutonomy(): Autonomy {
   if (!autonomyInstance) autonomyInstance = createAutonomy();
   return autonomyInstance;
 }
