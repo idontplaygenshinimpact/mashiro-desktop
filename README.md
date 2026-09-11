@@ -347,7 +347,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 面板「⚙️ 设置 → LLM 服务配置」直接填；或 `.env` / `MIANSHI_PROVIDERS`（多 Provider 路由，按顺序 failover）。
 
 **Q：知识库检索感觉只有关键词在起作用？**
-向量腿依赖 bge 模型，首次检索时从 huggingface.co 下载——国内直连会 `fetch failed` 并**静默降级为纯关键词**（不报错，所以很容易没发现）。配镜像后重启桌宠即可：`MIANSHI_HF_ENDPOINT=https://hf-mirror.com/`，缓存落在 `<data>/models/transformers`；首次检索会后台补齐向量（本机 1478 段约 52s，检索结果头部会显示 `向量 N/M`）；自建 20 题评测 top5 命中率 35% → 55%（`node scripts/kb-eval.mjs` 可复跑）。
+向量腿依赖 bge 模型，首次检索时从 huggingface.co 下载——国内直连会 `fetch failed` 并**静默降级为纯关键词**（不报错，所以很容易没发现）。在项目根目录 `.env` 里加一行（或设同名环境变量）后重启桌宠即可：`MIANSHI_HF_ENDPOINT=https://hf-mirror.com/`（`.env` 由根目录 `config.mjs` 注入 `process.env`，未设置的键才注入）；缓存落在 `<data>/models/transformers`；首次检索会后台补齐向量（本机 1478 段约 52s，检索结果头部会显示 `向量 N/M`）；自建 20 题评测 top5 命中率 35% → 55%（`node scripts/kb-eval.mjs` 可复跑）。
 
 **Q：怎么打安装包？**
 ```bash
