@@ -11,7 +11,7 @@ import path from "node:path";
 import { config } from "../config.mjs";
 import { llmChat, getReplyText, extractJson } from "./llm.mjs";
 import { safeExternalBlock } from "./prompt-guard.mjs";
-import { getAllPoints } from "./knowledge.mjs";
+import { getAllPoints } from "./knowledge.ts";
 import { getCareerProfile } from "./career.mjs";
 import { sanitizeFilename } from "./study-files.ts"; // 存档文件名统一（与 routes/study.mjs 同源，防双份实现漂移）
 import { loadPlan, savePlan, newPlanId } from "./study-store.ts";

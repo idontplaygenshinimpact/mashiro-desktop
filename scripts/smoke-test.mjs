@@ -113,7 +113,7 @@ console.log("== 5. 数据库 ==");
 // 6. 核心模块可导入
 console.log("== 6. 模块导入 ==");
 {
-    for (const m of ["lib/db.mjs", "lib/memory.mjs", "lib/study.mjs", "lib/review.mjs", "lib/knowledge.mjs", "lib/interview.mjs", "lib/ai.ts", "lib/llm.mjs"]) {
+    for (const m of ["lib/db.mjs", "lib/memory.mjs", "lib/study.mjs", "lib/review.mjs", "lib/knowledge.ts", "lib/interview.mjs", "lib/ai.ts", "lib/llm.mjs"]) {
     try {
       await import(toUrl(path.join(ROOT, m)));
       check(`import ${m}`, true);

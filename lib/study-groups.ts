@@ -1,7 +1,7 @@
 // 学习清单：大类归一化（知识树 + 兜底规则）——依赖 knowledge 知识树（getAllPoints 动态读 settings）
 // 纵向拆分第 4 刀第一步：纯函数域先拆（原在 study.mjs）
 // 全量 TS 升级工单阶段 1⑩：lib/study-groups.ts → .ts（词表/规则表显式类型；LLM 结果断言收口）
-import { getAllPoints } from "./knowledge.mjs";
+import { getAllPoints } from "./knowledge.ts";
 // 统一匹配层（match-utils）：组合词表/独立成词/特异性门槛一处维护全局生效
 import { kwHit, hasSpecificKw } from "./match-utils.ts";
 // 分类判定相似度引擎工单任务 1：similarity 规则层（同步——词表补全追不上新题）

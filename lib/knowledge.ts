@@ -6,9 +6,33 @@ import path from "node:path";
 import { db, withTx } from "./db.mjs";
 import { hasSpecificKw } from "./match-utils.ts";
 
+/** 知识点（自定义树可只带 id/title——kws/difficulty 可选） */
+export interface KnowledgePoint {
+  id: string;
+  title: string;
+  difficulty?: number;
+  kws?: string[];
+}
+
+/** 知识树分类（points 必填——isValidTree 拒绝无 points 的分类） */
+export interface KnowledgeCategory {
+  id: string;
+  title: string;
+  difficulty?: number;
+  points: KnowledgePoint[];
+}
+
+export type KnowledgeTree = KnowledgeCategory[];
+
+/** 模板仓库文件形状 { current, templates: { name: tree } } */
+interface TreeTemplates {
+  current: string;
+  templates: Record<string, KnowledgeTree>;
+}
+
 // 默认前端面试知识树（静态骨架：分类 → 知识点 → 难度/关键词）
 // kws = 该知识点的匹配关键词（matchKp 动态构建规则；自定义树可不带 kws → 仅精确 title 匹配）
-export const KNOWLEDGE_TREE = [
+export const KNOWLEDGE_TREE: KnowledgeTree = [
   {
     id: "js", title: "JavaScript 核心", difficulty: 2,
     points: [
@@ -74,7 +98,7 @@ export const KNOWLEDGE_TREE = [
 ];
 
 // 扁平索引（默认树）
-export const ALL_POINTS = KNOWLEDGE_TREE.flatMap((cat) =>
+export const ALL_POINTS: Array<KnowledgePoint & { category: string; categoryTitle: string }> = KNOWLEDGE_TREE.flatMap((cat) =>
   cat.points.map((p) => ({ ...p, category: cat.id, categoryTitle: cat.title }))
 );
 
@@ -84,28 +108,28 @@ import { createRequire } from "node:module";
 const TREE_KEY = "knowledge_tree";
 // 模板文件路径：测试可注入（KNOWLEDGE_TREES_FILE），避免测试写真实 data 文件
 const TREES_FILE = process.env.KNOWLEDGE_TREES_FILE || path.join(import.meta.dirname, "..", "data", "knowledge-trees.json");
-let treeCache = null; // null=未加载；object=当前树
+let treeCache: KnowledgeTree | null = null; // null=未加载；object=当前树
 
 /** 模板仓库 { current, templates: { name: tree } }（读文件；缺失/非法回退内存默认） */
-export function getTreeTemplates() {
+export function getTreeTemplates(): TreeTemplates {
   try {
     const raw = readFileSync(TREES_FILE, "utf8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && parsed.templates && typeof parsed.templates === "object") {
-      return parsed;
+      return parsed as TreeTemplates;
     }
   } catch { /* ignore */ }
   return { current: "frontend", templates: { frontend: KNOWLEDGE_TREE } };
 }
 
 /** 当前生效模板名（data 文件 current；非法回退 frontend） */
-export function getCurrentTemplateName() {
+export function getCurrentTemplateName(): string {
   const t = getTreeTemplates();
   return t.templates[t.current] ? String(t.current) : "frontend";
 }
 
 /** 列出可用模板（名称 + 当前标记 + 分类数 + 知识点数） */
-export function listTreeTemplates() {
+export function listTreeTemplates(): Array<{ name: string; current: boolean; categories: number; points: number }> {
   const t = getTreeTemplates();
   return Object.entries(t.templates).map(([name, tree]) => ({
     name,
@@ -116,7 +140,7 @@ export function listTreeTemplates() {
 }
 
 /** 加载模板为当前生效树（写 settings 覆盖；重启后 data 文件 current 同步，默认仍该模板） */
-export function loadTreeTemplate(name) {
+export function loadTreeTemplate(name: string): { ok: boolean; error?: string; name?: string; total?: number; message?: string } {
   const t = getTreeTemplates();
   const tree = t.templates[name];
   if (!tree) return { ok: false, error: `模板不存在：${name}（可用：${Object.keys(t.templates).join("/")}）` };
@@ -133,12 +157,12 @@ export function loadTreeTemplate(name) {
     return { ok: true, name, total,
              message: `✅ 已切换到「${name}」知识树模板（${tree.length} 类 / ${total} 个知识点）` };
   } catch (e) {
-    return { ok: false, error: e.message };
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 /** 结构校验：分类数组 → 分类有 id/title/points，点有 id/title */
-export function isValidTree(tree) {
+export function isValidTree(tree: unknown): boolean {
   if (!Array.isArray(tree) || !tree.length) return false;
   for (const cat of tree) {
     if (!cat || typeof cat.id !== "string" || typeof cat.title !== "string" || !Array.isArray(cat.points)) return false;
@@ -151,7 +175,7 @@ export function isValidTree(tree) {
 }
 
 /** 当前知识树：settings 覆盖优先 → data 文件 current 模板 → 默认树（带缓存，save/reset/load 失效） */
-export function getKnowledgeTree() {
+export function getKnowledgeTree(): KnowledgeTree {
   if (treeCache) return treeCache;
   // 1) 设置中心保存/加载的自定义树（最高优先）
   try {
@@ -160,7 +184,7 @@ export function getKnowledgeTree() {
       const parsed = JSON.parse(String(row.value));
       if (isValidTree(parsed)) {
         treeCache = parsed;
-        return treeCache;
+        return parsed; // try 块内模块级 let 不再窄化，直接返回已校验对象
       }
       console.log(`[knowledge] 自定义知识树结构非法，回退模板树`);
     }
@@ -181,16 +205,15 @@ export function getKnowledgeTree() {
  * 当前树是否仍为内置默认树（深比较）
  * 修复：原 kb.mjs 用 `getKnowledgeTree() === KNOWLEDGE_TREE` 引用比较——文件模板存在时
  * getKnowledgeTree 返回 JSON.parse 的新数组，与内存常量非同引用 → 标识恒 false
- * @returns {boolean}
  */
-export function isDefaultTree() {
+export function isDefaultTree(): boolean {
   try {
     return JSON.stringify(getKnowledgeTree()) === JSON.stringify(KNOWLEDGE_TREE);
   } catch { return false; }
 }
 
 /** 保存自定义知识树（校验 + 持久化 + 失效缓存）；重置传 {reset:true} */
-export function saveKnowledgeTree(tree) {
+export function saveKnowledgeTree(tree: KnowledgeTree): { ok: boolean; error?: string; total?: number; message?: string } {
   if (!isValidTree(tree)) return { ok: false, error: "知识树结构非法（需 [{id,title,points:[{id,title,kws?}]}]）" };
   try {
     db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
@@ -198,36 +221,44 @@ export function saveKnowledgeTree(tree) {
     treeCache = null;
     return { ok: true, total: tree.reduce((n, c) => n + c.points.length, 0), message: `✅ 知识树已更新（${tree.length} 类 / ${tree.reduce((n, c) => n + c.points.length, 0)} 个知识点）` };
   } catch (e) {
-    return { ok: false, error: e.message };
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 /** 重置为默认前端知识树 */
-export function resetKnowledgeTree() {
+export function resetKnowledgeTree(): { ok: boolean; error?: string; message?: string } {
   try {
     db.prepare("DELETE FROM settings WHERE key = ?").run(TREE_KEY);
     treeCache = null;
     return { ok: true, message: "已重置为默认知识树" };
   } catch (e) {
-    return { ok: false, error: e.message };
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 /** 当前树扁平索引（动态） */
-export function getAllPoints() {
+export function getAllPoints(): Array<KnowledgePoint & { category: string; categoryTitle: string }> {
   return getKnowledgeTree().flatMap((cat) =>
     cat.points.map((p) => ({ ...p, category: cat.id, categoryTitle: cat.title }))
   );
 }
 
-function loadMastery() {
-  const m = {};
-  for (const r of db.prepare("SELECT topic, score, attempts, last_at FROM kp_mastery").all()) {
+/** 掌握度条目（score 0-100；lastAt 最近一次作答时间） */
+interface MasteryEntry {
+  score: number;
+  attempts: number;
+  lastAt: string | null;
+}
+
+function loadMastery(): Record<string, MasteryEntry> {
+  const m: Record<string, MasteryEntry> = {};
+  const rows = db.prepare("SELECT topic, score, attempts, last_at FROM kp_mastery").all() as unknown as Array<{ topic: string; score: number; attempts: number; last_at: string | null }>;
+  for (const r of rows) {
     m[r.topic] = { score: r.score, attempts: r.attempts, lastAt: r.last_at };
   }
   return m;
 }
-function saveMastery(m) {
+function saveMastery(m: Record<string, MasteryEntry>): void {
   // 全量重写（掌握度表小）；包事务，防崩溃于 DELETE 与 INSERT 之间清空全部掌握度
   try {
     withTx(() => {
@@ -241,7 +272,7 @@ function saveMastery(m) {
 }
 
 /** 自由主题归一化：trim/小写/截断，作为动态知识点掌握度的 key（兜底去重） */
-function normalizeKpTopic(topic) {
+function normalizeKpTopic(topic: unknown): string {
   return String(topic || "").trim().toLowerCase().slice(0, 60);
 }
 
@@ -249,9 +280,9 @@ function normalizeKpTopic(topic) {
  * 特异性门槛（统一层 match-utils，2026-08 排查）：知识树短泛词（缓存/模板/锁 等 <3 字）
  * 命中不可信——"手撕LRU缓存"被"缓存"吸到浏览器原理同款问题；短泛词命中 → 不匹配，
  * 走兜底（动态知识点）。与 study-groups treeHit 同口径。 */
-export function matchKp(text) {
+export function matchKp(text: unknown): string | null {
   const t = String(text || "");
-  const rules = [];
+  const rules: Array<[string, string[]]> = [];
   for (const cat of getKnowledgeTree()) {
     for (const p of cat.points) {
       const kws = Array.isArray(p.kws) && p.kws.length ? p.kws : [p.title];
@@ -259,8 +290,7 @@ export function matchKp(text) {
     }
   }
   for (const [id, kws] of rules) {
-    const kw = /** @type {string[]} */ (kws);
-    const hitKws = kw.filter((k) => t.toLowerCase().includes(String(k).toLowerCase()));
+    const hitKws = kws.filter((k) => t.toLowerCase().includes(String(k).toLowerCase()));
     if (!hitKws.length) continue;
     if (!hasSpecificKw(hitKws)) continue; // 只有短泛词命中 → 点不可信，跳过
     return id;
@@ -270,7 +300,7 @@ export function matchKp(text) {
 }
 
 /** 记录一次作答：答对加分，答错/薄弱扣分 */
-export function recordKp(kpId, { correct = true, strong = false } = {}) {
+export function recordKp(kpId: string | null | undefined, { correct = true, strong = false }: { correct?: boolean; strong?: boolean } = {}): void {
   if (!kpId) return;
   const m = loadMastery();
   if (!m[kpId]) m[kpId] = { score: 50, attempts: 0, lastAt: "" };
@@ -286,7 +316,7 @@ export function recordKp(kpId, { correct = true, strong = false } = {}) {
 }
 
 /** 直接设置掌握度分数（薄弱点闭环工单任务 1：自评"一般"映射 0.5——非增量，覆盖式） */
-export function setMasteryScore(kpId, score) {
+export function setMasteryScore(kpId: string | null | undefined, score: number | string | null | undefined): void {
   if (!kpId) return;
   const m = loadMastery();
   if (!m[kpId]) m[kpId] = { score: 50, attempts: 0, lastAt: "" };
@@ -296,7 +326,7 @@ export function setMasteryScore(kpId, score) {
 }
 
 /** 掌握度视图：每个知识点的 score + 排序（基于当前知识树，动态） */
-export function getMastery() {
+export function getMastery(): Array<KnowledgePoint & { category: string; categoryTitle: string; score: number; attempts: number }> {
   const m = loadMastery();
   return getAllPoints().map((p) => ({
     ...p,
@@ -306,6 +336,6 @@ export function getMastery() {
 }
 
 /** 薄弱知识点（score < 50 或尝试多仍低） */
-export function getWeakKps(limit = 5) {
+export function getWeakKps(limit = 5): Array<KnowledgePoint & { category: string; categoryTitle: string; score: number; attempts: number }> {
   return getMastery().filter((k) => k.score < 50).slice(0, limit);
 }

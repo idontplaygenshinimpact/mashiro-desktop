@@ -244,7 +244,7 @@ test("⑪ /api/study-plan 返回 mastered 标记（两级语义：已学 vs 已�
   const it1 = r1.plan.items.find((i) => i.id === item.id);
   assert.equal(typeof it1.mastered, "boolean", "mastered 字段存在");
   // 已掌握：recordKp 达阈值 → mastered:true
-  const { matchKp, recordKp, getAllPoints } = await import("../lib/knowledge.mjs");
+  const { matchKp, recordKp, getAllPoints } = await import("../lib/knowledge.ts");
   const kpId = matchKp(item.topic);
   if (kpId && getAllPoints().some((p) => p.id === kpId)) {
     for (let i = 0; i < 5; i++) recordKp(kpId, { correct: true, strong: true });

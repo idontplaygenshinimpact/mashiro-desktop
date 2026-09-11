@@ -54,7 +54,7 @@ export async function execWebSearch(args: { query?: string } = {}) {
  */
 export async function execGetWeakPoints() {
   try {
-    const { getWeakKps } = await import("../knowledge.mjs");
+    const { getWeakKps } = await import("../knowledge.ts");
     const kps = getWeakKps(5);
     return { weakPoints: memory.getWeakPoints(), weakKps: kps.map((k: { title: string; score: number }) => ({ topic: k.title, score: k.score })) };
   } catch {

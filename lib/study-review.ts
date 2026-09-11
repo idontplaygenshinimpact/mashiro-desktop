@@ -5,7 +5,7 @@ import path from "node:path";
 import { config } from "../config.mjs";
 import { llmChat, getReplyText, extractJson } from "./llm.mjs";
 import { memory } from "./memory.mjs";
-import { matchKp, recordKp, getAllPoints } from "./knowledge.mjs";
+import { matchKp, recordKp, getAllPoints } from "./knowledge.ts";
 import { getCareerProfile } from "./career.mjs";
 import { sanitizeFilename } from "./study-files.ts"; // 存档文件名统一（与 routes/study.mjs 同源，防双份实现漂移）
 import { smartSlice } from "./text-utils.ts"; // 技术债 L3：收敛单点

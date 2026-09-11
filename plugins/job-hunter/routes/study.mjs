@@ -140,7 +140,7 @@ export function registerStudyRoutes(router, { getCorsOrigin = (_req) => "*", lan
       let masteryMap = null;
       let matchKpFn = null;
       try {
-        const { getMastery, matchKp } = await import("#lib/knowledge.mjs");
+        const { getMastery, matchKp } = await import("#lib/knowledge.ts");
         masteryMap = new Map(getMastery().map((k) => [k.id, k.score]));
         matchKpFn = matchKp;
       } catch { /* 掌握度不可用按未掌握 */ }

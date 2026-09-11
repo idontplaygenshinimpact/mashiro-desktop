@@ -10,7 +10,7 @@ const { registerKbRoutes } = await import("../plugins/job-hunter/routes/kb.mjs")
 const { memory } = await import("../lib/memory.mjs");
 const { db } = await import("../lib/db.mjs");
 const { getPlan } = await import("../lib/study.mjs");
-const { getMastery, matchKp } = await import("../lib/knowledge.mjs");
+const { getMastery, matchKp } = await import("../lib/knowledge.ts");
 
 const router = createRouter();
 registerKbRoutes(router, { getCorsOrigin: () => "*" });

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
 
 const dbDir = setupTempDb("knowledge");
-const kp = await import("../lib/knowledge.mjs");
+const kp = await import("../lib/knowledge.ts");
 const { KNOWLEDGE_TREE, ALL_POINTS, matchKp, recordKp, getMastery, getWeakKps } = kp;
 
 beforeEach(async () => {
