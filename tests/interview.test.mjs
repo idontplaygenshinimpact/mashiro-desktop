@@ -508,7 +508,7 @@ test("agent化⑤：next_question 空 → 兜底追问（不再'请继续'）", 
 
 // ---------- 伪知识点过滤统一工单任务 4：cleanWeakTopic 委托 _cleanTopic（单一实现） ----------
 test("cleanWeakTopic 委托 _cleanTopic：题目占位符/测试残留被拦截（此前两套模式漏拦）", async () => {
-  const { cleanWeakTopic } = await import("../lib/interview-scoring.mjs");
+  const { cleanWeakTopic } = await import("../lib/interview-scoring.ts");
   assert.equal(cleanWeakTopic("题1【二叉树遍历（DFS/BFS）】"), null, "题目占位符拦截（_cleanTopic 模式）");
   assert.equal(cleanWeakTopic("到期新卡"), null, "测试残留拦截");
   assert.equal(cleanWeakTopic("综合能力"), null, "泛化标签拦截");
