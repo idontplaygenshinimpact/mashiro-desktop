@@ -45,7 +45,7 @@
     "bench:web": "node scripts/web-task-bench.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.strict.json --noEmit",
     "typecheck:desktop": "tsc -p tsconfig.desktop.json",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=0",
     "coverage": "node --import ./tests/protocol-guard.mjs --experimental-test-module-mocks --experimental-test-coverage --test \"tests/*.test.mjs\"",
     "dist": "electron-builder --win --publish never",
     "dist:portable": "electron-builder --win portable --publish never",
