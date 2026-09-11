@@ -66,6 +66,13 @@ test("无 planId 查询 → 取最近激活计划", () => {
   createLearningPlan({ title: "新计划", scope: ["B"] });
   const r = getLearningPlanStatus();
   assert.equal(r.plan.title, "新计划", "缺省取最近激活");
+  // 根因不变量（2026-09-11 修 CI flake）：createdAt 必须**严格单调**——
+  // 否则同一毫秒内连建两个计划时 createdAt 相等，"按 createdAt 取最近"退化成随机，
+  // CI 上就会随机取到旧计划（实测 not ok 408：期望"新计划"实得"旧计划"）。
+  const all = getLearningPlans();
+  const older = all.find((p) => p.title === "旧计划");
+  const newer = all.find((p) => p.title === "新计划");
+  assert.ok(newer.createdAt > older.createdAt, `createdAt 必须严格递增（旧 ${older.createdAt} < 新 ${newer.createdAt}）`);
 });
 
 // ---------- 通用即时反馈（与动作类型解耦：判题/复习/清单/手动记录走同一函数） ----------
