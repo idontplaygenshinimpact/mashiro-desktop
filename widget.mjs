@@ -377,6 +377,17 @@ async function checkFocusEnd() {
 
 // ============ HTTP 服务 ============
 
+// 启动期门闸（2026-09-11 修，真实事故）：HTTP 服务在 `tryListen()` 时就监听，但模块级初始化
+// （动态 import / ensurePlanCoverage / createPatrol…）在其后还有**多个 top-level await** —— Node 在
+// 这些 await 期间会处理 I/O，于是启动瞬间到达的请求会踩 TDZ：
+//   uncaughtException: ReferenceError: Cannot access 'patrol' before initialization
+//     at patrolGetConfig (widget.mjs) ← /api/patrol-config 的 GET 处理器
+// 实测后果：**每次开 app 都崩一次**（data/widget-error.log 06:14 / 06:22 / 11:23 三次），
+// 守护进程约 10s 后才重新拉起 → 用户感知就是"后台进程启动很慢" + 崩溃窗口期面板 "Failed to fetch"。
+// 这里在初始化完成前只放行 /api/health（守护探活），其余一律 503 starting——比逐个给 thunk 打补丁可靠：
+// 以后任何人再往 listen 之后加模块级 const/let，都不会再被启动请求踩到。
+let bootReady = false;
+
 const server = createServer((req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
 
@@ -403,6 +414,13 @@ const server = createServer((req, res) => {
       res.end(JSON.stringify({ error: "未授权：缺少或错误的 Bearer token" }));
       return;
     }
+  }
+
+  // 启动期门闸：初始化未完成前不放行（/api/health 除外）——见文件上方 bootReady 注释
+  if (!bootReady && url.pathname !== "/api/health") {
+    res.writeHead(503, { "Content-Type": "application/json; charset=utf-8", "Retry-After": "1" });
+    res.end(JSON.stringify({ ok: false, starting: true, message: "widget 正在初始化（通常 < 2s），请稍后重试" }));
+    return;
   }
 
   // 域路由分发（lib/routes/*.mjs 注册；未命中 404）
@@ -462,6 +480,19 @@ server.on("error", (/** @type {NodeJS.ErrnoException} */ err) => {
 
 tryListen();
 
+// 巡检实例（2026-09-11 前置到此处）：它是**最后一个被路由 thunk 引用的模块级 const**
+// （`patrolGetConfig: () => patrol.getConfig()` 等）。原来它放在 ensurePlanCoverage / 今日播报 /
+// study-notes 等**慢初始化之后**（真实库上补卡要数秒），启动门闸就得等那么久才开。
+// 这里提前创建（依赖 disabled/sendNotification/crawlMutex/runDiscoverHidden 都已就绪）；
+// scheduleNext/日志仍留在原位置——顺序变化不影响行为（不 scheduleNext 就不会起定时器）。
+const patrol = createPatrol({
+  disabled: DISABLE_PATROL,
+  sendNotification,
+  crawlMutex,
+  runDiscoverHidden,
+});
+bootReady = true; // 门闸放行：此后到达的请求不会再踩 TDZ（上面几个 await 期间的请求收到 503 starting）
+
 // M7：tool_results 清理（保留最近 7 天——启动时清一次，防文件无限累积）
 try {
   const { readdirSync, statSync, rmSync } = await import("node:fs");
@@ -512,12 +543,7 @@ try {
 } catch { /* 转学习失败不阻断启动 */ }
 
 // ============ 主动推送：按关注点定时巡检新内容（纵向拆分：逻辑在 lib/patrol.mjs，可独立测试） ============
-const patrol = createPatrol({
-  disabled: DISABLE_PATROL,
-  sendNotification,
-  crawlMutex,
-  runDiscoverHidden,
-});
+// 注：patrol 实例已在 tryListen() 之后立即创建（启动期门闸需要它先于慢初始化就绪，见该处注释）
 patrol.scheduleNext(); // 启动巡检：读配置动态排程（环境变量强制关闭或面板关闭时不排程）
 console.log(`[widget] 自动巡检: ${DISABLE_PATROL ? "关闭（环境变量 MIANSHI_DISABLE_PATROL=1）" : patrol.state.enabled ? `开启（每 ${patrol.state.intervalMin} 分钟）` : "关闭（面板设置）"}`);
 

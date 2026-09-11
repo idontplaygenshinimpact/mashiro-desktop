@@ -4,7 +4,7 @@
 > 2026-08 起升级为**事件驱动自主桌宠**：感知（Claude Code 会话 watcher）→ 决策（自主规则引擎）→ 装配（场景技能子集）→ 表达（气泡/语音），并落地 **API 契约层（zod）与双层 AI 评测体系（真实消融基线）**。
 > 2026-09 起：**渲染层三态并行**（原生 / React / Vue 同屏可切 + dist 体积实测对比）、**UI 质量机器指标门禁**（8 类指标归零）、**本地 ASR 长音频分段识别**（实测 CER 4.1% → 0%）、**渐进式 TS 迁移**（每模块一提交 + 三条 tsc 门禁 + 桶化保调用方零改动）。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/mashiro-mcp?color=cb3837&label=mashiro-mcp)](https://www.npmjs.com/package/mashiro-mcp) ![Node](https://img.shields.io/badge/Node-%3E%3D22-5fa04e) ![Tests](https://img.shields.io/badge/tests-1205%2B-8a5adc) ![Platform](https://img.shields.io/badge/Windows-10%2F11-0078d6)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/mashiro-mcp?color=cb3837&label=mashiro-mcp)](https://www.npmjs.com/package/mashiro-mcp) ![Node](https://img.shields.io/badge/Node-%3E%3D22-5fa04e) ![Tests](https://img.shields.io/badge/tests-1206%2B-8a5adc) ![Platform](https://img.shields.io/badge/Windows-10%2F11-0078d6)
 
 ---
 
@@ -18,7 +18,7 @@
 | **契约层（Phase 2）** | zod 契约：≥15 个高频路由 input/output 校验（`tests/routes-registry.test.mjs` 护栏）+ SSE 事件 union + preload/renderer 类型化（`kanban-api.d.ts` **72 个接口方法**，preload 以该类型 expose，checkJs 校验）+ 117 处硬编码收编 | ✅ |
 | **双层评测（Phase 评测）** | Layer A 真实模型基线 + Layer B mock agent 机制；数据集治理（sha256）/ 成本延迟指标 / 分层回归门禁 / 消融基线 / 每周评测 workflow（机制已接线；**尚未产出真实徽章与趋势**——`<!-- EVAL_BADGE -->` 仍为空、`benchmark/trend.svg` 未入库，需带 `DEEPSEEK_API_KEY` secret 跑一周） | ✅ 机制 |
 | **三态渲染层** | **8 个 Tab × 原生 / React / Vue 三态并行**（同一 preload IPC 桥 + 同一业务层零改动）；三态对比卡（dist 实测：原生 345KB / React 240KB / Vue 158KB） | ✅ 矩阵 8×2 满格 |
-| **工程门禁** | **三条 tsc（宽松 checkJs + strict + desktop）0 错误** + eslint **0 error 0 warning** + **1205 用例全绿** + 渲染产物内容哈希新鲜度 + node:test 协议通道守卫 + UI 8 类机器指标巡检 + 本地 ASR 分段回归；**渐进式 TS 迁移**（lib 61 `.ts` / 49 `.mjs`，每模块一提交、桶化保调用方零改动） | ✅ |
+| **工程门禁** | **三条 tsc（宽松 checkJs + strict + desktop）0 错误** + eslint **0 error 0 warning** + **1206 用例全绿** + 渲染产物内容哈希新鲜度 + node:test 协议通道守卫 + UI 8 类机器指标巡检 + 本地 ASR 分段回归；**渐进式 TS 迁移**（lib 61 `.ts` / 49 `.mjs`，每模块一提交、桶化保调用方零改动） | ✅ |
 
 **秋招助手（插件①）能力一览**：
 
@@ -235,7 +235,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 ├── project-guide-skill/            # 可移植 skill 包（纯提示词，任意 agent 加载即用）
 ├── benchmark/                      # 双层评测数据集（questions 38 / classify 16 / detect 12 / judge-gold 20 / static 12 / web-tasks 19；Layer B mock agent 场景 19）+ 报告 + 趋势
 ├── scripts/                        # 评测/导入/语音/发布/巡检工具（75 个脚本：含 shot-panel UI 审计、_asr-ab ASR 回归、kb-eval 检索三条基线对比、gen-renderer-sizes 体积实测）
-├── tests/                          # 1205 用例（1167 单元 + 38 集成，130 个测试文件，mock LLM 无 key 可跑）
+├── tests/                          # 1206 用例（1167 单元 + 39 集成，131 个测试文件，mock LLM 无 key 可跑）
 ├── docs/                           # 公开文档（mcp 分发/CC 伴侣/插件架构/技术方案；内部评估审计文档本地留存不上仓库）
 ├── assets/voice/                   # 自训练声线（112 短句 + 26 长句 + nanami 声线）
 └── .github/workflows/              # ci.yml（全量门禁）+ weekly-eval.yml（每周评测）+ release.yml（双源发布）
@@ -325,7 +325,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 | 门禁 | 命令 | 当前状态 |
 |---|---|---|
-| 单元/集成测试 | `npm test` | ✅ **1205/1205 通过**（1167 单元 + 38 集成，130 个测试文件，mock LLM 无 key 可跑） |
+| 单元/集成测试 | `npm test` | ✅ **1206/1206 通过**（1167 单元 + 39 集成，131 个测试文件，mock LLM 无 key 可跑） |
 | 类型检查（lib，双 tsc） | `npm run typecheck` | ✅ 0 错误（宽松 checkJs 覆盖 `.mjs` + `tsconfig.strict.json` 只查 `.ts`，strict 下同样 0） |
 | 桌面端类型检查 | `npm run typecheck:desktop` | ✅ 0 错误（`kanban-api.d.ts` 72 个接口方法与 preload 实现一致）——**2026-09-11 修复**：该配置此前漏开 `allowImportingTsExtensions`，被 133 处 TS5097 噪音掩盖了真实的 `MusicResult.catch` 类型错（该步骤以前从未在 CI 上跑到） |
 | Lint | `npm run lint` | ✅ **0 error 0 warning**（全仓库，含面板/渲染层/脚本/测试） |
@@ -405,7 +405,7 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 
 - **许可证**：MIT（见 [LICENSE](LICENSE)）
 - **仓库不含**：本地数据（`data/`）、ASR 模型（`models/`）、`.env`（密钥）；**含**自训练声线（`assets/voice/`，开箱即用）
-- **测试**：`npm test` 1205 用例全绿（1167 单元 + 38 集成，mock LLM，CI 零成本）；评测体系见上文
+- **测试**：`npm test` 1206 用例全绿（1167 单元 + 39 集成，mock LLM，CI 零成本）；评测体系见上文
 - **插件化路线**：宿主（真白）+ 插件（秋招助手）架构见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)
 
 ---
