@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { setupTempDb, cleanupTempDb, clearAllTables } from "./helpers.mjs";
 
 const dbDir = setupTempDb("mcp-gate");
-const gateMod = await import("../lib/mcp-gate.mjs");
+const gateMod = await import("../lib/mcp-gate.ts");
 const { db } = await import("../lib/db.mjs");
 const { ensureTraceSchema } = await import("../lib/trace.mjs");
 ensureTraceSchema();

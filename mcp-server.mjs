@@ -7,7 +7,7 @@ import { z } from "zod";
 import { config } from "./config.mjs";
 import { getSettingsApiKey } from "./lib/llm.mjs";
 // 架构 P1-3：MCP 敏感数据门控 + 审计（默认关——零配置可用承诺；MIANSHI_MCP_GATE=on 开启）
-import { checkMcpReadGate, recordMcpRead, SENSITIVE_CONFIRM_FIELD } from "./lib/mcp-gate.mjs";
+import { checkMcpReadGate, recordMcpRead, SENSITIVE_CONFIRM_FIELD } from "./lib/mcp-gate.ts";
 
 // LLM 工具前置校验：无 key 时快速失败（修复：此前无 key 会走 llm 重试/failover 链，
 // 干净环境（npm 安装后未配置）下卡 15s+ 才超时，体验为"工具挂了"而非"需要配置"）。
