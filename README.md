@@ -217,7 +217,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 ├── plugins/                        # ── 插件目录 ──
 │   ├── job-hunter/                 # 插件①：秋招助手（manifest + server + 12 业务路由域）
 │   └── plugin-template/            # 示例插件模板（协议即文档）
-├── lib/                            # ── 共享业务库（137 个模块，单一数据源）──
+├── lib/                            # ── 共享业务库（139 个模块，单一数据源）──
 │   ├── agent.ts + tools/           # 对话 agent（38 内置工具，权限分级审批；tools/ 按 schema/实现/分发三层拆）
 │   ├── interview.mjs / study.mjs / review.ts / learning-plan.mjs / memory.ts
 │   ├── events.ts / autonomy.ts / scenarios.ts / hooks.ts   # 事件驱动内核（P0+P1）
@@ -228,7 +228,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 │   ├── data-detect.ts              # 桌宠数据目录自动探测（MCP 装包即连）
 │   ├── speech.mjs                  # 本地 ASR（sherpa-onnx + whisper 兜底；长音频分段 + 术语纠错）
 │   └── db.mjs                      # node:sqlite 主存储（WAL，23 表 + settings KV）
-│   （TS 迁移进行中：lib **顶层** 66 个 `.ts` / 48 个 `.mjs`（其中 34 个真模块 + 14 个一行桶；含 contracts/routes/tools/adapters 子目录合计 **137 个模块**：69 `.ts` / 68 `.mjs`）；大调用方模块保留一行 `export *` 的 `.mjs` 桶，调用方零改动）
+│   （TS 迁移进行中：lib **顶层** 69 个 `.ts` / 47 个 `.mjs`（其中 31 个真模块 + 16 个一行桶；含 contracts/routes/tools/adapters 子目录合计 **139 个模块**：72 `.ts` / 67 `.mjs`）；大调用方模块保留一行 `export *` 的 `.mjs` 桶，调用方零改动）
 ├── widget.mjs                      # 后台数据服务（HTTP :8899）：路由注册表 100+ 条（core + 插件域，测试护栏）+ 30+ 处定时任务（巡检/邮件/复习到期/CC watcher/RAG 增量…）+ 事件内核接线
 ├── mcp-server.mjs                  # MCP Server（13 工具 → 外部 agent）
 ├── skills/                         # 12 个技能（SKILL.md 声明 + 可选 skill.mjs 可编程）
@@ -387,7 +387,7 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 - [x] 本地 ASR 质量治理：长音频能量谷分段识别（样本 A：CER 4.1% → 0%、6.7s → 4.8s；样本 B 见 `lib/speech.mjs` 注释 5.5% → 4.5%）+ 术语/同音词纠错 + 真实样本落盘诊断开关
 - [x] 本地知识库混合检索：段落级索引（147 篇 → 1478 段）+ FTS5 BM25 + bge 向量 → RRF 融合 + 追问段加权；**2026-09-11 补齐索引期向量化**（此前 vector 列只读不写，混合检索实际退化成纯关键词：实测 35% → **55%**）+ 镜像支持（`MIANSHI_HF_ENDPOINT`）
 - [x] CI 全绿治理：js-yaml 高危 override、weekly-eval workflow 失效、node:test 协议通道污染（整文件假失败）、typecheck:desktop 配置缺失、渲染产物新鲜度改内容哈希
-- [ ] 全量 TS 迁移：阶段 1-3 已完成（lib 66 `.ts` / 48 `.mjs`，核心业务 + 编排层 + 服务入口），阶段 4（桌面 / 插件）进行中
+- [ ] 全量 TS 迁移：阶段 1-3 已完成（lib 69 `.ts` / 47 `.mjs`，核心业务 + 编排层 + 服务入口），阶段 4（桌面 / 插件）进行中
 - [x] 感知层价值升级：**会话时间线 + 项目投入统计**（`lib/agent-timeline.ts` + 驾驶舱 Tab；本机实测 764 会话 / 覆盖 256.5h / 活跃 45 天 / 14655 轮 / 15003 工具调用）——替代零信息量气泡播报
 - [ ] 感知层后续：仅在"窗口失焦 / 长任务结束 / 任务失败"时才播报，且文案带项目名与耗时
 - [ ] 实时 TTS 句子级流水线（开发中：speech-queue + GPT-SoVITS 本地引擎）
