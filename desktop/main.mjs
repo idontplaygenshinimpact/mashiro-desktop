@@ -4,7 +4,7 @@ import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell, se
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
-import { writeFileSync, readFileSync, createWriteStream, existsSync } from "node:fs";
+import { writeFileSync, readFileSync, createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, healthUrl } from "../lib/widget-auth.ts";
 // 纵向拆分：widget 服务守护 / 窗口位置持久化 / 重启设施（desktop/lib/*.mjs，无 electron 依赖可单测）
 import { safeSpawn, createWidgetServer } from "./lib/widget-server.mjs";
@@ -775,6 +775,9 @@ safeHandle("speech:transcribe", async (e, { audio }) => {
       return { ok: false, error: "音频数据无效（过短或格式错误）" };
     }
     console.log(`[speech] 收到音频 ${audio.length} 采样（${(audio.length / 16000).toFixed(1)}s）`);
+    // 诊断落盘（MIANSHI_KEEP_ASR_AUDIO=1）：真实录音问题（口音/语速/噪声/串句）无法用合成音频复现，
+    // 留下"送 ASR 的原始 PCM + 识别结果"才能定位。默认关闭（录音属隐私）；在 transfer 前拷贝（buffer 会转移给 worker）
+    const debugPcm = ASR_DEBUG ? audio.slice() : null;
     const worker = getAsrWorker();
     const id = ++asrSeq;
     const result = await new Promise((resolve, reject) => {
@@ -790,12 +793,41 @@ safeHandle("speech:transcribe", async (e, { audio }) => {
     });
     if (!result?.ok) throw new Error(result?.error || "识别失败");
     console.log(`[speech] 转写成功: ${String(result.text || "").slice(0, 60)}`);
+    if (debugPcm) saveAsrDebug(debugPcm, result);
     return { ok: true, text: result.text || "" };
   } catch (err) {
     console.error("[speech] 转写异常:", err?.message || err);
     return { ok: false, error: String(err?.message || err).slice(0, 120) };
   }
 });
+
+// ASR 诊断样本落盘（MIANSHI_KEEP_ASR_AUDIO=1 时启用）：data/asr-debug/<ts>.wav + .txt（+ .json 元信息）
+const ASR_DEBUG = process.env.MIANSHI_KEEP_ASR_AUDIO === "1";
+function saveAsrDebug(pcm, result) {
+  try {
+    const dir = path.join(process.env.MIANSHI_DATA_DIR || path.join(__dirname, "..", "data"), "asr-debug");
+    mkdirSync(dir, { recursive: true });
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    writeFileSync(path.join(dir, `${ts}.wav`), wav16kBuffer(pcm));
+    writeFileSync(path.join(dir, `${ts}.txt`), String(result?.text || ""), "utf8");
+    writeFileSync(path.join(dir, `${ts}.json`), JSON.stringify({ secs: +(pcm.length / 16000).toFixed(2), peak: +pcm.reduce((m, v) => Math.max(m, Math.abs(v)), 0).toFixed(4), segments: result?.segments ?? 1 }, null, 2), "utf8");
+    console.log(`[speech] 诊断样本已存: ${dir}\\${ts}.wav（${(pcm.length / 16000).toFixed(1)}s）`);
+  } catch { /* 落盘失败不影响识别 */ }
+}
+
+/** Float32 PCM（16k mono）→ wav 16bit 字节（诊断用，零依赖） */
+function wav16kBuffer(pcm) {
+  const n = pcm.length;
+  const buf = Buffer.alloc(44 + n * 2);
+  buf.write("RIFF", 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write("WAVE", 8);
+  buf.write("fmt ", 12); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22);
+  buf.writeUInt32LE(16000, 24); buf.writeUInt32LE(32000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34);
+  buf.write("data", 36); buf.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) {
+    buf.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(pcm[i] * 32767))), 44 + i * 2);
+  }
+  return buf;
+}
 
 // ASR 预热：启动 5s 后后台加载语音模型（worker 内，不占主进程），
 // 用户第一次点 🎤 语音时无需再等模型加载（首次加载约 2-4s）
