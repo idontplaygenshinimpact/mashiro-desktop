@@ -8,7 +8,7 @@ import { writeFileSync, readFileSync, createWriteStream, existsSync, mkdirSync }
 import { WIDGET_URL, loadTokenFromFile, shouldInjectAuth, widgetFetchFactory, healthUrl } from "../lib/widget-auth.ts";
 // 纵向拆分：widget 服务守护 / 窗口位置持久化 / 重启设施（desktop/lib/*.mjs，无 electron 依赖可单测）
 import { safeSpawn, createWidgetServer } from "./lib/widget-server.mjs";
-import { readWindowState as readWinState, scheduleSaveWindowState as scheduleSaveWinState, isOnScreen as isRectOnScreen } from "./lib/window-state.mjs";
+import { readWindowState as readWinState, scheduleSaveWindowState as scheduleSaveWinState, isOnScreen as isRectOnScreen } from "./lib/window-state.ts";
 import { rendererBundleStale as bundleStale, rebuildRendererBundle as rebuildBundle, killAllWidgetProcesses as killAllWidgets } from "./lib/restart.ts";
 // 事件驱动表达轮询（B6 接线：companion-poller 2s 拉 pet-events → petSay；autonomy=off 不启动）
 import { startCompanionPoller } from "./lib/companion-poller.mjs";
