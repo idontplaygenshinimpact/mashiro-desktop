@@ -6,8 +6,45 @@ import path from "node:path";
 const READ_CAP = 50 * 1024;   // read 50KB
 const WRITE_CAP = 200 * 1024; // write 200KB
 
+/** 工具统一返回（成功带 ok:true + 字段；失败带 error 文案——调用方以 error 是否存在判失败） */
+export interface SubagentToolResult {
+  ok?: boolean;
+  error?: string;
+  file?: string;
+  lines?: number;
+  content?: string;
+  bytes?: number;
+  replaced?: number;
+  added?: number;
+  dir?: string;
+  entries?: string[];
+  pattern?: string;
+  results?: string[];
+}
+
+/** 工具参数（各工具只取自己字段；未识别字段忽略） */
+export interface SubagentToolArgs {
+  file?: string;
+  content?: unknown;
+  old_string?: string;
+  new_string?: string;
+  dir?: string;
+  pattern?: string;
+  include?: string;
+}
+
+/** 工具 schema（function calling 格式） */
+export interface SubagentToolSchema {
+  type: string;
+  function: {
+    name: string;
+    description: string;
+    parameters: { type: string; properties: Record<string, unknown>; required?: string[] };
+  };
+}
+
 /** 路径白名单：resolve 后必须在项目目录内（复用 project-guide 的 safeResolve 模式） */
-export function safeResolve(root, p) {
+export function safeResolve(root: string, p: unknown): string | null {
   const base = path.resolve(root) + path.sep;
   const target = path.resolve(root, String(p || ""));
   if (target !== path.resolve(root) && !target.startsWith(base)) return null;
@@ -15,7 +52,7 @@ export function safeResolve(root, p) {
 }
 
 /** 读文件（50KB 上限 + 行号） */
-export function toolReadFile(root, { file }) {
+export function toolReadFile(root: string, { file }: { file: string }): SubagentToolResult {
   const target = safeResolve(root, file);
   if (!target) return { error: `路径越界：仅允许项目目录内（${file}）` };
   if (!existsSync(target) || !statSync(target).isFile()) return { error: `文件不存在: ${file}` };
@@ -28,7 +65,7 @@ export function toolReadFile(root, { file }) {
 }
 
 /** 写文件（200KB 上限） */
-export function toolWriteFile(root, { file, content }) {
+export function toolWriteFile(root: string, { file, content }: { file: string; content?: unknown }): SubagentToolResult {
   const target = safeResolve(root, file);
   if (!target) return { error: `路径越界：仅允许项目目录内（${file}）` };
   const text = String(content ?? "");
@@ -37,12 +74,12 @@ export function toolWriteFile(root, { file, content }) {
     writeFileSync(target, text, "utf8");
     return { ok: true, file, bytes: text.length };
   } catch (e) {
-    return { error: `写入失败: ${String(e?.message || e).slice(0, 80)}` };
+    return { error: `写入失败: ${String(e instanceof Error ? e.message : e).slice(0, 80)}` };
   }
 }
 
 /** 编辑文件（old_string 唯一匹配——多匹配拒绝防误改） */
-export function toolEditFile(root, { file, old_string, new_string }) {
+export function toolEditFile(root: string, { file, old_string, new_string }: { file: string; old_string?: string; new_string?: string }): SubagentToolResult {
   const target = safeResolve(root, file);
   if (!target) return { error: `路径越界：仅允许项目目录内（${file}）` };
   if (!existsSync(target)) return { error: `文件不存在: ${file}` };
@@ -57,12 +94,12 @@ export function toolEditFile(root, { file, old_string, new_string }) {
     writeFileSync(target, updated, "utf8");
     return { ok: true, file, replaced: oldS.length, added: String(new_string ?? "").length };
   } catch (e) {
-    return { error: `写入失败: ${String(e?.message || e).slice(0, 80)}` };
+    return { error: `写入失败: ${String(e instanceof Error ? e.message : e).slice(0, 80)}` };
   }
 }
 
 /** 目录列举（过滤 node_modules/.git/dist 等） */
-export function toolListDir(root, { dir = "." } = {}) {
+export function toolListDir(root: string, { dir = "." }: { dir?: string } = {}): SubagentToolResult {
   const target = safeResolve(root, dir);
   if (!target) return { error: `路径越界：仅允许项目目录内（${dir}）` };
   if (!existsSync(target) || !statSync(target).isDirectory()) return { error: `目录不存在: ${dir}` };
@@ -76,18 +113,18 @@ export function toolListDir(root, { dir = "." } = {}) {
       });
     return { ok: true, dir, entries: entries.slice(0, 100) };
   } catch (e) {
-    return { error: `列举失败: ${String(e?.message || e).slice(0, 80)}` };
+    return { error: `列举失败: ${String(e instanceof Error ? e.message : e).slice(0, 80)}` };
   }
 }
 
 /** 内容搜索（正则，限项目目录；返回文件:行号:行） */
-export function toolGrep(root, { pattern, include = "*.mjs" }) {
-  const re = new RegExp(pattern, "i");
-  const results = [];
+export function toolGrep(root: string, { pattern, include = "*.mjs" }: { pattern: string; include?: string }): SubagentToolResult {
+  const re = new RegExp(String(pattern), "i");
+  const results: string[] = [];
   const SKIP = new Set(["node_modules", ".git", "dist", "output", "data", "models"]);
-  const walk = (dir, depth = 0) => {
+  const walk = (dir: string, depth = 0): void => {
     if (depth > 6 || results.length >= 50) return;
-    let entries;
+    let entries: string[];
     try { entries = readdirSync(dir); } catch { return; }
     for (const n of entries) {
       if (SKIP.has(n) || n.startsWith(".")) continue;
@@ -112,7 +149,7 @@ export function toolGrep(root, { pattern, include = "*.mjs" }) {
 }
 
 /** 工具 schema（function calling 格式）+ 执行函数 */
-export const SUBAGENT_TOOLS = [
+export const SUBAGENT_TOOLS: SubagentToolSchema[] = [
   {
     type: "function",
     function: {
@@ -155,18 +192,14 @@ export const SUBAGENT_TOOLS = [
   },
 ];
 
-/** 执行 subagent 工具（白名单：只能调传入的 tools——调用方控制能力面）
- * @param {string} root 项目根
- * @param {string} name 工具名
- * @param {any} [args] 工具参数
- */
-export async function executeSubagentTool(root, name, args = {}) {
+/** 执行 subagent 工具（白名单：只能调传入的 tools——调用方控制能力面） */
+export async function executeSubagentTool(root: string, name: string, args: SubagentToolArgs = {}): Promise<SubagentToolResult> {
   switch (name) {
-    case "read_file": return toolReadFile(root, args);
-    case "write_file": return toolWriteFile(root, args);
-    case "edit_file": return toolEditFile(root, args);
+    case "read_file": return toolReadFile(root, args as { file: string });
+    case "write_file": return toolWriteFile(root, args as { file: string; content?: unknown });
+    case "edit_file": return toolEditFile(root, args as { file: string; old_string?: string; new_string?: string });
     case "list_dir": return toolListDir(root, args);
-    case "grep": return toolGrep(root, args);
+    case "grep": return toolGrep(root, args as { pattern: string; include?: string });
     default: return { error: `未知工具: ${name}` };
   }
 }
