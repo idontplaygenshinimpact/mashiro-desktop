@@ -304,7 +304,7 @@ test("React 版 S4：对话（会话载入 + 流式发送 + 工具事件时间�
   const calls = [];
   globalThis.window.kanban = {
     chatSessions: async () => ({ sessions: [{ id: "s-1", title: "面经讨论" }, { id: "s-2", title: "算法练习" }] }),
-    chatMessages: async (sid) => ({ messages: [{ role: "user", content: "事件循环是什么" }, { role: "assistant", content: "先同步后微任务" }] }),
+    chatMessages: async (_sid) => ({ messages: [{ role: "user", content: "事件循环是什么" }, { role: "assistant", content: "先同步后微任务" }] }),
     chatStream: async (msg, history, onEvent, sid) => {
       calls.push(["chatStream", msg, sid]);
       onEvent({ type: "tool", tool: "web-search", text: "检索事件循环" });

@@ -7,13 +7,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 // 批次 2：深色内联已收敛为 panel.css 的 .rf-* 语义类（card/row/chip/btn/input/track/muted）
-const muted = {};
-const btn = {};
-const btnPrimary = { background: "#8fc7ff", color: "#171322", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 };
-const input = {};
-const select = { ...input, padding: "6px 8px" };
-const row = { display: "flex", gap: 8 };
-const chip = {};
 
 /** 清单状态流（与原生 loadStudyPlan 的 stateOf 同口径）：待复习 > 已掌握 > 已学 > 学习中 > 待学习 */
 function stateOf(it) {

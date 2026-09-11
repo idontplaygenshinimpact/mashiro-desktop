@@ -6,9 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 
 // 批次 2：深色内联已收敛为 panel.css 的 .rf-* 语义类（见 panel.css 样式词汇段）
 const muted = {};
-const btn = {};
-const btnPrimary = {};
-const chip = {};
 const item = { display: "flex", alignItems: "center", gap: 8, fontSize: 12 };
 
 export function CrawlPanel() {
