@@ -2,8 +2,9 @@
 
 > 🎀 桌面 AI **宿主「真白」+ 第一个插件「秋招助手」**。真白是 Electron 桌宠宿主（Live2D / 语音 / 面板框架 / 设置中心），秋招助手是跑在宿主上的能力插件（面经采集 / 模拟面试 / 学习清单 / 复习卡 / 知识库 / 对话 agent / 校招闭环）。
 > 2026-08 起升级为**事件驱动自主桌宠**：感知（Claude Code 会话 watcher）→ 决策（自主规则引擎）→ 装配（场景技能子集）→ 表达（气泡/语音），并落地 **API 契约层（zod）与双层 AI 评测体系（真实消融基线）**。
+> 2026-09 起：**渲染层三态并行**（原生 / React / Vue 同屏可切 + dist 体积实测对比）、**UI 质量机器指标门禁**（8 类指标归零）、**本地 ASR 长音频分段识别**（实测 CER 4.1% → 0%）、**渐进式 TS 迁移**（每模块一提交 + 双 tsc 门禁 + 桶化保调用方零改动）。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/mashiro-mcp?color=cb3837&label=mashiro-mcp)](https://www.npmjs.com/package/mashiro-mcp) ![Node](https://img.shields.io/badge/Node-%3E%3D22-5fa04e) ![Tests](https://img.shields.io/badge/tests-1033%2B-8a5adc) ![Platform](https://img.shields.io/badge/Windows-10%2F11-0078d6)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/mashiro-mcp?color=cb3837&label=mashiro-mcp)](https://www.npmjs.com/package/mashiro-mcp) ![Node](https://img.shields.io/badge/Node-%3E%3D22-5fa04e) ![Tests](https://img.shields.io/badge/tests-1177%2B-8a5adc) ![Platform](https://img.shields.io/badge/Windows-10%2F11-0078d6)
 
 ---
 
@@ -16,6 +17,8 @@
 | **事件驱动内核** | 事件总线 + 自主决策（off/notify/full 三级刹车）+ CC 会话 watcher（Claude Code 伴侣）+ 场景技能装配 | ✅ P0+P1 已接线 |
 | **契约层（Phase 2）** | zod 契约：15 个高频路由 input/output 校验 + SSE 事件 union + preload/renderer 类型化（kanban-api.d.ts，checkJs 校验 74 方法一致）+ 117 处硬编码收编 | ✅ |
 | **双层评测（Phase 评测）** | Layer A 真实模型基线 + Layer B mock agent 机制；数据集治理（sha256）/ 成本延迟指标 / 分层回归门禁 / 消融基线 / 每周徽章 | ✅ |
+| **三态渲染层** | **8 个 Tab × 原生 / React / Vue 三态并行**（同一 preload IPC 桥 + 同一业务层零改动）；三态对比卡（dist 实测：原生 339KB / React 240KB / Vue 158KB） | ✅ 矩阵 8×2 满格 |
+| **工程门禁** | 双 tsc（宽松 + strict）0 错误 + eslint **0 error 0 warning** + 1177 用例全绿 + UI 8 类机器指标巡检 + 本地 ASR 分段回归；**渐进式 TS 迁移**（lib 61 `.ts` / 49 `.mjs`，每模块一提交、桶化保调用方零改动） | ✅ |
 
 **秋招助手（插件①）能力一览**：
 
@@ -25,8 +28,8 @@
 | **学习闭环** | 从产出提炼"优先学习清单" → 勾选完成 → 复盘出题 → 判分 → 错题自动进入**薄弱点**，下次优先学；FSRS 间隔复习 + 选择题自测 + 到期提醒 |
 | **学习计划引擎** | 任意"学一段长时间内容"→ 计划实体 + 学习事件流（唯一事实源）+ 趋势聚合 + 即时反馈（与判题/复习/清单解耦的通用引擎） |
 | **专项练习** | 牛客 TOP101 算法题 + **手写/算法题库 448 道**（281 道带自动判题测试，worker 沙箱隔离；答错回流薄弱点与复习卡） |
-| **模拟面试** | **面试官 agent 化**（出题前可检索题库/项目源码/知识库/薄弱点）+ 五维评分 + 追问深挖 + **动态轮数**（薄弱点未考完自动加试）+ 复盘报告回流；**继续上一场**（关面板不丢进度）+ 历史复盘回看 |
-| **对话闭环** | 对话 agent（**37 个内置工具** + MCP 工具 + 技能工具，权限分级审批）——可反哺学习清单、建复习卡、挂学习任务；**多会话**隔离；上下文压缩 + 追问语义缓存 |
+| **模拟面试** | **面试官 agent 化**（出题前可检索题库/项目源码/知识库/薄弱点）+ 五维评分 + 追问深挖 + **动态轮数**（薄弱点未考完自动加试）+ 复盘报告回流；**语音答题**（🎙️ 说答案 → 本地 ASR 转写回填，长回答自动分段识别）；**继续上一场**（关面板不丢进度）+ 历史复盘回看 |
+| **对话闭环** | 对话 agent（**38 个内置工具** + 13 个 MCP 工具 + 技能工具，权限分级审批）——可反哺学习清单、建复习卡、挂学习任务；**多会话**隔离；上下文压缩 + 追问语义缓存 |
 | **求职闭环** | 简历 → 方向画像 → 岗位匹配/投递 → 笔试日程 → 面试邀约（邮箱自动识别）→ 全节点回流（规则引擎给"现在最该做什么"） |
 | **本地知识库** | FTS5 关键词检索（零模型零内存），对话/复习/出题可引用 |
 
@@ -122,7 +125,7 @@ Claude Code 配置（`.mcp.json`）：
 
 **装包即连（实测）**：启动时**自动探测**你的桌宠数据目录（源码版 data/ / 打包版 Electron userData / ~/.mashiro 兜底）——已有桌宠数据的用户零配置，数据工具直接返回真实内容（学习清单/岗位/简历实测通过）；LLM key 随数据目录自动继承（设置中心配过的 key）。
 
-11 个工具（数据工具只读；`generate_project_guide` 写入 `output/project-guides/`）：
+13 个工具（数据工具只读；`generate_project_guide` / `generate_dev_history_guide` 写入 `output/`）：
 
 | 工具 | 能力 |
 |---|---|
@@ -132,6 +135,8 @@ Claude Code 配置（`.mcp.json`）：
 | `start_interview` | 模拟面试官（项目拷打/八股穿插/手写收尾） |
 | `get_personal_profile` / `get_jobs_status` / `get_schedule_events` / `get_project_archives` | 个人数据环境（简历/岗位/日程/项目源码档案） |
 | `generate_project_guide` / `read_project_file` | 项目面试讲解指南（基于真实源码 7 段生成：分层读取 + subagent 并行深读 + 覆盖范围透明）；可移植 skill 包见 `project-guide-skill/` |
+| `read_dev_history` / `generate_dev_history_guide` | 开发历史（git 时间线 + opencode/DSH 会话，只读三源）+ 开发历史面试文档（5 段：时间线/关键决策/技术拷打点/八股/踩坑） |
+| `get_personal_profile` 等 5 件套 | 个人数据环境（简历/岗位/日程/学习进度/项目源码档案；敏感项支持 `MIANSHI_MCP_GATE=on` 门控 + 读取审计） |
 
 **诚实两档**：数据工具零配置可用（空库优雅返回）；`solve_question`/`start_interview`/`generate_project_guide` 需 LLM Key（无 key 快速报错并给配置提示）。完整分发文档（工具清单/各客户端配置/使用示例/FAQ/数据权限）：**[docs/mcp.md](docs/mcp.md)**。
 
@@ -146,13 +151,13 @@ Claude Code 配置（`.mcp.json`）：
 ### 1. 桌宠（推荐日常使用）
 
 - **点击真白** → 短句应答（摸头/戳脸等部位人设）；**空闲 5 分钟** → 长句独白（GPT-SoVITS 真白声线）
-- **面板**（9 个 Tab：🎤 面试 / 🔁 复习 / 📋 学习清单 / 💬 对话 / 🔍 爬取 / 🏢 校招 / 📊 驾驶舱 / 🧠 知识库 / ⚙️ 设置）
+- **面板**（9 个 Tab：🎤 面试 / 🔁 复习 / 📋 学习清单 / 💬 对话 / 🔍 爬取 / 🏢 校招 / 📊 驾驶舱 / 🧠 知识库 / ⚙️ 设置）——每个 Tab 右上角可切换**原生 / React / Vue 三态**渲染层（含包体积对比卡）
 - **气泡** → 爬取进度 / 新产出 / 学习提醒 / **CC 伴侣播报**（事件驱动）
 - **全屏（B站视频/游戏）** → 自动隐藏；**托盘** → 右键菜单（面板/换肤/音乐/爬取/邮箱/巡检/退出）
 - **形象切换** → 真白·旅行装/水手服/私服 + 时雨，点击即换、重启记忆
-- **语音输入** → 面板 🎤 说话自动转文字（本地 sherpa-onnx 离线识别，零 API key）
+- **语音输入** → 面板 🎤 说话自动转文字（本地 sherpa-onnx 离线识别，零 API key）；**长回答自动分段识别**（能量谷切段 ≤14s 逐段识别，修复"多句+思考停顿"整段送模型导致的跨句串位）+ 技术术语/同音词纠错（实测同一段 90s 音频 CER 4.1% → 0%，耗时减半）
 
-### 2. 预设技能（对话直接触发，7 个）
+### 2. 预设技能（对话直接触发，12 个）
 
 | 技能 | 触发方式 | 能力 |
 |---|---|---|
@@ -163,6 +168,11 @@ Claude Code 配置（`.mcp.json`）：
 | 🏢 **company-intel** | "字节面什么" | 目标公司面经情报（TOP 考点+真题线索） |
 | 🐙 **github-repo** | "React 仓库多火" | GitHub 仓库信息（stars/语言/更新时间） |
 | 📖 **project-guide** | "生成 XX 项目的面试讲解指南/我的项目怎么讲" | 基于真实源码生成 7 段讲解指南（定位/选型/架构/亮点/问题清单/防御/简历 bullet）——分层读取 + subagent 并行深读 + 覆盖范围透明，多轮反馈可细化；可移植 skill 包（`project-guide-skill/`，纯提示词）可加载到任意 agent（Claude Code/DSH/Codex），MCP 桥接见上表 |
+| 🎯 **interview-prep** | "准备 XX 项目的面试/生成面试准备文档" | 基于真实源码生成完整面试准备文档：源码要点 + **全部八股（详细可背）** + 全覆盖拷打问答 |
+| 🗂️ **dev-history-guide** | "生成开发历史面试文档/这个项目开发过程怎么讲" | 基于 **git 时间线 + opencode/DSH 会话**生成开发历史讲解文档（时间线/关键决策/技术演进/可讲亮点） |
+| 📝 **project-doc** | "给项目补学习文档" | 项目学习文档生成（分步生成 + 源码外信息注入 + 多轮打磨 + 覆盖校验 ≥95%，subagent 并行） |
+| 📊 **project-eval** | "评估一下这个项目" | 项目全面评估报告（8 维度评估 + 问题清单 + Top 5 改进；分步评估 + 打磨循环） |
+| 🐮 **nowcoder-surf** | "逛逛牛客/找找面经线索" | 自主逛牛客：围绕目标做价值判断 + 线索扩展 + 逛完判定 + 汇报（不是固定 URL 爬虫） |
 
 > 技能即插即用：新增 `skills/<名>/` 目录即可（`lib/skills.mjs` 的 `reloadSkills` 支持热重载，HTTP 管理路由待补）；**场景装配**（P1）下 agent 只注入当前场景技能子集（面试中/CC 陪伴/学习），省 token、降幻觉面。
 
@@ -188,41 +198,45 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 │   ├── preload.js                  # IPC 桥接（74 方法 + SSE 流封装）
 │   ├── lib/                        # 主进程模块（widget-server 守护 / companion-poller 等）
 │   ├── voice-pack.mjs / tts-edge.mjs  # 日语语音包播放（预设匹配 + ack 兜底）
-│   └── renderer/                   # 面板 9 Tab（panel-core/study/chat/jobs/rest + api-client + vad）
+│   └── renderer/                   # 面板 9 Tab（原生 panel-*.js + React/Vue 两个 Vite 子项目三态并行）
 ├── plugins/                        # ── 插件目录 ──
 │   ├── job-hunter/                 # 插件①：秋招助手（manifest + server + 12 业务路由域）
 │   └── plugin-template/            # 示例插件模板（协议即文档）
-├── lib/                            # ── 共享业务库（76 模块，单一数据源）──
-│   ├── agent.mjs + tools/          # 对话 agent（37 内置工具，权限分级审批）
-│   ├── interview.mjs / study.mjs / review.mjs / learning-plan.mjs / memory.mjs
-│   ├── events.mjs / autonomy.mjs / scenarios.mjs / hooks.mjs   # 事件驱动内核（P0+P1）
+├── lib/                            # ── 共享业务库（132 个模块，单一数据源）──
+│   ├── agent.ts + tools/           # 对话 agent（38 内置工具，权限分级审批；tools/ 按 schema/实现/分发三层拆）
+│   ├── interview.mjs / study.mjs / review.ts / learning-plan.mjs / memory.ts
+│   ├── events.ts / autonomy.ts / scenarios.ts / hooks.ts   # 事件驱动内核（P0+P1）
 │   ├── adapters/cc-watcher.mjs     # CC 会话 watcher（jsonl 增量幂等解析）
 │   ├── contracts/                  # Phase 2 契约层（zod schema，前后端类型唯一事实源）
-│   ├── routes/                     # 路由域（core 30 条 + withContract 契约运行时）
-│   ├── eval-cost.mjs / eval-summary.mjs / eval-scoring.mjs  # 评测指标层
-│   ├── data-detect.mjs             # 桌宠数据目录自动探测（MCP 装包即连）
+│   ├── routes/                     # 路由域（core + withContract 契约运行时）
+│   ├── eval-cost.ts / eval-summary.ts / eval-scoring.ts  # 评测指标层
+│   ├── data-detect.ts              # 桌宠数据目录自动探测（MCP 装包即连）
+│   ├── speech.mjs                  # 本地 ASR（sherpa-onnx + whisper 兜底；长音频分段 + 术语纠错）
 │   └── db.mjs                      # node:sqlite 主存储（WAL，23 表 + settings KV）
-├── widget.mjs                      # 后台数据服务（HTTP :8899）：139 条路由 + 18 个后台任务 + 事件内核接线
-├── mcp-server.mjs                  # MCP Server（11 工具 → 外部 agent）
-├── skills/                         # 7 个技能（SKILL.md 声明 + skill.mjs 可编程；含 project-guide 讲解指南）
+│   （TS 迁移进行中：61 个 `.ts` / 49 个 `.mjs`；大调用方模块保留一行 `export *` 的 `.mjs` 桶，调用方零改动）
+├── widget.mjs                      # 后台数据服务（HTTP :8899）：路由注册表 100+ 条（core + 插件域，测试护栏）+ 30+ 处定时任务（巡检/邮件/复习到期/CC watcher/RAG 增量…）+ 事件内核接线
+├── mcp-server.mjs                  # MCP Server（13 工具 → 外部 agent）
+├── skills/                         # 12 个技能（SKILL.md 声明 + 可选 skill.mjs 可编程）
 ├── project-guide-skill/            # 可移植 skill 包（纯提示词，任意 agent 加载即用）
 ├── benchmark/                      # 双层评测数据集（38+16+12+20+12+19）+ 报告 + 趋势
-├── scripts/                        # 评测/导入/语音/发布工具（50+ 脚本）
-├── tests/                          # 1033 用例（108 个测试文件，mock LLM 无 key 可跑；截至 2026-09-04 实测）
+├── scripts/                        # 评测/导入/语音/发布/巡检工具（74 个脚本：含 shot-panel UI 审计、_asr-ab ASR 回归、gen-renderer-sizes 体积实测）
+├── tests/                          # 1177 用例（1139 单元 + 38 集成，126 个测试文件，mock LLM 无 key 可跑）
 ├── docs/                           # 公开文档（mcp 分发/CC 伴侣/插件架构/技术方案；内部评估审计文档本地留存不上仓库）
 ├── assets/voice/                   # 自训练声线（112 短句 + 26 长句 + nanami 声线）
 └── .github/workflows/              # ci.yml（全量门禁）+ weekly-eval.yml（每周评测）+ release.yml（双源发布）
 ```
 
-### 渲染层选型（esbuild 主面板 + Vite 双框架子项目）
+### 渲染层三态并行（原生 / React / Vue —— 8 Tab × 2 框架矩阵满格）
 
-| 层 | 技术 | 选型依据 |
-|---|---|---|
-| 主面板（原生） | 原生 JS + **esbuild** 单入口打包 | file:// 加载场景不需要 dev server/HMR；零依赖启动快（性能对照基线） |
-| 模拟面试（React 版） | **Vite 子项目**（`panel-react/`，vite 7） | 交互密集（**useReducer 面试 phase 状态机** setup/active/finished + **useMemo 雷达图缓存**），HMR 开发效率；独立窗口（托盘一键切换） |
-| 复习卡（Vue 版） | **Vite 子项目**（`panel-vue-review/`，vite 6） | 数据可视化（FSRS 调度/遗忘曲线 SVG），**Vue 响应式系统**（computed 曲线缓存 + watch 动画 + Transition 切卡）；独立窗口 |
+| 渲染层 | 技术 | 覆盖 Tab | dist 实测 | 选型依据 |
+|---|---|---|---|---|
+| 原生 | 原生 JS + **esbuild** 单入口 | 全部 9 Tab（对照基线） | **339KB**（gzip 103KB / 6 文件） | file:// 加载不需 dev server/HMR；零依赖启动快 |
+| React 版 | **Vite 子项目**（`panel-react/`，vite 7） | 8/8（面试·驾驶舱·知识库·学习·爬取·校招·对话·复习） | **240KB**（gzip 76KB，含 React 运行时） | 交互密集：**useReducer Phase 状态机** + useMemo 派生缓存 + useDeferredValue 搜索 |
+| Vue 版 | **Vite 子项目**（`panel-vue-review/`，vite 6） | 8/8（同上） | **158KB**（gzip 57KB，含 Vue 运行时） | 数据可视化：**响应式 computed 曲线缓存** + watch 动画 + Transition 切卡 |
 
-三套渲染层共用**同一 preload IPC 桥 + 同一业务层**（`lib/interview.mjs`/`lib/review.mjs` 零改动）——**渲染层可替换性验证 + 框架特色展示**：功能等价证明可替换（同一业务层零改动），同时各框架秀招牌特性（Vue 响应式/Transition 动画、React useReducer/useMemo）——"渲染层选型"卖点从口号变成代码证据。子项目 `npm run build --prefix` 出静态产物（`base:'./'` 兼容 file://，CSP `'self'` 零修改）。
+三态共用**同一 preload IPC 桥 + 同一业务层**（`lib/interview.mjs`/`lib/review.mjs` **零改动**）——**渲染层可替换性有代码证据**：功能等价证明可替换，同时各框架秀招牌特性（React useReducer/并发渲染、Vue 响应式/Transition）——"渲染层选型"从口号变成可对比的实现 + 实测包体积（`npm run gen:sizes` 从 dist 生成，测试护栏防过期）。
+
+> 一致性由测试守护：`panel-core.js` 的 `FRAMEWORK_TABS` 注册表 ⟷ 各框架 `TABS` 登记表必须一致（`tests/react-panel.test.mjs`）；每个 Tab 的挂载/卸载/偏好恢复（刷新保持）都在渲染测试覆盖内。
 
 ---
 
@@ -237,6 +251,10 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 - **记忆防污染**：origin 溯源（owner/agent/untrusted）——爬虫提炼的伪知识点不注入 prompt
 - **Skills 插件 + 场景装配**：SKILL.md 声明式 + skill.mjs 可编程（tools/hooks/权限），`skill__<skill>__<tool>` 命名空间，热重载；P1 场景激活子集（agent 只注入当前场景技能）
 - **可观测性**：`trace_llm`/`trace_tools` 每次调用记录 token/耗时/成败；面板运行监控实时可见
+- **渲染层三态并行**：同一业务层 + 同一 IPC 桥上的三套实现（原生 / React / Vue），覆盖 8 个 Tab×2 框架；`gen:sizes` 从 dist 实测包体积（原生 339KB / React 240KB / Vue 158KB），注册表一致性 + 渲染测试 + 体积新鲜度三重护栏
+- **语音识别长音频分段**：实测定位"多句 + 思考停顿的长音频整段送离线 paraformer → 注意力跨句错配（把后句的词串进前句、整句重复）"；修法是 `segmentVoice` 能量谷切段（静音 ≥250ms 视为句界，合并 ≤14s）+ 逐段识别拼接，并补齐术语/同音词纠错表（技术栈是/有限状态机/JD/FSM…）——同一段 90s 音频 **CER 4.1% → 0%、耗时 6.7s → 4.8s**（`scripts/_asr-ab.mjs` 可复跑）；`MIANSHI_KEEP_ASR_AUDIO=1` 可落盘真实录音样本，便于按真实嗓音继续调
+- **UI 质量机器指标巡检**：`scripts/shot-panel.mjs`（真实 Chromium，非 jsdom）量 8 类问题指标——内联深色样式 / 正文 <11px / 可点击元素缺可访问名 / 图片缺 alt / 横向溢出 / **WCAG 对比度**（透明度与渐变感知，避免"紫字配紫底"假阳性）/ 点击目标 <24px / 横向裁切；另记节点数与 scrollHeight 作"空白假绿"护栏。交互类缺陷同样固化成断言（如"固定浮层滚轮死区"→ `scripts/_verify-review-scroll.mjs` 10/10）
+- **渐进式 TS 迁移（进行中）**：叶子优先 + **桶化**（大调用方模块只留一行 `export *` 的 `.mjs` 桶 → 调用方零改动）+ 每模块一次提交；双 tsc 门禁（宽松 checkJs 覆盖 `.mjs` + strict 只查 `.ts`）。迁移过程顺带修出真实契约缺陷：`llmChatStream` 实际返回 `string | LLMResponse`（类型此前谎报纯文本）、`traceTool` 因解构默认值被推断成"只许 null"、`initPlan` 的 `steps` 被推断成 `never[]`
 
 ---
 
@@ -286,22 +304,24 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 ## 工程质量门禁
 
-> 数字为 2026-08-26 实测（已提交 HEAD）。**注意**：当前工作区含并行未提交开发（实时 TTS 流水线 / UI 审计脚本），
-> 全量 `npm run lint`（3 errors / 34 warnings）与 `npm run typecheck`（7 errors）会红——错误全部来自未提交新文件
-> （speech-queue / tts-gpt-sovits / ui-* 审计脚本），合入修复后恢复。以下为已提交代码的门禁状态：
+> 数字为 **2026-09-11 实测**（全部为已提交 HEAD 状态；工作区干净）。
 
 | 门禁 | 命令 | 当前状态 |
 |---|---|---|
-| 单元/集成测试 | `npm test` | ✅ **1033/1033 通过**（998 单元 + 35 集成，108 个测试文件，mock LLM 无 key 可跑） |
-| 类型检查（lib） | `npm run typecheck` | ✅ 0 错误（已提交代码） |
-| 桌面端类型检查 | `npm run typecheck:desktop` | ✅ 0 错误（已提交代码；kanban-api.d.ts 74 方法一致） |
-| Lint | `npm run lint` | ✅ 0 error（已提交代码；warning 若干 no-unused-vars） |
+| 单元/集成测试 | `npm test` | ✅ **1177/1177 通过**（1139 单元 + 38 集成，126 个测试文件，mock LLM 无 key 可跑） |
+| 类型检查（lib，双 tsc） | `npm run typecheck` | ✅ 0 错误（宽松 checkJs 覆盖 `.mjs` + `tsconfig.strict.json` 只查 `.ts`，strict 下同样 0） |
+| 桌面端类型检查 | `npm run typecheck:desktop` | ✅ 0 错误（kanban-api.d.ts 74 方法一致） |
+| Lint | `npm run lint` | ✅ **0 error 0 warning**（全仓库，含面板/渲染层/脚本/测试） |
+| 渲染层一致性 | `tests/react-panel.test.mjs` / `renderer-sizes.test.mjs` | ✅ 三态注册表一致 + 体积数据新鲜度 |
+| UI 机器指标巡检 | `node scripts/shot-panel.mjs` | ✅ 8 类指标（对比度/小字/可访问名/点击目标/裁切…）为零 |
+| 复习卡交互回归 | `node scripts/_verify-review-scroll.mjs` | ✅ 10/10（固定浮层滚轮死区 / 答案区可滚 / 评分按钮可达） |
+| ASR 长音频回归 | `node scripts/_asr-ab.mjs <wav> <gt.txt>` | ✅ 分段后 CER 0%（对照整段 4.1%） |
 | 评测数据合法性 | `npm run bench:validate` | ✅ 6 数据集全过（脏数据 exit 1） |
 | Agent 能力评测 | `npm run bench:agent` | ✅ 19/19（mock LLM，与模型无关） |
 | 模型基线 | `npm run bench` | ✅ 2026-08-28 全量 38 题实测：综合 96/100（Ollama deepseek-v4-flash:cloud，$0.22）——详见评测章节 |
 | 回归门禁 | `npm run bench:gate` | 分层门禁（硬红 exit 1） |
 | 语音评测 | `npm run voice:score` / `voice:audit` | 内容完整度/音色/节奏/污染 + 末尾完整度审计 |
-| 路由注册表回归 | `tests/routes-registry.test.mjs` | 139 条路由断言 + 契约覆盖率护栏（≥15 路由挂契约） |
+| 路由注册表回归 | `tests/routes-registry.test.mjs` | 路由总数护栏（≥100）+ 契约覆盖率护栏（≥15 路由挂契约） |
 | CI | `.github/workflows/ci.yml` | push/PR：test + validate + judge-check + quick + typecheck×2 + lint + build/check:renderer + bench:agent |
 | 每周评测 | `.github/workflows/weekly-eval.yml` | 全量 Layer A + web 任务 + 消融 + 门禁 + 徽章/趋势提交 |
 
@@ -335,10 +355,14 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 - [x] 爬取引擎 / 学习闭环 / 对话 agent / 桌宠（Live2D/气泡/全屏隐藏/自启）
 - [x] 面试实录、多轮回环审计（修复 50+ 断裂点）、设置中心全可配
 - [x] 语音系统：GPT-SoVITS 合成 + 评测/审计 + 训练流水线 + 交互重设计
-- [x] 纵向拆分（工程质量）：139 路由插件化、agent→tools 分层、面板 5 文件、契约层（Phase 2）
+- [x] 纵向拆分（工程质量）：路由注册表插件化（core + 12 业务域）、agent→tools 分层、面板按域拆文件、契约层（Phase 2）
 - [x] 事件驱动内核（P0）：事件总线 + 自主决策 + CC 伴侣 watcher + 场景装配（P1）
 - [x] 双层评测体系：数据集治理/指标/门禁/消融基线/判官校准/每周徽章
-- [x] MCP 分发闭环：11 工具（含 project-guide 讲解指南）+ 数据自动探测 + 发布瘦身（7 deps）+ 完整分发文档
+- [x] MCP 分发闭环：13 工具（含 project-guide / dev-history 讲解与开发历史文档）+ 数据自动探测 + 发布瘦身（7 deps）+ 完整分发文档
+- [x] 渲染层三态并行：8 Tab × 原生 / React / Vue + 三态对比卡（dist 实测体积）+ 注册表一致性与体积新鲜度护栏
+- [x] UI 批量优化：8 类机器指标归零（对比度/小字/可访问名/点击目标/裁切…）；复习卡可读性修复（答案区限高可滚、固定浮层滚轮死区兜底）
+- [x] 本地 ASR 质量治理：长音频能量谷分段识别（CER 4.1% → 0%、耗时减半）+ 术语/同音词纠错 + 真实样本落盘诊断开关
+- [ ] 全量 TS 迁移：阶段 1-3 已完成（lib 61 `.ts` / 49 `.mjs`，核心业务 + 编排层 + 服务入口），阶段 4（桌面 / 插件）进行中
 - [ ] 实时 TTS 句子级流水线（开发中：speech-queue + GPT-SoVITS 本地引擎）
 - [ ] companion-poller 主进程接线（事件驱动表达 → 桌宠气泡的 1-2 行 `startCompanionPoller` 启动接线，模块已就绪；待实时 TTS 合入后一并接）
 - [ ] 判官长官方差控制（金标回归 + 更多抽检）
@@ -352,7 +376,7 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 
 - **许可证**：MIT（见 [LICENSE](LICENSE)）
 - **仓库不含**：本地数据（`data/`）、ASR 模型（`models/`）、`.env`（密钥）；**含**自训练声线（`assets/voice/`，开箱即用）
-- **测试**：`npm test` 1033 用例全绿（mock LLM，CI 零成本）；评测体系见上文
+- **测试**：`npm test` 1177 用例全绿（1139 单元 + 38 集成，mock LLM，CI 零成本）；评测体系见上文
 - **插件化路线**：宿主（真白）+ 插件（秋招助手）架构见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)
 
 ---
