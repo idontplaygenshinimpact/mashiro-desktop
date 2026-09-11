@@ -343,7 +343,7 @@ function checkGoalState(goal) {
   }
   const iv = goal.interview;
   if (iv) {
-    const s = memory.getInterview();
+    const s = /** @type {{ current?: { question?: string }, position?: string } | null} */ (memory.getInterview());
     let hit = true;
     if (iv.active === true && !s) { hit = false; fails.push("面试会话未进行中"); }
     if (iv.active === false && s) { hit = false; fails.push("面试会话未结束"); }
