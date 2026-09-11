@@ -13,7 +13,7 @@ const notesDir = path.join(dbDir, "out", "study_notes");
 mkdirSync(notesDir, { recursive: true });
 process.env.MIANSHI_OUTPUT_DIR = path.join(dbDir, "out");
 
-const { splitStudyNote, indexStudyNotes, searchParagraphs, getParagraphStats } = await import("../lib/knowledge-base.mjs");
+const { splitStudyNote, indexStudyNotes, searchParagraphs, getParagraphStats, applyTransformersEnv } = await import("../lib/knowledge-base.mjs");
 
 const DOC = `# 事件循环
 
@@ -148,6 +148,58 @@ test("任务3：追问段落 → 复习卡（source=追问，进 FSRS 调度；�
   await followupsToReviewCards();
   const cards2 = review.loadCards().cards.filter((c) => c.source === "追问");
   assert.equal(cards2.length, fuCards.length, "幂等不重复建");
+});
+
+// ---------- 模型运行环境（2026-09-11：向量腿静默失效的根因） ----------
+test("模型环境：镜像 env 生效 + 缓存目录落到 data/models（不再污染仓库根 .cache）", () => {
+  const env = {};
+  applyTransformersEnv(env, { MIANSHI_HF_ENDPOINT: "https://hf-mirror.com" });
+  assert.equal(env.remoteHost, "https://hf-mirror.com/", "缺尾斜杠自动补");
+  assert.ok(env.cacheDir.includes(path.join("models", "transformers")), "缓存目录 = <data>/models/transformers");
+
+  const envStd = {};
+  applyTransformersEnv(envStd, { HF_ENDPOINT: "https://hf-mirror.com/" });
+  assert.equal(envStd.remoteHost, "https://hf-mirror.com/", "标准 HF_ENDPOINT 也认");
+
+  const envBoth = {};
+  applyTransformersEnv(envBoth, { MIANSHI_HF_ENDPOINT: "https://a.example", HF_ENDPOINT: "https://b.example" });
+  assert.equal(envBoth.remoteHost, "https://a.example/", "MIANSHI_ 前缀优先");
+
+  const envDefault = {};
+  const applied = applyTransformersEnv(envDefault, {});
+  assert.equal(envDefault.remoteHost, undefined, "未配置镜像时不覆盖 transformers 默认远端（huggingface.co）");
+  assert.equal(applied.remoteHost, "https://huggingface.co/", "返回值报告实际生效的远端");
+});
+
+// ---------- 向量回填（2026-09-11：此前 vector 列只读不写 → 混合检索实际退化成纯关键词） ----------
+test("向量回填：注入 embedder → 写入向量且幂等；模型不可用 → 不写空向量", async () => {
+  const { backfillVectors, countMissingVectors, getParagraphStats } = await import("../lib/knowledge-base.mjs");
+  writeFileSync(path.join(notesDir, "事件循环.md"), DOC, "utf8");
+  indexStudyNotes();
+  const before = countMissingVectors();
+  assert.ok(before > 0, `索引后应有待向量化段落（实际 ${before}）`);
+
+  // 模型不可用：不写空向量、如实报告（测试里注入 embedder，避免真去下载模型）
+  const failed = await backfillVectors({ limit: 5, embed: async () => null });
+  assert.equal(failed.embedded, 0, "模型不可用时不写向量");
+  assert.equal(failed.modelAvailable, false, "如实报告模型不可用");
+  assert.equal(countMissingVectors(), before, "缺向量数不变");
+
+  // 注入假 embedder → 正常写入
+  const fake = async (text) => Float32Array.from([String(text).length % 7, 1, 0, 0]);
+  const ok = await backfillVectors({ limit: 1000, embed: fake });
+  assert.ok(ok.embedded >= before, `写入 ${ok.embedded} 段向量`);
+  assert.equal(ok.remaining, 0, "全部补齐");
+  assert.equal(countMissingVectors(), 0, "缺向量归零");
+
+  const stats = getParagraphStats();
+  assert.equal(stats.withVectors, stats.total, "统计口径：withVectors = total");
+  assert.equal(stats.missingVectors, 0);
+
+  // 幂等：再跑没有可写的
+  const again = await backfillVectors({ limit: 100, embed: fake });
+  assert.equal(again.embedded, 0, "幂等：无待写段落");
+  assert.equal(again.modelAvailable, true);
 });
 
 after(() => { cleanupTempDb(dbDir); });

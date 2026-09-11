@@ -719,7 +719,10 @@ async function initMusic() {
     m.setMusicPrefs({ volume: Number(st.volume) || 70, autoplay: !!st.autoplay });
     if (st.autoplay) {
       setTimeout(() => {
-        m.playMusic().catch?.();
+        // playMusic 是同步返回 MusicResult（lib/music.ts）——不是 Promise，原来的 `.catch?.()` 是死代码；
+        // music.mjs → music.ts 迁移后 tsc 直接报 TS2339（desktop 配置此前漏开 allowImportingTsExtensions，
+        // 该错误被 133 处 TS5097 噪音掩盖）。行为不变：调用照旧、不处理返回值。
+        m.playMusic();
       }, 6000);
     }
   } catch { /* ignore */ }

@@ -1,0 +1,15 @@
+{
+  "note": "自动生成，请勿手改——由 npm run build:renderer / build:speech-queue 更新",
+  "app": {
+    "sources": {
+      "app.js": "d9627071270c19a1",
+      "index.html": "a895f79c1810a1b3",
+      "style.css": "e88a86072fde241b"
+    }
+  },
+  "speechQueue": {
+    "sources": {
+      "speech-queue.mjs": "3f20b85ee3651a6e"
+    }
+  }
+}

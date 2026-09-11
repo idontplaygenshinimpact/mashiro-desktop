@@ -198,6 +198,8 @@ export function registerKbRoutes(router) {
         const { query, topK } = JSON.parse(body || "{}");
         // 首次检索前增量索引（mtime + 段落数变化才重刷——幂等）
         try { kbApi.indexStudyNotes(); } catch { /* 索引失败不影响检索 */ }
+        // 向量回填：fire-and-forget（本次检索先用关键词结果返回，向量补齐后下次检索即参与 RRF 融合）
+        try { void kbApi.scheduleVectorBackfill(); } catch { /* 回填失败不影响检索 */ }
         const hits = await kbApi.searchParagraphs(query, Math.min(topK || 8, 12));
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ok: true, hits, stats: kbApi.getParagraphStats() }));

@@ -208,7 +208,7 @@ async function loadKbStats() {
     if (!j.total) {
       // 区分"未启用"与"空库"
       if (j.enabled === false) {
-        statusEl.textContent = "📭 本地知识库未启用——在「⚙️ 设置」开启后自动重建索引（纯关键词检索，秒级）";
+        statusEl.textContent = "📭 本地知识库未启用——在「⚙️ 设置」开启后自动重建索引（混合检索：关键词 BM25 + 向量 RRF，向量模型首次检索时加载）";
       } else {
         statusEl.textContent = "⏳ 知识库为空——后端启动后会自动构建，或点「🔄 重建索引」";
       }
@@ -236,7 +236,7 @@ async function kbSearch() {
     if (j.disabled) { list.innerHTML = `<div class="empty-hint">📭 知识库未启用——到「⚙️ 设置」开启后即可搜索</div>`; return; }
     if (!j.hits?.length) { list.innerHTML = '<div class="empty-hint">没有命中——换个说法，或点「🔄 重建索引」</div>'; return; }
     const fu = j.hits.filter((h) => h.kind === "followup").length;
-    list.innerHTML = `<div style="font-size:11px;color:#6a6790;margin:2px 0 6px;">命中 ${j.hits.length} 段（${j.stats?.docs || 0} 篇文档 · ${j.stats?.followups || 0} 段追问 · 混合检索）${fu ? ` · 追问段 ${fu} 段优先` : ""}</div>` +
+    list.innerHTML = `<div style="font-size:11px;color:#6a6790;margin:2px 0 6px;">命中 ${j.hits.length} 段（${j.stats?.docs || 0} 篇文档 · ${j.stats?.followups || 0} 段追问 · 混合检索 · 向量 ${j.stats?.withVectors || 0}/${j.stats?.total || 0}${(j.stats?.missingVectors || 0) > 0 ? "（后台补齐中）" : ""}）${fu ? ` · 追问段 ${fu} 段优先` : ""}</div>` +
       j.hits.map((h) => `
       <div class="job-item">
         <div class="job-head">
