@@ -14,7 +14,7 @@ import * as reviewApi from "./lib/review.mjs";
 import { submit as laneSubmit } from "./lib/lane.ts";
 import * as jobsApi from "./lib/jobs.mjs";
 import { getUpcomingJobDeadlines } from "./lib/job-reminders.ts";
-import * as ragApi from "./lib/rag.mjs";
+import * as ragApi from "./lib/rag.ts";
 import * as rssApi from "./lib/rss.mjs";
 import * as focusApi from "./lib/focus.mjs";
 import * as mailApi from "./lib/mail.mjs";

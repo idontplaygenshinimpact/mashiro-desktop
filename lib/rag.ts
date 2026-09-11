@@ -9,11 +9,45 @@ import { readJsonSafe } from "./atomic-json.ts";
 import { UNTRUSTED_DECLARATION, safeExternalBlock } from "./prompt-guard.mjs";
 import { getPersonalProjects, buildProjectArchive } from "./personal-projects.mjs";
 
+/** 知识库条目（资产采集统一形状；confidence/evidence 可缺省落到默认值） */
+export interface RagItem {
+  source: string;
+  kind: string;
+  title: string;
+  content: string;
+  confidence?: number;
+  evidence?: string;
+}
+
+/** 检索命中（score 排名分；vectorScore 恒 0——已移除 embedding 通道，保留字段供渲染层兼容） */
+export interface SearchHit {
+  id: string;
+  title: string;
+  content: string;
+  source: string;
+  kind: string;
+  score: number;
+  vectorScore: number;
+  ftsScore: number;
+}
+
+/** 构建/增量的返回（disabled=未启用跳过；changed/added/removed 为增量专用） */
+export interface BuildResult {
+  ok?: boolean;
+  disabled?: boolean;
+  message?: string;
+  items?: number;
+  seconds?: number;
+  changed?: boolean;
+  added?: number;
+  removed?: number;
+}
+
 // ---------- 知识库开关（设置中心可配：rag_enabled "1"/"0"） ----------
 // 个人学习知识库工单：定位变化——agent 检索工具（被抛弃）→ 用户学习知识库（用户主动检索 + 复习消费）
 // 默认开（settings 无值 → true；显式 "0" 才关）
 const RAG_ENABLED_KEY = "rag_enabled";
-export function ragEnabled() {
+export function ragEnabled(): boolean {
   try {
     const row = db.prepare("SELECT value FROM settings WHERE key=?").get(RAG_ENABLED_KEY);
     if (!row) return true; // 默认开（用户知识库定位）
@@ -57,10 +91,10 @@ if (ftsRebuilt) {
 const OUTPUT_DIR = process.env.RAG_OUTPUT_DIR || path.join(import.meta.dirname, "..", "output");
 
 // ---------- 资产采集 ----------
-function collectMdAssets() {
-  const items = [];
-  const seen = new Set(); // 全局去重：同内容切片跨文件也只保留一份（防两份相同 md 产生重复条目）
-  const walk = (dir) => {
+function collectMdAssets(): RagItem[] {
+  const items: RagItem[] = [];
+  const seen = new Set<string>(); // 全局去重：同内容切片跨文件也只保留一份（防两份相同 md 产生重复条目）
+  const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
       const p = path.join(dir, name);
       const st = statSync(p);
@@ -90,12 +124,12 @@ function collectMdAssets() {
   return items;
 }
 
-function existsSyncSafe(p) {
+function existsSyncSafe(p: string): boolean {
   try { return statSync(p).isDirectory(); } catch { return false; }
 }
 
-async function collectDbAssets() {
-  const items = [];
+async function collectDbAssets(): Promise<RagItem[]> {
+  const items: RagItem[] = [];
   // 学习清单（含验证题）
   try {
     for (const r of db.prepare("SELECT topic, why, verify_question, level FROM study_plan_items").all()) {
@@ -124,8 +158,10 @@ async function collectDbAssets() {
   } catch { /* ignore */ }
   // 官方文档（清单 + 版本检测结果）
   try {
-    const sites = readJsonSafe(path.join(import.meta.dirname, "..", "data", "learning-sites.json"), { categories: [] });
-    const versions = readJsonSafe(path.join(import.meta.dirname, "..", "data", "doc-versions.json"), {});
+    const sites = readJsonSafe(path.join(import.meta.dirname, "..", "data", "learning-sites.json"), {
+      categories: [] as Array<{ category: string; sites: Array<{ name: string; desc?: string; official?: string }> }>,
+    });
+    const versions = readJsonSafe(path.join(import.meta.dirname, "..", "data", "doc-versions.json"), {} as Record<string, { version?: string; date?: string }>);
     for (const cat of sites.categories || []) {
       for (const s of cat.sites || []) {
         const v = versions[s.name] || {};
@@ -139,7 +175,7 @@ async function collectDbAssets() {
       const counts = r.question_count
         ? `题型：总${r.question_count}（单选${r.single_count || 0}/多选${r.multi_count || 0}/编程${r.program_count || 0}）`
         : "题型：未抓取";
-      items.push({ source: "zhenti", kind: "exam", title: `笔试·${r.kind === "simulate" ? "模拟卷" : r.company} ${r.title}`, content: `${r.title}\n${counts}\n练习：${r.url}`, confidence: 0.5, evidence: r.url || "" });
+      items.push({ source: "zhenti", kind: "exam", title: `笔试·${r.kind === "simulate" ? "模拟卷" : r.company} ${r.title}`, content: `${r.title}\n${counts}\n练习：${r.url}`, confidence: 0.5, evidence: String(r.url || "") });
     }
   } catch { /* ignore */ }
   // 牛客真题具体题目（题干/选项/答案——复习选择题出题素材，闭环：爬取 → 知识库 → 选择题）
@@ -151,7 +187,7 @@ async function collectDbAssets() {
         source: "zhenti-q", kind: "exam",
         title: `真题·${r.company || r.paper_test_id}·题${r.q_index}（${r.q_type || ""}）`,
         content: `${r.title}${optText}${ansText}`.slice(0, 800),
-        confidence: 0.6, evidence: r.paper_test_id || "",
+        confidence: 0.6, evidence: String(r.paper_test_id || ""),
       });
     }
   } catch { /* ignore */ }
@@ -162,7 +198,7 @@ async function collectDbAssets() {
         source: "oj", kind: "problem",
         title: `题·${r.category}·${r.title}`,
         content: `${r.title}（${r.category}，${r.bm_no}）\n难度：${r.difficulty || "未知"}${r.people ? "，通过量 " + r.people : ""}\n刷题：${r.url}`,
-        confidence: 0.5, evidence: r.url || "",
+        confidence: 0.5, evidence: String(r.url || ""),
       });
     }
   } catch { /* ignore */ }
@@ -182,15 +218,15 @@ async function collectDbAssets() {
 
 // 构建互斥：全量重建与增量重建共享同一把锁（防手动触发与定时任务并发覆盖）
 let building = false;
-async function withBuildLock(fn) {
+async function withBuildLock<T>(fn: () => Promise<T>): Promise<T | null> {
   if (building) return null; // 正在重建：直接告知 busy（调用方跳过/提示）
   building = true;
   try { return await fn(); } finally { building = false; }
 }
 
-const genId = (base) => `kb_${base}_${Math.random().toString(36).slice(2, 10)}`;
+const genId = (base: string): string => `kb_${base}_${Math.random().toString(36).slice(2, 10)}`;
 
-function insertItem(id, it, now) {
+function insertItem(id: string, it: RagItem, now: number): void {
   db.prepare("INSERT INTO knowledge_items (id, source, kind, title, content, vector, confidence, evidence, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
     .run(id, it.source, it.kind, it.title.slice(0, 200), it.content, null, it.confidence ?? 0.5, it.evidence ?? "", now, now);
   db.prepare("INSERT INTO knowledge_fts (id, title, content) VALUES (?,?,?)")
@@ -198,10 +234,7 @@ function insertItem(id, it, now) {
 }
 
 // ---------- 构建 ----------
-/**
- * @returns {Promise<{ok?: boolean, disabled?: boolean, message?: string, items?: number, seconds?: number}>}
- */
-export async function rebuildKnowledgeBase(_onProgress = null) {
+export async function rebuildKnowledgeBase(_onProgress: unknown = null): Promise<BuildResult | null> {
   if (!ragEnabled()) return { ok: false, disabled: true, message: "本地知识库未启用（设置中心可开启）" };
   return withBuildLock(async () => {
     const mdItems = collectMdAssets();
@@ -217,7 +250,7 @@ export async function rebuildKnowledgeBase(_onProgress = null) {
       db.exec("COMMIT");
     } catch (e) { db.exec("ROLLBACK"); throw e; }
     // 记录 md mtime+size（供增量用；size 兜底"mtime 相等但内容变化"的检测）
-    const mtimes = {};
+    const mtimes: Record<string, { m: number; s: number }> = {};
     for (const it of mdItems) {
       try {
         const st = statSync(it.source);
@@ -235,11 +268,7 @@ export async function rebuildKnowledgeBase(_onProgress = null) {
 }
 
 // ---------- 关键词检索（纯 FTS5 trigram，零模型零内存） ----------
-/**
- * 关键词检索：FTS5 trigram（中文 3 字滑动窗口 OR 组合——trigram 索引要求查询串连续匹配）
- * 轻量实现（grep 式）：不用 embedding，几千条规模毫秒级返回
- */
-export async function searchKnowledge(query, topK = 5) {
+export async function searchKnowledge(query: unknown, topK = 5): Promise<SearchHit[]> {
   if (!ragEnabled()) return []; // 未启用：返回空（调用方自然降级到联网搜索）
   const q = String(query || "").trim();
   if (!q) return [];
@@ -247,8 +276,8 @@ export async function searchKnowledge(query, topK = 5) {
 
   // 分词：拉丁/数字连续串 ≥3 字符走 trigram，1-2 字符（JS/AI）走 LIKE；
   // 中文连续串 ≥3 字切 3 字窗口，2 字词（缓存/闭包）trigram 无法匹配 → LIKE 兜底
-  const terms = [];
-  const shortTerms = [];
+  const terms: string[] = [];
+  const shortTerms: string[] = [];
   for (const m of q.match(/[\u4e00-\u9fff]+|[A-Za-z0-9]+/g) || []) {
     if (/^[A-Za-z0-9]/.test(m)) {
       if (m.length >= 3) terms.push(m);
@@ -264,7 +293,7 @@ export async function searchKnowledge(query, topK = 5) {
     }
   }
 
-  const hits = new Map(); // id → { id, score }
+  const hits = new Map<string, { id: string; score: number }>(); // id → { id, score }
   if (terms.length) {
     try {
       const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
@@ -294,21 +323,22 @@ export async function searchKnowledge(query, topK = 5) {
   const topIds = ranked.map((r) => r.id);
   const byId = new Map(
     topIds.length
-      ? db.prepare(`SELECT id, source, kind, title, content FROM knowledge_items WHERE id IN (${topIds.map(() => "?").join(",")})`).all(...topIds).map((r) => [String(r.id), r])
+      ? db.prepare(`SELECT id, source, kind, title, content FROM knowledge_items WHERE id IN (${topIds.map(() => "?").join(",")})`).all(...topIds)
+        .map((r) => [String(r.id), r] as [string, { id: unknown; source: unknown; kind: unknown; title: unknown; content: unknown }])
       : []
   );
   // 标题命中提权：压过正文噪声（如"官网：https://…"里的 htt/ttp trigram 命中），
   // 保证"标题含查询词"的条目（真教程）排在 URL 噪声条目（文档卡片）前面
-  const titleBoost = (title) => {
+  const titleBoost = (title: unknown): number => {
     const tl = String(title).toLowerCase();
     return [...terms, ...shortTerms].some((t) => tl.includes(t.toLowerCase())) ? 0.5 : 0;
   };
   return ranked
     .filter((r) => byId.has(r.id))
-    .sort((a, b) => (b.score + titleBoost(byId.get(b.id).title)) - (a.score + titleBoost(byId.get(a.id).title)))
+    .sort((a, b) => (b.score + titleBoost(byId.get(b.id)!.title)) - (a.score + titleBoost(byId.get(a.id)!.title)))
     .slice(0, topK)
     .map((r) => {
-      const d = byId.get(r.id);
+      const d = byId.get(r.id)!;
       return {
         id: r.id,
         title: String(d.title),
@@ -323,28 +353,28 @@ export async function searchKnowledge(query, topK = 5) {
 }
 
 /** 知识库统计 */
-export function getKnowledgeStats() {
-  const total = db.prepare("SELECT COUNT(*) n FROM knowledge_items").get().n;
-  const byKind = db.prepare("SELECT kind, COUNT(*) n FROM knowledge_items GROUP BY kind").all();
-  const last = db.prepare("SELECT MAX(updated_at) t FROM knowledge_items").get().t || 0;
+export function getKnowledgeStats(): { total: number; byKind: Array<{ kind: unknown; n: unknown }>; lastBuild: number; embedding: boolean; enabled: boolean } {
+  const row = db.prepare("SELECT COUNT(*) n FROM knowledge_items").get();
+  const total = row ? Number(row.n) || 0 : 0;
+  const byKind = db.prepare("SELECT kind, COUNT(*) n FROM knowledge_items GROUP BY kind").all() as unknown as Array<{ kind: unknown; n: unknown }>;
+  const lastRow = db.prepare("SELECT MAX(updated_at) t FROM knowledge_items").get();
+  const last = lastRow ? Number(lastRow.t) || 0 : 0;
   return { total, byKind, lastBuild: last, embedding: false, enabled: ragEnabled() };
 }
 
 /** 人工验证知识条目：更新可信度 + 验证时间戳（claim layer：可把 0.3 弱项提升到 0.9） */
-export function markVerified(id, confidence) {
+export function markVerified(id: unknown, confidence: unknown): { ok: boolean; changes: number; confidence: number; lastVerifiedAt: number } {
   const n = Number(confidence);
   const c = Number.isFinite(n) && n >= 0 && n <= 1 ? n : 0.9;
   const now = Date.now();
   const r = db.prepare("UPDATE knowledge_items SET confidence = ?, last_verified_at = ?, updated_at = ? WHERE id = ?")
     .run(c, now, now, String(id));
-  return { ok: r.changes > 0, changes: r.changes, confidence: c, lastVerifiedAt: now };
+  return { ok: r.changes > 0, changes: Number(r.changes), confidence: c, lastVerifiedAt: now };
 }
 
 // ---------- RAG 问答闭环（检索 → 注入 → LLM 生成） ----------
-/**
- * 基于知识库回答：混合检索 topK → 拼上下文 → LLM 生成答案
- */
-export async function askKnowledge(query) {
+/** 基于知识库回答：混合检索 topK → 拼上下文 → LLM 生成答案 */
+export async function askKnowledge(query: unknown): Promise<{ ok: boolean; hits: SearchHit[]; answer: string | null; message?: string }> {
   if (!ragEnabled()) return { ok: false, hits: [], answer: null, message: "本地知识库未启用，可在设置中心开启（开启后自动构建，之后可在此问答）" };
   const q = String(query || "").trim();
   if (!q) return { ok: false, hits: [], answer: null, message: "问题不能为空" };
@@ -370,7 +400,7 @@ const MTIMES_KEY = "rag_indexed_mtimes";
 const DB_HASH_KEY = "rag_db_assets_hash";
 
 /** 简单字符串 hash（FNV-1a 32bit，足够检测内容变化） */
-function simpleHash(s) {
+function simpleHash(s: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -380,7 +410,7 @@ function simpleHash(s) {
 }
 
 /** 读 settings 值（无则返回缺省） */
-function readSetting(key, def) {
+function readSetting(key: string, def: string): string {
   try {
     const row = db.prepare("SELECT value FROM settings WHERE key=?").get(key);
     return row ? String(row.value) : def;
@@ -388,17 +418,14 @@ function readSetting(key, def) {
 }
 
 /** 已索引 md 文件的 mtime 记录（settings 表持久化） */
-export function getIndexedMtimes() {
+export function getIndexedMtimes(): Record<string, unknown> {
   try {
     const row = db.prepare("SELECT value FROM settings WHERE key=?").get(MTIMES_KEY);
     return row ? JSON.parse(String(row.value)) : {};
   } catch { return {}; }
 }
 
-/**
- * @returns {Promise<{ok?: boolean, disabled?: boolean, message?: string, changed?: boolean, added?: number, removed?: number, seconds?: number}>}
- */
-export async function incrementalRebuild() {
+export async function incrementalRebuild(): Promise<BuildResult | null> {
   if (!ragEnabled()) return { ok: false, disabled: true, message: "本地知识库未启用（设置中心可开启）" };
   return withBuildLock(async () => {
     const t0 = Date.now();
@@ -406,23 +433,23 @@ export async function incrementalRebuild() {
     const now = Date.now();
     const idBase = now.toString(36);
     let added = 0, removed = 0;
-    const newMtimes = {};
+    const newMtimes: Record<string, { m: number; s: number }> = {};
 
     // md 资产：按文件聚合，mtime 变化才重刷
     const mdItems = collectMdAssets();
-    const bySource = new Map();
+    const bySource = new Map<string, RagItem[]>();
     for (const it of mdItems) {
       if (!bySource.has(it.source)) bySource.set(it.source, []);
-      bySource.get(it.source).push(it);
+      bySource.get(it.source)!.push(it);
     }
     // 阶段 1：收集所有变更——待删旧 id + 待插入 items（纯内存操作，无外部依赖）
-    const delIds = [];
-    const insItems = [];
+    const delIds: string[] = [];
+    const insItems: RagItem[] = [];
     for (const [src, items] of bySource) {
       let mtime = 0, size = 0;
       try { const st = statSync(src); mtime = st.mtimeMs; size = st.size; } catch { /* 文件被删 */ }
       newMtimes[src] = { m: mtime, s: size };
-      const rec = mtimes[src];
+      const rec = mtimes[src] as { m?: number; s?: number } | number | undefined;
       // 兼容旧格式（纯数字 mtime）+ 新格式（{m, s}）；size 兜底"mtime 相等但内容变化"
       const unchanged = rec && (typeof rec === "number" ? rec === mtime : rec.m === mtime && rec.s === size);
       if (unchanged) continue; // 未变化跳过
@@ -464,7 +491,7 @@ export async function incrementalRebuild() {
     }
 
     // 持久化 mtime+size（清除已删除文件的记录）+ DB 资产快照 hash
-    const cleaned = {};
+    const cleaned: Record<string, { m: number; s: number }> = {};
     for (const [src, m] of Object.entries(newMtimes)) if (m && m.m) cleaned[src] = m;
     db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?,?,?)")
       .run(MTIMES_KEY, JSON.stringify(cleaned), now);

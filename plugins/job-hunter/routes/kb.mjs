@@ -1,7 +1,7 @@
 // 知识库域路由（纵向拆分：原 widget.mjs /api/knowledge/*、/api/learning/*、/api/career/profile、
 // /api/knowledge/tree、/api/weak-points、/api/mastery）
 import * as knowledgeApi from "#lib/knowledge.ts";
-import * as ragApi from "#lib/rag.mjs";
+import * as ragApi from "#lib/rag.ts";
 import * as kbApi from "#lib/knowledge-base.mjs";
 import * as learningApi from "#lib/learning.mjs";
 import * as studyApi from "#lib/study.mjs";

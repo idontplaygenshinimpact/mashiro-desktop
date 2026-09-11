@@ -13,7 +13,7 @@ const outDir = mkdtempSync(path.join(tmpdir(), "rag-out-"));
 process.env.RAG_OUTPUT_DIR = outDir;
 process.env.RAG_EMBED_MODEL = "Xenova/nonexistent-model-for-test"; // 强制降级路径
 mockLLM();
-const rag = await import("../lib/rag.mjs");
+const rag = await import("../lib/rag.ts");
 const { db } = await import("../lib/db.mjs");
 
 const writeMd = (rel, content) => {

@@ -12,7 +12,7 @@ const outDir = mkdtempSync(path.join(tmpdir(), "rag-test-out-"));
 mkdirSync(outDir, { recursive: true });
 process.env.RAG_OUTPUT_DIR = outDir;
 process.env.RAG_EMBED_MODEL = "Xenova/nonexistent-model-for-test"; // 强制 embedding 降级，避免加载真实模型拖慢测试
-const { searchKnowledge, getKnowledgeStats, incrementalRebuild, getIndexedMtimes, markVerified } = await import("../lib/rag.mjs");
+const { searchKnowledge, getKnowledgeStats, incrementalRebuild, getIndexedMtimes, markVerified } = await import("../lib/rag.ts");
 const { db } = await import("../lib/db.mjs");
 
 // 假向量：基于文本哈希的确定性 32 维向量（测通道逻辑，不加载真实模型）

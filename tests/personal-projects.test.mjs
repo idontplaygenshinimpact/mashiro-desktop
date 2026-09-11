@@ -97,7 +97,7 @@ test("项目档案进知识库：开启 RAG 后 searchKnowledge 可检索到（�
   const idx = await indexPersonalProjects(); // async（并行开发改造——await 修复测试回归）
   assert.ok(idx.ok >= 1, "项目档案已入库");
   // 检索：对话/复习搜索源码标识应命中项目档案（kind=project；查询词用档案真实内容）
-  const { searchKnowledge } = await import("../lib/rag.mjs");
+  const { searchKnowledge } = await import("../lib/rag.ts");
   const hits = await searchKnowledge("DragEngine", 3);
   assert.ok(hits.length > 0, "检索有结果");
   assert.ok(hits.some((h) => String(h.title).includes("低代码平台") || String(h.kind) === "project"), "命中项目档案");
@@ -106,7 +106,7 @@ test("项目档案进知识库：开启 RAG 后 searchKnowledge 可检索到（�
 test("全量重建（rebuildKnowledgeBase）后项目档案仍在（不丢失/可恢复）", async () => {
   const { db } = await import("../lib/db.mjs");
   db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('rag_enabled', '1', ?)").run(Date.now());
-  const { rebuildKnowledgeBase, incrementalRebuild } = await import("../lib/rag.mjs");
+  const { rebuildKnowledgeBase, incrementalRebuild } = await import("../lib/rag.ts");
   const r = await rebuildKnowledgeBase();
   assert.ok(r.items >= 1, "全量重建完成");
   const rows = db.prepare("SELECT id, source, kind, title FROM knowledge_items WHERE source LIKE 'project:%'").all();

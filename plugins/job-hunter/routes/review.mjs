@@ -139,7 +139,7 @@ export function registerReviewRoutes(router, ctx) {
       .then(async () => {
         let kbContext = "";
         try {
-          const { searchKnowledge } = await import("#lib/rag.mjs");
+          const { searchKnowledge } = await import("#lib/rag.ts");
           const hits = await searchKnowledge(card.topic, 2);
           if (hits?.length) {
             kbContext = hits.map((h) => `【${h.title}】\n${String(h.content || "").slice(0, 900)}`).join("\n\n");

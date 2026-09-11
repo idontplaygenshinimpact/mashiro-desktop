@@ -13,7 +13,7 @@ import * as interviewApi from "../interview.mjs";
  */
 export async function execSearchKnowledge(args: { query?: string; topK?: number } = {}) {
   try {
-    const { ragEnabled, searchKnowledge } = await import("../rag.mjs");
+    const { ragEnabled, searchKnowledge } = await import("../rag.ts");
     if (!ragEnabled()) return { error: "本地知识库未启用（可在设置中心开启）", hint: "改用 search_posts / web_search 联网获取" };
     const hits = await searchKnowledge(args.query, Math.min(args.topK || 3, 6));
     const wrapped = hits.map((h) => ({ ...h, title: wrapUntrusted(h.title), content: wrapUntrusted(h.content) }));
