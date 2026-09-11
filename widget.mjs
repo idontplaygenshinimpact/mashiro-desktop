@@ -13,7 +13,7 @@ import { config } from "./config.mjs";
 import * as reviewApi from "./lib/review.mjs";
 import { submit as laneSubmit } from "./lib/lane.ts";
 import * as jobsApi from "./lib/jobs.mjs";
-import { getUpcomingJobDeadlines } from "./lib/job-reminders.mjs";
+import { getUpcomingJobDeadlines } from "./lib/job-reminders.ts";
 import * as ragApi from "./lib/rag.mjs";
 import * as rssApi from "./lib/rss.mjs";
 import * as focusApi from "./lib/focus.mjs";
@@ -294,7 +294,8 @@ let lastJobDeadlineNotify = 0; // 上次岗位提醒时间戳（ms），6 小时
 
 async function checkJobDeadline() {
   try {
-    const upcoming = getUpcomingJobDeadlines(jobsApi.getJobs());
+    /** @type {Array<{title?: string, company?: string, dueDate?: string, kind?: string}>} */
+  const upcoming = getUpcomingJobDeadlines(jobsApi.getJobs());
     if (upcoming.length === 0) return;
     // 9 点后才提醒（避免半夜打扰）；距上次提醒 >6 小时才再次提醒
     const h = new Date().getHours();

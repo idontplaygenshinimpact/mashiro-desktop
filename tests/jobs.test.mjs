@@ -6,10 +6,10 @@ import { setupTempDb, cleanupTempDb, clearAllTables, mockLLM, mockFetchPage, set
 const dbDir = setupTempDb("jobs");
 mockLLM();
 mockFetchPage();
-// 拆分后：岗位数据层（jobs.mjs）+ 画像/推荐（job-match.mjs）+ 提醒（job-reminders.mjs）
+// 拆分后：岗位数据层（jobs.mjs）+ 画像/推荐（job-match.mjs）+ 提醒（job-reminders.ts）
 const jobs = await import("../lib/jobs.mjs");
 const jobMatch = await import("../lib/job-match.mjs");
-const jobReminders = await import("../lib/job-reminders.mjs");
+const jobReminders = await import("../lib/job-reminders.ts");
 
 beforeEach(async () => {
   await clearAllTables();

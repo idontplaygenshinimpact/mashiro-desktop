@@ -4,7 +4,9 @@ import { db } from "./db.mjs";
 import { parseLocalDate } from "./date-utils.ts"; // 技术债 L2：收敛单点
 
 /** 岗位笔试时间同步进日程表（schedule_events，邮箱邀约同表）——笔试进入统一日程，提前提醒 */
-export function syncJobBishiToSchedule(id, company, title, bishiDate) {
+/** 岗位条目（本模块只读这几个字段；其余字段由调用方定义） */
+interface JobLike { id?: unknown; company?: unknown; title?: unknown; bishiDate?: unknown; deadline?: unknown; [k: string]: unknown }
+export function syncJobBishiToSchedule(id: unknown, company: unknown, title: unknown, bishiDate: unknown): unknown {
   if (!id || !company || !bishiDate) return;
   try {
     // 本地时区解析（纯日期 → 当天 00:00，带时间 → 精确；修复 UTC +8h 漂移）
@@ -35,7 +37,7 @@ export function syncJobBishiToSchedule(id, company, title, bishiDate) {
  * @param {number} [now] 当前时间戳（测试注入用；默认 Date.now()）
  * @returns {Array<{id:string, company:string, title:string, deadline:string|null, bishiDate:string|null, dueDate:string, kind:string}>}
  */
-export function getUpcomingJobDeadlines(jobs, now = Date.now()) {
+export function getUpcomingJobDeadlines(jobs: readonly JobLike[], now: number = Date.now()): unknown[] {
   const upcoming = [];
   // 日历日比较（本地时区日期字符串）：截止/笔试当天 0 点一过，时间戳差 diff=t-now 变负，
   // 原 diff>=0 过滤会让当天到期岗位全天无提醒 → 改为"今天"与到期日两个日期字符串的天数差 ∈ [0,3]
