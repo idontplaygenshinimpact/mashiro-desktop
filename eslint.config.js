@@ -1,6 +1,7 @@
 // ESLint flat config（Node ESM 项目）
 import js from "@eslint/js";
 import globals from "globals";
+import tseslint from "typescript-eslint";
 
 // 面板跨文件共享全局（desktop/renderer/panel-*.js 普通 script 互相引用，非模块导出）
 const panelGlobals = {
@@ -66,6 +67,32 @@ const baseRules = {
 
 export default [
   { ignores: ["node_modules/**", "output/**", "data/**", "benchmark/reports/**", "desktop/renderer/app.bundle.js", "desktop/renderer/react-panel.bundle.js", "desktop/renderer/speech-queue.bundle.js", "desktop/renderer/vue-review/review-app.bundle.js", "desktop/renderer/panel-react/dist/**", "desktop/renderer/panel-vue-review/dist/**", "desktop/renderer/assets/**", "desktop/renderer/lib/**", "*.bak", "*.log"] },
+  // 全量 TS 升级工单护栏：.ts 必须和 .mjs 一样受 lint 约束
+  // （此前 eslint 配置只匹配 **/*.mjs|js → 迁移到 .ts 的文件被静默跳过，随着迁移推进会掏空 lint 覆盖）
+  {
+    files: ["**/*.ts"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      parser: tseslint.parser,
+      globals: { ...globals.node, ...globals.browser },
+    },
+    plugins: { "@typescript-eslint": tseslint.plugin },
+    rules: {
+      ...baseRules,
+      // TS 文件关闭 no-undef（typescript-eslint 官方建议）：类型命名空间（NodeJS.Timeout 等）
+      // 在 TS 里由类型系统解析，js 版 no-undef 会误报；未定义标识符由 tsc 兜住
+      "no-undef": "off",
+      "no-unused-vars": "off", // 由 TS 版本接管（否则 interface/type 导入被误报）
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      // 迁移期的两类真实缺陷（typo/死代码）——recommended 里的风格类规则（no-explicit-any 等）
+      // 与"边界宽松、内部收紧"的迁移约定冲突，不启用
+      "@typescript-eslint/no-duplicate-enum-values": "error",
+      "@typescript-eslint/no-misused-new": "error",
+      "@typescript-eslint/no-unsafe-function-type": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
   {
     files: ["**/*.mjs", "**/*.js"],
     languageOptions: {

@@ -302,7 +302,7 @@ ON CONFLICT(id) DO UPDATE SET
 /** OpenCode 历史回填（走 SQL 聚合，精确）：266 会话 / 19340 消息 / 77624 part 本机实测一次 ~1s */
 export function backfillFromOpenCode(dbPath: string): number {
   if (!existsSync(dbPath)) return 0;
-  let oc: DatabaseSync | null = null;
+  let oc: DatabaseSync;
   try { oc = new DatabaseSync(dbPath, { readOnly: true }); } catch { return 0; }
   try {
     const sessions = oc.prepare("SELECT id, title, directory, time_created, time_updated FROM session").all() as Array<Record<string, unknown>>;
@@ -362,7 +362,7 @@ export function backfillFromJsonl(dir: string, source: "codex" | "claude-code", 
   const now = Date.now();
   let n = 0;
   for (const f of files) {
-    let text = "";
+    let text: string;
     let st;
     try { st = statSync(f); text = readFileSync(f, "utf8"); } catch { continue; }
     let turns = 0, toolCalls = 0, started = st.birthtimeMs || st.mtimeMs;

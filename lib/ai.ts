@@ -437,12 +437,8 @@ ${topicText}`;
 // 无必然关系（前端只是运行时的一个实例，后端/任何宿主都一样）——此前全局注入前端方向，
 // LLM 被引导把通用机制硬往前端套（如"前端场景比后端多了两个特殊约束"这类被带偏的表述）。
 // Agent/LLM 类题目改用 AI Agent 应用开发方向讲解。
-// 2026-08 再修：宽泛单字词（LLM/token/模型/推理）在前端面经也常见（"LLM 流式输出"、
-// "每帧携带 N 个 token"是前端对接 LLM 的场景，不是 Agent 开发方向）→ 单字命中会把
-// "前端性能优化方案"带偏到 Agent 方向。改为组合词匹配：LLM 后必须跟领域词（机制/原理/基础/
-// 应用/开发/架构/推理/微调/量化/上下文/token/提示词/工具调用），token 后必须跟预算/上下文/
-// 窗口/消耗/限制——"LLM 流式输出"（流式不在列表）与裸 "token" 不再命中。
-const AGENT_TOPIC_RE = /agent|工具调用|function\s*calling|tool\s*binding|mcp|大模型|llm\s*(机制|原理|基础|应用|开发|架构|推理|微调|量化|上下文|token|提示词|工具调用)|token\s*(预算|上下文|窗口|消耗|限制)|提示词\s*(注入|工程|设计|优化)|推理模型|rag|检索增强|multi-agent|多智能体|langchain|langgraph|微调|量化|embedding|向量检索|结构化输出|structured\s*output/i;
+// 2026-09 清理（全量 TS 升级工单顺带）：方向词表（AGENT_TOPIC_RE / FRONTEND_TOPIC_RE）随
+// "不再按方向定制"（2026-08 简化）成为死代码——两道大正则已删除，只保留 isAlgo 这一条真实生效的判定
 // 算法/手写题检测（2026-08 追加：命中则注入算法专属约束——完整可运行函数/复杂度/边界/
 // 暴力→优化演进/示例验证；面试官必问"有没有更优解"）
 // 组合词化（统一层 match-utils）：裸正则 test 会把"技术栈"（含"栈"）误判为算法题注入
@@ -453,26 +449,21 @@ function isAlgoTopic(text: string) {
   const t = String(text || "").toLowerCase();
   return ALGO_TOPIC_WORDS.some((w) => kwHit(t, w));
 }
-/** 题目方向判定（纯函数，导出供测试直测）：返回 {roleLabel, scopeNote, dual}
- * 2026-08 再修：不再"二选一"——前端词与 Agent 词**双命中**时返回双方向（dual:true），
- * 讲解两个视角都覆盖（如"浏览器渲染机制与性能优化"：前端渲染管线 + Agent 场景的 LLM 流式
- * 渲染/工具调用状态渲染——只讲一侧会丢另一侧信息）。单命中时按命中方向；都无 → 方向画像。
- */
-const FRONTEND_TOPIC_RE = /渲染|浏览器|dom|布局|重排|回流|性能优化|事件循环|闭包|原型|作用域|http|缓存|css|react|vue|javascript|typescript|js\b|ts\b|webpack|vite|工程化|组件|虚拟dom|diff|合成事件|微任务|宏任务|promise|异步|防抖|节流|深拷贝|原型链|继承|this|箭头函数|模块化|es6|esm|commonjs|babel|webgl|canvas|动画|帧率|fps|requestanimationframe|重绘|paint|composite|layout|style|selector|盒模型|flex|grid|响应式|移动端|兼容性|跨域|安全|xss|csrf|存储|localstorage|sessionstorage|cookie|网络|tcp|udp|dns|websocket|sse|fetch|axios|ajax|jsonp|状态管理|redux|pinia|vuex|hooks|useeffect|usestate|memo|usecallback|虚拟列表|懒加载|预加载|骨架屏|ssr|csr|hydration/i;
 /** 题目方向判定（纯函数，导出供测试直测）：返回 {roleLabel, scopeNote, dual, isAlgo}
  * 2026-08 简化：**不再按方向定制**（前端/Agent/双方向判定引入"前端场景硬塞"等问题——
  * "Agent 工具调用错误处理"被塞"前端场景的特殊约束（单线程/CORS/CSP）"、纯前端题被塞 Agent 视角）。
  * 从知识本身讲：统一"面试辅导老师"，讲解聚焦机制/原理/边界/追问，不注入方向视角。
  * 保留：isAlgo（算法专属约束）、改编约束（原题范围）、代码按需（≤15 行）——知识本身的约束。
+ * 2026-09：方向正则（AGENT/FRONTEND_TOPIC_RE）随上述简化删除（死代码）
  */
 /**
- * 判断题目方向（算法/前端/通用——决定讲解风格）
+ * 判断题目方向（算法/通用——决定讲解风格）
  * @param {string} title 题目标题
  * @param {string} text 题目正文
- * @param {{ roleLabel?: string, codeLang?: string }} prof 职业画像
+ * @param {{ roleLabel?: string, codeLang?: string }} _prof 职业画像（保留签名：调用方按位置传；2026-08 起不再按方向定制）
  * @returns {{ roleLabel: string, scopeNote: string, dual: boolean, isAlgo: boolean }} 方向信息（roleLabel 用于 prompt 角色）
  */
-export function topicDirection(title: string, text: string, prof: { roleLabel?: string; codeLang?: string }) {
+export function topicDirection(title: string, text: string, _prof: { roleLabel?: string; codeLang?: string }) {
   const joined = String(title || "") + " " + String(text || "");
   const isAlgo = isAlgoTopic(joined);
   return { roleLabel: "资深面试辅导老师", scopeNote: "面试相关（从知识本身讲，不按方向定制）", dual: false, isAlgo };

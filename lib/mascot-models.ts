@@ -26,7 +26,7 @@ export function scanMascotModels(root: string = path.join(import.meta.dirname, "
     const pkgDir = path.join(root, dir.name);
     const walk = (d: string, depth = 0) => {
       if (depth > 4) return;
-      let entries: Dirent[] = [];
+      let entries: Dirent[];
       try { entries = readdirSync(d, { withFileTypes: true }); } catch { return; }
       for (const e of entries) {
         if (e.isDirectory()) { walk(path.join(d, e.name), depth + 1); continue; }
