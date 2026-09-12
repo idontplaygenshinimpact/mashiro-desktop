@@ -1,0 +1,248 @@
+// 可观测性模块：记录每次 LLM 调用（模型/耗时/token/成败）+ 工具调用链 + 审计决策账本
+// 数据存 mianshi.db 的 trace 表，供面板"运行监控"展示与面试讲述
+// 全量 TS 升级工单阶段 3：lib/trace.mjs → .ts（调用方 lib/agent.ts、lib/routes/core.mjs、lib/autonomy.ts、
+// lib/mcp-gate.ts、lib/permission.ts 均按 .mjs 路径惰性 import → 保留同名一行桶）
+import { db } from "./db.mjs";
+
+export function ensureTraceSchema(): void {
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS trace_llm (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    role TEXT NOT NULL,            -- 调用来源：agent/interview/study/ai
+    model TEXT NOT NULL,
+    stream INTEGER NOT NULL DEFAULT 0,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    duration_ms INTEGER,
+    ok INTEGER NOT NULL DEFAULT 1,
+    error TEXT,
+    endpoint TEXT                  -- 实际使用的主/备端点
+  );
+  CREATE TABLE IF NOT EXISTS trace_tools (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    session_id TEXT,               -- 关联的对话会话（chat）
+    tool_name TEXT NOT NULL,
+    args TEXT,
+    ok INTEGER NOT NULL DEFAULT 1,
+    error TEXT,
+    duration_ms INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS decision_ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    session_id TEXT,               -- 关联的对话会话（chat）
+    decision TEXT NOT NULL CHECK(decision IN ('allow','deny','auto_allow','timeout','tool_error','injection_hit')),
+    tool_name TEXT,
+    reason TEXT,                   -- 决策理由（明确拒绝/超时/异常消息，截断）
+    policy_ref TEXT,               -- 命中策略引用（如 auto 分级/MCP auto 配置）
+    approved_by TEXT,              -- 批准来源（如 user；拒绝/超时为 NULL）
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_decision_ts ON decision_ledger(ts);
+  `);
+}
+ensureTraceSchema();
+
+/** 一次 LLM 调用的记录信息（llm.ts 传实值；缺省回落默认） */
+export interface TraceLLMInfo {
+  role?: string;
+  model?: string | null;
+  stream?: boolean;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  durationMs?: number | null;
+  ok?: boolean;
+  error?: string | null;
+  endpoint?: string | null;
+}
+
+/** 记录一次 LLM 调用 */
+export function traceLLM({ role = "agent", model, stream = false, inputTokens = null, outputTokens = null, durationMs = null, ok = true, error = null, endpoint = null }: TraceLLMInfo): void {
+  try {
+    db.prepare(`INSERT INTO trace_llm (ts, role, model, stream, input_tokens, output_tokens, duration_ms, ok, error, endpoint)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(Date.now(), role, model || "unknown", stream ? 1 : 0, inputTokens, outputTokens, durationMs, ok ? 1 : 0, error ? String(error).slice(0, 300) : null, endpoint);
+  } catch { /* ignore */ }
+}
+
+// 敏感工具：args 可能含用户简历/回答/投递信息等隐私内容，trace_tools 不落盘参数值
+// （只记参数键名，不记值）——面板可观测性仍能看到"调了哪些工具"，但不泄露入参
+const SENSITIVE_TOOLS = new Set([
+  "submit_answer", "start_interview", "solve_question", "job_apply", "record_interview_topics",
+]);
+
+/** 一次工具调用的记录信息（缺省回落默认） */
+export interface TraceToolInfo {
+  sessionId?: string | null;
+  toolName: string;
+  args?: unknown;
+  ok?: boolean;
+  error?: string | null;
+  durationMs?: number | null;
+}
+
+/** 记录一次工具调用 */
+export function traceTool({ sessionId = null, toolName, args = null, ok = true, error = null, durationMs = null }: TraceToolInfo): void {
+  try {
+    // 修复：String(args) 对对象返回 "[object Object]"（面板可观测性拿不到参数）→ JSON 序列化
+    let argsText: string | null = null;
+    if (args != null) {
+      try {
+        if (SENSITIVE_TOOLS.has(toolName)) {
+          // 隐私防护：只记参数键名（不落盘回答内容/简历/投递 URL 等值）
+          const keys = args && typeof args === "object" ? Object.keys(args) : [];
+          argsText = JSON.stringify({ _redacted: true, argKeys: keys });
+        } else {
+          argsText = typeof args === "string" ? args : JSON.stringify(args);
+        }
+      } catch { argsText = String(args); }
+    }
+    db.prepare(`INSERT INTO trace_tools (ts, session_id, tool_name, args, ok, error, duration_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(Date.now(), sessionId, toolName, argsText ? String(argsText).slice(0, 500) : null, ok ? 1 : 0, error ? String(error).slice(0, 200) : null, durationMs);
+  } catch { /* ignore */ }
+}
+
+/** LLM 调用汇总（总量 / 失败数 / 按角色成本 / 最近 10 条） */
+export interface LLMStats {
+  total: number;
+  totalDurationMs: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  fail: number;
+  byRole: Array<{ role: string; calls: number; inputTokens: number; outputTokens: number; durationMs: number }>;
+  recent: Array<Record<string, unknown> & { ok: boolean }>;
+}
+
+/** 统计视图：LLM 调用汇总 */
+export function getLLMStats(): LLMStats {
+  const total = db.prepare("SELECT COUNT(*) n, SUM(duration_ms) d, SUM(input_tokens) i, SUM(output_tokens) o FROM trace_llm").get() as Record<string, unknown>;
+  const failRow = db.prepare("SELECT COUNT(*) n FROM trace_llm WHERE ok=0").get() as { n?: unknown } | undefined;
+  const recent = db.prepare("SELECT role, model, stream, input_tokens, output_tokens, duration_ms, ok, error, ts FROM trace_llm ORDER BY id DESC LIMIT 10").all();
+  // 按角色汇总（对话/讲解/面试/复盘/复习/压缩…）：面板成本观察
+  const byRole = (db.prepare(
+    `SELECT role, COUNT(*) n, SUM(input_tokens) i, SUM(output_tokens) o, SUM(duration_ms) d
+     FROM trace_llm GROUP BY role ORDER BY (SUM(input_tokens)+SUM(output_tokens)) DESC`
+  ).all() as Array<Record<string, unknown>>).map((r) => ({
+    role: String(r.role),
+    calls: Number(r.n) || 0,
+    inputTokens: Number(r.i) || 0,
+    outputTokens: Number(r.o) || 0,
+    durationMs: Number(r.d) || 0,
+  }));
+  return {
+    total: Number(total.n) || 0,
+    totalDurationMs: Number(total.d) || 0,
+    totalInputTokens: Number(total.i) || 0,
+    totalOutputTokens: Number(total.o) || 0,
+    fail: Number(failRow?.n) || 0,
+    byRole,
+    recent: recent.map((r) => ({ ...r, ok: !!r.ok })),
+  };
+}
+
+/** 最近工具调用链的一行 */
+export interface ToolTraceRow {
+  tool_name: string;
+  args: string | null;
+  ok: boolean;
+  error: string | null;
+  duration_ms: number | null;
+  ts: number;
+}
+
+/** 最近工具调用链 */
+export function getRecentTools(limit = 10): ToolTraceRow[] {
+  const rows = db.prepare("SELECT tool_name, args, ok, error, duration_ms, ts FROM trace_tools ORDER BY id DESC LIMIT ?").all(limit);
+  return rows.map((r) => ({
+    tool_name: String(r.tool_name),
+    args: r.args === null || r.args === undefined ? null : String(r.args),
+    ok: !!r.ok,
+    error: r.error === null || r.error === undefined ? null : String(r.error),
+    duration_ms: typeof r.duration_ms === "number" ? r.duration_ms : null,
+    ts: typeof r.ts === "number" ? r.ts : 0,
+  }));
+}
+
+// ---------- 审计/决策账本（OpenClaw 风格：metadata-only decision receipts） ----------
+// 只记录决策元数据（决策类型/工具名/理由/策略引用/批准人），绝不存工具参数或内容——供审计追溯，
+// 与 trace_tools（含 args）分离，避免决策账本泄露敏感入参/回填内容。
+
+export type DecisionKind = "allow" | "deny" | "auto_allow" | "timeout" | "tool_error" | "injection_hit";
+
+/** 记录一条工具决策（metadata only）的入参 */
+export interface DecisionInput {
+  sessionId?: string | null;
+  decision: DecisionKind;
+  toolName?: string | null;
+  reason?: string | null;
+  policyRef?: string | null;
+  approvedBy?: string | null;
+}
+
+/** 决策账本一行 */
+export interface DecisionRow {
+  id: number;
+  ts: number;
+  session_id: string | null;
+  decision: string;
+  tool_name: string | null;
+  reason: string | null;
+  policy_ref: string | null;
+  approved_by: string | null;
+  created_at: number;
+}
+
+export interface DecisionStats {
+  total: number;
+  byDecision: Record<string, number>;
+  byTool: Record<string, number>;
+  breakdown: Array<{ decision: string; toolName: string | null; count: number }>;
+}
+
+/** 记录一条工具决策（metadata only）。ledger 永不抛错（try/catch 兜底，防破坏 agent 主循环）。 */
+export function recordDecision({ sessionId = null, decision, toolName = null, reason = null, policyRef = null, approvedBy = null }: DecisionInput): void {
+  try {
+    const now = Date.now();
+    db.prepare(`INSERT INTO decision_ledger (ts, session_id, decision, tool_name, reason, policy_ref, approved_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(now, sessionId, decision, toolName, reason ? String(reason).slice(0, 200) : null, policyRef ? String(policyRef).slice(0, 200) : null, approvedBy ? String(approvedBy).slice(0, 100) : null, now);
+  } catch { /* ignore */ }
+}
+
+/** 最近决策（账本倒序） */
+export function getRecentDecisions(limit = 50): DecisionRow[] {
+  const rows = db.prepare("SELECT id, ts, session_id, decision, tool_name, reason, policy_ref, approved_by, created_at FROM decision_ledger ORDER BY id DESC LIMIT ?").all(limit);
+  return rows.map((r) => ({
+    id: typeof r.id === "number" ? r.id : Number(r.id),
+    ts: typeof r.ts === "number" ? r.ts : 0,
+    session_id: r.session_id === null || r.session_id === undefined ? null : String(r.session_id),
+    decision: String(r.decision),
+    tool_name: r.tool_name === null || r.tool_name === undefined ? null : String(r.tool_name),
+    reason: r.reason === null || r.reason === undefined ? null : String(r.reason),
+    policy_ref: r.policy_ref === null || r.policy_ref === undefined ? null : String(r.policy_ref),
+    approved_by: r.approved_by === null || r.approved_by === undefined ? null : String(r.approved_by),
+    created_at: typeof r.created_at === "number" ? r.created_at : 0,
+  }));
+}
+
+/** 决策统计：按决策类型 + 工具名聚合（sinceTs 起始时间戳，只统计此后的决策） */
+export function getDecisionStats({ sinceTs = 0 }: { sinceTs?: number } = {}): DecisionStats {
+  const rows = db.prepare("SELECT decision, tool_name, COUNT(*) AS count FROM decision_ledger WHERE ts >= ? GROUP BY decision, tool_name").all(sinceTs ?? 0);
+  const byDecision: Record<string, number> = {};
+  const byTool: Record<string, number> = {};
+  let total = 0;
+  const breakdown: Array<{ decision: string; toolName: string | null; count: number }> = [];
+  for (const r of rows) {
+    const decision = String(r.decision);
+    const toolName = r.tool_name === null || r.tool_name === undefined ? null : String(r.tool_name);
+    const count = Number(r.count) || 0;
+    total += count;
+    byDecision[decision] = (byDecision[decision] || 0) + count;
+    if (toolName !== null) byTool[toolName] = (byTool[toolName] || 0) + count;
+    breakdown.push({ decision, toolName, count });
+  }
+  return { total, byDecision, byTool, breakdown };
+}
