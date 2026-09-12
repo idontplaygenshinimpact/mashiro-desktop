@@ -20,14 +20,18 @@ test("串行执行：任务按提交顺序完成，前一个完成后才下一�
 
 test("慢任务不阻塞队列进度（排队等待）", async () => {
   const start = Date.now();
-  const p1 = submit(async () => { await new Promise((r) => setTimeout(r, 100)); return 1; });
+  // 慢任务用 300ms（原 100ms）：全套件并行跑时主线程可能被 GC/调度卡住上百毫秒，
+  // 100ms 的慢任务有概率在"提交 p2 后立刻断言 queued"之前就跑完 → 断言随机失败（CI flaky）。
+  // 断言语义不变（p2 排队/串行/队列清空），只是让"慢"真的慢到不会被调度抖动吃掉。
+  const SLOW_MS = 300;
+  const p1 = submit(async () => { await new Promise((r) => setTimeout(r, SLOW_MS)); return 1; });
   // p2 排队，但 laneStatus 能看到 queued
   const p2 = submit(async () => 2);
   assert.equal(laneStatus().queued >= 1, true, "p2 在队列中");
   const [r1, r2] = await Promise.all([p1, p2]);
   assert.equal(r1, 1);
   assert.equal(r2, 2);
-  assert.ok(Date.now() - start >= 100);
+  assert.ok(Date.now() - start >= SLOW_MS);
   assert.equal(laneStatus().queued, 0, "队列清空");
 });
 
