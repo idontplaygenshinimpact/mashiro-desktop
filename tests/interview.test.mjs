@@ -37,8 +37,9 @@ test("startInterview 已有面试进行中 → error", async () => {
 });
 
 // 回归护栏：配置了简历项目源码（personal-projects）后，startInterview 必须仍正常返回第一问（问题可见），
-// 且档案注入到 prompt（此前"看不到问题"类回归——档案注入把启动弄挂时会在此暴露）
-test("startInterview 配置个人项目档案后仍正常返回问题（档案注入不破坏启动）", async () => {
+// 且项目资料以**精简核对简报**注入 prompt（不含核心源码预览——用户反馈 2026-09：面试官拿本地源码
+// 刨文件名/函数实现，真实面试不会这么问；出题依据以简历为准）
+test("startInterview 配置个人项目档案后仍正常返回问题（档案注入不破坏启动 + 不注入源码实现）", async () => {
   // 临时假项目：package.json（技术栈）+ 一个源码文件 → 有可注入档案
   const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
@@ -50,12 +51,17 @@ test("startInterview 配置个人项目档案后仍正常返回问题（档案�
   const { savePersonalProjects } = await import("../lib/personal-projects.mjs");
   savePersonalProjects([{ name: "iv-proj", dir: projDir }]);
   setLlmResponses(FIRST_Q);
-  const r = await startInterview({ position: "前端" });
+  const r = await startInterview({ position: "前端", resume: "简历：独立开发 CareerPilot（Next.js + CodeMirror），负责简历诊断与模拟面试模块" });
   assert.equal(r.ok, true, "档案注入后 startInterview 仍成功（不抛错）");
   assert.ok(r.question && r.question.length > 0, "返回第一问（问题可见）");
-  // prompt 应含项目档案（面试官拷打真实代码）
+  // prompt 应含精简核对资料（技术栈级），不应含源码实现
   const prompt = (await import("./helpers.mjs")).getLastMessages().map((m) => m.content).join("\n");
-  assert.ok(prompt.includes("简历项目源码档案"), "档案段注入 prompt");
+  assert.ok(prompt.includes("简历项目核对资料"), "核对资料段注入 prompt");
+  assert.ok(prompt.includes("项目拷打的唯一依据"), "简历是项目拷打依据（出题以简历为准）");
+  // 只看注入的核对资料段（output/ 下的历史学习文档含"核心源码预览"字样，不属本段）
+  const briefSeg = prompt.slice(prompt.indexOf("【简历项目核对资料】")).split("\n\n请生成")[0];
+  assert.ok(briefSeg.length > 0 && briefSeg.length < 2000, `核对资料段精简（实际 ${briefSeg.length} 字符）`);
+  assert.ok(!briefSeg.includes("【核心源码预览】"), "核对资料段不含核心源码预览（不拿本地源码细节考人）");
   assert.ok(prompt.includes("iv-proj") || prompt.includes("react"), "档案内容（项目名/技术栈）出现在 prompt");
   // 清理
   savePersonalProjects([]);
@@ -504,6 +510,33 @@ test("agent化⑤：next_question 空 → 兜底追问（不再'请继续'）", 
   assert.equal(r.ok, true);
   assert.ok(!r.question.includes("请继续。"), "不再'请继续。'（空兜底）");
   assert.ok(r.question.includes("深入讲讲"), "兜底追问（基于当前问题）");
+});
+
+// ---------- 回归（2026-09 真实事故）：工具轮打满 → 强制收口出题 ----------
+// 现场：模型每轮连续 4 次只调工具、始终不出 JSON → raw 空 → total=0 + 兜底"请继续"，
+// 面试官连续 7 轮卡在同一题，评分全 0（trace_llm 可见每轮 4 连击 tool_calls）
+const TOOL_CALL_RESP = `TOOLCALL:${JSON.stringify({ name: "search_challenge", arguments: JSON.stringify({ query: "防抖" }) })}`;
+
+test("回归：LLM 连续只调工具（工具轮打满）→ 强制收口仍拿到评分与下一问（不 0 分空转）", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  // 3 次 TOOLCALL（超过工具轮上限 2）→ 第 3 次是强制收口调用；随后 1 次为无工具兜底（后端忽略 tool_choice 场景）
+  setLlmResponses(TOOL_CALL_RESP, TOOL_CALL_RESP, TOOL_CALL_RESP, IV_SCORES);
+  const r = await submitAnswer("我只知道大概思路");
+  assert.equal(r.ok, true, "工具轮打满不阻塞面试推进");
+  assert.equal(r.total, 70, "评分来自强制收口的 JSON（此前 raw 空 → total=0）");
+  assert.ok(r.question.includes("Promise"), "下一问来自强制收口的 JSON（不再空转'请继续'）");
+  assert.equal(memory.getInterview().rounds.length, 1, "本轮正常入账（不产生 0 分空转轮）");
+});
+
+test("回归：强制收口也拿不到 JSON → 返回可重试错误，不写 0 分轮", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  // 工具轮 2 次 + 强制收口 1 次 + 无工具兜底 1 次，全部都不是 JSON
+  setLlmResponses(TOOL_CALL_RESP, TOOL_CALL_RESP, TOOL_CALL_RESP, "抱歉，我无法评分");
+  const r = await submitAnswer("回答");
+  assert.ok(r.error && r.retry === true, `返回可重试错误（实际 ${JSON.stringify(r)}）`);
+  assert.equal(memory.getInterview().rounds.length, 0, "不写 0 分空转轮（此前会记一轮 0 分并重复同一题）");
 });
 
 // ---------- 伪知识点过滤统一工单任务 4：cleanWeakTopic 委托 _cleanTopic（单一实现） ----------

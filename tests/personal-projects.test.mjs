@@ -55,6 +55,29 @@ test("topic 无匹配 → 返回空串（普通知识点不误注入）", async 
   assert.equal(ctx, "", "非项目条目不注入");
 });
 
+// 用户反馈（2026-09）：面试官被灌了本地源码档案（含核心源码预览）→ 围着文件名/函数实现刨根问底，
+// 真实面试不会这么问。archiveBrief = 面试核对用简报：留 技术栈/结构概览/README，剥掉核心源码预览
+test("archiveBrief：剥掉核心源码预览（面试核对简历真实性用，不拿源码实现考人）", async () => {
+  const { buildProjectArchive, archiveBrief } = await import("../lib/personal-projects.mjs");
+  const arch = await buildProjectArchive({ name: "低代码平台", dir: projDir });
+  assert.ok(arch.content.includes("【核心源码预览】"), "原始档案（知识库用）保留源码预览");
+  const brief = archiveBrief(arch.content, 1200);
+  assert.ok(brief.includes("低代码平台"), "保留项目名（核对真实性）");
+  assert.ok(brief.includes("react") || brief.includes("lowcode"), "保留技术栈");
+  assert.ok(!brief.includes("【核心源码预览】"), "剥离核心源码预览");
+  assert.ok(!brief.includes("undoStack"), "不含源码实现细节");
+  assert.ok(brief.length <= 1200, "长度上限生效");
+});
+
+test("archiveBrief：源码结构只留前 12 行（目录树不进面试 prompt）", async () => {
+  const { archiveBrief } = await import("../lib/personal-projects.mjs");
+  const files = Array.from({ length: 30 }, (_, i) => `src/mod${i}.js`).join("\n");
+  const out = archiveBrief(`# 项目：大项目（源码 X）\n\n【技术栈/依赖】\nreact\n\n【源码结构】\n${files}\n`);
+  assert.ok(out.includes("src/mod0.js"), "保留顶层若干文件（概览）");
+  assert.ok(!out.includes("src/mod20.js"), "超出 12 行的文件不注入");
+  assert.ok(out.includes("其余"), "截断有标注（透明）");
+});
+
 test("source 标记简历 + topic 含项目名前缀 → 兜底匹配", async () => {
   const ctx = await getProjectArchiveContext("低代码", "简历");
   assert.ok(ctx.includes("低代码平台"), "按来源兜底匹配到项目");

@@ -45,7 +45,7 @@ export const INTERVIEWER_TOOLS: InterviewerTool[] = [
     type: "function",
     function: {
       name: "search_project_archive",
-      description: "检索候选人本地项目源码档案（真实代码：技术栈/目录结构/核心实现）。项目拷打轮深挖时调用，基于真实代码追问（如具体某个模块怎么实现、潜在 bug、可优化点），不要泛泛而谈。",
+      description: "核对候选人简历里写的项目是否真实存在（返回项目名/技术栈/结构概览/README 摘要，不含源码实现）。仅用于校验简历可信度；项目拷打必须围绕简历写到的模块与职责提问，不要就文件名、目录层级、函数实现细节刨根问底（真实面试官看不到候选人的代码）。",
       parameters: {
         type: "object",
         properties: { keyword: { type: "string", description: "关键词，如'状态机'、'SSE'、'缓存'、'数据库'（可选，空则看项目概览）" } },
@@ -104,15 +104,16 @@ export async function runInterviewerTool(name: string, args: Record<string, unkn
       return { items: list.map((c: { title: string; difficulty?: number; category?: string; description?: unknown }) => ({ title: c.title, difficulty: c.difficulty, category: c.category, description: String(c.description || "").slice(0, 150) })) };
     }
     if (name === "search_project_archive") {
-      const { getPersonalProjects, buildProjectArchive } = await import("./personal-projects.mjs");
+      const { getPersonalProjects, buildProjectArchive, archiveBrief } = await import("./personal-projects.mjs");
       const kw = String(args.keyword || "").toLowerCase();
       const out: Array<{ project: unknown; archive: string }> = [];
       for (const p of getPersonalProjects() || []) {
         try {
           const arch = await buildProjectArchive(p); // async（2026-08 改造——await 修复回归）
-          const text = JSON.stringify(arch || {}).toLowerCase();
-          if (kw && !text.includes(kw)) continue;
-          out.push({ project: p.name, archive: JSON.stringify(arch).slice(0, 1500) });
+          // 只回简报（技术栈/结构概览/README）——面试以简历为准，源码实现细节不给面试官
+          const brief = archiveBrief(arch?.content || "", 900);
+          if (kw && !String(brief).toLowerCase().includes(kw)) continue;
+          out.push({ project: p.name, archive: brief });
         } catch { /* ignore */ }
       }
       return out.length ? { items: out.slice(0, 3) } : { error: `项目档案无匹配「${args.keyword}」，可换关键词或提醒候选人配置源码` };
