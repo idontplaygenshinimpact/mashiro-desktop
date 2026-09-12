@@ -61,7 +61,10 @@ const PROVIDERS: Provider[] = [
         try {
           const { getTargetDirection } = await import("./job-match.mjs");
           const directions = profile?.directions as string[] | undefined;
-          target = (getTargetDirection ? getTargetDirection() : "") || directions?.[0] || "";
+          // 2026-09 起 getTargetDirection 返回多选数组；原来直接把数组塞进 string 槽（隐式 join），
+          // 这里显式拼接（join(",") 与旧的数组隐式 toString 输出一致，多方向不丢信息）
+          const dirs = getTargetDirection ? getTargetDirection() : null;
+          target = (Array.isArray(dirs) ? dirs.join(",") : dirs) || directions?.[0] || "";
         } catch {
           const directions = profile?.directions as string[] | undefined;
           target = directions?.[0] || "";
