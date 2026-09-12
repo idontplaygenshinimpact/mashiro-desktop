@@ -413,8 +413,9 @@ $("iv-send").addEventListener("click", submitAnswer);
 $("iv-answer").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { submitAnswer(); return; }
   if (ivAnswerMode !== "code") return;
-  if (e.key === "Tab") ivHandleTab(e);
-  else if (e.key === "Enter") ivHandleEnter(e);
+  // setRangeText 不触发 input 事件 → 这里显式同步行号（否则 Tab/Enter 后行号要等下一次敲键才更新）
+  if (e.key === "Tab") { ivHandleTab(e); syncIvGutter(); }
+  else if (e.key === "Enter") { ivHandleEnter(e); syncIvGutter(); }
 });
 $("iv-answer").addEventListener("input", syncIvGutter);
 $("iv-answer").addEventListener("scroll", () => {

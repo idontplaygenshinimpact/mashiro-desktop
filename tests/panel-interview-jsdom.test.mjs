@@ -164,6 +164,8 @@ test("代码模式：Tab 插入两个空格（缩进），Enter 自动缩进（{
     box.selectionStart = box.selectionEnd = box.value.length;
     fire("Enter");
     assert.equal(box.value, "  const t = 1;\n  ", "Enter 沿用当前缩进");
+    // 行号随 Tab/Enter 同步（setRangeText 不触发 input 事件——真实浏览器里发现的行号滞后回归）
+    assert.equal(window.document.getElementById("iv-gutter").textContent, "1\n2", "Tab/Enter 后行号同步（无需等下一次敲键）");
     // 行号随内容增长
     box.value = "a\nb\nc";
     box.dispatchEvent(new window.Event("input", { bubbles: true }));
