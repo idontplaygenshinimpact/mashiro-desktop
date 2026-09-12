@@ -105,6 +105,72 @@ test("空回答提交 → 不调用后端（按钮安全）", async () => {
   });
 });
 
+// ---------- 💻 手写轮代码作答（用户反馈 2026-09：手写题用纯文本框太难受）----------
+const CODE_Q = {
+  ok: true, round: 5, roundType: "手写/场景题", nextRoundType: "手写/场景题",
+  question: "手写一个 debounce（防抖）函数", totalRounds: 9, weakQueue: [], depth: 0,
+  dimension: "代码能力", basis: "手写轮", criteria: "leading/trailing", boundary: "不考框架",
+  answerMode: "code",
+};
+
+test("手写轮（answerMode=code）→ 代码编辑器形态：编辑器栏可见 + 行号 + 隐藏语音按钮", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    kanban.invStart = async () => CODE_Q;
+    window.document.getElementById("iv-start").click();
+    await tick();
+    const area = window.document.getElementById("iv-answer-area");
+    assert.ok(area.classList.contains("iv-code"), "作答区进入代码模式");
+    assert.ok(!window.document.getElementById("iv-editor-bar").classList.contains("hidden"), "编辑器栏显示");
+    assert.equal(window.document.getElementById("iv-mic").style.display, "none", "代码轮隐藏语音按钮");
+    assert.match(window.document.getElementById("iv-gutter").textContent, /^1$/, "行号槽可用");
+    assert.match(window.document.getElementById("iv-answer").placeholder, /写代码作答/);
+  });
+});
+
+test("普通轮（answerMode=text）→ 保持文本框形态（不误开编辑器）", async () => {
+  await withPanel(async ({ window }) => {
+    window.document.getElementById("iv-start").click();
+    await tick();
+    const area = window.document.getElementById("iv-answer-area");
+    assert.ok(!area.classList.contains("iv-code"), "非手写轮不进代码模式");
+    assert.ok(window.document.getElementById("iv-editor-bar").classList.contains("hidden"), "编辑器栏隐藏");
+    assert.notEqual(window.document.getElementById("iv-mic").style.display, "none", "语音按钮可见");
+  });
+});
+
+test("代码模式：Tab 插入两个空格（缩进），Enter 自动缩进（{ 后多缩一级）", async () => {
+  await withPanel(async ({ window, kanban }) => {
+    kanban.invStart = async () => CODE_Q;
+    window.document.getElementById("iv-start").click();
+    await tick();
+    const box = window.document.getElementById("iv-answer");
+    const fire = (key, opts = {}) => {
+      const ev = new window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...opts });
+      Object.defineProperty(ev, "target", { value: box });
+      box.dispatchEvent(ev);
+    };
+    // Tab → 两个空格
+    box.value = "";
+    box.selectionStart = box.selectionEnd = 0;
+    fire("Tab");
+    assert.equal(box.value, "  ", "Tab 插入两个空格（不切走焦点）");
+    // Enter（行尾是 {）→ 换行 + 沿用缩进 + 多缩一级
+    box.value = "function debounce(fn) {";
+    box.selectionStart = box.selectionEnd = box.value.length;
+    fire("Enter");
+    assert.equal(box.value, "function debounce(fn) {\n  ", "Enter 自动缩进（{ 后多一级）");
+    // Enter（普通行）→ 沿用当前缩进
+    box.value = "  const t = 1;";
+    box.selectionStart = box.selectionEnd = box.value.length;
+    fire("Enter");
+    assert.equal(box.value, "  const t = 1;\n  ", "Enter 沿用当前缩进");
+    // 行号随内容增长
+    box.value = "a\nb\nc";
+    box.dispatchEvent(new window.Event("input", { bubbles: true }));
+    assert.equal(window.document.getElementById("iv-gutter").textContent, "1\n2\n3", "行号与行数同步");
+  });
+});
+
 test("残留会话自愈：start 报「已有面试进行中」→ 自动 end 旧会话 → 重新开始 → 问题显示", async () => {
   await withPanel(async ({ window, kanban, alerts }) => {
     const starts = [];

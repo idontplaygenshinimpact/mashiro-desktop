@@ -6,6 +6,7 @@
   --sd-fs-md: 13px;  /* 正文基准（原 13px） */
   --sd-fs-lg: 15px;  /* 强调（原 14-16px） */
   --sd-fs-xl: 22px;  /* 标题（原 22/26px） */
+  --sd-mono: ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace; /* 代码作答（手写轮编辑器） */
 }
 /* 真白面板：浅紫罗兰主题（适配真白图片主色 RGB 159,156,196） */
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -130,6 +131,26 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .iv-meta { font-size: var(--sd-fs-xs); color: #6a6790; margin: 8px 0; line-height: 1.6; }
 .iv-answer-area { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 .iv-answer-area textarea { flex: 1; height: 70px; resize: none; }
+/* 💻 手写轮代码作答（用户反馈 2026-09：手写题用纯文本框太难受 → 行号 + 等宽 + Tab/自动缩进） */
+.iv-editor { display: flex; align-items: stretch; gap: 6px; }
+.iv-gutter {
+  display: none; flex: none; width: 30px; padding: 8px 4px 8px 0; text-align: right;
+  font-family: var(--sd-mono); font-size: var(--sd-fs-xs); line-height: 1.55;
+  color: #a9a5c4; background: rgba(109,79,216,.05); border-radius: 6px;
+  overflow: hidden; white-space: pre; user-select: none;
+}
+.iv-editor-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.iv-editor-bar.hidden { display: none; }
+.iv-mode-chip {
+  font-size: var(--sd-fs-xs); padding: 1px 8px; border-radius: 10px;
+  background: rgba(109,79,216,.14); color: #5d48b8; border: 1px solid rgba(109,79,216,.25);
+}
+.iv-editor-hint { font-size: var(--sd-fs-xs); color: #8d89a8; }
+.iv-answer-area.iv-code .iv-gutter { display: block; }
+.iv-answer-area.iv-code textarea {
+  font-family: var(--sd-mono); font-size: var(--sd-fs-sm); line-height: 1.55;
+  height: 190px; white-space: pre; overflow-wrap: normal; overflow-x: auto; tab-size: 2;
+}
 .iv-answer-row { display: flex; gap: 8px; }
 .iv-answer-row #iv-mic { width: 44px; flex: none; font-size: var(--sd-fs-lg); }
 .iv-answer-row #iv-mic.recording {

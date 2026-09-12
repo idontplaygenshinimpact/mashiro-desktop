@@ -253,6 +253,7 @@ function resumeIvSession(status) {
     question: status.question, basis: status.basis, dimension: status.dimension,
     criteria: status.criteria, boundary: status.boundary,
     round: status.round, roundType: status.roundType, depth: status.depth,
+    answerMode: status.answerMode, // 续场：手写轮恢复代码编辑器
     weakQueue: status.weakQueue || [], totalRounds: status.totalRounds,
   });
   // 已评分轮次 → 恢复全场均分累计（服务端镜像持续累计，逐轮增量写）
@@ -307,14 +308,118 @@ function showQuestion(r) {
     <div>🚧 边界：${esc(r.boundary || "-")}</div>`;
   $("iv-answer").value = "";
   $("iv-answer").focus();
+  setIvAnswerMode(r.answerMode === "code" ? "code" : "text");
   renderIvProgress();
   startIvTimer();
-  addIvLog(`轮${interviewState.round}【${interviewState.roundType || "问答"}】问题：${(r.question || "").slice(0, 60)}`);
+  addIvLog(`轮${interviewState.round}【${r.nextRoundType || interviewState.roundType || "问答"}】问题：${(r.question || "").slice(0, 60)}`);
+}
+
+// ============ 💻 手写/代码轮作答（用户反馈 2026-09：手写题用纯文本框太难受）============
+// 同一个 #iv-answer（语音转写/提交链路零改动），code 模式下开启：行号槽 + 等宽字体 +
+// Tab 缩进（多行选区整体缩进/反缩进）+ Enter 自动缩进（{([ 后多缩进一级）+ Backspace 删到缩进位
+let ivAnswerMode = "text";
+const IV_INDENT = "  ";
+
+function ivGutterLineCount() {
+  const v = $("iv-answer").value || "";
+  return (v.match(/\n/g) || []).length + 1;
+}
+
+/** 行号槽与文本行数/滚动同步 */
+function syncIvGutter() {
+  const gutter = $("iv-gutter");
+  const box = $("iv-answer");
+  if (!gutter || !box) return;
+  if (ivAnswerMode !== "code") { gutter.textContent = "1"; return; }
+  const n = ivGutterLineCount();
+  gutter.textContent = Array.from({ length: n }, (_, i) => i + 1).join("\n");
+  gutter.scrollTop = box.scrollTop;
+}
+
+/** 作答形态切换（code = 手写轮：显示编辑器栏 + 行号 + 隐藏语音按钮——代码靠语音输入不现实） */
+function setIvAnswerMode(mode) {
+  ivAnswerMode = mode === "code" ? "code" : "text";
+  const area = $("iv-answer-area");
+  const bar = $("iv-editor-bar");
+  const mic = $("iv-mic");
+  const box = $("iv-answer");
+  if (area) area.classList.toggle("iv-code", ivAnswerMode === "code");
+  if (bar) bar.classList.toggle("hidden", ivAnswerMode !== "code");
+  if (mic) mic.style.display = ivAnswerMode === "code" ? "none" : "";
+  if (box) {
+    box.setAttribute("placeholder", ivAnswerMode === "code"
+      ? "写代码作答（Tab 缩进 · Enter 自动缩进 · Ctrl+Enter 提交）"
+      : "输入你的回答...（也可点 🎙️ 直接说，语音自动转写 + 录音留存可回听；Ctrl+Enter 提交）");
+  }
+  syncIvGutter();
+}
+
+/** 选区替换（jsdom 无 setRangeText 时手工拼接——两条路径都保持光标在插入文本之后） */
+function ivReplaceRange(box, start, end, text) {
+  if (typeof box.setRangeText === "function") {
+    box.setRangeText(text, start, end, "end");
+    return;
+  }
+  const v = box.value;
+  box.value = v.slice(0, start) + text + v.slice(end);
+  const caret = start + text.length;
+  box.selectionStart = box.selectionEnd = caret;
+}
+
+/** 行首缩进（用于 Enter 自动缩进） */
+function ivLineIndent(value, pos) {
+  const lineStart = value.lastIndexOf("\n", pos - 1) + 1;
+  const line = value.slice(lineStart, pos);
+  return (line.match(/^[ \t]*/) || [""])[0];
+}
+
+/** Tab：单行插入两个空格；多行选区整体缩进/反缩进（Shift+Tab） */
+function ivHandleTab(e) {
+  const box = e.target;
+  const { selectionStart: s, selectionEnd: en, value } = box;
+  e.preventDefault();
+  const multiline = value.slice(s, en).includes("\n");
+  if (!multiline) {
+    if (e.shiftKey) {
+      const lineStart = value.lastIndexOf("\n", s - 1) + 1;
+      const head = value.slice(lineStart, s);
+      const strip = head.match(/[ \t]{1,2}$/);
+      if (strip) ivReplaceRange(box, s - strip[0].length, s, "");
+      return;
+    }
+    ivReplaceRange(box, s, en, IV_INDENT);
+    return;
+  }
+  const blockStart = value.lastIndexOf("\n", s - 1) + 1;
+  const blockEnd = value.indexOf("\n", en) === -1 ? value.length : value.indexOf("\n", en);
+  const lines = value.slice(blockStart, blockEnd).split("\n");
+  const next = lines.map((l) => (e.shiftKey ? l.replace(/^[ \t]{1,2}/, "") : IV_INDENT + l)).join("\n");
+  ivReplaceRange(box, blockStart, blockEnd, next);
+}
+
+/** Enter：沿用上一行缩进；行尾是 { ( [ 时多缩进一级（写完 } 想反缩进按 Shift+Tab 或退格） */
+function ivHandleEnter(e) {
+  const box = e.target;
+  const { selectionStart: s, selectionEnd: en, value } = box;
+  e.preventDefault();
+  const indent = ivLineIndent(value, s);
+  const lineStart = value.lastIndexOf("\n", s - 1) + 1;
+  const lineText = value.slice(lineStart, s);
+  const extra = /[{([]\s*$/.test(lineText) ? IV_INDENT : "";
+  ivReplaceRange(box, s, en, "\n" + indent + extra);
 }
 
 $("iv-send").addEventListener("click", submitAnswer);
 $("iv-answer").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) submitAnswer();
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { submitAnswer(); return; }
+  if (ivAnswerMode !== "code") return;
+  if (e.key === "Tab") ivHandleTab(e);
+  else if (e.key === "Enter") ivHandleEnter(e);
+});
+$("iv-answer").addEventListener("input", syncIvGutter);
+$("iv-answer").addEventListener("scroll", () => {
+  const gutter = $("iv-gutter");
+  if (gutter) gutter.scrollTop = $("iv-answer").scrollTop;
 });
 
 async function submitAnswer() {

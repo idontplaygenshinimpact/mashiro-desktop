@@ -783,7 +783,7 @@ async function loadSettings() {
       $("set-notify-status").textContent = j.reviewReminder || j.studyReminder ? "✅ 已生效" : "已全部关闭";
     }
   } catch { /* ignore */ }
-  // 简历项目源码（面试官拷打素材）
+  // 简历项目源码（知识库/讲解素材；模拟面试只基于简历提问，不读本地源码）
   try {
     const r = await fetch(API_BASE + "/api/settings/personal-projects");
     const j = await r.json();
@@ -791,7 +791,7 @@ async function loadSettings() {
       const lines = (j.projects || []).map((p) => `${p.name}=${p.dir}`).join("\n");
       $("set-personal-projects").value = lines;
       $("set-personal-projects-status").textContent = j.projects?.length
-        ? `✅ ${j.projects.length} 个项目已接入（面试官会基于真实代码拷打）`
+        ? `✅ ${j.projects.length} 个项目已接入（供知识库/讲解检索；模拟面试以简历为准）`
         : "未配置——填项目名=源码目录后保存";
     }
   } catch { /* ignore */ }
@@ -1365,7 +1365,7 @@ async function saveReminderSwitch(key, on) {
 $("set-notify-review")?.addEventListener("change", (e) => saveReminderSwitch("reviewReminder", e.target.checked));
 $("set-notify-study")?.addEventListener("change", (e) => saveReminderSwitch("studyReminder", e.target.checked));
 
-// 简历项目源码（面试官拷打素材）：保存 → 生成档案进知识库
+// 简历项目源码（知识库/讲解素材）：保存 → 生成档案进知识库（模拟面试不消费，只基于简历提问）
 $("set-personal-projects-save")?.addEventListener("click", async () => {
   const btn = $("set-personal-projects-save");
   btn.disabled = true;

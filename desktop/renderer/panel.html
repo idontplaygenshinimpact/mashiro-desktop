@@ -134,7 +134,14 @@
         <div class="iv-question" id="iv-question"></div>
         <div class="iv-meta" id="iv-meta"></div>
         <div class="iv-answer-area" id="iv-answer-area">
-          <textarea id="iv-answer" placeholder="输入你的回答...（也可点 🎙️ 直接说，语音自动转写 + 录音留存可回听；Ctrl+Enter 提交）"></textarea>
+          <div class="iv-editor-bar hidden" id="iv-editor-bar">
+            <span class="iv-mode-chip" id="iv-mode-chip">💻 手写题 · 代码作答</span>
+            <span class="iv-editor-hint">Tab 缩进 · Enter 自动缩进 · Ctrl+Enter 提交</span>
+          </div>
+          <div class="iv-editor" id="iv-editor">
+            <div class="iv-gutter" id="iv-gutter" aria-hidden="true">1</div>
+            <textarea id="iv-answer" spellcheck="false" placeholder="输入你的回答...（也可点 🎙️ 直接说，语音自动转写 + 录音留存可回听；Ctrl+Enter 提交）"></textarea>
+          </div>
           <div class="iv-answer-row">
             <button id="iv-mic" class="secondary" title="录音回答：说答案 → 自动转写回填输入框，录音留存本场可回听">🎙️</button>
             <button id="iv-send" class="primary">提交回答</button>

@@ -37,9 +37,9 @@ test("startInterview 已有面试进行中 → error", async () => {
 });
 
 // 回归护栏：配置了简历项目源码（personal-projects）后，startInterview 必须仍正常返回第一问（问题可见），
-// 且项目资料以**精简核对简报**注入 prompt（不含核心源码预览——用户反馈 2026-09：面试官拿本地源码
-// 刨文件名/函数实现，真实面试不会这么问；出题依据以简历为准）
-test("startInterview 配置个人项目档案后仍正常返回问题（档案注入不破坏启动 + 不注入源码实现）", async () => {
+// 且**本地项目源码不进面试上下文**（用户反馈 2026-09：面试官拿本地源码刨文件名/函数实现，
+// "正常一般不会查这么细，还是根据简历来吧"）——项目拷打只看简历
+test("startInterview 配置个人项目档案后仍正常返回问题（面试上下文不含本地源码）", async () => {
   // 临时假项目：package.json（技术栈）+ 一个源码文件 → 有可注入档案
   const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
@@ -52,17 +52,18 @@ test("startInterview 配置个人项目档案后仍正常返回问题（档案�
   savePersonalProjects([{ name: "iv-proj", dir: projDir }]);
   setLlmResponses(FIRST_Q);
   const r = await startInterview({ position: "前端", resume: "简历：独立开发 CareerPilot（Next.js + CodeMirror），负责简历诊断与模拟面试模块" });
-  assert.equal(r.ok, true, "档案注入后 startInterview 仍成功（不抛错）");
+  assert.equal(r.ok, true, "档案配置后 startInterview 仍成功（不抛错）");
   assert.ok(r.question && r.question.length > 0, "返回第一问（问题可见）");
-  // prompt 应含精简核对资料（技术栈级），不应含源码实现
+  // prompt：简历是唯一项目依据；不含本地源码信息
   const prompt = (await import("./helpers.mjs")).getLastMessages().map((m) => m.content).join("\n");
-  assert.ok(prompt.includes("简历项目核对资料"), "核对资料段注入 prompt");
   assert.ok(prompt.includes("项目拷打的唯一依据"), "简历是项目拷打依据（出题以简历为准）");
-  // 只看注入的核对资料段（output/ 下的历史学习文档含"核心源码预览"字样，不属本段）
-  const briefSeg = prompt.slice(prompt.indexOf("【简历项目核对资料】")).split("\n\n请生成")[0];
-  assert.ok(briefSeg.length > 0 && briefSeg.length < 2000, `核对资料段精简（实际 ${briefSeg.length} 字符）`);
-  assert.ok(!briefSeg.includes("【核心源码预览】"), "核对资料段不含核心源码预览（不拿本地源码细节考人）");
-  assert.ok(prompt.includes("iv-proj") || prompt.includes("react"), "档案内容（项目名/技术栈）出现在 prompt");
+  assert.ok(prompt.includes("看不到候选人的代码") || prompt.includes("看不到"), "明确告知面试官看不到代码");
+  // 项目上下文段（简历段）里不得有任何本地源码档案痕迹（output/ 下历史学习文档是另一段素材，不属项目上下文）
+  const projectCtx = prompt.slice(prompt.indexOf("候选人简历（"), prompt.indexOf("请生成面试的"));
+  assert.ok(projectCtx.length > 0, "简历段存在");
+  assert.ok(!projectCtx.includes("【源码结构】") && !projectCtx.includes("【核心源码预览】"), "项目上下文不含本地源码/目录结构");
+  assert.ok(!prompt.includes("iv-proj"), "本地项目名不进面试上下文");
+  assert.ok(!prompt.includes(projDir), "本地项目路径不进面试上下文");
   // 清理
   savePersonalProjects([]);
   try { rmSync(projDir, { recursive: true, force: true }); } catch { /* ignore */ }
@@ -460,11 +461,11 @@ test("startInterview 优先考察多源聚合：题库错题/复习错题/今日
 });
 
 test("质量服务端兜底：低分+stage → 强制追问；高分+followup → 放行不纠缠（Bug#5）", async () => {
-  // 低分（30）+ LLM 说 stage → 服务端强制 followup（tech 轮）
+  // 低分（30）+ LLM 说 stage → 服务端强制 followup（tech 轮）——回答含糊但**没有明确放弃**
   setLlmResponses(FIRST_Q);
   await startInterview({ position: "前端" });
   setLlmResponses('{"scores":{"tech":30,"expr":30,"depth":30,"edge":30,"reflect":30},"comment":"差","finish":false,"next_kind":"stage","next_question":"下一问","next_basis":"b","next_dimension":"d","next_criteria":"c","next_boundary":"b","weak_topic":""}');
-  const r1 = await submitAnswer("不太会");
+  const r1 = await submitAnswer("宏任务和微任务吧，大概是这么个顺序，具体没细看");
   assert.equal(r1.depth, 1, "低分强制追问（depth=1）");
   assert.equal(memory.getInterview().roundIndex, 0, "低分强制追问不推进轮次");
   // 高分（80）+ LLM 说 followup → 服务端放行（改 new 本轮换题，不追问）
@@ -472,6 +473,42 @@ test("质量服务端兜底：低分+stage → 强制追问；高分+followup �
   const r2 = await submitAnswer("我很懂");
   assert.equal(r2.depth, 0, "高分不追问（depth=0）");
   assert.equal(memory.getInterview().roundIndex, 0, "高分放行本轮换题（不推进不纠缠）");
+});
+
+// ---------- 用户反馈（2026-09）：明确说"忘了/不会"就该换题，不再拷打同一题 ----------
+test("isGiveUpAnswer：明确放弃识别（短回答命中；长回答里的转折不算）", async () => {
+  const { isGiveUpAnswer } = await import("../lib/interview-session.mjs");
+  for (const a of ["忘了", "这个我不记得了", "没做过这个", "不太会", "不会，跳过吧", ""]) {
+    assert.equal(isGiveUpAnswer(a), true, `「${a}」应判为放弃`);
+  }
+  const long = "这块我确实不知道细节，但我可以从整体设计上讲：我们用的是三阶段状态机，plan/round/review 分别对应简历输入、AI 规划与复盘生成，用 Zustand selector 管理五阶段状态，其中动态追问和手写穿插是两条独立的链路，SSE 流式复盘单独走一条通道……" + "补充说明细节若干".repeat(6);
+  assert.ok(long.replace(/\s+/g, "").length > 120, "长回答样本需超阈值");
+  assert.equal(isGiveUpAnswer(long), false, "长回答里的'不知道'是转折，不算放弃");
+  assert.equal(isGiveUpAnswer("事件循环是宏任务与微任务的调度机制，先执行同步代码再清空微任务队列"), false, "正常回答不算放弃");
+});
+
+test("明确放弃（低分 + next_kind=followup）→ 服务端强制换题（depth 归 0，不重复同一题）", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  // LLM 还想追问（followup）+ 低分 —— 但候选人明确说忘了 → 必须换题
+  setLlmResponses('{"scores":{"tech":20,"expr":20,"depth":20,"edge":20,"reflect":20},"comment":"不会","finish":false,"next_kind":"followup","next_question":"那再讲讲这个知识点的底层原理","next_basis":"追问","next_dimension":"原理","next_criteria":"c","next_boundary":"b","weak_topic":""}');
+  const r = await submitAnswer("忘了，这题我不会");
+  assert.equal(r.ok, true);
+  assert.equal(r.gaveUp, true, "标记候选人放弃");
+  assert.equal(r.depth, 0, "不再追问（depth 归 0）");
+  assert.equal(memory.getInterview().current.round, 1, "同轮内换题（不推进轮次）");
+  assert.ok(r.question.includes("底层原理"), "仍用 LLM 给出的新题（换题而非重复原题）");
+});
+
+test("明确放弃 + LLM 未给新题 → 兜底不重复原题（引导到别的知识点）", async () => {
+  setLlmResponses(FIRST_Q);
+  await startInterview({ position: "前端" });
+  setLlmResponses('{"scores":{"tech":10,"expr":10,"depth":10,"edge":10,"reflect":10},"comment":"不会","finish":false,"next_kind":"followup","next_question":"","weak_topic":""}');
+  const r = await submitAnswer("没做过");
+  assert.equal(r.ok, true);
+  assert.equal(r.depth, 0, "放弃后不追问");
+  assert.ok(!r.question.includes("事件循环"), "兜底问题不重复原题");
+  assert.ok(r.question.includes("换个方向"), "兜底换题文案");
 });
 
 // ---------- 模拟面试 agent 化工单任务 6：循环内 tool_calls / messages 累积 / 兜底 ----------

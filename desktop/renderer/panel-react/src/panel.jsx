@@ -60,7 +60,7 @@ export function InterviewPanel() {
 
   function enterActive(r) {
     setPhase("active");
-    setSession(pick(r, ["round", "roundType", "question", "dimension", "basis", "criteria", "boundary", "depth", "totalRounds"]));
+    setSession(pick(r, ["round", "roundType", "nextRoundType", "answerMode", "question", "dimension", "basis", "criteria", "boundary", "depth", "totalRounds"]));
     setScores({ tech: 0, expr: 0, depth: 0, edge: 0, reflect: 0, total: 0, rounds: 0 });
     setLog([{ ts: Date.now(), text: `面试开始：${r.roundType || ""} · 第 1 轮` }]);
   }
@@ -82,7 +82,7 @@ export function InterviewPanel() {
     try {
       const r = resumable;
       setPhase("active");
-      setSession(pick(r, ["round", "roundType", "question", "dimension", "basis", "criteria", "boundary", "depth", "totalRounds"]));
+      setSession(pick(r, ["round", "roundType", "nextRoundType", "answerMode", "question", "dimension", "basis", "criteria", "boundary", "depth", "totalRounds"]));
       setScores({
         tech: Number(r.scoreSum?.tech) || 0, expr: Number(r.scoreSum?.expr) || 0, depth: Number(r.scoreSum?.depth) || 0,
         edge: Number(r.scoreSum?.edge) || 0, reflect: Number(r.scoreSum?.reflect) || 0,
@@ -120,7 +120,7 @@ export function InterviewPanel() {
           alert(end?.error || "结束失败");
         }
       } else {
-        setSession(pick(r, ["round", "roundType", "question", "dimension", "basis", "criteria", "boundary", "depth", "totalRounds"]));
+        setSession(pick(r, ["round", "roundType", "nextRoundType", "answerMode", "question", "dimension", "basis", "criteria", "boundary", "depth", "totalRounds"]));
       }
     } catch (e) { alert("提交异常：" + String(e?.message || e)); }
     finally { setBusy(false); }
@@ -216,6 +216,9 @@ function SessionView({ session, scores, busy, log, onSubmit, onExit }) {
   const [micErr, setMicErr] = useState("");
   const recRef = useRef(null);
   const avgRounds = Math.max(1, scores.rounds);
+  // 💻 手写轮代码作答（用户反馈 2026-09：手写题用纯文本框太难受）——原生面板同款：行号 + 等宽 + Tab/自动缩进
+  const isCode = session?.answerMode === "code";
+  const gutterText = Array.from({ length: (answer.match(/\n/g) || []).length + 1 }, (_, i) => i + 1).join("\n");
 
   // 计时器：进入会话/切换轮次时启动
   useEffect(() => {
@@ -291,24 +294,63 @@ function SessionView({ session, scores, busy, log, onSubmit, onExit }) {
       <div style={{ display: "flex", gap: 14 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-            <div style={{ fontSize: 12, color: "#a8a3c8" }}>你的回答{recording ? "（录音中…）" : ""}</div>
+            <div style={{ fontSize: 12, color: "#a8a3c8", display: "flex", gap: 8, alignItems: "center" }}>
+              <span>你的回答{recording ? "（录音中…）" : ""}</span>
+              {isCode && (
+                <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 10, background: "rgba(109,79,216,.18)", color: "#b9aef0", border: "1px solid rgba(109,79,216,.35)" }}>
+                  💻 手写题 · 代码作答
+                </span>
+              )}
+            </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               {micErr && <span style={{ fontSize: 11, color: "#e5484d" }}>{micErr}</span>}
-              <button onClick={toggleMic} disabled={busy}
-                style={{ background: recording ? "#e5484d" : "#2a2540", color: "#fff", border: "1px solid #4a4568", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
-                {recording ? "⏹ 停止" : "🎤 语音作答"}
-              </button>
+              {/* 代码轮隐藏语音作答（代码靠语音输入不现实）；普通轮保留 */}
+              {!isCode && (
+                <button onClick={toggleMic} disabled={busy}
+                  style={{ background: recording ? "#e5484d" : "#2a2540", color: "#fff", border: "1px solid #4a4568", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
+                  {recording ? "⏹ 停止" : "🎤 语音作答"}
+                </button>
+              )}
             </div>
           </div>
-          <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={7}
-            placeholder="组织你的回答（思路 → 代码/例子 → 边界）…" style={{ ...input, resize: "vertical", lineHeight: 1.5 }}
-            onKeyDown={(e) => {
-              // Ctrl/Cmd+Enter 快速提交（isComposing 防中文输入法选字误触）
-              if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                if (answer.trim() && !busy) { onSubmit(answer); setAnswer(""); }
-              }
-            }} />
+          <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+            {isCode && (
+              <div aria-hidden="true" style={{
+                width: 30, flexShrink: 0, textAlign: "right", padding: "8px 4px 8px 0", borderRadius: 6,
+                fontFamily: MONO, fontSize: 11, lineHeight: 1.5, color: "#8d89a8",
+                background: "rgba(109,79,216,.07)", whiteSpace: "pre", overflow: "hidden", userSelect: "none",
+              }}>{gutterText}</div>
+            )}
+            <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={isCode ? 10 : 7}
+              placeholder={isCode ? "写代码作答（Tab 缩进 · Enter 自动缩进 · Ctrl+Enter 提交）…" : "组织你的回答（思路 → 代码/例子 → 边界）…"}
+              style={{
+                ...input, resize: "vertical", lineHeight: 1.5, flex: 1, minWidth: 0,
+                ...(isCode ? { fontFamily: MONO, fontSize: 12, whiteSpace: "pre", overflowX: "auto", tabSize: 2 } : {}),
+              }}
+              onKeyDown={(e) => {
+                // Ctrl/Cmd+Enter 快速提交（isComposing 防中文输入法选字误触）
+                if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  if (answer.trim() && !busy) { onSubmit(answer); setAnswer(""); }
+                  return;
+                }
+                // 手写轮：Tab 缩进两格 / Enter 自动缩进（与原生面板 panel-study.js 同款行为）
+                if (!isCode) return;
+                const box = e.target;
+                const { selectionStart: s, selectionEnd: en, value } = box;
+                if (e.key === "Tab") {
+                  e.preventDefault();
+                  setAnswer(replaceRange(box, s, en, "  "));
+                } else if (e.key === "Enter") {
+                  e.preventDefault();
+                  const lineStart = value.lastIndexOf("\n", s - 1) + 1;
+                  const line = value.slice(lineStart, s);
+                  const indent = (line.match(/^[ \t]*/) || [""])[0];
+                  const extra = /[{([]\s*$/.test(line) ? "  " : "";
+                  setAnswer(replaceRange(box, s, en, "\n" + indent + extra));
+                }
+              }} />
+          </div>
           <button onClick={() => { onSubmit(answer); setAnswer(""); }} disabled={busy || !answer.trim()}
             style={{ ...btnPrimary, width: "100%", marginTop: 10, padding: "10px 0" }}>
             {busy ? "评分中…" : "📤 提交回答"}
@@ -367,3 +409,18 @@ const btnPrimary = { background: "#8fc7ff", color: "#171322", border: "none", bo
 const btnSecondary = { background: "#2a2540", color: "#e8e6f5", border: "1px solid #4a4568", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13 };
 const input = { background: "#241f3a", color: "#e8e6f5", border: "1px solid #3a3558", borderRadius: 6, padding: "8px 10px", fontSize: 13, outline: "none" };
 const lbl = { fontSize: 12, color: "#a8a3c8" };
+const MONO = 'ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace'; // 手写轮代码字体
+
+/** 替换选区文本（jsdom 无 setRangeText 时手工拼接）→ 返回新值（React 受控组件用） */
+function replaceRange(box, start, end, text) {
+  if (typeof box.setRangeText === "function") {
+    box.setRangeText(text, start, end, "end");
+    return box.value;
+  }
+  const v = box.value;
+  const next = v.slice(0, start) + text + v.slice(end);
+  const caret = start + text.length;
+  box.value = next;
+  box.selectionStart = box.selectionEnd = caret;
+  return next;
+}

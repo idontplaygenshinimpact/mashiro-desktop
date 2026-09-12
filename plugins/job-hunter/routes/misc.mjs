@@ -171,12 +171,12 @@ export function registerMiscRoutes(router) {
     });
   });
 
-  // ---------- 简历项目源码（设置中心；模拟面试拷打素材） ----------
+  // ---------- 简历项目源码（设置中心；知识库/讲解素材——模拟面试不看源码，只看简历） ----------
   router.route("/api/settings/personal-projects", "GET", (req, res) => {
     try {
       const projects = personalProjectsApi.getPersonalProjects();
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ ok: true, projects: projects.map((p) => ({ name: p.name, dir: p.dir })), note: "扫描项目目录生成源码档案，模拟面试项目拷打时面试官会基于真实代码发问" }));
+      res.end(JSON.stringify({ ok: true, projects: projects.map((p) => ({ name: p.name, dir: p.dir })), note: "扫描项目目录生成源码档案，供知识库检索与清单讲解；模拟面试只基于简历提问，不读本地源码" }));
     } catch (e) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
@@ -189,7 +189,7 @@ export function registerMiscRoutes(router) {
         const r = personalProjectsApi.savePersonalProjects(projects);
         const idx = r.ok ? await personalProjectsApi.indexPersonalProjects() : { ok: 0, fail: 0 };
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ ok: true, ...r, indexed: idx, message: `✅ 已保存 ${r.projects.length} 个项目并生成源码档案（面试官拷打用）` }));
+        res.end(JSON.stringify({ ok: true, ...r, indexed: idx, message: `✅ 已保存 ${r.projects.length} 个项目并生成源码档案（知识库/讲解用；模拟面试以简历为准）` }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
