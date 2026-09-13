@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 全量 TS 升级（四阶段完成：核心业务 → 编排层 → 服务入口 → 插件/桌面）
+
+- 🧱 **实现全覆盖**：`lib` 122 `.ts`（含 `contracts/` `routes/` `tools/` `adapters/` `platforms/`）、`plugins` 14 `.ts`（job-hunter 12 个路由域 + 模板插件）、`desktop` 11 `.ts`（widget-server / tts-edge / foreground / voice-pack / main / speech-queue / api-client）。**迁移后每个模块都保留同名 `.mjs` 一行桶**（`export * from "./X.ts"`）——插件协议入口（`server.mjs`）、Electron `main`（`package.json` 的 `main`）、`#lib/*` 子路径导入、Vite 子项目、esbuild 入口全部零改动
+- 🔬 **strict 门禁扩到三层**：`tsconfig.strict.json` 覆盖 `lib/plugins/desktop` 的 `.ts`；`tsconfig.desktop.json` 纳入 `desktop/**/*.ts`；Electron 43（内嵌 Node 24.18）实测可直接 `import` `.ts`（原生类型剥离生效），Electron 入口与打包路径不变
+- 🐛 **迁移把隐式 any 掩盖的真缺陷顶了出来，逐个修掉并补护栏**：
+  - `/api/review/feedback` 与 `/api/review/retry` 把 JSON-Schema 形状的普通对象当 zod schema 传给 `withContract` → 运行期 `output.safeParse is not a function` → **两条路由恒 500**（新增 `tests/review-routes.test.mjs`，含 again 卡入队后的出参契约断言）
+  - `POST /api/settings/reminders` 把 `readBody` 的**原始字符串**当对象（`hasOwnProperty.call(字符串, key)` 恒 false）→ 复习/学习提醒开关**静默不落库**、面板显示"已保存"刷新即回滚（新增 `tests/misc-reminders.test.mjs`；并用 HEAD 版实现反证：修复前 3/4 断言必失败）
+  - `shell.openPath` 是 Promise（失败返回错误描述），旧代码当同步调用 → 打开文件失败仍返回 `{ok:true}`（静默成功）；`resolveFfplay()` 返回 `false` 时被当命令传给 `spawn`（错误信息被吞成模糊提示）
+  - `withLLMTimeout` 把流式文本类型擦成 `unknown`（调用方靠 JSDoc any 压回）→ 泛型化；`speech-queue` 的音频句柄泛型化（调用方不再拿到 unknown）
+- 🧪 **护栏同步迁移口径**（否则"实现迁走、`.mjs` 变一行桶"会让护栏静默失明）：源码扫描型断言改读实现文件（`.ts` + `.mjs` 桶）——`tests/panel-dom-consistency.test.mjs`（practice/focus）、`tests/react-panel.test.mjs`（main）；内容哈希新鲜度 `speech-queue` 组改盯 `speech-queue.ts`
+- 🟢 **三态并行补口（Vue 全 Tab 渲染护栏）**：8×2 矩阵虽已满格，但 Vue 侧只有 `useReview` 逻辑测试 → 新增 `tests/vue-tabs.render.test.mjs`（7 项，jsdom + 真实构建产物）：复习/驾驶舱/知识库/清单/爬取/校招/对话/面试逐 Tab 断言"按 tab 分发 → 数据同源 → 🟢 Vue 特色 → UI 不变量 → 对称卸载"；顺带修掉 Vue 入口 `__mountVueReview` 对**未登记 Tab 静默挂复习卡**（登记表漂移时表现为"别的 Tab 冒出复习卡"，现在与 React 侧一样抛错可排查）
+
 ### 模拟面试（真实使用反馈修复）
 
 - 🎯 **出题依据只有简历**：本地项目源码档案（此前 9000 字符含核心源码预览）**彻底退出面试上下文**——面试官和真实面试官一样看不到候选人电脑里的代码，`search_project_archive` 工具一并下线，prompt 明确"简历是项目拷打的唯一依据"；项目源码档案仍服务知识库/清单讲解/项目讲解指南（模拟面试不再消费）。用户原话："正常一般不会查这么细，还是根据简历来吧"

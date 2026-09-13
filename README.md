@@ -4,7 +4,7 @@
 > 2026-08 起升级为**事件驱动自主桌宠**：感知（Claude Code 会话 watcher）→ 决策（自主规则引擎）→ 装配（场景技能子集）→ 表达（气泡/语音），并落地 **API 契约层（zod）与双层 AI 评测体系（真实消融基线）**。
 > 2026-09 起：**渲染层三态并行**（原生 / React / Vue 同屏可切 + dist 体积实测对比）、**UI 质量机器指标门禁**（8 类指标归零）、**本地 ASR 长音频分段识别**（实测 CER 4.1% → 0%）、**渐进式 TS 迁移**（每模块一提交 + 三条 tsc 门禁 + 桶化保调用方零改动）。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/mashiro-mcp?color=cb3837&label=mashiro-mcp)](https://www.npmjs.com/package/mashiro-mcp) ![Node](https://img.shields.io/badge/Node-%3E%3D22-5fa04e) ![Tests](https://img.shields.io/badge/tests-1206%2B-8a5adc) ![Platform](https://img.shields.io/badge/Windows-10%2F11-0078d6)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/idontplaygenshinimpact/mashiro-desktop/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/mashiro-mcp?color=cb3837&label=mashiro-mcp)](https://www.npmjs.com/package/mashiro-mcp) ![Node](https://img.shields.io/badge/Node-%3E%3D22-5fa04e) ![Tests](https://img.shields.io/badge/tests-1231%2B-8a5adc) ![Platform](https://img.shields.io/badge/Windows-10%2F11-0078d6)
 
 ---
 
@@ -17,8 +17,8 @@
 | **事件驱动内核** | 事件总线 + 自主决策（off/notify/full 三级刹车）+ CC 会话 watcher（Claude Code 伴侣）+ 场景技能装配 | ✅ P0+P1 已接线 |
 | **契约层（Phase 2）** | zod 契约：≥15 个高频路由 input/output 校验（`tests/routes-registry.test.mjs` 护栏）+ SSE 事件 union + preload/renderer 类型化（`kanban-api.d.ts` **72 个接口方法**，preload 以该类型 expose，checkJs 校验）+ 117 处硬编码收编 | ✅ |
 | **双层评测（Phase 评测）** | Layer A 真实模型基线 + Layer B mock agent 机制；数据集治理（sha256）/ 成本延迟指标 / 分层回归门禁 / 消融基线 / 每周评测 workflow（机制已接线；**尚未产出真实徽章与趋势**——`<!-- EVAL_BADGE -->` 仍为空、`benchmark/trend.svg` 未入库，需带 `DEEPSEEK_API_KEY` secret 跑一周） | ✅ 机制 |
-| **三态渲染层** | **8 个 Tab × 原生 / React / Vue 三态并行**（同一 preload IPC 桥 + 同一业务层零改动）；三态对比卡（dist 实测：原生 349KB / React 242KB / Vue 158KB） | ✅ 矩阵 8×2 满格 |
-| **工程门禁** | **三条 tsc（宽松 checkJs + strict + desktop）0 错误** + eslint **0 error 0 warning** + **1206 用例全绿** + 渲染产物内容哈希新鲜度 + node:test 协议通道守卫 + UI 8 类机器指标巡检 + 本地 ASR 分段回归；**渐进式 TS 迁移**（lib 61 `.ts` / 49 `.mjs`，每模块一提交、桶化保调用方零改动） | ✅ |
+| **三态渲染层** | **8 个 Tab × 原生 / React / Vue 三态并行**（同一 preload IPC 桥 + 同一业务层零改动）；三态对比卡（dist 实测：原生 349.8KB / React 241.7KB / Vue 158KB）；**两侧全 Tab 渲染护栏**（`tests/react-tabs.render.test.mjs` + `tests/vue-tabs.render.test.mjs`：按 tab 挂载 → 数据等价 → 特色标注 → UI 不变量 → 对称卸载） | ✅ 矩阵 8×2 满格 |
+| **工程门禁** | **三条 tsc（宽松 checkJs + strict 含 lib/plugins/desktop + desktop 主进程）0 错误** + eslint **0 error 0 warning** + **1231 用例全绿**（1192 单元 + 39 集成）+ 渲染产物内容哈希新鲜度 + node:test 协议通道守卫 + UI 8 类机器指标巡检 + 本地 ASR 分段回归；**全量 TS 迁移已完成**（`lib` 122 `.ts` / `plugins` 14 `.ts` / `desktop` 11 `.ts`，实现全在 `.ts`，`.mjs` 只剩同名一行桶 → 调用方/插件协议/Electron 入口零改动；每模块一提交） | ✅ |
 
 **秋招助手（插件①）能力一览**：
 
@@ -228,14 +228,16 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 │   ├── data-detect.ts              # 桌宠数据目录自动探测（MCP 装包即连）
 │   ├── speech.mjs                  # 本地 ASR（sherpa-onnx + whisper 兜底；长音频分段 + 术语纠错）
 │   └── db.mjs                      # node:sqlite 主存储（WAL，23 表 + settings KV）
-│   （TS 迁移进行中：lib **顶层** 69 个 `.ts` / 47 个 `.mjs`（其中 31 个真模块 + 16 个一行桶；含 contracts/routes/tools/adapters 子目录合计 **139 个模块**：72 `.ts` / 67 `.mjs`）；大调用方模块保留一行 `export *` 的 `.mjs` 桶，调用方零改动）
+│   （全量 TS 迁移已完成：`lib` 122 `.ts` / 66 `.mjs`（其中 **63 个是同名一行桶**，另 3 个是设计上的 re-export 桶 `interview/study/tools/impl`）；
+│    加上 `plugins` 14 `.ts` / 14 桶、`desktop` 11 `.ts` / 7 桶 —— **实现文件全在 `.ts`，`.mjs` 只剩 `export *` 一行桶**，
+│    因此按 `.mjs` 路径加载的调用方（插件协议入口、Electron `main`、`#lib/*` 子路径、Vite 子项目）全部零改动）
 ├── widget.mjs                      # 后台数据服务（HTTP :8899）：路由注册表 100+ 条（core + 插件域，测试护栏）+ 30+ 处定时任务（巡检/邮件/复习到期/CC watcher/RAG 增量…）+ 事件内核接线
 ├── mcp-server.mjs                  # MCP Server（13 工具 → 外部 agent）
 ├── skills/                         # 12 个技能（SKILL.md 声明 + 可选 skill.mjs 可编程）
 ├── project-guide-skill/            # 可移植 skill 包（纯提示词，任意 agent 加载即用）
 ├── benchmark/                      # 双层评测数据集（questions 38 / classify 16 / detect 12 / judge-gold 20 / static 12 / web-tasks 19；Layer B mock agent 场景 19）+ 报告 + 趋势
 ├── scripts/                        # 评测/导入/语音/发布/巡检工具（75 个脚本：含 shot-panel UI 审计、_asr-ab ASR 回归、kb-eval 检索三条基线对比、gen-renderer-sizes 体积实测）
-├── tests/                          # 1206 用例（1167 单元 + 39 集成，131 个测试文件，mock LLM 无 key 可跑）
+├── tests/                          # 1231 用例（1192 单元 + 39 集成，135 个测试文件，mock LLM 无 key 可跑）
 ├── docs/                           # 公开文档（mcp 分发/CC 伴侣/插件架构/技术方案；内部评估审计文档本地留存不上仓库）
 ├── assets/voice/                   # 自训练声线（112 短句 + 26 长句 + nanami 声线）
 └── .github/workflows/              # ci.yml（全量门禁）+ weekly-eval.yml（每周评测）+ release.yml（双源发布）
@@ -271,7 +273,8 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 - **本地知识库混合检索（2026-09-11 补齐）**：`lib/knowledge-base.mjs` —— 讲解文档按标题/💬 追问切段（追问=用户亲手问的缺口，检索加权）→ `knowledge_paragraphs` + FTS5 trigram；检索 = BM25（含 2 字词 LIKE 兜底）+ bge-small-zh 向量余弦 → **RRF 融合**（k=60，分数不可比只看排名）→ `bge-reranker-base` 交叉编码器精排（粗排 top10 → top5，路由 `/api/knowledge/paragraphs/search-reranked` 已就绪但**前端未接**）。踩过的三个坑都固化成修复：① 向量列**只读不写**（索引期从不向量化 → 向量腿一直是空的，实测 35% → 补齐后 55%）；② transformers.js 默认远端 huggingface.co（国内 `fetch failed` 被 catch 吞掉 → 静默退化，现支持 `MIANSHI_HF_ENDPOINT` 镜像）；③ 缓存目录默认是 cwd 相对 `.cache`（会在仓库根留垃圾 → 固定到 `<data>/models/transformers`）
 - **Agent 会话时间线（"把感知信号沉淀成数据"，2026-09-11）**：`lib/agent-timeline.ts` 两张表——`agent_sessions`（会话汇总：source/project/起止/轮次/工具数）+ `agent_tool_events`（工具明细，支持高频工具与按天分布）；写入两条路径：**实时**（事件总线回调）+ **历史回填**（OpenCode 走 SQL 聚合 266 会话；DSH 用「会话头 createdAt + 文件 mtime」近似并标 `partial`，**不逐帧解压** 18.9MB×578 个）。**指标口径踩了三处坑才修对**：① 会话区间大量重叠，直接求和得到 6128h（≈256 天）→ 改**区间并集**；② 区间跨统计窗口/跨自然日，出现"单日 81.2h"这种不可能值 → 按窗口与自然日**裁剪**；③ OpenCode 的会话 `title` 是"项目浏览/问候"这类临时标题，会把项目统计打散 → 按 `directory` 目录名归组。展示在「📊 驾驶舱」Tab；UI 明确标注"覆盖时段 = 存在活跃会话的时段并集（并行 agent 会叠加到接近全天），**不是工作时长**"
 - **UI 质量机器指标巡检**：`scripts/shot-panel.mjs`（真实 Chromium，非 jsdom）量 8 类问题指标——内联深色样式 / 正文 <11px / 可点击元素缺可访问名 / 图片缺 alt / 横向溢出 / **WCAG 对比度**（透明度与渐变感知，避免"紫字配紫底"假阳性）/ 点击目标 <24px / 横向裁切；另记节点数与 scrollHeight 作"空白假绿"护栏。交互类缺陷同样固化成断言（如"固定浮层滚轮死区"→ `scripts/_verify-review-scroll.mjs` 10/10）
-- **渐进式 TS 迁移（进行中）**：叶子优先 + **桶化**（大调用方模块只留一行 `export *` 的 `.mjs` 桶 → 调用方零改动）+ 每模块一次提交；**三条 tsc 门禁**（宽松 checkJs 覆盖 `.mjs` + strict 只查 `.ts` + `tsconfig.desktop.json` 覆盖主进程/preload/api-client）。迁移过程顺带修出真实契约缺陷：`llmChatStream` 实际返回 `string | LLMResponse`（类型此前谎报纯文本）、`traceTool` 因解构默认值被推断成"只许 null"、`initPlan` 的 `steps` 被推断成 `never[]`
+- **全量 TS 迁移（已完成，一模块一提交）**：叶子优先 + **桶化**（每个迁移后的模块都保留一行 `export *` 的 `.mjs` 桶 → 按路径加载的调用方零改动）；**三条 tsc 门禁**（宽松 checkJs 覆盖 `.mjs` + strict 覆盖 `lib/**`/`plugins/**`/`desktop/**` 的 `.ts` + `tsconfig.desktop.json` 覆盖主进程/preload/api-client）。覆盖顺序：核心业务 → 编排层 → 服务入口（契约/路由/工具/适配器/平台）→ 插件 12 个路由域 + 模板 → 桌面（widget-server / tts-edge / foreground / voice-pack / main / speech-queue）。
+  迁移不只是"加类型"，它把**此前被隐式 any 掩盖的真缺陷**顶了出来，逐个修掉并补了回归护栏：① `/api/review/feedback` 与 `/api/review/retry` 把 JSON-Schema 形状的普通对象当 zod schema 传给 `withContract` → 运行期 `output.safeParse is not a function` → **两条路由恒 500**（`tests/review-routes.test.mjs` 护栏）；② `POST /api/settings/reminders` 把 `readBody` 的**原始字符串**当对象用（`hasOwnProperty.call(字符串, key)` 恒 false）→ 提醒开关**静默不落库**、面板却显示"已保存"（`tests/misc-reminders.test.mjs` 护栏，且用 HEAD 版实现反证过修复前必失败）；③ `shell.openPath` 是 Promise（失败返回错误描述），旧代码"发出去不管"→ 打开文件失败仍返回 `{ok:true}`；④ `resolveFfplay()` 返回 `false` 时被当命令传给 `spawn`；⑤ `llmChatStream` 实际返回 `string | LLMResponse`（类型此前谎报纯文本）、`withLLMTimeout` 把流式文本类型擦成 `unknown`、`traceTool` 因解构默认值被推断成"只许 null"、`initPlan` 的 `steps` 被推断成 `never[]`。护栏同步迁移口径：源码扫描型断言改读**实现文件**（`.ts` + `.mjs` 桶），内容哈希新鲜度（speech-queue）改盯 `.ts`——否则"实现迁走、`.mjs` 变一行桶"会让护栏静默失明
 
 ---
 
@@ -325,8 +328,8 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 | 门禁 | 命令 | 当前状态 |
 |---|---|---|
-| 单元/集成测试 | `npm test` | ✅ **1206/1206 通过**（1167 单元 + 39 集成，131 个测试文件，mock LLM 无 key 可跑） |
-| 类型检查（lib，双 tsc） | `npm run typecheck` | ✅ 0 错误（宽松 checkJs 覆盖 `.mjs` + `tsconfig.strict.json` 只查 `.ts`，strict 下同样 0） |
+| 单元/集成测试 | `npm test` | ✅ **1231/1231 通过**（1192 单元 + 39 集成，135 个测试文件，mock LLM 无 key 可跑） |
+| 类型检查（lib，双 tsc） | `npm run typecheck` | ✅ 0 错误（宽松 checkJs 覆盖 `.mjs` + `tsconfig.strict.json` 查 `lib/plugins/desktop` 的 `.ts`，strict 下同样 0） |
 | 桌面端类型检查 | `npm run typecheck:desktop` | ✅ 0 错误（`kanban-api.d.ts` 72 个接口方法与 preload 实现一致）——**2026-09-11 修复**：该配置此前漏开 `allowImportingTsExtensions`，被 133 处 TS5097 噪音掩盖了真实的 `MusicResult.catch` 类型错（该步骤以前从未在 CI 上跑到） |
 | Lint | `npm run lint` | ✅ **0 error 0 warning**（全仓库，含面板/渲染层/脚本/测试） |
 | 渲染层一致性 | `tests/react-panel.test.mjs` / `renderer-sizes.test.mjs` | ✅ 三态注册表一致 + 体积数据新鲜度 |
@@ -387,7 +390,7 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 - [x] 本地 ASR 质量治理：长音频能量谷分段识别（样本 A：CER 4.1% → 0%、6.7s → 4.8s；样本 B 见 `lib/speech.mjs` 注释 5.5% → 4.5%）+ 术语/同音词纠错 + 真实样本落盘诊断开关
 - [x] 本地知识库混合检索：段落级索引（147 篇 → 1478 段）+ FTS5 BM25 + bge 向量 → RRF 融合 + 追问段加权；**2026-09-11 补齐索引期向量化**（此前 vector 列只读不写，混合检索实际退化成纯关键词：实测 35% → **55%**）+ 镜像支持（`MIANSHI_HF_ENDPOINT`）
 - [x] CI 全绿治理：js-yaml 高危 override、weekly-eval workflow 失效、node:test 协议通道污染（整文件假失败）、typecheck:desktop 配置缺失、渲染产物新鲜度改内容哈希
-- [ ] 全量 TS 迁移：阶段 1-3 已完成（lib 69 `.ts` / 47 `.mjs`，核心业务 + 编排层 + 服务入口），阶段 4（桌面 / 插件）进行中
+- [x] 全量 TS 迁移：**四阶段全部完成**——核心业务 → 编排层 → 服务入口（契约/路由/工具/适配器/平台）→ 插件（12 路由域 + 模板）与桌面（widget-server / tts-edge / foreground / voice-pack / main / speech-queue）；实现文件全 `.ts`，`.mjs` 只剩同名一行桶（`lib` 122 `.ts` / 66 桶、`plugins` 14 / 14、`desktop` 11 / 7），strict 门禁覆盖三层
 - [x] 感知层价值升级：**会话时间线 + 项目投入统计**（`lib/agent-timeline.ts` + 驾驶舱 Tab；本机实测 764 会话 / 覆盖 256.5h / 活跃 45 天 / 14655 轮 / 15003 工具调用）——替代零信息量气泡播报
 - [ ] 感知层后续：仅在"窗口失焦 / 长任务结束 / 任务失败"时才播报，且文案带项目名与耗时
 - [ ] 实时 TTS 句子级流水线（开发中：speech-queue + GPT-SoVITS 本地引擎）
@@ -405,7 +408,7 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 
 - **许可证**：MIT（见 [LICENSE](LICENSE)）
 - **仓库不含**：本地数据（`data/`）、ASR 模型（`models/`）、`.env`（密钥）；**含**自训练声线（`assets/voice/`，开箱即用）
-- **测试**：`npm test` 1206 用例全绿（1167 单元 + 39 集成，mock LLM，CI 零成本）；评测体系见上文
+- **测试**：`npm test` 1231 用例全绿（1192 单元 + 39 集成，mock LLM，CI 零成本）；评测体系见上文
 - **插件化路线**：宿主（真白）+ 插件（秋招助手）架构见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)
 
 ---
