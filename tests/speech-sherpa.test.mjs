@@ -5,8 +5,11 @@ import { mock } from "node:test";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const speechUrl = new URL("../lib/speech.mjs", import.meta.url).href;
-// speech.mjs 内部引擎单例（recognizerPromise）跨用例缓存——每个用例独立模块实例（query 隔离）
+// 全量 TS 升级工单：lib/speech.mjs 已是一行桶（export * from "./speech.ts"）——给**桶**的 URL 加 query
+// 不会让实现模块重新实例化（内部 specifier 无 query，仍是同一模块实例），
+// 所以"每个用例独立引擎单例"的隔离必须落在实现文件上（.ts + query）
+const speechUrl = new URL("../lib/speech.ts", import.meta.url).href;
+// speech 内部引擎单例（recognizerPromise）跨用例缓存——每个用例独立模块实例（query 隔离）
 let caseN = 0;
 const freshSpeech = () => import(`${speechUrl}?case=${++caseN}`);
 
