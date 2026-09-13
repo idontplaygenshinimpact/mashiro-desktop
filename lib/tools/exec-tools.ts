@@ -94,7 +94,8 @@ export async function execSpawnSubagent(args: { name?: string; system?: string; 
   const r = await withRetry(() => runSubagent(args), 0);
   // 子任务 context 可能含外部内容（主 agent 抓的页面）——其结果按不可信数据包裹回填，
   // 防注入经 subagent 链路二次传播进主对话
-  if (r?.ok && typeof r.result === "string") r.result = wrapUntrusted(r.result);
+  // （withRetry 降级分支是 {error,hint}，无 ok 字段；用 in 收窄后再包裹）
+  if ("ok" in r && r.ok && typeof r.result === "string") r.result = wrapUntrusted(r.result);
   return r;
 }
 
