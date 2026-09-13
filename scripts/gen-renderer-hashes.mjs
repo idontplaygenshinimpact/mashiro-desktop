@@ -17,7 +17,9 @@ const HASH_FILE = path.join(RENDERER, "bundle-hashes.json");
 
 const GROUPS = {
   app: ["app.js", "index.html", "style.css"],
-  "speech-queue": ["speech-queue.mjs"],
+  // 全量 TS 升级工单阶段 4：实现迁到 speech-queue.ts（.mjs 变一行桶）→ 哈希盯**实现文件**，
+  // 否则内容哈希只会记录一成不变的桶，护栏静默失明
+  "speech-queue": ["speech-queue.ts", "speech-queue.mjs"],
 };
 
 const group = String(process.argv[2] || "").trim();

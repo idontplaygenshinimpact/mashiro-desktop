@@ -14,9 +14,9 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const RENDERER = path.join(ROOT, "desktop", "renderer");
 const BUNDLE = path.join(RENDERER, "app.bundle.js");
 const SRC = ["app.js", "index.html", "style.css"].map((f) => path.join(RENDERER, f));
-// 实时语音：speech-queue.mjs → speech-queue.bundle.js（window.SpeechQueue，panel.html 引用）
+// 实时语音：speech-queue.ts（实现）+ speech-queue.mjs（一行桶）→ speech-queue.bundle.js（window.SpeechQueue，panel.html 引用）
 const SQ_BUNDLE = path.join(RENDERER, "speech-queue.bundle.js");
-const SQ_SRC = path.join(RENDERER, "speech-queue.mjs");
+const SQ_SRC = [path.join(RENDERER, "speech-queue.ts"), path.join(RENDERER, "speech-queue.mjs")];
 const HASH_FILE = path.join(RENDERER, "bundle-hashes.json");
 
 // 与 gen-renderer-hashes.mjs 同口径：先归一化行尾（CRLF/LF 随 checkout 变化，否则会误报"源码已改"）
@@ -38,14 +38,18 @@ try {
       if (!existsSync(f)) continue;
       if (hashes.app.sources[name] !== sha(f)) stale.push(`${name}（内容已改，app.bundle.js 需重建）`);
     }
-    if (existsSync(SQ_SRC) && hashes.speechQueue.sources["speech-queue.mjs"] !== sha(SQ_SRC)) {
-      stale.push("speech-queue.mjs（内容已改，speech-queue.bundle.js 需重建）");
+    for (const f of SQ_SRC) {
+      const name = path.basename(f);
+      if (!existsSync(f)) continue;
+      if (hashes.speechQueue.sources[name] !== sha(f)) {
+        stale.push(`${name}（内容已改，speech-queue.bundle.js 需重建）`);
+      }
     }
   } else if (existsSync(BUNDLE) && existsSync(SQ_BUNDLE)) {
     // 向后兼容：没有哈希记录时按 mtime 粗判
     const bm = statSync(BUNDLE).mtimeMs;
     for (const f of SRC) if (existsSync(f) && statSync(f).mtimeMs > bm) stale.push(path.basename(f));
-    if (existsSync(SQ_SRC) && statSync(SQ_SRC).mtimeMs > statSync(SQ_BUNDLE).mtimeMs) stale.push("speech-queue.mjs");
+    for (const f of SQ_SRC) if (existsSync(f) && statSync(f).mtimeMs > statSync(SQ_BUNDLE).mtimeMs) stale.push(path.basename(f));
   }
 } catch (e) {
   console.error(`[check-renderer] 检查失败: ${e.message}`);

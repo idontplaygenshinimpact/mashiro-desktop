@@ -77,15 +77,17 @@ var SpeechQueue = (() => {
     let stopped = false;
     let prefetch = null;
     function startPrefetch() {
-      if (prefetch || queue.length === 0 || !prepare) return;
+      const prep = prepare;
+      if (prefetch || queue.length === 0 || !prep) return;
       const text = queue[0];
-      prefetch = { text, promise: prepare(text).catch(() => null) };
+      prefetch = { text, promise: prep(text).catch(() => null) };
     }
     async function pump() {
       if (playing || queue.length === 0) return;
       playing = true;
       while (queue.length > 0 && !stopped) {
         const text = queue.shift();
+        if (text === void 0) break;
         if (spokenToday >= budget) break;
         try {
           let audio = null;
@@ -94,7 +96,8 @@ var SpeechQueue = (() => {
             prefetch = null;
           } else {
             prefetch = null;
-            audio = prepare ? await prepare(text) : null;
+            const prep = prepare;
+            audio = prep ? await prep(text) : null;
           }
           startPrefetch();
           if (audio) await play(audio, text);
@@ -106,7 +109,6 @@ var SpeechQueue = (() => {
       stopped = false;
     }
     return {
-      /** 入队一句（或一句数组）；正在播放时排队，队列空时立即开始 */
       push(text) {
         if (stopped) return;
         const list = Array.isArray(text) ? text : [text];
@@ -117,7 +119,6 @@ var SpeechQueue = (() => {
         startPrefetch();
         void pump();
       },
-      /** 打断：清空队列 + 停止当前句（由 play 实现方配合 abort） */
       stop() {
         stopped = true;
         queue = [];

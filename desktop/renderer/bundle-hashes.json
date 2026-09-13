@@ -9,7 +9,8 @@
   },
   "speechQueue": {
     "sources": {
-      "speech-queue.mjs": "3f20b85ee3651a6e"
+      "speech-queue.ts": "6de9c6cff674e1db",
+      "speech-queue.mjs": "8333caded30e0cab"
     }
   }
 }

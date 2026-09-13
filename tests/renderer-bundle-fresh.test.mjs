@@ -22,7 +22,7 @@ test("渲染产物新鲜度：源码内容哈希与 bundle-hashes.json 记录一
   // （2026-09-11 CI 实测踩到：断言 app.bundle.js 存在 → fresh clone 上必红）
   const groups = [
     { key: "app", sources: ["app.js", "index.html", "style.css"] },
-    { key: "speechQueue", sources: ["speech-queue.mjs"] },
+    { key: "speechQueue", sources: ["speech-queue.ts", "speech-queue.mjs"] },
   ];
   for (const g of groups) {
     assert.ok(hashes[g.key]?.sources, `哈希记录含 ${g.key} 组`);
