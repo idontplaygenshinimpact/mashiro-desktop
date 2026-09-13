@@ -149,10 +149,10 @@ function checkArgValue(k: string, v: unknown, schema: ArgSchema | undefined): st
 
 // 轻量参数校验：按 TOOLS schema 检查必填字段和类型（避免 LLM 传错参直接炸）
 function validateArgs(name: string, args: unknown): { ok: true; args: ToolArgs } | { ok: false; error: string } {
-  const tool = TOOLS.find((t: { function?: { name?: string } }) => t.function?.name === name);
+  const tool = TOOLS.find((t) => t.function.name === name);
   if (!tool) return { ok: true, args: (args || {}) as ToolArgs };
-  const params = tool.function?.parameters as unknown as { properties?: Record<string, ArgSchema>; required?: string[] } | undefined;
-  if (!params?.properties) return { ok: true, args: (args || {}) as ToolArgs };
+  const params = tool.function.parameters; // schemas.ts 已定类型（JsonSchemaNode），无需再断言
+  if (!params.properties) return { ok: true, args: (args || {}) as ToolArgs };
   const a = (args && typeof args === "object") ? args as ToolArgs : {};
   const missing = (params.required || []).filter((k) => a[k] === undefined || a[k] === null || a[k] === "");
   if (missing.length) {
@@ -766,7 +766,7 @@ async function callLLM(messages: AgentMessage[], onDelta: ((delta: string) => vo
   } catch { /* skills 加载失败忽略 */ }
   // 自环去重：mcp__mashiro__* 中与内置 TOOLS 同名的跳过（同一能力两套实现行为分叉——
   // 内置版有重试/防注入/完整链路，MCP 版无；LLM 同时看到两套会导致结果漂移）
-  const builtinNames = new Set(TOOLS.map((t: { function?: { name?: string } }) => t?.function?.name));
+  const builtinNames = new Set(TOOLS.map((t) => t.function.name));
   const mcpTools = getMcpToolsCache().filter((t: { function?: { name?: string } }) => {
     const n = String(t?.function?.name || "");
     const m = n.match(/^mcp__mashiro__(.+)$/);
