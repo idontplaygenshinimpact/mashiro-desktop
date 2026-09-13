@@ -48,13 +48,17 @@ test("assertPublicUrl：内网/环回字面量拒绝（无需 DNS）", async () 
 });
 
 // SSRF 旁路回归护栏：edge-session 复用 assertPublicUrl（含 DNS），rss 用静态 isPrivateHostname（配置源友好）
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const LIB = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "lib");
+// 全量 TS 升级工单：模块可能是 X.ts（实现）+ X.mjs（一行桶）——读该模块的**全部落盘源码**再断言，
+// 迁移前后同一断言口径（护栏语义不变：实现里必须有 SSRF 校验）
+const readLibModule = (name) =>
+  [".ts", ".mjs"].map((ext) => path.join(LIB, name + ext)).filter(existsSync).map((p) => readFileSync(p, "utf8")).join("\n");
 test("SSRF 旁路护栏：edge-session 用 assertPublicUrl；rss 用 isPrivateHostname 拒绝内网", () => {
-  const edge = readFileSync(path.join(LIB, "edge-session.mjs"), "utf8");
-  const rss = readFileSync(path.join(LIB, "rss.mjs"), "utf8");
+  const edge = readLibModule("edge-session");
+  const rss = readLibModule("rss");
   assert.ok(edge.includes('assertPublicUrl'), "edge-session 必须做 SSRF 校验（修复：此前直接 goto 任意 URL）");
   assert.ok(rss.includes('isPrivateHostname'), "rss 必须做 SSRF 校验（修复：此前仅 https? 前缀）");
 });
