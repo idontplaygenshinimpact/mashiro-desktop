@@ -175,17 +175,18 @@ export async function execSkillInspect() {
     await loadSkills();
     const r = inspectSkills();
     if (!r.ok) return { ok: false, hint: r.hint || "技能未加载" };
-    const text = r.skills.map((s: any) => {
+    const skills = r.skills || []; // ok:true 时必有（类型上可选：显式归一，防 undefined）
+    const text = skills.map((s) => {
       const tools = s.tools.length
-        ? s.tools.map((t: any) => `    - ${t.name}（权限:${t.permission}）`).join("\n")
+        ? s.tools.map((t) => `    - ${t.name}（权限:${t.permission}）`).join("\n")
         : "    - （无工具，纯声明技能）";
       return `  ${s.name}：${s.description || "无说明"}\n${tools}`;
     }).join("\n");
     return {
       ok: true,
-      skills: r.skills,
+      skills,
       hookCount: r.hookCount,
-      summary: `已加载 ${r.skills.length} 个技能、${r.totalTools} 个工具：\n${text}`,
+      summary: `已加载 ${skills.length} 个技能、${r.totalTools} 个工具：\n${text}`,
     };
   } catch (e: any) {
     return { error: `技能清单读取失败: ${e.message}` };

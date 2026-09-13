@@ -303,7 +303,7 @@ async function executeTool(name: string, args: ToolArgs): Promise<ToolExecResult
     try {
       const { callMcpTool } = await import("./mcp-client.ts");
       const r = await callMcpTool(name, args);
-      try { const { traceTool } = await import("./trace.mjs"); traceTool({ toolName: name, args, ok: !r.error, error: r.error || null, durationMs: Date.now() - _tStart }); } catch { /* ignore */ }
+      try { const { traceTool } = await import("./trace.mjs"); traceTool({ toolName: name, args, ok: !r.error, error: r.error ? String(r.error) : null, durationMs: Date.now() - _tStart }); } catch { /* ignore */ }
       return r;
     } catch (e) {
       try { const { traceTool } = await import("./trace.mjs"); traceTool({ toolName: name, args, ok: false, error: e instanceof Error ? e.message : String(e), durationMs: Date.now() - _tStart }); } catch { /* ignore */ }
@@ -319,7 +319,7 @@ async function executeTool(name: string, args: ToolArgs): Promise<ToolExecResult
     try {
       const { callSkillTool } = await import("./skills.mjs");
       const r = await callSkillTool(name, args);
-      try { const { traceTool } = await import("./trace.mjs"); traceTool({ toolName: name, args, ok: !r.error, error: r.error || null, durationMs: Date.now() - _tStart }); } catch { /* ignore */ }
+      try { const { traceTool } = await import("./trace.mjs"); traceTool({ toolName: name, args, ok: !r.error, error: r.error ? String(r.error) : null, durationMs: Date.now() - _tStart }); } catch { /* ignore */ }
       return r;
     } catch (e) {
       try { const { traceTool } = await import("./trace.mjs"); traceTool({ toolName: name, args, ok: false, error: e instanceof Error ? e.message : String(e), durationMs: Date.now() - _tStart }); } catch { /* ignore */ }
