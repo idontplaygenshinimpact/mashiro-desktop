@@ -973,6 +973,8 @@ safeHandle("tts:play-file", async (_e, { path: wavPath }) => {
   try {
     const { resolveFfplay } = await import("./voice-pack.mjs");
     const ffplay = resolveFfplay();
+    // ffplay 不可用（resolveFfplay 返回 false）→ 明确报错，别把 false 当命令传给 spawn（同步抛错走 catch，日志里看不出根因）
+    if (!ffplay) return { ok: false, error: "ffplay 不可用（可设 FFPLAY_PATH 指定路径）" };
     await new Promise((resolve) => {
       const proc = safeSpawn(ffplay, ["-nodisp", "-autoexit", "-volume", "80", String(wavPath)], { stdio: "ignore" });
       ttsPlayingProc = proc;
