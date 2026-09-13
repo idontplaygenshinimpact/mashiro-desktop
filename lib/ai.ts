@@ -17,15 +17,17 @@ import type { AgentMessage, LLMOptions } from "./types.d.ts";
  * 2026-09 再修：**空闲超时语义**——activity.touch() 在流式 delta 回调里调用时重置计时器——
  * 流式输出中（LLM 慢但正常生成）不超时；只有长时间无输出（LLM 挂起）才中断。
  * （此前固定 60s：长讲解生成 >60s 被误中断——重新生成失败但旧档保留，用户困惑）
- * @param {Promise<unknown>} promise 流式生成 Promise
- * @param {number} [ms] 空闲超时毫秒（默认 env 或 60s）
- * @param {string} [msg] 超时错误信息
- * @param {{ touch?: () => void }} [activity] 活动对象——调用方在流式回调里调 touch() 重置计时器
- * @returns {Promise<unknown>} 竞速结果（空闲超时抛错）
+ * 泛型化（TS 升级阶段 4）：原返回 Promise<unknown> → 调用方拿到的流式文本全变 unknown，
+ * 逼得调用方用 JSDoc any 断言压回去；泛型后"进什么出什么"（Promise.race 的解析值就是入参 promise 的值）
+ * @param promise 流式生成 Promise
+ * @param [ms] 空闲超时毫秒（默认 env 或 60s）
+ * @param [msg] 超时错误信息
+ * @param [activity] 活动对象——调用方在流式回调里调 touch() 重置计时器
+ * @returns 竞速结果（空闲超时抛错）
  */
-export function withLLMTimeout(promise: Promise<unknown>, ms = Number(process.env.MIANSHI_LLM_TIMEOUT_MS) || 60000, msg = "生成超时（60s）——请重试", activity: { touch?: () => void } | null = null): Promise<unknown> {
+export function withLLMTimeout<T>(promise: Promise<T>, ms = Number(process.env.MIANSHI_LLM_TIMEOUT_MS) || 60000, msg = "生成超时（60s）——请重试", activity: { touch?: () => void } | null = null): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise((_, rej) => {
+  const timeoutPromise = new Promise<never>((_, rej) => {
     const start = () => { timer = setTimeout(() => rej(new Error(msg)), ms); };
     start();
     if (activity) {
