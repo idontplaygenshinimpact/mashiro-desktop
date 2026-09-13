@@ -768,7 +768,9 @@ function seedDefaultJobs() {
   try {
     const row = db.prepare("SELECT COUNT(*) AS n FROM scheduled_jobs").get();
     if (Number(row && row.n) > 0) return;
-    scheduler.registerJob({
+    // 修复（TS 迁移暴露）：此前没接住 registerJob 的返回值，日志里写的是 `${patrol.id}`——
+    // patrol 是巡检器实例（无 id），巡检那条日志永远打印 undefined；改为接住 job 记录再打 id
+    const patrolJob = scheduler.registerJob({
       name: "自动巡检",
       job_type: "patrol",
       schedule_spec: `interval:${patrol.state.intervalMin}`, // 沿用现有巡检间隔设置
@@ -782,7 +784,7 @@ function seedDefaultJobs() {
       enabled: false,
       config: { seeded: true, source: "widget-defaults" },
     });
-    console.log(`[scheduler] 已种默认任务: ${patrol.id}（巡检）/ ${rss.id}（资讯摘要）——默认禁用，不抢现有定时器`);
+    console.log(`[scheduler] 已种默认任务: ${patrolJob.id}（巡检）/ ${rss.id}（资讯摘要）——默认禁用，不抢现有定时器`);
   } catch (e) {
     logErr(`scheduler 种子默认任务失败: ${e && e.message ? e.message : String(e)}`);
   }
