@@ -84,7 +84,8 @@ export function registerPracticeRoutes(router) {
         const r = challengeApi.markChallengeDone(String(id), { progress: true });
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         // 契约：必须回传 title（面板通知「「X」已标记完成」依赖它；曾丢失导致通知显示 undefined）
-        res.end(JSON.stringify({ ok: r?.ok ?? true, title: r?.title, message: r?.message || "已标记完成" }));
+        // 注：markChallengeDone 从不返回 message（TS 迁移暴露）——这里就是固定文案，语义与旧行为一致
+        res.end(JSON.stringify({ ok: r?.ok ?? true, title: r?.title, message: "已标记完成" }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));

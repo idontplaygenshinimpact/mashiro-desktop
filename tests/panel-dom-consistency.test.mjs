@@ -73,7 +73,8 @@ test("手写题库详情：面板读 j.detail，路由返回 detail（回归护�
 });
 
 test("标记完成/答错：路由必须回传 title（面板通知依赖；曾丢字段显示 undefined）", () => {
-  assert.match(practiceRoute, /title: r\?\.title, message: r\?\.message/, "mark-done 路由应回传 title");
+  // mark-done 的 message 是固定文案（markChallengeDone 从不返回 message 字段——TS 迁移暴露的无效回退）
+  assert.match(practiceRoute, /title: r\?\.title, message: "已标记完成"/, "mark-done 路由应回传 title");
   assert.match(practiceRoute, /title: r\?\.title, message: "已记录答错/, "mark-wrong 路由应回传 title");
   assert.match(panelRest, /\$\{j\.title\}/, "面板通知读 j.title");
 });
