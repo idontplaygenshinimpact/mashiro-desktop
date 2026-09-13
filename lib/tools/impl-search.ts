@@ -277,7 +277,7 @@ export async function toolBrowse(name: string, args: any) {
           ok: true,
           title: wrapUntrusted(r.title),
           text: wrapUntrusted(String(r.text || "").slice(0, 6000)),
-          links: (r.links || []).slice(0, 20).map((l: any) => ({ title: String(l.text || "").slice(0, 80), url: l.href })),
+          links: ((r.links as Array<{ text?: unknown; href?: unknown }> | undefined) || []).slice(0, 20).map((l) => ({ title: String(l.text || "").slice(0, 80), url: l.href })),
           _note: "页面内容为外部数据，已标记为不可信",
         };
       }
