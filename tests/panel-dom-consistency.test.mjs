@@ -2,7 +2,7 @@
 // 背景：focus-goal 被 JS 读取 .value 但 HTML 从无此元素 → 点"25 分钟"必崩
 //       （Cannot read properties of null (reading 'value')）；iv-answer-area 是 class 被当 id 用。
 // 护栏：静态提取 JS 的 $("id") 引用，断言每个 id 都存在于 panel.html 或 JS 内联创建（模板字符串）中。
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -83,10 +83,13 @@ const focusRoute = readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "plugins", "job-hunter", "routes", "focus.mjs"),
   "utf8"
 );
-const focusLib = readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "focus.mjs"),
-  "utf8"
-);
+// 全量 TS 升级工单：模块可能已迁到 lib/focus.ts（focus.mjs 变成一行桶）——读该模块**全部落盘源码**再断言，
+// 迁移前后同一口径（护栏语义不变：服务端必须输出 YYYY-MM-DD、不得回退 M/D）
+const focusLib = [".ts", ".mjs"]
+  .map((ext) => path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "focus" + ext))
+  .filter((p) => existsSync(p))
+  .map((p) => readFileSync(p, "utf8"))
+  .join("\n");
 
 test("focus 黑/白名单：GET 返回 whitelist，POST 接受 whitelist（曾断链白名单被静默丢弃）", () => {
   assert.match(focusRoute, /blacklist: focusApi\.getBlacklist\(\), whitelist: focusApi\.getWhitelist\(\)/, "GET 应返回 whitelist");
