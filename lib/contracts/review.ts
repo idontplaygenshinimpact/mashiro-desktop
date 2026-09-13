@@ -59,3 +59,28 @@ export const ReviewDueOutput = z.object({
   trend: z.object({ trend: z.array(z.any()), streak: z.number().int().nonnegative() }),
   todayReviewed: z.array(z.object({ topic: z.string(), id: z.string() })),
 });
+
+/** 错题重练队列条目（review.getRetryQueue 产出） */
+export const ReviewRetryItem = z.object({
+  id: z.string(),
+  topic: z.string(),
+  question: z.string(),
+  answer: z.string(),
+  type: z.enum(["algo", "concept"]),
+  priority: z.string(),
+  lastWrongAt: z.number(),
+});
+
+/** /api/review/feedback GET 出参（今日复习 N 张 / 掌握 X / 待重练 Y） */
+export const ReviewFeedbackOutput = z.object({
+  ok: z.literal(true),
+  today: z.number().int().nonnegative(),
+  mastered: z.number().int().nonnegative(),
+  retry: z.number().int().nonnegative(),
+});
+
+/** /api/review/retry GET 出参（错题重练队列） */
+export const ReviewRetryOutput = z.object({
+  ok: z.literal(true),
+  retry: z.array(ReviewRetryItem),
+});
