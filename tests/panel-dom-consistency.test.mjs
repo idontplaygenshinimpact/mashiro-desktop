@@ -54,10 +54,18 @@ test("panel-*.js 文件集完整（6 个模块按序加载——含 panel-state.
 //       "题库为空——运行 scripts/import-ai-career.mjs"，做题展开也抛 undefined。
 // 护栏：面板读取字段必须与路由返回字段一致（静态断言，双侧锚定）。
 const panelRest = readFileSync(path.join(renderer, "panel-rest.js"), "utf8");
-const practiceRoute = readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "plugins", "job-hunter", "routes", "practice.mjs"),
-  "utf8"
-);
+
+// 全量 TS 升级工单：插件路由域可能已迁到 <name>.ts（<name>.mjs 变成一行桶）——
+// 统一读该模块**全部落盘源码**（.ts 实现 + .mjs 桶）再断言，迁移前后同一口径，护栏语义不变
+function readRouteSource(name) {
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "plugins", "job-hunter", "routes");
+  return [".ts", ".mjs"]
+    .map((ext) => path.join(dir, name + ext))
+    .filter((p) => existsSync(p))
+    .map((p) => readFileSync(p, "utf8"))
+    .join("\n");
+}
+const practiceRoute = readRouteSource("practice");
 
 test("手写题库列表：面板读 j.list，路由返回 list（回归护栏）", () => {
   assert.match(panelRest, /!j\.list\?\.length/, "面板空态判断应读 j.list（接口字段）");
@@ -80,10 +88,7 @@ test("标记完成/答错：路由必须回传 title（面板通知依赖；曾�
 });
 
 // ---------- focus 域契约（白名单断链 + week 日期格式） ----------
-const focusRoute = readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "plugins", "job-hunter", "routes", "focus.mjs"),
-  "utf8"
-);
+const focusRoute = readRouteSource("focus");
 // 全量 TS 升级工单：模块可能已迁到 lib/focus.ts（focus.mjs 变成一行桶）——读该模块**全部落盘源码**再断言，
 // 迁移前后同一口径（护栏语义不变：服务端必须输出 YYYY-MM-DD、不得回退 M/D）
 const focusLib = [".ts", ".mjs"]
