@@ -11,7 +11,13 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const R = (p) => path.join(ROOT, p);
 
 test("React 面板窗口接线：main.mjs 有 createReactPanelWindow + 托盘入口（同一 preload 桥）", () => {
-  const main = readFileSync(R("desktop/main.mjs"), "utf8");
+  // 全量 TS 升级工单阶段 4：desktop/main.mjs 已降为一行桶（实现在 main.ts）——
+  // 读该模块**全部落盘源码**再断言（迁移前后同一口径：接线必须存在，只是实现文件换了扩展名）
+  const main = ["desktop/main.ts", "desktop/main.mjs"]
+    .map((p) => R(p))
+    .filter((p) => existsSync(p))
+    .map((p) => readFileSync(p, "utf8"))
+    .join("\n");
   assert.ok(main.includes("createReactPanelWindow"), "窗口创建函数存在");
   assert.ok(main.includes("panel-react"), "加载独立 Vite 项目（panel-react/dist/index.html）");
   assert.ok(main.includes("React 版"), "托盘入口存在");
