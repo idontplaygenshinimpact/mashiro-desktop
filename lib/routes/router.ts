@@ -4,8 +4,10 @@
 // 全量 TS 升级工单阶段 3：lib/routes/router.mjs → .ts（widget.mjs 与各路由域按 .mjs 路径加载 → 保留同名一行桶）
 import type { ZodType } from "zod";
 
-/** 路由处理函数（req/res/url 形状由宿主决定——路由域按需自行收口） */
-export type RouteFn = ((req: unknown, res: unknown, url: unknown) => unknown) & { _contract?: unknown };
+/** 路由处理函数（req/res/url 形状由宿主决定——路由域按需自行收口）。
+ * 形参用 any 而非 unknown：unknown 会逼所有 handler 声明 unknown 形参，路由域内反而无法标注
+ * IncomingMessage/ServerResponse（且与 withContract 返回的具名 handler 不兼容）。 */
+export type RouteFn = ((req: any, res: any, url?: any) => unknown) & { _contract?: unknown };
 /** 契约（Phase 2，可选；缺省行为与旧版完全一致） */
 export interface RouteSchema { input?: ZodType; output?: ZodType }
 /** 已注册路由条目 */
