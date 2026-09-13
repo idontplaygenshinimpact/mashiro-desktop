@@ -13,5 +13,5 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["lib/**/*.ts", "plugins/**/*.ts"]
+  "include": ["lib/**/*.ts", "plugins/**/*.ts", "desktop/**/*.ts"]
 }

@@ -17,6 +17,7 @@
     "desktop/preload.js",
     "desktop/main.mjs",
     "desktop/kanban-api.d.ts",
-    "desktop/renderer/api-client.mjs"
+    "desktop/renderer/api-client.mjs",
+    "desktop/**/*.ts"
   ]
 }
