@@ -131,14 +131,22 @@
 | 11 | **爬取 TLS 全灭 + 零产出仍报成功**：`newContext` 未开 `ignoreHTTPSErrors`（本机 MITM 证书 → 所有起始页 `ERR_CERT_AUTHORITY_INVALID`）；`discover.mjs` 零产出静默 return、退出时把进度覆盖成 idle → 面板永远"暂无任务" | C3/C4/C8 | 抓取 context 全部开证书容错（SSRF 内网拦截不受影响）；零产出写 `status=error` + `exitCode=1`，失败/中断不再清成 idle，SIGINT 写"已被中断" |
 | 12 | **复习两处无终态**：重练队列只看"窗口内出现过答错"、不看最近一次 → 错→错→对 后永久滞留；错题本 `AND is_first=0` 把首刷答错排除在计数外 → 门槛实为"错 ≥3 次"，生产库无卡达标 → 面板恒空 | C7 | 队列按"最近一次仍答错"判定；错题本按"答错总次数 ≥2"判定；`tests/review-terminal-states.test.mjs` |
 
+#### 第三批已修（commit `b4d3968`）
+
+| # | 断链（原状） | 断在哪一环 | 修法与护栏 |
+|---|---|---|---|
+| 13 | **「已掌握」是不可达终态**：写侧 `matchKp` 未命中知识树时用「归一化 topic 自身」当 key 落 `kp_mastery`，读侧却用 `getMastery()`（只列**树内**的点）建 map → 树外条目永远 `mastered=false`（实测 `kp_mastery` 43 行里 `score>=80` 为 **0 行**） | C4/C7 | 新增 `getMasteryLookup()`（落盘掌握表快照：树内 id 与动态 key 同一 key 空间）供读侧使用；`recordKp` 入口加**形态守卫**（整句题干/问句直接拒收，防 `请继续深入讲讲「…」` 这类递归题干键继续入库）；`tests/mastery-key-space.test.mjs` |
+| 14 | **清单 89% 条目恒在「待复习」**：到期口径把 `fsrs_due=0`（**从未复习**的新卡）按"创建满 1 天"也算到期 → 221 张卡里 174 张新卡全部算到期，「已学/已掌握」两组永不出现 | C3 | 到期只认 `fsrs_due > 0 && <= now`；新卡归「待学/学习中」（每日队列仍按 FSRS 缓冲调度，不漏复习）；`tests/study-due-semantics.test.mjs` |
+
+> **真实数据基线（只读副本实测）**：清单「待复习」条目 **192/216（89%）→ 45/216（21%）**，其余条目回到由"已学/讲解存档"决定的分组；掌握度侧 `kp_mastery` 从此可被正确读回（此前 `score≥80` 恒为 0 行）。
+
+
+
 #### 待修（已定位到 `file:line`，按严重度排序；完整报告见 `%TEMP%\mashiro-audit\{A..H}-*.md`）
 
 - **P0 巡检三键"读而不写"**：`lib/patrol.ts` 读 `patrol_enabled/interval_min/avoid_peak`，写点只在面板路由；真实库 30 个 settings 键里没有这三个 → 面板默认态与后端相反（巡检默认开，面板显示关）
-- **P0 三态互切后切回框架版空屏**：`panel-core.js` 切原生时无条件 `delete` 挂载引用，配合"已有引用则跳过重挂载"的分支 → 隐藏原生 + 显示空容器却报成功；同时两框架可并存挂载
-- **P0 爬取零产出仍报成功**：本机日志全 14 个起始页 `net::ERR_CERT_AUTHORITY_INVALID`（`lib/fetch-page.ts` 的 `newContext` 未开 `ignoreHTTPSErrors`），8 次爬取 `产出 md=0` 仍写"✅ 完成"、进度回 idle、无 error 态、无停止入口（**审计实测**）
-- **P0 掌握度 key 空间不一致**：写侧 `recordKp` 用 topic 兜底、读侧 `getMastery` 只认知识树内点 → 实测 216 条清单里 188 条（87%）无论怎么答对都到不了「已掌握」；`kp_mastery` 43 行中 30 行是树外伪点
-- **P0「待复习」吞掉状态流**：`reviewDue` 口径让 221 张卡全判到期 → 实测分组 `{todo:12, learning:12, learned:0, review:192, mastered:0}`，89% 条目恒在「待复习」，未学条目也被要求复习
-- **P1** 题库判题不自动 done、判错回流路由恒报成功；`schedule_events` 无删除/已处理；`job_posts` 无归档；爬取/产出与岗位库两条独立管线（爬取停止入口仍缺）；`decision_ledger` 写而不读；自主播报的语音 scene 不存在（"看得见字，听不见音"）；场景装配冷启动不装配；`tool_results/` 无回收；审批按工具名放行（无 args 维度）；`kanban-api.d.ts` 漏声明 9 个 IPC（`reviewFeedback/reviewRetry/ttsSynth/...`）；`scheduled_jobs` 种子恒禁用且无启用入口；备份只还原主库；三态互切与爬取失败语义的 jsdom 护栏待补
+- **P0 爬取入口体验**：证书容错与"零产出=失败"已修（见第二批 #11），**停止/取消入口仍缺**；`output/` 六种目录约定 + 产出扫描只认一层 → `output/<date>_discover/讲解/**` 永不进「最新产出」
+- **P1** 题库判题不自动 done、判错回流路由恒报成功；`schedule_events` 无删除/已处理；`job_posts` 无归档；爬取/产出与岗位库两条独立管线；`decision_ledger` 写而不读（无读函数）；自主播报的语音 scene 不存在（"看得见字，听不见音"，`lines.json` 无 `agent-*`）；场景装配冷启动不装配且 UI 不可见；`tool_results/` 无回收/TTL；审批按工具名放行（无 args 维度）；`kanban-api.d.ts` 漏声明 9 个 IPC（`reviewFeedback/reviewRetry/ttsSynth/openReactPanel/...`）；三套「掌握」互不同步（`kp_mastery` / `mastered_points` / `fsrs≥21`）；`scheduled_jobs` 种子恒禁用且无启用入口；备份只还原主库（`study_notes`/`schedule_events` 不恢复）；`/api/review/add` 丢 `priority`；167/448 题 `test_code` 为空导致判题恒失败；Vue 面试缺语音作答；三态互切与爬取失败语义的 jsdom 护栏待补
 
 
 
