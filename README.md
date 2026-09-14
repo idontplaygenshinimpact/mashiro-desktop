@@ -99,6 +99,41 @@
 | 一个插件 | 复制 `plugins/plugin-template/`（manifest + `server.ts`，协议即文档）；`lib/plugin-loader.ts` 负责 manifest 校验 / settings 命名空间 `plg_<id>_` / init 钩子 / 健康检查 / 失败隔离 |
 | 一个面板 Tab（三态） | `panel.html` 加容器 → `panel-core.js` 的 `rendererState`+`FRAMEWORK_TABS` 登记 → `panel-react/src/tabs/*.jsx` 与 `panel-vue-review/src/tabs/*.vue` 各加组件并在各自 `TABS` 注册；护栏 = 两侧全 Tab 渲染测试（含 UI 不变量与对称卸载） |
 
+### 业务闭环清查（8 域并行审计 + 九环判定）
+
+> 方法：8 个域（面试 / 学习清单与计划 / 复习题库判题 / 求职校招 / 对话 agent 与工具 / 事件感知语音 / 宿主核心路由 / 知识库产出）各自**只读**审计，
+> 逐功能按**九环**打勾——C1 入口可达 · C2 执行可推进 · C3 过程可感知 · C4 结果可产出 · C5 结果可持久化 · C6 历史可回溯 ·
+> C7 产出可复用（数据血缘）· C8 异常可恢复 · C9 终态可清理；每条结论要求 `file:line` 证据或实测输出，专找"功能存在但不闭环"的样子货。
+> 关键结论都由主审**独立复核**（含真实 Electron 探针、只读 DB 副本、反向改代码验证护栏有效性）。
+
+**判定标准（"样子货"的十种形态）**：① 写而不读 ② 读而不写（恒空/恒默认）③ 路由/IPC 恒失败或静默 no-op ④ UI 假成功（乐观更新不回滚/固定文案/假 loading）
+⑤ 空 catch 吞错 ⑥ 死分支与无效参数 ⑦ 状态机无终态或无恢复入口 ⑧ 数据血缘断点 ⑨ 三态渲染层某一态动作空实现 ⑩ 注册了却没 handler 的任务。
+
+#### 本批已修（每处都有回归护栏，commit `e89ea72`）
+
+| # | 断链（原状） | 断在哪一环 | 修法与护栏 |
+|---|---|---|---|
+| 1 | **对话流式正文全丢**：`preload.js` 把 `type:"delta"` 只发给空函数 `onChunk`，三态渲染层收不到正文增量（React/Vue 的 delta 分支不触发、原生"流式逐句语音播报"失效，只有 `done.reply` 一次性出现） | C3 | delta 转成事件回调；`tests/preload-stream-events.test.mjs`（vm 加载真实 preload + stub ipcRenderer；**已反证**：还原旧写法该用例必红） |
+| 2 | **`fetch_nowcoder_user` 恒"未知工具"**：schema 声明 + 权限登记 + 实现齐备，dispatch switch 缺一臂 → 模型一调就报未知（只有 skills 直连能跑） | C2 | 补 case；工具"声明↔分发"一致性由测试抽样覆盖 |
+| 3 | **>8K 工具结果读不回**：写端认 `MIANSHI_DATA_DIR`、读端硬编码仓库根 → 打包版回读恒"文件不存在" | C7 | 读写口径统一 + 兼容 `_file` 形态；`tests/tool-result-roundtrip.test.mjs`（含目录穿越仍被拒） |
+| 4 | **React 复习评分坐标错 + 假成功**：按钮值 1..4 直传（后端契约 0..3）→「忘了」记成 Hard、「熟练」400，而错误体无 `ok` 字段使 `r?.ok===false` 为假 → 静默翻页、`card_reviews` 零写入 | C2/C5 | 改 0..3 + 失败判定加 `|| r?.error` |
+| 5 | **「继续上一场」按钮真机不可达**：与简历框同 id `iv-resume` → `getElementById` 只拿到 textarea，按钮文案/onclick/隐藏全落到简历框上（还把按钮文案当简历发给面试官） | C8 | 按钮改 `#iv-resume-btn`；新增「panel.html 无重复 id」护栏，jsdom 用例改为断言真按钮（此前断言打在 textarea 上=**测试为假实现背书**） |
+| 6 | **真题「记错题」点了抛错**：用 `window.prompt`，而 Electron 渲染进程不支持它（**实测抛 `prompt() is not supported.`**）→ 真题→错题→清单/复习卡整条不可用 | C2 | 新增页内浮层 `window.__askText`（Promise + aria-modal + Esc/遮罩取消）替换 prompt；护栏：渲染层禁用 `prompt()` 的静态断言 |
+| 7 | **岗位→学习 / 岗位→面试恒 404**：面板按钮 POST 的两条 `/api/loop/*` 从未注册（后端 `deriveStudyFromJob`/`startInterviewForJob` 因此长期是孤儿函数） | C1/C7 | 按前端既有 `{ jobId }` 载荷补齐两条路由 |
+| 8 | **三态口径不一致**：React/Vue 校招 Tab 状态筛选 `none` vs 后端枚举 `new` → 筛选恒空 | C2 | 两侧统一为 `new` |
+
+#### 待修（已定位到 `file:line`，按严重度排序；完整报告见 `%TEMP%\mashiro-audit\{A..H}-*.md`）
+
+- **P0 巡检三键"读而不写"**：`lib/patrol.ts` 读 `patrol_enabled/interval_min/avoid_peak`，写点只在面板路由；真实库 30 个 settings 键里没有这三个 → 面板默认态与后端相反（巡检默认开，面板显示关）
+- **P0 三态互切后切回框架版空屏**：`panel-core.js` 切原生时无条件 `delete` 挂载引用，配合"已有引用则跳过重挂载"的分支 → 隐藏原生 + 显示空容器却报成功；同时两框架可并存挂载
+- **P0 爬取零产出仍报成功**：本机日志全 14 个起始页 `net::ERR_CERT_AUTHORITY_INVALID`（`lib/fetch-page.ts` 的 `newContext` 未开 `ignoreHTTPSErrors`），8 次爬取 `产出 md=0` 仍写"✅ 完成"、进度回 idle、无 error 态、无停止入口（**审计实测**）
+- **P0 掌握度 key 空间不一致**：写侧 `recordKp` 用 topic 兜底、读侧 `getMastery` 只认知识树内点 → 实测 216 条清单里 188 条（87%）无论怎么答对都到不了「已掌握」；`kp_mastery` 43 行中 30 行是树外伪点
+- **P0「待复习」吞掉状态流**：`reviewDue` 口径让 221 张卡全判到期 → 实测分组 `{todo:12, learning:12, learned:0, review:192, mastered:0}`，89% 条目恒在「待复习」，未学条目也被要求复习
+- **P0 错题本/重练队列无终态**：`HAVING wrong_count>=2 AND is_first=0` 在生产数据上恒空；重练队列不看"最近一次是否已答对" → 错→错→对 后仍在队列
+- **P1** 题库判题不自动 done、判错回流路由恒报成功；`schedule_events` 无删除/已处理；`job_posts` 无归档；爬取/产出与岗位库两条独立管线；`decision_ledger` 写而不读；自主播报的语音 scene 不存在（"看得见字，听不见音"）；场景装配冷启动不装配；`tool_results/` 无回收；审批按工具名放行（无 args 维度）；`kanban-api.d.ts` 漏声明 9 个 IPC（`reviewFeedback/reviewRetry/ttsSynth/...`）；`scheduled_jobs` 种子恒禁用且无启用入口；备份只还原主库
+
+
+
 ### 插件化（已完成三个阶段）
 
 真白按"宿主 + 插件"设计演进（manifest 声明 + 加载器 + 设置命名空间 + 健康检查 + 面板扩展点动态渲染 + 插件市场一键安装）：
