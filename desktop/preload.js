@@ -55,8 +55,14 @@ contextBridge.exposeInMainWorld("kanban", /** @type {import("./kanban-api").Kanb
   getProgress: () => ipcRenderer.invoke("widget:progress"),
   notify: (title, message) => ipcRenderer.invoke("widget:notify", { title, message }),
   chat: (message, history, sessionId) => ipcRenderer.invoke("widget:chat", { message, history, sessionId }),
+  // 修复（闭环清查）：正文 delta 必须转成事件回调——streamPromise 把 type:"delta" 只发给 onChunk，
+  // 而这里原先传的是空函数 `() => {}` → 三态渲染层收到的流事件里**永远没有正文增量**
+  // （React/Vue 的 `ev.type === "delta"` 分支不触发，原生面板的流式逐句语音播报也失效，
+  //   只有结束后的 done.reply 一次性出现）。修复后 delta 以 {type:"delta", delta} 透传给调用方。
   chatStream: (message, history, onEvent, sessionId) => streamPromise({
-    channel: "chat-chunk", invokeName: "widget:chat-stream", args: { message, history, sessionId }, onChunk: () => {}, onEvent,
+    channel: "chat-chunk", invokeName: "widget:chat-stream", args: { message, history, sessionId },
+    onChunk: (delta) => { if (typeof onEvent === "function") onEvent({ type: "delta", delta }); },
+    onEvent,
   }),
   chatSessions: () => ipcRenderer.invoke("widget:chat-sessions"),
   chatMessages: (sessionId) => ipcRenderer.invoke("widget:chat-messages", { sessionId }),

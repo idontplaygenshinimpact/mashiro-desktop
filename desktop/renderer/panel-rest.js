@@ -364,11 +364,26 @@ async function loadZhenti() {
       });
     });
     // 记错题 → 学习清单 + 复习卡
+    // 修复（闭环清查）：原用 window.prompt() 收集题干/错误答案——Electron 渲染进程**不支持 prompt**
+    // （实测抛 "prompt() is not supported."）→ 按钮点了直接抛错，真题→错题→清单/复习卡这条链路整条不可用。
+    // 改成页内浮层表单（复用 .sd-overlay/.sd-modal 样式），不依赖任何浏览器弹窗。
     document.querySelectorAll(".zhenti-wrong").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        const question = prompt(`记录你做错的题（题干，来自 ${btn.dataset.title}）：`);
-        if (!question || !question.trim()) return;
-        const answer = prompt("你的错误答案/卡壳点（可跳过，留空即可）：") || "";
+        const input = await window.__askText?.({
+          title: `✍️ 记录做错的题（来自 ${btn.dataset.title || "真题"}）`,
+          label: "题干（可粘贴原题）",
+          placeholder: "把题目内容贴进来，便于讲解与复习",
+          multiline: true,
+        });
+        const question = String(input ?? "").trim();
+        if (!question) return;
+        const answer = (await window.__askText?.({
+          title: "🙈 你的错误答案 / 卡壳点",
+          label: "可留空（留空则只记题目）",
+          placeholder: "当时卡在哪一步？",
+          multiline: true,
+          optional: true,
+        })) || "";
         try {
           const res = await fetch(API_BASE + "/api/zhenti/wrong", {
             method: "POST", headers: { "Content-Type": "application/json" },

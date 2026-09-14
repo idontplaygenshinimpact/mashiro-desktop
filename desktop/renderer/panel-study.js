@@ -231,7 +231,10 @@ async function startIvSession(cfg) {
 // ============ 进行中会话"继续上一场"（C8 恢复闭环 + 关面板不丢进度） ============
 // 进入面试 Tab 时检测服务端进行中会话 → 显示"🔄 继续上一场"按钮（无缝续，不用收尾重开）
 async function loadIvResume() {
-  const btn = $("iv-resume");
+  // 修复（闭环清查）：此按钮的 id 曾是 "iv-resume"，与简历输入框 <textarea id="iv-resume"> 重复 →
+  // getElementById 只返回第一个（textarea）→ 按钮文案被写进简历框、onclick 挂在简历框上、
+  // 无进行中会话时"隐藏"的也是简历框（"继续上一场"真机不可达，且简历被污染后当简历发给面试官）。
+  const btn = $("iv-resume-btn");
   if (!btn) return;
   try {
     const r = await window.kanban.invStatus();

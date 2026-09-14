@@ -479,6 +479,50 @@ document.addEventListener("wheel", (e) => {
   e.preventDefault();
 }, { passive: false });
 
+// ---------- 页内文本输入浮层（闭环清查补的基础设施） ----------
+// 背景：Electron 渲染进程**不支持 window.prompt**（实测抛 "prompt() is not supported."），
+// 任何用 prompt 收集输入的功能点了就抛错（真题「记错题」曾如此，整条错题回流链路不可用）。
+// 这里提供 Promise 化的页内浮层：确定 → 文本（可选场景可为空串），取消/Esc → null；带 aria-modal 与自动聚焦。
+window.__askText = function askText({ title = "请输入", label = "", placeholder = "", multiline = false, optional = false } = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "sd-overlay";
+    const field = multiline
+      ? `<textarea class="rf-input" rows="4" aria-label="${escHtml(title)}" placeholder="${escHtml(placeholder)}"></textarea>`
+      : `<input class="rf-input" type="text" aria-label="${escHtml(title)}" placeholder="${escHtml(placeholder)}" />`;
+    overlay.innerHTML = `<div class="sd-modal" role="dialog" aria-modal="true" aria-label="${escHtml(title)}" style="width:min(560px,92vw);">
+      <div class="sd-modal-head"><b>${escHtml(title)}</b><button type="button" class="sd-close" data-cancel title="关闭">✕</button></div>
+      <div class="sd-modal-body">
+        ${label ? `<div class="rf-muted" style="margin-bottom:6px;">${escHtml(label)}</div>` : ""}
+        ${field}
+      </div>
+      <div class="sd-modal-ask">
+        <button type="button" class="primary" data-ok>确定</button>
+        <button type="button" class="secondary" data-cancel>${optional ? "跳过" : "取消"}</button>
+      </div>
+    </div>`;
+    const done = (val) => {
+      document.removeEventListener("keydown", onKey, true);
+      overlay.remove();
+      resolve(val);
+    };
+    const onKey = (ev) => {
+      if (ev.key === "Escape") { ev.preventDefault(); done(null); }
+      else if (ev.key === "Enter" && !multiline) { ev.preventDefault(); done(String(el.value || "")); }
+    };
+    document.body.appendChild(overlay);
+    const el = overlay.querySelector("textarea, input");
+    const okBtn = overlay.querySelector("[data-ok]");
+    okBtn.disabled = !optional; // 必填时输入非空才能提交（可选场景允许直接"跳过"）
+    el.addEventListener("input", () => { okBtn.disabled = !optional && !String(el.value || "").trim(); });
+    okBtn.addEventListener("click", () => done(String(el.value || "")));
+    overlay.querySelectorAll("[data-cancel]").forEach((b) => b.addEventListener("click", () => done(null)));
+    overlay.addEventListener("click", (ev) => { if (ev.target === overlay) done(null); });
+    document.addEventListener("keydown", onKey, true);
+    setTimeout(() => el.focus(), 0);
+  });
+};
+
 
 
 

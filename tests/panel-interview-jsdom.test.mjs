@@ -216,7 +216,12 @@ test("进行中会话 → 渲染「继续上一场」按钮 → 点击恢复面�
     });
     window.switchTab("interview");
     await tick();
-    const resumeBtn = window.document.getElementById("iv-resume");
+    // 闭环清查：续场按钮有自己的 id（此前与简历输入框同 id "iv-resume" → 断言实际打在 textarea 上，
+    // 测试在为"按钮真机不可达"的假实现背书；现在同时钉住"简历框不被按钮占用"）
+    const resumeBtn = window.document.getElementById("iv-resume-btn");
+    const resumeBox = window.document.getElementById("iv-resume");
+    assert.ok(resumeBtn, "续场按钮存在（#iv-resume-btn）");
+    assert.ok(resumeBox && resumeBox.tagName === "TEXTAREA", "简历框仍是 textarea（id 不被按钮抢占）");
     assert.ok(!resumeBtn.classList.contains("hidden"), "有进行中会话 → 显示继续按钮");
     assert.match(resumeBtn.textContent, /第 3 轮/, "按钮标注续接轮次");
     resumeBtn.click();
@@ -233,8 +238,10 @@ test("无进行中会话 → 「继续上一场」按钮隐藏", async () => {
     kanban.invStatus = async () => ({ ok: true, active: false });
     window.switchTab("interview");
     await tick();
-    const resumeBtn = window.document.getElementById("iv-resume");
+    const resumeBtn = window.document.getElementById("iv-resume-btn");
+    const resumeBox = window.document.getElementById("iv-resume");
     // switchTab 顶层会先以 mock 空库跑一遍 → 保证始终 hidden
     assert.ok(resumeBtn.classList.contains("hidden"), "无会话 → 按钮隐藏");
+    assert.ok(!resumeBox.classList.contains("hidden"), "无会话时简历框必须照常可见（此前按钮会把它藏掉）");
   });
 });

@@ -4,11 +4,15 @@
 // ⚛️ React 特性：useReducer 复习状态机（load/reveal/rate/next）+ useMemo 派生本次统计
 import { useEffect, useMemo, useReducer, useState } from "react";
 
+// FSRS 评分坐标 = 后端契约 0..3（again/hard/good/easy，见 lib/contracts/review.ts 的 ReviewSubmitInput
+// `z.number().int().min(0).max(3)`）。
+// 修复（闭环清查）：此前按钮值是 1/2/3/4 直传 → 「😵 忘了」被记成 Hard、「😎 熟练」(4) 直接违反契约
+// 返回 400（错误体无 ok 字段 → 原判断 `r?.ok === false` 为假 → 静默翻下一张、card_reviews 零写入）。
 const RATINGS = [
-  [1, "😵 忘了", "完全想不起来（下次很快再见）"],
-  [2, "🤔 模糊", "想起来一部分（间隔缩短）"],
-  [3, "🙂 记得", "基本回忆起来（间隔拉长）"],
-  [4, "😎 熟练", "脱口而出（间隔大幅拉长）"],
+  [0, "😵 忘了", "完全想不起来（下次很快再见）"],
+  [1, "🤔 模糊", "想起来一部分（间隔缩短）"],
+  [2, "🙂 记得", "基本回忆起来（间隔拉长）"],
+  [3, "😎 熟练", "脱口而出（间隔大幅拉长）"],
 ];
 
 function reviewReducer(state, action) {
@@ -41,7 +45,9 @@ export function ReviewPanel() {
     dispatch({ type: "busy", busy: true });
     try {
       const r = await window.kanban.reviewSubmit(card.id, rating);
-      if (r?.ok === false) { setErr("评分提交失败：" + String(r.error || "").slice(0, 60)); return; }
+      // 失败判定同时看 ok 与 error：契约校验失败（400 VALIDATION_ERROR）返回的错误体没有 ok 字段，
+      // 只看 `r?.ok === false` 会把失败当成功（曾经的正文明细见文件头注释）
+      if (r?.ok === false || r?.error) { setErr("评分提交失败：" + String(r.error || "").slice(0, 60)); return; }
       if (r?.clearedWeak) window.kanban?.notify?.("✨ 薄弱点消灭", `「${r.clearedWeak}」已消灭（复习答对回流）`);
       dispatch({ type: "rate" });
     } catch (e) { setErr("评分提交异常：" + String(e?.message || e).slice(0, 80)); }

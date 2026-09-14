@@ -18,11 +18,19 @@ export async function toolReadToolResult(file: string): Promise<ReadToolResult> 
   try {
     const { readFileSync, existsSync } = await import("node:fs");
     const path = await import("node:path");
-    // 修复：写端（exec-utils.ts）落盘到仓库根 data/tool_results（dirname=lib/tools → ../..），
-    // 读端原用 ..（=lib/）→ 路径错位 → read_tool_result 恒"文件不存在"，>8K 结果恢复链路死掉
-    const root = path.join(import.meta.dirname, "..", "..");
-    const resultsDir = path.resolve(path.join(root, "data", "tool_results"));
-    const target = path.resolve(path.join(root, String(file || "")));
+    // 路径口径必须与写端（exec-utils.ts）完全一致：
+    //   写端 = (process.env.MIANSHI_DATA_DIR || 仓库根/data)/tool_results/<fname>
+    // 修复（闭环清查）：原先读端硬编码仓库根 data/ → 打包版/headless（MIANSHI_DATA_DIR 已重定向到
+    // userData）下写进去的文件读不回来，>8K 结果恢复链路（read_tool_result）恒"文件不存在"。
+    // 同时兼容写端记录的 `_file` 形态：`data/tool_results/<fname>`（仓库相对）与裸文件名。
+    const dataDir = process.env.MIANSHI_DATA_DIR || path.join(import.meta.dirname, "..", "..", "data");
+    const resultsDir = path.resolve(path.join(dataDir, "tool_results"));
+    const name = String(file || "")
+      .trim()
+      .replace(/^[\\/]+/, "")
+      .replace(/^data[\\/]tool_results[\\/]/, "")
+      .replace(/^tool_results[\\/]/, "");
+    const target = path.resolve(path.join(resultsDir, name));
     if (!target.startsWith(resultsDir + path.sep)) {
       return { error: `拒绝读取：仅允许 data/tool_results/ 目录下的文件（收到 ${file}）` };
     }

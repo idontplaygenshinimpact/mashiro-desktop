@@ -276,6 +276,43 @@ export function registerMiscRoutes(router: Router): void {
       res.end(JSON.stringify({ error: eMsg(e) }));
     }
   });
+  // 修复（闭环清查）：校招卡片的「📚 学考点」「🎤 按岗面试」一直 POST 到这两条路径，但路由从未注册（404）
+  // → 岗位→学习、岗位→面试两条闭环整体断开；lib/loop.ts 的 deriveStudyFromJob/startInterviewForJob
+  // 也因此长期是没有调用方的孤儿函数（只有单测引用）。此处按前端既有载荷 { jobId } 补齐。
+  router.route("/api/loop/job-study", "POST", (req: IncomingMessage, res: ServerResponse) => {
+    readBody(req, res, async (body: string) => {
+      try {
+        const { jobId } = JSON.parse(body || "{}");
+        const job = jobsApi.getJobs().find((j) => j.id === String(jobId));
+        if (!job) {
+          res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: false, error: `岗位不存在: ${String(jobId)}` }));
+          return;
+        }
+        const { deriveStudyFromJob } = await import("#lib/loop.mjs");
+        const r = await deriveStudyFromJob(job);
+        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: eMsg(e) }));
+      }
+    });
+  });
+  router.route("/api/loop/interview-for-job", "POST", (req: IncomingMessage, res: ServerResponse) => {
+    readBody(req, res, async (body: string) => {
+      try {
+        const { jobId } = JSON.parse(body || "{}");
+        const { startInterviewForJob } = await import("#lib/loop.mjs");
+        const r = await startInterviewForJob(jobId);
+        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: eMsg(e) }));
+      }
+    });
+  });
 
   // ---------- 问候语（GET 规则版 / POST LLM 精修，失败回退规则） ----------
   router.route("/api/greeting", "GET", (req: IncomingMessage, res: ServerResponse) => {

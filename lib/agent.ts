@@ -359,6 +359,16 @@ async function executeTool(name: string, args: ToolArgs): Promise<ToolExecResult
         return await execWebSearch(args);
       case "fetch_page":
         return await withRetry(() => toolFetchPage(String(args.url ?? "")), 2);
+      // 修复（闭环清查）：schemas 里声明了 fetch_nowcoder_user（模型会调用它，权限表也登记为 auto），
+      // 但 dispatch 里一直缺这一臂 → 恒返回「未知工具」（只有 skills/nowcoder-surf 直连实现能用）。
+      // 结果含外部页面衍生内容 → 标题等文本按不可信数据包裹后回填。
+      case "fetch_nowcoder_user": {
+        const { toolFetchNowcoderUser } = await import("./tools/impl-search.ts");
+        return await withRetry(() => toolFetchNowcoderUser({
+          userId: String(args.userId ?? ""),
+          maxPages: Number(args.maxPages) || 5,
+        }), 1);
+      }
       case "solve_question":
         return await withRetry(() => toolSolveQuestion(args as { question: string; company: string; sourceUrl?: string }), 1);
       case "detect_questions":

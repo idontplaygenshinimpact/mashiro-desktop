@@ -48,6 +48,25 @@ test("panel-*.js 文件集完整（6 个模块按序加载——含 panel-state.
   assert.deepEqual(jsFiles.sort(), ["panel-chat.js", "panel-core.js", "panel-jobs.js", "panel-rest.js", "panel-state.js", "panel-study.js"]);
 });
 
+// 闭环清查：重复 id 会让 getElementById 静默返回第一个元素（曾把「继续上一场」按钮写成与简历框同 id
+// "iv-resume" → 按钮文案/onclick/隐藏全落到简历框上，真机入口不可达且污染简历）
+test("panel.html 无重复 id（重复 id 会让 getElementById 命中错误的元素）", () => {
+  const ids = collect(/id="([a-zA-Z0-9-]+)"/g, htmlSrc);
+  const dup = [...new Set(ids.filter((x, i) => ids.indexOf(x) !== i))];
+  assert.deepEqual(dup, [], `重复 id：${dup.join(", ")}`);
+});
+
+// 闭环清查：Electron 渲染进程不支持 window.prompt（实测抛 "prompt() is not supported."）——
+// 用它收集输入会让按钮点了直接抛错（真题「记错题」曾如此）
+test("渲染层不使用 window.prompt（Electron 不支持，会抛错）", () => {
+  const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+  const offenders = jsFiles
+    .map((f) => [f, stripComments(readFileSync(path.join(renderer, f), "utf8"))])
+    .filter(([, src]) => /(^|[^.\w])prompt\s*\(/.test(src))
+    .map(([f]) => f);
+  assert.deepEqual(offenders, [], `这些文件用了 prompt()：${offenders.join(", ")}`);
+});
+
 // ---------- 面板 ↔ widget 接口字段契约（防"题库为空"类错位回归） ----------
 // 背景：30d5733 路由拆分后 /api/challenges 响应字段从 challenges 变为 list，
 //       detail 接口字段从 challenge 变为 detail，而面板仍读旧字段 → 专项练习永远显示

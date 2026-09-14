@@ -9,8 +9,10 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 
 const DIRECTION_LABEL = { frontend: "前端", agent: "AI Agent", fullstack: "全栈", backend: "后端", algorithm: "算法" };
-const STATUS_LABEL = { ready: "📮 已投递", ready_bishi: "✍️ 待笔试", favor: "⭐ 收藏", none: "未处理" };
-const STATUS_FILTERS = [["", "全部"], ["ready", "📮 已投递"], ["ready_bishi", "✍️ 待笔试"], ["none", "未处理"]];
+const STATUS_LABEL = { ready: "📮 已投递", ready_bishi: "✍️ 待笔试", favor: "⭐ 收藏", done: "✅ 已完成", new: "未处理" };
+// 状态值与后端枚举一致（lib/jobs.ts setJobStatus 只接受 new/ready/ready_bishi/done）——
+// 修复（闭环清查）：此前用 "none" → 「未处理」筛选恒空，且与原生面板（new）口径不一致
+const STATUS_FILTERS = [["", "全部"], ["ready", "📮 已投递"], ["ready_bishi", "✍️ 待笔试"], ["new", "未处理"]];
 
 export function JobsPanel() {
   const [jobs, setJobs] = useState([]);
