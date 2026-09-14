@@ -274,7 +274,11 @@ export function registerCoreRoutes(router: Router, { laneSubmit = (fn: () => any
     if (req.method === "GET") {
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       const cfg = rt.patrolGetConfig();
+      // 修复（闭环清查）：原先不返回 ok，而面板是 `if (r?.ok) { 回填开关/间隔/预算 }` ——
+      // 于是整个巡检设置区**从不回填**（开关恒为 HTML 默认、间隔/预算框恒空，用户一保存就把框里的
+      // 占位假值 100000 写成真实预算）。这里补 ok:true，面板默认态与后端真实态对齐。
       res.end(JSON.stringify({
+        ok: true,
         ...cfg,
         dailyTokenBudget: rt.patrolGetBudget(),
         usedToday: rt.patrolGetUsed(),

@@ -97,6 +97,27 @@ async function switchRenderer(tab, mode) {
   }
   const box = document.getElementById(`${tab}-${mode}`);
   if (!box) { window.kanban?.notify?.("🎨 渲染层", `${TAB_LABELS[tab] || tab} 的容器缺失，请刷新面板重试`); return; }
+  // 闭环清查修复：框架版之间直接互切（react ⇄ vue）时，必须把**另一个框架**也隐藏并卸载——
+  // 原实现只 hide 了原生容器，导致两套框架同时可见/同时持有 DOM（重叠渲染 + 事件重复绑定）；
+  // 另外容器若被外部清空（或上次卸载失败留下空壳），要强制重挂，否则会停在"容器可见但空白"的假成功态。
+  const otherMode = mode === "react" ? "vue" : mode === "vue" ? "react" : null;
+  if (otherMode) {
+    const otherBox = document.getElementById(`${tab}-${otherMode}`);
+    if (otherBox) otherBox.style.display = "none";
+    if (otherMode === "react") {
+      const rr = reactRoots.get(tab);
+      if (rr) {
+        try { rr.unmount(); } catch (e) { console.warn("[panel] React 卸载失败（改走强制重挂载）", e); }
+        reactRoots.delete(tab);
+      }
+    } else {
+      const va = vueApps.get(tab);
+      if (va) {
+        try { va.unmount(); } catch (e) { console.warn("[panel] Vue 卸载失败（改走强制重挂载）", e); }
+        vueApps.delete(tab);
+      }
+    }
+  }
   if (mode === "react") {
     const ready = await ensureBundle("react");
     if (!ready) { window.kanban?.notify?.("🎨 渲染层", "React 版加载失败，请刷新面板重试"); return; }
@@ -123,12 +144,12 @@ async function switchRenderer(tab, mode) {
     native.style.display = "";
     const rr = reactRoots.get(tab);
     if (rr) {
-      try { rr.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
+      try { rr.unmount(); } catch (e) { console.warn("[panel] React 卸载失败（渲染异常不阻塞切换）", e); }
       reactRoots.delete(tab); // 无论卸载成败都清引用（防"切不回来"：引用残留 → 再切 React 不重新挂载）
     }
     const va = vueApps.get(tab);
     if (va) {
-      try { va.unmount(); } catch { /* 渲染异常时卸载失败不阻塞切换 */ }
+      try { va.unmount(); } catch (e) { console.warn("[panel] Vue 卸载失败（渲染异常不阻塞切换）", e); }
       vueApps.delete(tab); // 无论卸载成败都清引用（防"切不回来"）
     }
   }

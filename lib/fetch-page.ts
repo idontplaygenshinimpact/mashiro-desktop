@@ -209,6 +209,7 @@ export async function fetchPage(url: string, { maxTextChars = 60000, collectLink
       userAgent: UA,
       locale: "zh-CN",
       viewport: { width: 1366, height: 900 },
+      ignoreHTTPSErrors: true, // 同上：证书链不完整的公开站点也要能抓（否则 TLS 一失败就零产出）
     });
   } catch (e) {
     if (/context closed|browser closed|target closed|browser has been closed/i.test(e instanceof Error ? e.message : "")) {
@@ -218,6 +219,7 @@ export async function fetchPage(url: string, { maxTextChars = 60000, collectLink
         userAgent: UA,
         locale: "zh-CN",
         viewport: { width: 1366, height: 900 },
+        ignoreHTTPSErrors: true, // 重建 context 时保持同一容错口径（见上方说明）
       });
     } else {
       throw e;
@@ -366,6 +368,7 @@ export async function openPage(url: string): Promise<{ page: Page; context: Brow
   await assertPublicUrl(url);
   const b = await getBrowser();
   const context = await b.newContext({
+    ignoreHTTPSErrors: true,
     userAgent: UA,
     locale: "zh-CN",
     viewport: { width: 1366, height: 900 },
@@ -394,6 +397,7 @@ async function getBrowseSession(): Promise<BrowserContext> {
   }
   const b = await getBrowser();
   const context = await b.newContext({
+    ignoreHTTPSErrors: true,
     userAgent: UA,
     locale: "zh-CN",
     viewport: { width: 1366, height: 900 },

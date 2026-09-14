@@ -515,11 +515,16 @@ export const review = {
 
   // 错题重练队列（强化复习工单任务 2②：again/hard 卡当天/3 天内重练——不等 FSRS 长间隔）
   getRetryQueue(limit = 10): Array<{ id: string; topic: string; question: string; answer: string; type: "algo" | "concept"; priority: string; lastWrongAt: number }> {
+    // 闭环清查修复：队列要有终态——原 SQL 只看"窗口内出现过 rating<2"，不看**最近一次**评分，
+    // 于是 错→错→对 之后仍留在重练队列（feedback.retry 恒 1、永不归零）。
+    // 现在取每张卡在窗口内的最后一次评分，只有"最近一次仍是答错"才入队。
     const rows = db.prepare(
-      `SELECT r.card_id, c.topic, c.question, c.answer, c.type, c.priority, MAX(r.reviewed_at) last_at, r.rating
+      `SELECT r.card_id, c.topic, c.question, c.answer, c.type, c.priority, r.reviewed_at AS last_at, r.rating
        FROM card_reviews r JOIN review_cards c ON c.id = r.card_id
-       WHERE r.rating < 2 AND r.reviewed_at >= ? GROUP BY r.card_id
-       ORDER BY last_at DESC LIMIT ?`
+       WHERE r.reviewed_at >= ?
+         AND r.reviewed_at = (SELECT MAX(r2.reviewed_at) FROM card_reviews r2 WHERE r2.card_id = r.card_id)
+         AND r.rating < 2
+       ORDER BY r.reviewed_at DESC LIMIT ?`
     ).all(Date.now() - 3 * 24 * 3600 * 1000, limit) as unknown as Array<{ card_id: unknown; topic: unknown; question: unknown; answer: unknown; type: unknown; priority: unknown; last_at: number }>;
     return rows.map((r) => ({
       id: String(r.card_id),
@@ -541,13 +546,15 @@ export const review = {
     return { today: todayRows.length, mastered, retry: this.getRetryQueue(10).length };
   },
 
-  // 错题本：答错（rating<2）>=2 次的卡片，按错次数降序（错得最多的最该重学）
-  // 复习首刷不计 fail 工单任务 1：排除首刷记录（is_first=1——没学过不算失败）
+  // 错题本：答错（rating<2）≥2 次的卡片，按错次数降序（错得最多的最该重学）
+  // 闭环清查修复：原 `AND is_first = 0` 把"首刷那次答错"排除在**计数**之外——首刷答错本身就是答错一次，
+  // 于是门槛被抬成"要错 ≥3 次"，生产库 35 行答错记录里没有任何卡达标 → 错题本恒空（面板有入口有文案却永远没内容）。
+  // 现在按"答错总次数 ≥2"判定；"首刷不计 fail"的口径仍保留在薄弱点/记忆侧（未改那里的判定）。
   getWrongCards(limit = 8): Array<{ id: string; topic: string; question: string; wrongCount: number; lastWrongAt: string }> {
     const rows = db.prepare(
       `SELECT r.card_id, c.topic, c.question, COUNT(*) wrong_count, MAX(r.reviewed_at) last_wrong_at
        FROM card_reviews r JOIN review_cards c ON c.id = r.card_id
-       WHERE r.rating < 2 AND r.is_first = 0 GROUP BY r.card_id HAVING wrong_count >= 2
+       WHERE r.rating < 2 GROUP BY r.card_id HAVING wrong_count >= 2
        ORDER BY wrong_count DESC, last_wrong_at DESC LIMIT ?`
     ).all(limit) as unknown as Array<{ card_id: unknown; topic: unknown; question: unknown; wrong_count: unknown; last_wrong_at: unknown }>;
     return rows.map((r) => ({

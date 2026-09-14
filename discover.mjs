@@ -90,8 +90,15 @@ function clearProgress() {
 }
 
 // 优雅退出时清进度
-process.on("exit", () => clearProgress());
-process.on("SIGINT", () => { clearProgress(); process.exit(0); });
+// 闭环清查修复：原先无论成功失败，进程退出都把 progress.json 覆盖成 idle → 面板"暂无任务"，
+// 失败被彻底抹掉（用户只看到一闪而过的"跑完了"，实测 8 次爬取零产出全部报成功）。
+// 现在失败/中断都保留 error 态，只有正常结束才回落 idle。
+let runFailed = false;
+process.on("exit", () => { if (!runFailed) clearProgress(); });
+process.on("SIGINT", () => {
+  try { writeFileSync(PROGRESS_FILE, JSON.stringify({ status: "error", message: "已被中断（用户取消）", ts: Date.now() }), "utf8"); } catch { /* ignore */ }
+  process.exit(130);
+});
 
 // 各站点"内容帖"链接模式：牛客 /discuss/、掘金 /post/、CSDN /article/details/、知乎 /question/、
 // 思否 /a/（面经汇总帖）、博客园 /p/（实测 zzk 搜索对 headless 反爬，保留模式备用）
@@ -367,6 +374,13 @@ export async function solveStage(ctx) {
 
   if (items.length === 0) {
     ctx.summary = [];
+    // 闭环清查修复：零产出必须算失败——此前静默 return，日志照打"✅ 完成"、进度被清成 idle，
+    // 面板显示"暂无任务"，用户以为抓到了（实测连续 8 次爬取 0 篇却都报成功）。
+    runFailed = true;
+    const msg = `未抓到任何面经（${startUrls.length} 个起始页全部失败或为空）——检查网络/证书/站点选择器`;
+    console.error(`⚠️ ${msg}`);
+    try { writeFileSync(PROGRESS_FILE, JSON.stringify({ status: "error", message: msg, current: 0, total: 0, ts: Date.now() }), "utf8"); } catch { /* ignore */ }
+    process.exitCode = 1;
     return;
   }
 
