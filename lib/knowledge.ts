@@ -299,9 +299,20 @@ export function matchKp(text: unknown): string | null {
   return normalizeKpTopic(text) || null;
 }
 
+/** 动态 key 形态守卫（闭环清查）：matchKp 在没有命中知识树时会把**整句 topic** 当 key 返回，
+ *  追问句式（"请继续深入讲讲「…」"）会被逐字写进 kp_mastery，实测库里出现过
+ *  `请继续深入讲讲「请继续深入讲讲「…」的手写能力、闭包、边界` 这种递归题干键（43 行里 30 行是这类）。
+ *  这类键既不是知识点、也永远不会被读侧命中 → 在写入口直接拒收（短而干净的动态主题仍允许）。 */
+function isTopicLikeKey(k: string): boolean {
+  if (k.length > 24) return false;
+  if (/[「」“”？?。！!\n{}]/.test(k)) return false;
+  return true;
+}
+
 /** 记录一次作答：答对加分，答错/薄弱扣分 */
 export function recordKp(kpId: string | null | undefined, { correct = true, strong = false }: { correct?: boolean; strong?: boolean } = {}): void {
   if (!kpId) return;
+  if (!isTopicLikeKey(String(kpId))) return; // 整句题干/问句不是知识点键——拒收，防脏键污染掌握度
   const m = loadMastery();
   if (!m[kpId]) m[kpId] = { score: 50, attempts: 0, lastAt: "" };
   const kp = m[kpId];
@@ -313,6 +324,16 @@ export function recordKp(kpId: string | null | undefined, { correct = true, stro
     kp.score = Math.max(0, kp.score - 12);
   }
   saveMastery(m);
+}
+
+/** 掌握度落盘快照（key → score）——供读侧按**同一 key 空间**消费：
+ *  树的点 id 与动态主题 key 都在同一张表里，用 getMastery()（只列知识树内的点）会漏掉后者
+ *  （闭环清查前的根因：216 条清单里 188 条无论怎么答对都到不了「已掌握」）。 */
+export function getMasteryLookup(): Record<string, number> {
+  const m = loadMastery();
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(m)) out[k] = Number(v?.score ?? 0);
+  return out;
 }
 
 /** 直接设置掌握度分数（薄弱点闭环工单任务 1：自评"一般"映射 0.5——非增量，覆盖式） */

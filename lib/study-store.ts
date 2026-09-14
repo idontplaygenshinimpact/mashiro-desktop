@@ -39,13 +39,14 @@ export function loadPlan(): StudyPlan {
   const dueByTopic = new Map<string, boolean>();
   try {
     const now = Date.now();
-    const DAY = 24 * 60 * 60 * 1000;
     // node:sqlite 的行是 Record<string, SQLOutputValue>——列形状是运行时契约，边界处显式收口
     const rows = db.prepare("SELECT topic, fsrs_due, created_at FROM review_cards").all() as unknown as DueRow[];
     for (const r of rows) {
-      const due = Number(r.fsrs_due) > 0
-        ? Number(r.fsrs_due) <= now                       // 复习过：fsrs_due 到期
-        : (Number(r.created_at) || 0) + DAY <= now;       // 新卡：创建超 1 天
+      // 闭环清查修复：到期口径收敛为"真的该复习了"。原实现把 fsrs_due=0（**从未复习过**的新卡）
+      // 按"创建超 1 天"也算到期 → 实测 221 张卡里 174 张是新卡、全部创建超 1 天 → 清单 192/216 条
+      // （89%）恒显示「待复习」，「已学/已掌握」两组永不出现（复习 Tab 同期只有 47 张真到期）。
+      // 新卡属于 FSRS learning 阶段 → 归「待学/学习中」，每日复习队列仍会按缓冲把它排进来，不漏复习。
+      const due = Number(r.fsrs_due) > 0 && Number(r.fsrs_due) <= now;
       if (due) dueByTopic.set(String(r.topic), true);
     }
   } catch { /* 复习表暂不可用 */ }

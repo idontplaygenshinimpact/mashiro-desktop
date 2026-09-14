@@ -170,11 +170,14 @@ export function registerStudyRoutes(router: Router, { getCorsOrigin = (_req: Inc
     // 两级语义：done = "已学"（讲解过/勾选）；mastered = "已掌握"（面试/复习答对，mastery score ≥ 80）
     async () => {
       const plan = studyApi.getPlan();
-      let masteryMap = null;
-      let matchKpFn = null;
+      // 闭环清查修复：原先用 getMastery()（只列**知识树内**的点）建 map，而 matchKp 未命中树时返回归一化后的
+      // topic 自身 → 树外条目（实测 216 条里 188 条）无论答对多少次 mastered 永远 false，「已掌握」不可达。
+      // 改为读**落盘掌握表快照**：树内 id 与动态 topic key 处在同一 key 空间。
+      let masteryMap: Map<string, number> | null = null;
+      let matchKpFn: ((t: string) => string | null) | null = null;
       try {
-        const { getMastery, matchKp } = await import("#lib/knowledge.ts");
-        masteryMap = new Map(getMastery().map((k) => [k.id, k.score]));
+        const { getMasteryLookup, matchKp } = await import("#lib/knowledge.ts");
+        masteryMap = new Map(Object.entries(getMasteryLookup()));
         matchKpFn = matchKp;
       } catch { /* 掌握度不可用按未掌握 */ }
       const items = (plan.items || []).map((it) => {
