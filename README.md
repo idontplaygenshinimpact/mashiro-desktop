@@ -142,6 +142,13 @@
 
 
 
+#### 第四批已修（commit `945e6ac`）
+
+| # | 断链（原状） | 断在哪一环 | 修法与护栏 |
+|---|---|---|---|
+| 15 | **渲染层 IPC 声明漂移**：`preload.js` 暴露 81 个键、`kanban-api.d.ts` 只声明 72 个 —— 漏了 `reviewFeedback`/`reviewRetry`（Vue 复习面板在用）、`ttsSynth`/`ttsPlayFile`/`stopSpeak`（实时语音两阶段）、`openReactPanel`/`openVuePanel`（三态独立窗口）；checkJs 只能校验"已声明项的实现是否匹配"，漏声明永远发现不了 | C4 契约 | 补齐 7 条声明 + `tests/ipc-declaration.test.mjs`（解析 preload 暴露面 vs 声明面，缺一即红——**首个能发现"漏声明"的护栏**） |
+| 16 | **爬取产出写完没人读**：`scanNewestFiles` 只扫一层 `output/<日期>/*.md`，而爬取把讲解写在 `output/<日期>_discover/讲解/**.md` → 这些文件永远进不了「最新产出/今日推荐」 | C7 | 改为递归扫描（深度 ≤3、跳过学习存档与 `00_` 索引、`dir` 保留相对子路径）；目录判定走 `statSync().isDirectory`（真实 fs 生效、假 fs 保持单测隔离） |
+
 #### 待修（已定位到 `file:line`，按严重度排序；完整报告见 `%TEMP%\mashiro-audit\{A..H}-*.md`）
 
 - **P0 巡检三键"读而不写"**：`lib/patrol.ts` 读 `patrol_enabled/interval_min/avoid_peak`，写点只在面板路由；真实库 30 个 settings 键里没有这三个 → 面板默认态与后端相反（巡检默认开，面板显示关）
