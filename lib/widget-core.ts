@@ -76,18 +76,34 @@ export function scanNewestFiles(limit = 20, outputDir: string, fs: FsLike = { ex
     if (!fs.existsSync(outputDir)) return [];
     const files: OutputFileEntry[] = [];
     const SKIP_DIRS = new Set(["study_notes", "chat_solutions"]); // 学习存档/对话答疑产物不混入爬取产出
+    // 闭环清查修复：原来只扫一层（output/<日期>/*.md），而爬取产出会把讲解写在
+    // output/<日期>_discover/讲解/**.md → 这些文件**永远进不了「最新产出/今日推荐」**（写完没人读）。
+    // 改为递归扫描（跳过学习存档目录与 00_ 索引），dir 保留相对子路径便于面板展示与打开。
+    const walk = (absDir: string, relDir: string, depth: number): void => {
+      if (depth > 3) return; // 防深目录异常（产出约定最多两层）
+      let names: string[];
+      try { names = fs.readdirSync(absDir) as string[]; } catch { return; }
+      for (const name of names) {
+        const abs = path.join(absDir, name);
+        // 目录判定走 statSync（真实 fs 的 Stats 有 isDirectory；注入的假 fs 只有 mtime → 视为文件）
+        let isDir = false;
+        try { isDir = typeof (fs.statSync(abs) as { isDirectory?: () => boolean }).isDirectory === "function" && (fs.statSync(abs) as { isDirectory: () => boolean }).isDirectory(); } catch { /* 见下：交给文件分支再判一次 */ }
+        if (isDir) {
+          if (SKIP_DIRS.has(name)) continue;
+          walk(abs, `${relDir}/${name}`, depth + 1);
+          continue;
+        }
+        if (!name.endsWith(".md")) continue;
+        if (/^00[_-]/.test(name)) continue; // 索引文件跳过
+        try {
+          files.push({ file: name, dir: relDir, mtime: fs.statSync(abs).mtime, path: abs });
+        } catch { /* 文件在扫描中被删除（ENOENT 等），跳过该文件继续 */ }
+      }
+    };
     for (const d of fs.readdirSync(outputDir, { withFileTypes: true }) as Array<{ isDirectory: () => boolean; name: string }>) {
       if (!d.isDirectory()) continue;
       if (SKIP_DIRS.has(d.name)) continue; // 学习讲解存档不展示
-      const dirPath = path.join(outputDir, d.name);
-      for (const f of fs.readdirSync(dirPath) as string[]) {
-        if (!f.endsWith(".md")) continue;
-        if (/^00[_-]/.test(f)) continue; // 索引文件跳过
-        const fp = path.join(dirPath, f);
-        try {
-          files.push({ file: f, dir: d.name, mtime: fs.statSync(fp).mtime, path: fp });
-        } catch { /* 文件在扫描中被删除（ENOENT 等），跳过该文件继续 */ }
-      }
+      walk(path.join(outputDir, d.name), d.name, 1);
     }
     return files.sort((a, b) => b.mtime.getTime() - a.mtime.getTime()).slice(0, limit);
   } catch (e) {

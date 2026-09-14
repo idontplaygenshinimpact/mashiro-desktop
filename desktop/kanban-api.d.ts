@@ -50,6 +50,10 @@ export interface KanbanApi {
   invStatus: () => Promise<any>;
   reviewDue: () => Promise<any>;
   reviewSubmit: (id: string, rating: number) => Promise<any>;
+  // 闭环清查补齐：这三条路由/IPC 早已实现（preload.js:99-100 + main.ts:603-604 + Vue 复习面板在用），
+  // 但声明一直漏着 → 渲染层拿不到类型，且 tsconfig.desktop.json 的 checkJs 也校验不到（声明与实现漂移）
+  reviewFeedback: () => Promise<any>;
+  reviewRetry: () => Promise<any>;
   getMastery: () => Promise<any>;
   runDiscover: () => Promise<any>;
   quit: () => Promise<any>;
@@ -57,9 +61,16 @@ export interface KanbanApi {
   openOutput: () => Promise<any>;
   openFile: (filePath: string) => Promise<any>;
   togglePanel: () => Promise<any>;
+  // 闭环清查补齐：渲染层三态"独立窗口"入口（preload.js:115-116 → main.ts 的 panel:open-react/open-vue）
+  openReactPanel: () => Promise<any>;
+  openVuePanel: () => Promise<any>;
   getApiBase: () => Promise<{ base: string }>; // 架构 P1-4：实际 widget 端口（端口回退后同步）
   setIgnoreMouse: (ignore: boolean) => Promise<any>;
   speak: (text: string) => Promise<any>;
+  // 闭环清查补齐：实时语音两阶段（speech-queue 预取流水线用）+ 打断
+  ttsSynth: (text: string) => Promise<any>;
+  ttsPlayFile: (path: string) => Promise<any>;
+  stopSpeak: () => Promise<any>;
   playScene: (scene: string) => Promise<any>;
   playLongScene: (scene: string) => Promise<any>;
   playClickShort: () => Promise<any>;
