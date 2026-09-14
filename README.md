@@ -122,6 +122,15 @@
 | 7 | **岗位→学习 / 岗位→面试恒 404**：面板按钮 POST 的两条 `/api/loop/*` 从未注册（后端 `deriveStudyFromJob`/`startInterviewForJob` 因此长期是孤儿函数） | C1/C7 | 按前端既有 `{ jobId }` 载荷补齐两条路由 |
 | 8 | **三态口径不一致**：React/Vue 校招 Tab 状态筛选 `none` vs 后端枚举 `new` → 筛选恒空 | C2 | 两侧统一为 `new` |
 
+#### 第二批已修（commit `f71baab`）
+
+| # | 断链（原状） | 断在哪一环 | 修法与护栏 |
+|---|---|---|---|
+| 9 | **巡检设置区从不回填**：`GET /api/patrol-config` 不返回 `ok`，而面板是 `if (r?.ok) { 回填开关/间隔/预算 }` → 开关恒为 HTML 默认、间隔/预算框恒空（占位假值 100000），用户一保存就把假值写成真实 token 预算 | C2/C5 | 补 `ok:true`；`tests/patrol-config-route.test.mjs` |
+| 10 | **三态框架互切重叠渲染**：框架→框架直接互切时只隐藏了原生容器，另一个框架容器既可见又保持挂载（两套 UI 重叠、事件双绑）；卸载失败被空 catch 吞成"可见但空白"的假成功 | C2 | 互切时先隐藏并卸载对方框架 + 卸载失败改 `console.warn`（可诊断）；**此项目前无 jsdom 护栏（待补）** |
+| 11 | **爬取 TLS 全灭 + 零产出仍报成功**：`newContext` 未开 `ignoreHTTPSErrors`（本机 MITM 证书 → 所有起始页 `ERR_CERT_AUTHORITY_INVALID`）；`discover.mjs` 零产出静默 return、退出时把进度覆盖成 idle → 面板永远"暂无任务" | C3/C4/C8 | 抓取 context 全部开证书容错（SSRF 内网拦截不受影响）；零产出写 `status=error` + `exitCode=1`，失败/中断不再清成 idle，SIGINT 写"已被中断" |
+| 12 | **复习两处无终态**：重练队列只看"窗口内出现过答错"、不看最近一次 → 错→错→对 后永久滞留；错题本 `AND is_first=0` 把首刷答错排除在计数外 → 门槛实为"错 ≥3 次"，生产库无卡达标 → 面板恒空 | C7 | 队列按"最近一次仍答错"判定；错题本按"答错总次数 ≥2"判定；`tests/review-terminal-states.test.mjs` |
+
 #### 待修（已定位到 `file:line`，按严重度排序；完整报告见 `%TEMP%\mashiro-audit\{A..H}-*.md`）
 
 - **P0 巡检三键"读而不写"**：`lib/patrol.ts` 读 `patrol_enabled/interval_min/avoid_peak`，写点只在面板路由；真实库 30 个 settings 键里没有这三个 → 面板默认态与后端相反（巡检默认开，面板显示关）
@@ -129,8 +138,7 @@
 - **P0 爬取零产出仍报成功**：本机日志全 14 个起始页 `net::ERR_CERT_AUTHORITY_INVALID`（`lib/fetch-page.ts` 的 `newContext` 未开 `ignoreHTTPSErrors`），8 次爬取 `产出 md=0` 仍写"✅ 完成"、进度回 idle、无 error 态、无停止入口（**审计实测**）
 - **P0 掌握度 key 空间不一致**：写侧 `recordKp` 用 topic 兜底、读侧 `getMastery` 只认知识树内点 → 实测 216 条清单里 188 条（87%）无论怎么答对都到不了「已掌握」；`kp_mastery` 43 行中 30 行是树外伪点
 - **P0「待复习」吞掉状态流**：`reviewDue` 口径让 221 张卡全判到期 → 实测分组 `{todo:12, learning:12, learned:0, review:192, mastered:0}`，89% 条目恒在「待复习」，未学条目也被要求复习
-- **P0 错题本/重练队列无终态**：`HAVING wrong_count>=2 AND is_first=0` 在生产数据上恒空；重练队列不看"最近一次是否已答对" → 错→错→对 后仍在队列
-- **P1** 题库判题不自动 done、判错回流路由恒报成功；`schedule_events` 无删除/已处理；`job_posts` 无归档；爬取/产出与岗位库两条独立管线；`decision_ledger` 写而不读；自主播报的语音 scene 不存在（"看得见字，听不见音"）；场景装配冷启动不装配；`tool_results/` 无回收；审批按工具名放行（无 args 维度）；`kanban-api.d.ts` 漏声明 9 个 IPC（`reviewFeedback/reviewRetry/ttsSynth/...`）；`scheduled_jobs` 种子恒禁用且无启用入口；备份只还原主库
+- **P1** 题库判题不自动 done、判错回流路由恒报成功；`schedule_events` 无删除/已处理；`job_posts` 无归档；爬取/产出与岗位库两条独立管线（爬取停止入口仍缺）；`decision_ledger` 写而不读；自主播报的语音 scene 不存在（"看得见字，听不见音"）；场景装配冷启动不装配；`tool_results/` 无回收；审批按工具名放行（无 args 维度）；`kanban-api.d.ts` 漏声明 9 个 IPC（`reviewFeedback/reviewRetry/ttsSynth/...`）；`scheduled_jobs` 种子恒禁用且无启用入口；备份只还原主库；三态互切与爬取失败语义的 jsdom 护栏待补
 
 
 
