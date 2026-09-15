@@ -58,6 +58,21 @@ export function registerPracticeRoutes(router: Router): void {
           testCode: detail.testCode,
           skeleton: detail.skeleton,
         });
+        // 闭环清查修复：判题结果必须回流——此前只埋点不落状态：
+        //   · 判题通过不写 challenges.done → 生产库 done 恒 0/448（"练完"没有任何痕迹）
+        //   · 判题失败不落 wrong_count/薄弱点/复习卡 → 错题不进闭环（"练→学"整条断）
+        // 现在：成功 → markChallengeDone（含 memory.recordProgress 回流）；失败 → markChallengeWrong
+        // （wrong_count+1 + 薄弱点回流 + 自动建 FSRS 复习卡）。
+        let reflow: { done?: boolean; wrong?: boolean; title?: string; error?: string } = {};
+        try {
+          if (r.success) {
+            const m = challengeApi.markChallengeDone(String(id), { progress: true });
+            reflow = { done: !!m?.ok, title: m?.title, error: m?.ok ? undefined : m?.error };
+          } else {
+            const m = challengeApi.markChallengeWrong(String(id));
+            reflow = { wrong: !!m?.ok, title: m?.title, error: m?.ok ? undefined : m?.error };
+          }
+        } catch (e) { /* 回流失败不影响判题结果，但要如实带回 */ reflow = { error: eMsg(e) }; }
         // 学习事件埋点（长期学习计划引擎的唯一事实源）+ 通用即时反馈（事件流基线对比，
         // 与动作类型解耦——判题/复习/清单/手动记录统一走 buildFeedbackTip）
         let tip = null;
@@ -78,7 +93,8 @@ export function registerPracticeRoutes(router: Router): void {
         } catch { /* 埋点/tip 失败不影响判题 */ }
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         // 契约：tests/logs/durationMs 必须回传（前端逐条展示断言结果与 console 输出定位失败）；tip 为节奏反馈
-        res.end(JSON.stringify({ ok: true, success: r.success, error: r.error || null, tests: r.tests || [], logs: r.logs || [], durationMs: r.durationMs || 0, tip }));
+        // reflow：把"回流结果"也带回（面板据此显示"已标记完成/已入复习卡"，回流失败如实报）
+        res.end(JSON.stringify({ ok: true, success: r.success, error: r.error || null, tests: r.tests || [], logs: r.logs || [], durationMs: r.durationMs || 0, tip, reflow }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: eMsg(e) }));
@@ -92,10 +108,17 @@ export function registerPracticeRoutes(router: Router): void {
         const { id } = JSON.parse(body || "{}");
         if (!id) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "id required" })); return; }
         const r = challengeApi.markChallengeDone(String(id), { progress: true });
+        // 闭环清查修复：如实上报（同 mark-wrong）——原 `ok: r?.ok ?? true` 在题目不存在/写入失败时
+        // 也报 200 + ok:true，面板通知「已标记完成，进度 +1」，实际零写入。
+        if (r?.ok === false) {
+          res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: false, error: r.error || "标记完成失败" }));
+          return;
+        }
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         // 契约：必须回传 title（面板通知「「X」已标记完成」依赖它；曾丢失导致通知显示 undefined）
         // 注：markChallengeDone 从不返回 message（TS 迁移暴露）——这里就是固定文案，语义与旧行为一致
-        res.end(JSON.stringify({ ok: r?.ok ?? true, title: r?.title, message: "已标记完成" }));
+        res.end(JSON.stringify({ ok: true, title: r?.title, message: "已标记完成" }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: eMsg(e) }));
@@ -112,9 +135,16 @@ export function registerPracticeRoutes(router: Router): void {
         const { id } = JSON.parse(body || "{}");
         if (!id) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "id required" })); return; }
         const r = challengeApi.markChallengeWrong(String(id));
+        // 闭环清查修复：如实上报——原 `ok: r?.ok ?? true` + 固定文案，题目不存在/写入失败也报
+        // "已记录答错，自动加入复习卡"（面板据此显示成功，实际零写入）。
+        if (r?.ok === false) {
+          res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: false, error: r.error || "记录答错失败" }));
+          return;
+        }
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         // 契约：必须回传 title（面板通知依赖它）
-        res.end(JSON.stringify({ ok: r?.ok ?? true, title: r?.title, message: "已记录答错，自动加入复习卡" }));
+        res.end(JSON.stringify({ ok: true, title: r?.title, message: "已记录答错，自动加入复习卡" }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: eMsg(e) }));

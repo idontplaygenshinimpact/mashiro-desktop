@@ -365,9 +365,16 @@ export const review = {
     // 复习答对（Good/Easy）→ 清除薄弱点（薄弱点消灭进度可视化工单任务 2：响应带 clearedWeak——前端 toast 正反馈）
     let clearedWeak: string | null = null;
     if (ratingNum >= 2 && card.topic) {
-      const hadWeak = memory.getWeakPoints().some((w: { topic?: unknown }) => w.topic === card.topic);
-      memory.clearWeakPoint(card.topic);
-      if (hadWeak) clearedWeak = card.topic;
+      // 闭环清查修复：题库来源的复习卡 topic 带 `手写题·` 前缀（ai-career.markChallengeWrong 建卡），
+      // 而薄弱点的 key 是题干本身 → 精确匹配永远失败，实测「手写防抖 debounce」这类薄弱点
+      // 即使复习答对也清不掉（面板一直显示未消灭）。两条候选都试，命中哪条清哪条。
+      const candidates = [String(card.topic), String(card.topic).replace(/^手写题[·:：]\s*/, "")];
+      for (const topic of candidates) {
+        if (!topic) continue;
+        const hadWeak = memory.getWeakPoints().some((w: { topic?: unknown }) => w.topic === topic);
+        memory.clearWeakPoint(topic);
+        if (hadWeak && !clearedWeak) clearedWeak = topic;
+      }
     }
     // 复习答错（Again/Hard）→ 回流薄弱点（failCount+1，下次清单/面试优先覆盖）
     // 首刷答错不回流（没学过不算失败——67% 答错率里首刷部分不再污染薄弱点）

@@ -777,13 +777,23 @@ function bindChPractice() {
               if ((j.logs || []).length) { lines.push("— console —"); for (const l of j.logs) lines.push(l); }
               // 即时反馈 tip（长期学习计划：节奏对比/错题转正提示）
               if (j.tip) lines.push("💡 " + j.tip);
+              // 回流结果（服务端判题已自动回流：通过→done+学习进度；失败→wrong_count+薄弱点+复习卡）
+              // 此前只埋点不落状态，面板还要求手动点「标记完成」——现在如实显示回流去向
+              const rf = j.reflow || {};
+              if (rf.error) lines.push("⚠️ 回流失败：" + String(rf.error).slice(0, 80));
+              if (rf.done) lines.push("♻️ 已自动标记完成（题库进度 + 学习进度回流）");
+              if (rf.wrong) lines.push("♻️ 已记入错题：wrong_count+1 + 薄弱点 + 复习卡（到期会提醒复习）");
               resultEl.textContent = lines.join("\n");
               resultEl.style.display = "block";
               if (pass) {
-                stateEl.textContent = "✅ 通过！点「标记完成」计入闭环（学习进度 + 题库进度）";
+                stateEl.textContent = rf.done
+                  ? "✅ 通过！已自动标记完成并计入闭环"
+                  : "✅ 通过！点「标记完成」计入闭环（学习进度 + 题库进度）";
                 markBtn.style.display = "inline-block";
               } else {
-                stateEl.textContent = "❌ 未通过——可继续改代码重跑，或点列表里的「❌ 不会」记入薄弱点";
+                stateEl.textContent = rf.wrong
+                  ? "❌ 未通过——已自动记入错题/复习卡，可继续改代码重跑"
+                  : "❌ 未通过——可继续改代码重跑，或点列表里的「❌ 不会」记入薄弱点";
               }
             } catch (e) {
               stateEl.textContent = "⚠️ " + e.message;
