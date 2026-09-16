@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState, useReducer } from "react";
 import { renderMarkdown } from "./markdown.js";
 import { ScoreBars, ScoreRadar } from "./score.jsx";
+import { api } from "./api.js";
 
 const ROLES = ["技术深挖型", "温和引导型", "压力追问型"];
 
@@ -131,9 +132,31 @@ export function InterviewPanel() {
     if (md) { setReport(md); setPhase("finished"); }
   }
 
+  // 历史复盘删除（三态共用同一 HTTP 路由 /api/interview/history/delete，与原生/Vue 不各自造）
+  // 经统一 api client（api.js → api-client 解析基址，不硬编码端口，尊重"React 只经 IPC/统一 client"解耦）
+  // ① confirm 二次确认（window.prompt 在 Electron 渲染层抛异常，禁用）
+  // ② 按真实结果反馈 + 从 history 状态移除（api client 对 404 等非 2xx 抛带 status 的 Error——如实上报）
+  async function delHistory(rec) {
+    const id = rec?.id;
+    if (!id) return;
+    if (!window.confirm(`确定删除这场复盘「${String(rec?.position || "模拟面试")}」吗？不可恢复。`)) return;
+    try {
+      const j = await api("/api/interview/history/delete", { method: "POST", body: { id } });
+      if (j?.ok) {
+        setHistory((prev) => prev.filter((h) => String(h?.id) !== String(id)));
+        window.kanban.notify("🗑 历史复盘", "已删除该场复盘");
+      } else {
+        window.kanban.notify("🗑 历史复盘", j?.error || "删除失败");
+      }
+    } catch (e) {
+      // 404（不存在）/ 400（缺参）/ 500（异常）都如实反馈，不假装成功
+      window.kanban.notify("🗑 历史复盘", String(e?.message || e).slice(0, 60));
+    }
+  }
+
   if (phase === "finished") {
     return (
-      <ReportView report={report} history={history} onBack={() => setPhase("setup")} onOpen={openHistory} onNew={() => { setReport(null); setPhase("setup"); }} />
+      <ReportView report={report} history={history} onBack={() => setPhase("setup")} onOpen={openHistory} onNew={() => { setReport(null); setPhase("setup"); }} onDelete={delHistory} />
     );
   }
   if (phase === "active" && session) {
@@ -147,13 +170,13 @@ export function InterviewPanel() {
   return (
     <SetupView config={config} setConfig={setConfig} busy={busy} onStart={start}
       resumable={resumable} onResume={resume}
-      history={history} onOpen={openHistory} />
+      history={history} onOpen={openHistory} onDelete={delHistory} />
   );
 }
 
 // ---------- 视图组件 ----------
 
-function SetupView({ config, setConfig, busy, onStart, resumable, onResume, history, onOpen }) {
+function SetupView({ config, setConfig, busy, onStart, resumable, onResume, history, onOpen, onDelete }) {
   const set = (k) => (e) => setConfig((c) => ({ ...c, [k]: e.target.value }));
   return (
     <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 18, maxWidth: 640, margin: "0 auto" }}>
@@ -199,7 +222,12 @@ function SetupView({ config, setConfig, busy, onStart, resumable, onResume, hist
             {history.slice(0, 20).map((h, i) => (
               <div key={i} onClick={() => onOpen(h)} className="rf-row" style={{ cursor: "pointer", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span>{h.position || "面试"} · {h.rounds || 0} 轮</span>
-                <span style={{ color: "#a8a3c8" }}>{h.date ? String(h.date).slice(0, 16) : ""}</span>
+                <span style={{ color: "#a8a3c8", display: "flex", alignItems: "center", gap: 6 }}>
+                  {h.date ? String(h.date).slice(0, 16) : ""}
+                  {h.id && (
+                    <button type="button" className="rf-btn" style={delBtnStyle} onClick={(e) => { e.stopPropagation(); if (onDelete) onDelete(h); }}>🗑 删除</button>
+                  )}
+                </span>
               </div>
             ))}
           </div>
@@ -377,7 +405,7 @@ function SessionView({ session, scores, busy, log, onSubmit, onExit }) {
   );
 }
 
-function ReportView({ report, history, onBack, onOpen, onNew }) {
+function ReportView({ report, history, onBack, onOpen, onNew, onDelete }) {
   return (
     <div style={{ padding: 24, maxWidth: 760, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -394,8 +422,11 @@ function ReportView({ report, history, onBack, onOpen, onNew }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ fontSize: 13, color: "#a8a3c8", marginBottom: 6 }}>历史复盘</div>
           {history.map((h, i) => (
-            <div key={i} onClick={() => onOpen(h)} style={{ background: "#241f3a", borderRadius: 6, padding: "10px 14px", cursor: "pointer", fontSize: 13 }}>
-              {h.position || "面试"} · {h.rounds || 0} 轮 · {h.date ? String(h.date).slice(0, 16) : ""}
+            <div key={i} onClick={() => onOpen(h)} style={{ background: "#241f3a", borderRadius: 6, padding: "8px 14px", cursor: "pointer", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>{h.position || "面试"} · {h.rounds || 0} 轮 · {h.date ? String(h.date).slice(0, 16) : ""}</span>
+              {h.id && (
+                <button type="button" className="rf-btn" style={delBtnStyle} onClick={(e) => { e.stopPropagation(); if (onDelete) onDelete(h); }}>🗑 删除</button>
+              )}
             </div>
           ))}
         </div>
@@ -410,6 +441,7 @@ const btnSecondary = { background: "#2a2540", color: "#e8e6f5", border: "1px sol
 const input = { background: "#241f3a", color: "#e8e6f5", border: "1px solid #3a3558", borderRadius: 6, padding: "8px 10px", fontSize: 13, outline: "none" };
 const lbl = { fontSize: 12, color: "#a8a3c8" };
 const MONO = 'ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace'; // 手写轮代码字体
+const delBtnStyle = { background: "none", border: "1px solid rgba(229,72,77,.5)", color: "#e5484d", borderRadius: 6, padding: "2px 8px", fontSize: 11, cursor: "pointer" };
 
 /** 替换选区文本（jsdom 无 setRangeText 时手工拼接）→ 返回新值（React 受控组件用） */
 function replaceRange(box, start, end, text) {

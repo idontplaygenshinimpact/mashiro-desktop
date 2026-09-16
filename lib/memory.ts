@@ -27,8 +27,12 @@ export interface InterviewSession {
   [key: string]: unknown;
 }
 
-/** 面试历史记录（saveInterviewHistory 输入；DB 行直通的镜像字段含 bigint——不转换保持原值） */
+/** 面试历史记录（saveInterviewHistory 输入；DB 行直通的镜像字段含 bigint——不转换保持原值）
+ * id：DB 主键（lib/db.ts:94 `interview_history.id TEXT PRIMARY KEY`）。保存时生成、读取时回填，
+ * 让 `getInterviewHistory()` 返回的每条记录都带主键——删除终态（deleteInterviewHistory）按此键删，
+ * 镜像与 DB 用同一把键，否则 UI 拿到的 id 对不上镜像条目、删镜像过滤空转（历史"删不掉"的样子货）。 */
 export interface InterviewHistoryRecord {
+  id?: string | null;
   date?: string | null;
   position?: string | number | bigint | null;
   role?: string | number | bigint | null;
@@ -145,8 +149,9 @@ function load(): MemoryState {
   d.masteredPoints = db.prepare("SELECT topic, verified_at FROM mastered_points").all()
     .map((r) => ({ topic: String(r.topic), verifiedAt: String(r.verified_at) }));
   // interviewHistory（DB 行直通边界显式转换：文本 String、数值 Number、dims JSON 解析——与 saveInterviewHistory 写端同口径）
-  d.interviewHistory = db.prepare("SELECT date, position, role, rounds, avg, dims, report FROM interview_history").all()
+  d.interviewHistory = db.prepare("SELECT id, date, position, role, rounds, avg, dims, report FROM interview_history").all()
     .map((r) => ({
+      id: r.id == null ? null : String(r.id),
       date: r.date == null ? null : String(r.date),
       position: r.position == null ? null : String(r.position),
       role: r.role == null ? null : String(r.role),
@@ -488,14 +493,20 @@ export const memory = {
     return Date.now() - Number(s.updatedAt) > INTERVIEW_IDLE_MS;
   },
   saveInterviewHistory(record: InterviewHistoryRecord): void {
-    mem.interviewHistory = [...(mem.interviewHistory || []), record].slice(-20);
+    // 先统一生成主键：id 既作为 DB 主键写入，也落到镜像条目上——
+    // 删除终态（deleteInterviewHistory）要求"镜像与 DB 同一把键"。
+    // （历史 bug 隐患：镜像若不带 id，删除时只能按 date+position 组合猜，
+    //   position 可空、同日可多场，组合不唯一，删不干净。故这里从保存端就统一带 id。）
+    const id = `iv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`; // 随机后缀防同毫秒碰撞（循环/高频保存会撞 id → OR IGNORE 丢记录）
+    const entry: InterviewHistoryRecord = { id, ...record };
+    mem.interviewHistory = [...(mem.interviewHistory || []), entry].slice(-20);
     mem.stats.interviewsDone = (mem.stats.interviewsDone || 0) + 1;
     // 增量写 DB
     try {
       db.prepare(`INSERT OR IGNORE INTO interview_history (id, date, position, role, rounds, avg, dims, report)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(
-          `iv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`, // 随机后缀防同毫秒碰撞（循环/高频保存会撞 id → OR IGNORE 丢记录）
+          id,
           String(record.date || ""),
           record.position || null, record.role || null,
           record.rounds || null, record.avg ?? record.avgScore ?? null,
@@ -506,6 +517,31 @@ export const memory = {
     } catch { /* ignore */ }
   },
   getInterviewHistory(): InterviewHistoryRecord[] { return mem.interviewHistory || []; },
+
+  // 面试历史删除终态（闭环清查 ⑦"状态机无终态"补齐：读得到、删不掉的样子货 → 真实删除）。
+  // 按主键 id 删（interview_history.id TEXT PRIMARY KEY，lib/db.ts:94）——最唯一最稳；
+  // 不用 (date, position) 组合键：position 可空、同日可多场，组合不唯一，删不干净。
+  /** 删除一条面试历史（DB + 内存镜像同步；id 不存在 / 异常如实返回 ok:false） */
+  deleteInterviewHistory(id: unknown): { ok: boolean; removed: number; error?: string } {
+    const hid = String(id ?? "").trim();
+    if (!hid) return { ok: false, removed: 0, error: "id 缺失" }; // 契约层已拦截，防御兜底
+    try {
+      const r = db.prepare("DELETE FROM interview_history WHERE id = ?").run(hid);
+      const dbRemoved = Number((r as { changes?: unknown })?.changes) || 0;
+      // 内存镜像必须同步删——否则同进程 getInterviewHistory() 仍返回已删记录（本任务最容易踩的闭环断点：
+      // 只删 DB、不动 mem.interviewHistory，UI 刷新后旧数据"鬼影"复现）
+      const before = (mem.interviewHistory || []).length;
+      mem.interviewHistory = (mem.interviewHistory || []).filter((m) => String(m.id ?? "") !== hid);
+      const mirrorRemoved = before - (mem.interviewHistory || []).length;
+      // 如实上报：DB 与镜像都未命中（id 不存在）→ ok:false（路由据此转 404），不恒报成功
+      if (dbRemoved === 0 && mirrorRemoved === 0) {
+        return { ok: false, removed: 0, error: "面试历史记录不存在" };
+      }
+      return { ok: true, removed: Math.max(dbRemoved, mirrorRemoved) };
+    } catch (e) {
+      return { ok: false, removed: 0, error: e instanceof Error ? e.message : String(e) };
+    }
+  },
 
   // ---------- 长期记忆（curated_memory，dreaming 提炼） ----------
   // 按重要度降序、最近更新降序返回（带来源溯源）

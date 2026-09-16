@@ -6,7 +6,7 @@ import { memory } from "#lib/memory.mjs";
 import { readBody } from "#lib/widget-core.mjs";
 import { withContract } from "#lib/routes/contract.mjs";
 import { InterviewStartInput, InterviewAnswerInput, InterviewResult, InterviewStatusOutput } from "#lib/contracts/interview.mjs";
-import { InterviewHistoryOutput } from "#lib/contracts/misc.mjs";
+import { InterviewHistoryOutput, InterviewHistoryDeleteInput, InterviewHistoryDeleteOutput } from "#lib/contracts/misc.mjs";
 
 // 全量 TS 升级工单阶段 4（插件）：实现迁至 interview.ts，interview.mjs 保留同名薄桶（插件按路径加载 → 入口与调用方零改动）
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -38,6 +38,25 @@ export function registerInterviewRoutes(router: Router, { laneSubmit = (fn: () =
     // 面试历史（复盘报告）
     () => ({ ok: true, history: memory.getInterviewHistory() }),
     { output: InterviewHistoryOutput }
+  ));
+
+  router.route("/api/interview/history/delete", "POST", withContract(
+    // 历史复盘删除终态（闭环清查 ⑦：读得到、删不掉的"状态机无终态"样子货 → 真删）。
+    // 三态渲染层共用这一条 HTTP 路由，不各自造删除逻辑。
+    (input, { res }) => {
+      const r = memory.deleteInterviewHistory(input.id);
+      // 目标不存在/删除失败 → 如实 404 + ok:false（不恒报成功）；UI 据此显示真实结果。
+      if (!r.ok) {
+        if (!res.destroyed && !res.writableEnded) {
+          res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: false, error: r.error || "删除面试历史失败" }));
+        }
+        // 回传给 output 契约校验；res 已被上面 404 收尾（writableEnded），withContract 的 200 不会再写入
+        return { ok: false, error: r.error || "删除面试历史失败" };
+      }
+      return { ok: true };
+    },
+    { input: InterviewHistoryDeleteInput, output: InterviewHistoryDeleteOutput }
   ));
 
   router.route("/api/interview/status", "GET", withContract(

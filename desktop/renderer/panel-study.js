@@ -502,6 +502,29 @@ function fmtIvDate(iso) {
   try { return new Date(iso).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }); } catch { return ""; }
 }
 
+// 历史复盘删除（三态复用同一 HTTP 路由 /api/interview/history/delete；渲染层经 fetch 直连 widget）
+// ① 二次确认用 confirm（Electron 渲染层 alert/confirm 可用；window.prompt 会抛异常，禁用）
+// ② 删除后按真实结果反馈+刷新——后端 ok:false/异常会如实上报，不掩盖
+async function delIvHistory(id, label) {
+  if (!id) return;
+  if (!confirm(`确定删除这场复盘「${String(label || "模拟面试")}」吗？将同时从数据库与记录列表移除，不可恢复。`)) return;
+  try {
+    const r = await fetch(API_BASE + "/api/interview/history/delete", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j?.ok) {
+      window.kanban.notify("🗑 历史复盘", "已删除该场复盘");
+      loadIvHistory(); // 刷新列表（DB + 内存镜像都删了，重取不再出现）
+    } else {
+      window.kanban.notify("🗑 历史复盘", j?.error || `删除失败（HTTP ${r.status}）`);
+    }
+  } catch (e) {
+    window.kanban.notify("🗑 历史复盘", "删除异常: " + String(e?.message || e).slice(0, 60));
+  }
+}
+
 async function loadIvHistory() {
   const countEl = $("iv-history-count");
   const body = $("iv-history-body");
@@ -519,6 +542,7 @@ async function loadIvHistory() {
         <div class="iv-hist-head">${esc(it.position || "模拟面试")} · ${esc(it.role || "")} · ${it.rounds || 0} 轮
           <span class="iv-hist-score">均分 ${it.avg ?? it.avgScore ?? "-"}</span>
           ${it.report ? `<button class="iv-hist-open" data-i="${i}">查看复盘</button>` : ""}
+          ${it.id ? `<button class="iv-hist-del" data-id="${esc(String(it.id))}" data-label="${esc(it.position || "模拟面试")}">🗑 删除</button>` : ""}
         </div>
         <div style="font-size:11px;color:#6a6790">${fmtIvDate(it.date)}</div>
       </div>`).join("");
@@ -527,6 +551,9 @@ async function loadIvHistory() {
         const it = list[Number(btn.dataset.i)];
         if (it?.report) showIvReport(it.report); // 复用毛玻璃复盘弹窗（完整 Markdown 渲染，含目录）
       });
+    });
+    body.querySelectorAll(".iv-hist-del").forEach((btn) => {
+      btn.addEventListener("click", () => delIvHistory(btn.dataset.id, btn.dataset.label));
     });
   } catch { body.innerHTML = '<div style="color:#7c7c7c;font-size:12px">历史加载失败（服务未就绪）</div>'; }
 }

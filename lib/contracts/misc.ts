@@ -20,6 +20,17 @@ export const InterviewHistoryOutput = z.object({
   history: z.array(z.any()),
 });
 
+/** POST /api/interview/history/delete 入参（按主键 id 删；id 必填非空 → 缺失由 withContract 返 400） */
+export const InterviewHistoryDeleteInput = z.object({
+  id: z.string().min(1),
+});
+
+/** POST /api/interview/history/delete 出参（ok:true 成功；ok:false 带 error 供路由 404 如实上报） */
+export const InterviewHistoryDeleteOutput = z.object({
+  ok: z.boolean(),
+  error: z.string().optional(),
+});
+
 /** /api/pet-events GET 出参（桌宠伴侣表达队列 drain：取走即清空） */
 export const PetEventsOutput = z.object({
   ok: z.literal(true),

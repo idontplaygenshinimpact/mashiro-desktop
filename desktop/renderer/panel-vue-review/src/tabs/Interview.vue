@@ -4,7 +4,7 @@
 import { onMounted } from "vue";
 import { useInterview } from "../useInterview.js";
 
-const { st, config, history, resumable, err, answer, ROLES, start, resume, submit, finish, loadMeta, scoreRows } = useInterview();
+const { st, config, history, resumable, err, answer, micState, micErr, ROLES, start, resume, submit, finish, loadMeta, toggleMic, cancelMic, scoreRows, delHistory } = useInterview();
 onMounted(loadMeta);
 </script>
 
@@ -36,6 +36,8 @@ onMounted(loadMeta);
         <div v-for="(h, i) in history.slice(0, 8)" :key="i" class="rf-row">
           <span class="rf-grow">{{ h.position || "面试" }} · {{ h.rounds || 0 }} 轮</span>
           <span class="rf-muted">{{ h.date ? String(h.date).slice(0, 16) : "" }}</span>
+          <!-- 历史复盘删除：与原生/React 共用 /api/interview/history/delete（confirm 二次确认在 delHistory 内） -->
+          <button v-if="h.id" type="button" class="rf-btn" style="background:none;border:1px solid rgba(229,72,77,.5);color:#e5484d;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer" :disabled="st.busy" @click="delHistory(h)">🗑 删除</button>
         </div>
       </div>
       <div class="rf-muted" style="margin-top:6px">💡 会话中 Ctrl/Cmd + Enter 快速提交回答</div>
@@ -56,10 +58,18 @@ onMounted(loadMeta);
       </div>
       <div class="rf-card">
         <textarea class="rf-input" v-model="answer" rows="5" placeholder="作答…（Ctrl/Cmd + Enter 提交）" aria-label="面试作答" @keydown.ctrl.enter.prevent="submit" @keydown.meta.enter.prevent="submit" />
-        <div style="display:flex;gap:6px;margin-top:6px">
+        <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
           <button type="button" class="rf-btn rf-btn-primary" :disabled="st.busy || !answer.trim()" @click="submit">{{ st.busy ? "评分中…" : "提交回答" }}</button>
           <button type="button" class="rf-btn" :disabled="st.busy" @click="finish">结束并生成复盘</button>
+          <span style="flex:1"></span>
+          <!-- 语音作答：三态按钮（未录音/录音中/转写中），与 React 版同一交互（🎤 开始 / ⏹ 停止转写） -->
+          <button v-if="micState === 'recording'" type="button" class="rf-btn" style="background:#e5484d;color:#fff;font-weight:700" @click="toggleMic">⏹ 停止</button>
+          <button v-if="micState === 'recording'" type="button" class="rf-btn" @click="cancelMic">✖ 取消</button>
+          <button v-else-if="micState === 'transcribing'" type="button" class="rf-btn" disabled>⏳ 转写中…</button>
+          <button v-else type="button" class="rf-btn" :disabled="st.busy" @click="toggleMic">🎤 语音作答</button>
         </div>
+        <!-- 空转写/权限拒绝/调用失败都在这给可见提示，绝不静默 -->
+        <div v-if="micErr" class="rf-muted rf-chip-warn" style="margin-top:6px">⚠️ {{ micErr }}</div>
       </div>
       <div class="rf-card">
         <b class="rf-title">累计评分（{{ st.scores.rounds }} 轮 · 均分 {{ st.scores.total }}）</b>
