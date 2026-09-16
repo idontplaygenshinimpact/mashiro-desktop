@@ -570,6 +570,19 @@ const patrol = createPatrol({
 });
 bootReady = true; // 门闸放行：此后到达的请求不会再踩 TDZ（上面几个 await 期间的请求收到 503 starting）
 
+// agent 图预热（性能修复的配套）：agent.mjs 已从启动路径改为懒加载
+// （`lib/routes/core.ts` 的静态 import → 动态 import，见该文件 loadAgent 注释；实测那条链
+//  agent.ts 1483ms / fetch-page.ts 1290ms = playwright + jsdom，占原先 2.2s 启动的 ~1.5s）。
+// **必须延迟到 listen 之后 2s 再预热**（实测教训）：ESM 的模块解析/求值跑在**主线程**上，
+// 在 listen 回调之前发起 import("./lib/agent.mjs") 会把事件循环堵住 ~1.25s——服务虽然已经 bind，
+// 但 listen 回调与第一批请求都被推迟（实测"已启动"日志从 621ms 推到 1897ms，等于把刚省下的钱又付回去）。
+// 延迟 2s 让面板先完成首屏数据加载；之后的一次性阻塞是有界的（~1.2s，仅一次），换来首次聊天不必等待。
+if (process.env.MIANSHI_DISABLE_BACKGROUND !== "1") {
+  const warmAgentGraph = () => import("./lib/agent.mjs").catch((e) => logErr(`agent 图预热失败（不影响服务）: ${e && e.message ? e.message : String(e)}`));
+  if (server.listening) setTimeout(warmAgentGraph, 2000);
+  else server.once("listening", () => setTimeout(warmAgentGraph, 2000));
+}
+
 // M7：tool_results 清理（保留最近 7 天——启动时清一次，防文件无限累积）
 try {
   const { readdirSync, statSync, rmSync } = await import("node:fs");

@@ -13,7 +13,6 @@ import { memory } from "../memory.mjs";
 import { getLLMStats, getRecentTools } from "../trace.mjs";
 import * as mailApi from "../mail.mjs";
 import { getPendingApprovals, resolveApproval, getSessionApproved } from "../permission.mjs";
-import { chatWithAgent } from "../agent.mjs";
 import * as reviewApi from "../review.mjs";
 import { scanNewestFiles, latestOutputs, buildHealthPayload, readBody } from "../widget-core.mjs";
 import { saveImportedPost } from "../output-import.ts";
@@ -26,6 +25,21 @@ import type { Router } from "./router.mjs";
 
 /** 错误信息提取（catch 变量在 strict 模式下是 unknown） */
 const eMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/** agent 会话函数形状（只取本文件用到的两个入参位；实现在 lib/agent.ts） */
+type ChatWithAgent = (message: string, history: unknown[], onEvent: ((ev: { type: string; [k: string]: unknown }) => void) | null, sessionId: string) => Promise<{ reply: string; history?: unknown[] }>;
+
+/**
+ * agent 图**懒加载**（本轮性能修复的核心）
+ * 背景（实测）：`import { chatWithAgent } from "../agent.mjs"` 是静态导入，而 agent.mjs 会沿
+ * `tools/impl-search.ts → fetch-page.ts → playwright + jsdom` 把整条抓取链拉起来——
+ * 单独测：`lib/agent.ts` 导入 1483ms、`lib/fetch-page.ts` 1290ms（playwright 397ms + jsdom），
+ * 于是后端**从 spawn 到能 listen 的 2.2s 里有 ~1.5s 花在"启动即加载一个聊天才用得到的浏览器栈"**。
+ * 面板窗口是静态文件，~0.8s 就画出来了 → 用户看到的"后端比前端慢这么多"就是这么来的。
+ * 现在：聊天请求时才加载（首次仍可用，见 widget.mjs listen 后的后台预热），进程启动不再付这笔钱。
+ */
+let agentPromise: Promise<{ chatWithAgent: ChatWithAgent }> | null = null;
+const loadAgent = (): Promise<{ chatWithAgent: ChatWithAgent }> => (agentPromise ??= import("../agent.mjs") as Promise<{ chatWithAgent: ChatWithAgent }>);
 
 /** 错误信息（与迁移前 `err && err.message ? err.message : String(err)` 等价：
  *  message 为空/非 Error 抛出都退回 String(err)，不引入新的空串输出） */
@@ -136,7 +150,7 @@ export function registerCoreRoutes(router: Router, { laneSubmit = (fn: () => any
     async (input) => {
       // sessionId：多会话隔离（无则归 'default'；聊天记录按会话落库/读取）
       return laneSubmit(() =>
-        chatWithAgent(input.message, input.history || [], null, input.sessionId || "default")
+        loadAgent().then((m) => m.chatWithAgent(input.message, input.history || [], null, input.sessionId || "default"))
       );
     },
     { input: ChatInput, output: ChatOutput }
@@ -177,9 +191,11 @@ export function registerCoreRoutes(router: Router, { laneSubmit = (fn: () => any
         const { push } = createSSEPush(res, { eventSchema: ChatStreamEvent });
         push({ type: "start" });
         // 排入 lane 串行队列（与 /api/chat 同互斥，防并发竞争 memory 镜像）；事件实时透传
-        const result = await laneSubmit(() =>
-          chatWithAgent(message, history || [], (ev) => push({ ...ev, type: ev.type === "done" ? "agent_done" : ev.type }), sessionId || "default")
-        );
+        // 注：agent 图懒加载（见 loadAgent 注释）——await 放在 laneSubmit 的回调内，队列语义不变
+        const result = await laneSubmit(async () => {
+          const { chatWithAgent } = await loadAgent();
+          return chatWithAgent(message, history || [], (ev) => push({ ...ev, type: ev.type === "done" ? "agent_done" : ev.type }), sessionId || "default");
+        });
         push({ type: "done", reply: result.reply, history: result.history || [] });
         res.end();
       } catch (e) {

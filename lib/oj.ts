@@ -3,7 +3,9 @@
 // 抓取：页面 innerText + .question-tree-row 结构化提取（BM 编号/标题/难度/通过量/链接）
 // 全量 TS 升级工单阶段 3：lib/oj.mjs → .ts（loop.mjs/context-providers/插件路由/tests 按 .mjs 路径加载 → 保留同名一行桶）
 import { db, ensureColumn } from "./db.mjs";
-import { assertPublicUrl } from "./fetch-page.mjs"; // 安全工单 L10：内部抓取复用 SSRF 防护
+// 安全工单 L10：内部抓取复用 assertPublicUrl（防题库 URL 被污染为内网/文件协议）
+// 注意：**不能**静态 import "./fetch-page.mjs"——那条链会拉起 playwright + jsdom（实测 ~1.3s），
+// 而 oj 被插件路由静态导入 → 会变成"进程启动即加载浏览器栈"。改为在调用点动态 import（见下方使用处）。
 
 db.exec(`CREATE TABLE IF NOT EXISTS exam_problems (
   id TEXT PRIMARY KEY,
@@ -252,7 +254,12 @@ async function fetchOjDetailWithBrowser(browser: import("playwright").Browser, u
   const href = String(url || "").trim();
   if (!href) return { ok: false, error: "url required" };
   // 安全工单 L10：内部抓取复用 assertPublicUrl（防题库 URL 被污染为内网/文件协议）
-  try { await assertPublicUrl(href); } catch (e) { return { ok: false, error: `URL 非法: ${e instanceof Error ? e.message : String(e)}` }; }
+  // 性能修复：原先静态 `import { assertPublicUrl } from "./fetch-page.mjs"` 会把整条抓取链
+  // （playwright + jsdom，实测 ~1.3s）拉进**进程启动**路径（oj 被插件路由静态导入）；改为用时加载。
+  try {
+    const { assertPublicUrl } = await import("./fetch-page.mjs");
+    await assertPublicUrl(href);
+  } catch (e) { return { ok: false, error: `URL 非法: ${e instanceof Error ? e.message : String(e)}` }; }
   const row = db.prepare("SELECT content, meta, samples, fetched_at FROM exam_problems WHERE url=?").get(href) as { content?: unknown; meta?: unknown; samples?: unknown; fetched_at?: unknown } | undefined;
   if (row?.fetched_at && (row.content || row.meta)) {
     return { ok: true, content: String(row.content || ""), meta: String(row.meta || ""), samples: String(row.samples || ""), cached: true };
