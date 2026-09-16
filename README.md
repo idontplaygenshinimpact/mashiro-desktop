@@ -15,9 +15,9 @@
 | **真白（宿主）** | Electron 透明窗口 + Live2D 真白、点击对话（短句日语语音）、气泡提醒、全屏自动隐藏、托盘常驻、设置中心、本地 ASR 语音输入（**开机自启尚未实现**——不写注册表，见路线图） | ✅ 核心 |
 | **秋招助手（插件①）** | 面经爬取 / 学习闭环 / 专项练习 / 模拟面试 / 求职闭环 / 知识库 / 对话 agent / 学习计划引擎（12 个业务路由域） | ✅ 内置（plugins/job-hunter） |
 | **事件驱动内核** | 事件总线 + 自主决策（off/notify/full 三级刹车）+ CC 会话 watcher（Claude Code 伴侣）+ 场景技能装配 | ✅ P0+P1 已接线 |
-| **契约层（Phase 2）** | zod 契约：**20 条路由**挂 input/output 校验（`withContract`）+ SSE 事件 union + preload/renderer 类型化（`kanban-api.d.ts` **72 个接口方法**，preload 以该类型 expose，checkJs 校验）+ 117 处硬编码收编；护栏 `tests/routes-registry.test.mjs`（路由总数 + 契约覆盖率）与 `tests/contracts.test.mjs`（400/500 语义） | ✅ |
+| **契约层（Phase 2）** | zod 契约：**20 条路由**挂 input/output 校验（`withContract`）+ SSE 事件 union + preload/renderer 类型化（`kanban-api.d.ts` **83 个接口方法**，preload 以该类型 expose，checkJs 校验）+ 117 处硬编码收编；护栏 `tests/routes-registry.test.mjs`（路由总数 + 契约覆盖率）与 `tests/contracts.test.mjs`（400/500 语义） | ✅ |
 | **双层评测（Phase 评测）** | Layer A 真实模型基线 + Layer B mock agent 机制；数据集治理（sha256）/ 成本延迟指标 / 分层回归门禁 / 消融基线 / 每周评测 workflow（机制已接线；**尚未产出真实徽章与趋势**——`<!-- EVAL_BADGE -->` 仍为空、`benchmark/trend.svg` 未入库，需带 `DEEPSEEK_API_KEY` secret 跑一周） | ✅ 机制 |
-| **三态渲染层** | **8 个 Tab × 原生 / React / Vue 三态并行**（同一 preload IPC 桥 + 同一业务层零改动）；三态对比卡（dist 实测：原生 349.8KB / React 241.7KB / Vue 158KB）；**两侧全 Tab 渲染护栏**（`tests/react-tabs.render.test.mjs` + `tests/vue-tabs.render.test.mjs`：按 tab 挂载 → 数据等价 → 特色标注 → UI 不变量 → 对称卸载） | ✅ 矩阵 8×2 满格 |
+| **三态渲染层** | **8 个 Tab × 原生 / React / Vue 三态并行**（同一 preload IPC 桥 + 同一业务层零改动）；三态对比卡（dist 实测 2026-09-16：原生 367.7KB / React 244.0KB / Vue 163.3KB）；**两侧全 Tab 渲染护栏**（`tests/react-tabs.render.test.mjs` + `tests/vue-tabs.render.test.mjs`：按 tab 挂载 → 数据等价 → 特色标注 → UI 不变量 → 对称卸载） | ✅ 矩阵 8×2 满格 |
 | **工程门禁** | **三条 tsc（宽松 checkJs + strict 含 lib/plugins/desktop + desktop 主进程）0 错误** + eslint **0 error 0 warning** + **1231 用例全绿**（1192 单元 + 39 集成）+ 渲染产物内容哈希新鲜度 + node:test 协议通道守卫 + UI 8 类机器指标巡检 + 本地 ASR 分段回归；**全量 TS 迁移已完成**（`lib` 122 `.ts` / `plugins` 14 `.ts` / `desktop` 11 `.ts`，实现全在 `.ts`，`.mjs` 只剩同名一行桶 → 调用方/插件协议/Electron 入口零改动；每模块一提交） | ✅ |
 
 **秋招助手（插件①）能力一览**：
@@ -149,11 +149,23 @@
 | 15 | **渲染层 IPC 声明漂移**：`preload.js` 暴露 81 个键、`kanban-api.d.ts` 只声明 72 个 —— 漏了 `reviewFeedback`/`reviewRetry`（Vue 复习面板在用）、`ttsSynth`/`ttsPlayFile`/`stopSpeak`（实时语音两阶段）、`openReactPanel`/`openVuePanel`（三态独立窗口）；checkJs 只能校验"已声明项的实现是否匹配"，漏声明永远发现不了 | C4 契约 | 补齐 7 条声明 + `tests/ipc-declaration.test.mjs`（解析 preload 暴露面 vs 声明面，缺一即红——**首个能发现"漏声明"的护栏**） |
 | 16 | **爬取产出写完没人读**：`scanNewestFiles` 只扫一层 `output/<日期>/*.md`，而爬取把讲解写在 `output/<日期>_discover/讲解/**.md` → 这些文件永远进不了「最新产出/今日推荐」 | C7 | 改为递归扫描（深度 ≤3、跳过学习存档与 `00_` 索引、`dir` 保留相对子路径）；目录判定走 `statSync().isDirectory`（真实 fs 生效、假 fs 保持单测隔离） |
 
+#### 第五批已修（commit `d07498f` / `7407d12` / `72e04c7` / `a35809e` / `db58fa7`）
+
+| # | 断链（原状） | 断在哪一环 | 修法与护栏 |
+|---|---|---|---|
+| 17 | **判题结果不回流（练与学是断的）**：`/api/challenges/run` 只埋点不落状态——通过不写 `challenges.done`（生产库 **done 恒 0/448**）、答错不写 `wrong_count`/薄弱点/复习卡；`mark-wrong`/`mark-done` 又是 `ok: r?.ok ?? true` + 固定文案 → 题目不存在也报"已记录答错，自动加入复习卡"（面板据此显示成功，实际零写入） | C4/C5 | 判题通过 → `markChallengeDone`（done + 学习进度回流）、失败 → `markChallengeWrong`（wrong_count+1 + 薄弱点 + 自动建 FSRS 卡），响应带 `reflow` 让面板如实展示；两条 mark 路由题目不存在 → 404 + `ok:false`；题库卡 topic 前缀 `手写题·` 与薄弱点 key 不一致导致"复习答对也清不掉"→ 双候选清理；`tests/challenge-reflow.test.mjs`（6 项，**旧代码下 5 项红**） |
+| 18 | **爬取没有停止入口 + 互斥闸门形同虚设**：`createCrawlMutex` 只护 `spawn` 一瞬（discover 要跑几分钟）→ `isRunning()` 几乎恒 false，`/api/run-discover` 的 409「已有爬取任务运行中」与巡检「爬取中则跳过」全部失效（可并发拉起多个 chromium）；`progress.json` 与真实进程脱节（进程被强杀就永远停在 `running`，面板一直显示"爬取中"） | C1/C8/C9 | 互斥判定绑到子进程**真实存活期**（`track`/`exit` 自动释放 + `release` 兜底）；新增 `POST /api/stop-discover`（Windows 走 `taskkill /T /F` 杀**进程树**，本机实测：孙进程 detached 启动时只 kill 直系会留下孤儿，杀树后父与孙全消失；终态由停止方写，因为 `/F` 强杀不会执行子进程的 exit handler）；`/api/widget-data` 增加 `crawlRunning`（三态按钮态与轮询不再只信 progress.json）；三态都有「⏹ 停止爬取」；`tests/crawl-stop.test.mjs`（8 项，旧代码下 5 项红） |
+| 19 | **`schedule_events` 无删除终态**：写入两条（邮箱邀约识别 / 岗位笔试同步）、读取两条（未来日程 / 提醒窗口），**没有任何删除路径**——解析错或已取消的邀约每次提醒都再弹一遍；"时间待定"（`interview_at` 为空）的邀约永远显示（真实库现 4 行、时间待定 0 行，该形态由测试构造复现） | C9 | `mail.deleteEvent` + `POST /api/schedule/delete`（成功 200 / 不存在 404 / 缺 id 400）+ 原生日程每条「🗑 删除」（confirm 二次确认、失败如实提示） |
+| 20 | **`job_posts` 无归档终态**：只有 new/ready/ready_bishi/done，自动搜集进来的岗位（**只读副本实测 247 行全 `status='new'`**）没有任何办法清掉，「未处理」越堆越多、推荐被垃圾岗位占位 | C9 | 新增 `archived`（**软删除**：行保留作为入库去重依据，否则下次搜集又加回来）；归档不记 `applied_at`（否则统计冒出幽灵投递）；默认列表/推荐/RAG 索引都排除归档，显式 `status:"archived"` 可查可恢复；归档行收起「学考点/按岗面试」（那两条按 id 查岗位已排除归档，点了必 404）；三态入口 + `getJobStats` 单列 archived |
+| 21 | **持久化调度层完全不可达**：`scheduler` 每分钟 `checkDue`、三个 job_type 执行器齐备，种子任务却恒 `enabled:false`，而**没有任何路由/UI 能列出或启用它们**（注册了却没入口） | C1 | `scheduler.runJob`（立即运行一次，与 `checkDue` 共用 `runOne` → 同失败计数/心跳/自动禁用语义）+ `GET /api/scheduled-jobs`、`POST /api/scheduled-jobs/{toggle,run}`（未注入/无执行器/任务不存在都不报成功）+ preload/main/`kanban-api.d.ts` 三处 IPC + 设置区「⏱️ 定时任务」区块；`widget.mjs` 用提前声明的 `schedulerRef` 注入（scheduler 在文件后段才创建，规避 TDZ） |
+| 22 | **`/api/review/add` 丢 `priority`**：`addCard` 支持 必会/进阶/拓展（调度按优先级排序），路由层却把它丢掉 → 一律落"拓展"，优先级调度静默失效 | C4 | 契约补 `priority`（非法值 400，不静默降级）；写库失败改为直接上报真实原因（原先靠输出契约兜底报 `SCHEMA_MISMATCH`，不是假成功但错误码误导）；`tests/review-terminal-states.test.mjs` +2、`tests/scheduler.test.mjs` +3、`tests/terminal-states.test.mjs`（10 项，旧代码下 8 项红） |
+| 23 | **面试历史"读得到、删不掉"**：每场复盘的复盘写进 `interview_history`、`GET /api/interview/history` 也读得到，但**没有删除函数、没有路由、UI 没有入口**——错误/测试产生的复盘永远留在历史里 | C9 | `memory.deleteInterviewHistory(id)`（按主键删；**DB 与内存镜像同步删**——只删 DB 会让同进程继续读到"鬼影"；镜像条目补主键，否则 UI 的 id 与镜像对不上、删除空转）+ `POST /api/interview/history/delete`（200 / 404 / 缺参 400）+ 三态入口（原生两处、React、Vue，一律 `confirm` 二次确认、失败如实提示）；`tests/interview-history-delete.test.mjs`（4 项，改坏路由后 3 项必红） |
+| 24 | **Vue 面试无语音作答**（三态能力不对齐，第 ⑨ 种样子货）：React 版早有「麦克风采集 → `speechToText` → 回填作答」整条链路，Vue 版一格都没有 | C2/C9 | 照抄 React 版契约补齐：AudioWorklet 16k 单声道采集 + 录音状态机 + 停止/取消 + **卸载时释放麦克风流**（不泄漏）+ 空转写/失败可见提示；worklet 路径判据与 React 一致（内嵌/独立窗口）；`tests/vue-interview-speech.test.mjs`（4 项，**已独立反证**：改名 IPC 调用后必红） |
+
 #### 待修（已定位到 `file:line`，按严重度排序；完整报告见 `%TEMP%\mashiro-audit\{A..H}-*.md`）
 
-- **P0 巡检三键"读而不写"**：`lib/patrol.ts` 读 `patrol_enabled/interval_min/avoid_peak`，写点只在面板路由；真实库 30 个 settings 键里没有这三个 → 面板默认态与后端相反（巡检默认开，面板显示关）
-- **P0 爬取入口体验**：证书容错与"零产出=失败"已修（见第二批 #11），**停止/取消入口仍缺**；`output/` 六种目录约定 + 产出扫描只认一层 → `output/<date>_discover/讲解/**` 永不进「最新产出」
-- **P1** 题库判题不自动 done、判错回流路由恒报成功；`schedule_events` 无删除/已处理；`job_posts` 无归档；爬取/产出与岗位库两条独立管线；`decision_ledger` 写而不读（无读函数）；自主播报的语音 scene 不存在（"看得见字，听不见音"，`lines.json` 无 `agent-*`）；场景装配冷启动不装配且 UI 不可见；`tool_results/` 无回收/TTL；审批按工具名放行（无 args 维度）；`kanban-api.d.ts` 漏声明 9 个 IPC（`reviewFeedback/reviewRetry/ttsSynth/openReactPanel/...`）；三套「掌握」互不同步（`kp_mastery` / `mastered_points` / `fsrs≥21`）；`scheduled_jobs` 种子恒禁用且无启用入口；备份只还原主库（`study_notes`/`schedule_events` 不恢复）；`/api/review/add` 丢 `priority`；167/448 题 `test_code` 为空导致判题恒失败；Vue 面试缺语音作答；三态互切与爬取失败语义的 jsdom 护栏待补
+- **P0 巡检三键"读而不写"**：`lib/patrol.ts` 读 `patrol_enabled/interval_min/avoid_peak`，写点只在面板路由；真实库 30 个 settings 键里没有这三个 —— 面板"默认态与后端相反"这一症状已由第二批 #9 消解（`GET /api/patrol-config` 带 `ok` 后按后端真实态回填）；仅剩"用户不动就不落盘"（行为等价，不再算断链）
+- **P1** 爬取/产出与岗位库两条独立管线；`decision_ledger` 写而不读（无读函数）；自主播报的语音 scene 不存在（"看得见字，听不见音"，`lines.json` 无 `agent-*`）；场景装配冷启动不装配且 UI 不可见；`tool_results/` 启动时清 >7 天（无运行期回收）；审批按工具名放行（无 args 维度）；三套「掌握」互不同步（`kp_mastery` / `mastered_points` / `fsrs≥21`）；备份只还原主库（`study_notes`/`schedule_events` 不恢复）；167/448 题 `test_code` 为空导致判题恒失败（`scripts/gen-challenge-tests.mjs` 可补，需写真实库）；三态互切与爬取失败语义的 jsdom 护栏待补；面试历史镜像只留最近 **20** 条（`saveInterviewHistory` 的 `.slice(-20)`）→ 面板只能看到/删除最近 20 场，更早记录仍在 DB 累积且 UI 无入口触达（删除终态对"可见"记录已完整）
 
 
 
@@ -305,7 +317,7 @@ Claude Code 配置（`.mcp.json`）：
 mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 docs/plugin-architecture.md）
 ├── desktop/                        # ── 真白宿主：桌宠（Electron）──
 │   ├── main.ts                     # 主进程：窗口/托盘/70 个 IPC 通道/widget 守护/本地 ASR/语音播放（main.mjs 仅剩一行桶）
-│   ├── kanban-api.d.ts             # 渲染层 API 类型声明（72 个接口方法，preload 以该类型 expose，checkJs 校验）
+│   ├── kanban-api.d.ts             # 渲染层 API 类型声明（83 个接口方法，preload 以该类型 expose，checkJs 校验）
 │   ├── preload.js                  # IPC 桥接（72 个类型化方法 + SSE 流封装 + 事件订阅）
 │   ├── lib/                        # 主进程模块（widget-server.ts 守护 / window-state / restart / companion-poller）
 │   ├── voice-pack.ts / tts-edge.ts / foreground.ts   # 日语语音包播放（预设匹配 + ack 兜底）/ 前台窗口检测（koffi FFI）
@@ -342,9 +354,9 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 | 渲染层 | 技术 | 覆盖 Tab | dist 实测 | 选型依据 |
 |---|---|---|---|---|
-| 原生 | 原生 JS + **esbuild** 单入口 | 全部 9 Tab（对照基线；设置 Tab 只有原生） | **349.8KB**（gzip 106.8KB / 6 文件） | file:// 加载不需 dev server/HMR；零依赖启动快 |
-| React 版 | **Vite 子项目**（`panel-react/`，vite 7） | 8/8（面试·驾驶舱·知识库·学习·爬取·校招·对话·复习） | **241.7KB**（gzip 76.2KB，含 React 运行时） | 交互密集：**useReducer Phase 状态机** + useMemo 派生缓存 + useDeferredValue 搜索 |
-| Vue 版 | **Vite 子项目**（`panel-vue-review/`，vite 6） | 8/8（同上） | **158.0KB**（gzip 56.6KB，含 Vue 运行时） | 数据可视化：**响应式 computed 曲线缓存** + watch 动画 + Transition 切卡 |
+| 原生 | 原生 JS + **esbuild** 单入口 | 全部 9 Tab（对照基线；设置 Tab 只有原生） | **367.7KB**（gzip 112.3KB / 6 文件） | file:// 加载不需 dev server/HMR；零依赖启动快 |
+| React 版 | **Vite 子项目**（`panel-react/`，vite 7） | 8/8（面试·驾驶舱·知识库·学习·爬取·校招·对话·复习） | **244.0KB**（gzip 77.0KB，含 React 运行时） | 交互密集：**useReducer Phase 状态机** + useMemo 派生缓存 + useDeferredValue 搜索 |
+| Vue 版 | **Vite 子项目**（`panel-vue-review/`，vite 6） | 8/8（同上） | **163.3KB**（gzip 58.6KB，含 Vue 运行时） | 数据可视化：**响应式 computed 曲线缓存** + watch 动画 + Transition 切卡 |
 
 三态共用**同一 preload IPC 桥 + 同一业务层**（`lib/interview*.ts`/`lib/review.ts` **零改动**）——**渲染层可替换性有代码证据**：功能等价证明可替换，同时各框架秀招牌特性（React useReducer/并发渲染、Vue 响应式/Transition）——"渲染层选型"从口号变成可对比的实现 + 实测包体积（`npm run gen:sizes` 从 dist 生成，`tests/renderer-sizes.test.mjs` 防数据过期）。
 
@@ -364,7 +376,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 - **Skills 插件 + 场景装配**：SKILL.md 声明式 + skill.mjs 可编程（tools/hooks/权限），`skill__<skill>__<tool>` 命名空间，`lib/skills.ts` 热重载；P1 场景激活子集（agent 只注入当前场景技能）
 - **可观测性**：`trace_llm`/`trace_tools` 每次调用记录 token/耗时/成败；面板运行监控实时可见
 - **定时任务与调度**：`widget.mjs` 的 33 处 `registerTimer/registerInterval`（18 周期 + 15 启动首跑；进程内、显式管理、退出统一清理）**+** `lib/scheduler.ts` 的持久化调度（`scheduled_jobs` 表 + `schedule_spec` 解析 + 失败自动停用）——scheduler 是 ADDITIVE 层，种子任务默认禁用，不与既有定时器双重触发
-- **渲染层三态并行**：同一业务层 + 同一 IPC 桥上的三套实现（原生 / React / Vue），覆盖 8 个 Tab×2 框架；`gen:sizes` 从 dist 实测包体积（原生 349.8KB / React 241.7KB / Vue 158.0KB），注册表一致性 + 两侧全 Tab 渲染测试 + 体积数据新鲜度三重护栏
+- **渲染层三态并行**：同一业务层 + 同一 IPC 桥上的三套实现（原生 / React / Vue），覆盖 8 个 Tab×2 框架；`gen:sizes` 从 dist 实测包体积（原生 367.7KB / React 244.0KB / Vue 163.3KB），注册表一致性 + 两侧全 Tab 渲染测试 + 体积数据新鲜度三重护栏
 - **语音识别长音频分段**：实测定位"多句 + 思考停顿的长音频整段送离线 paraformer → 注意力跨句错配（把后句的词串进前句、整句重复）"；修法是 `segmentVoice` 能量谷切段（静音 ≥250ms 视为句界，合并 ≤14s）+ 逐段识别拼接，并补齐术语/同音词纠错表（技术栈是/有限状态机/JD/FSM…）——同一段 90s 音频 **CER 4.1% → 0%、耗时 6.7s → 4.8s**（`scripts/_asr-ab.mjs <wav> <gt.txt>` 可复跑，需自备样本与真值；另一段样本的早期记录见 `lib/speech.ts` 注释：5.5% → 4.5%、6.8s → 3.3s——**数字随录音/切分不同，不要跨样本比较**）；`MIANSHI_KEEP_ASR_AUDIO=1` 可落盘真实录音样本，便于按真实嗓音继续调
 - **本地知识库混合检索（2026-09-11 补齐）**：`lib/knowledge-base.ts` —— 讲解文档按标题/💬 追问切段（追问=用户亲手问的缺口，检索加权）→ `knowledge_paragraphs` + FTS5 trigram；检索 = BM25（含 2 字词 LIKE 兜底）+ bge-small-zh 向量余弦 → **RRF 融合**（k=60，分数不可比只看排名）→ `bge-reranker-base` 交叉编码器精排（粗排 top10 → top5，路由 `/api/knowledge/paragraphs/search-reranked` 已就绪但**前端未接**）。踩过的三个坑都固化成修复：① 向量列**只读不写**（索引期从不向量化 → 向量腿一直是空的，实测 35% → 补齐后 55%）；② transformers.js 默认远端 huggingface.co（国内 `fetch failed` 被 catch 吞掉 → 静默退化，现支持 `MIANSHI_HF_ENDPOINT` 镜像）；③ 缓存目录默认是 cwd 相对 `.cache`（会在仓库根留垃圾 → 固定到 `<data>/models/transformers`）
 - **Agent 会话时间线（"把感知信号沉淀成数据"，2026-09-11）**：`lib/agent-timeline.ts` 两张表——`agent_sessions`（会话汇总：source/project/起止/轮次/工具数）+ `agent_tool_events`（工具明细，支持高频工具与按天分布）；写入两条路径：**实时**（事件总线回调）+ **历史回填**（OpenCode 走 SQL 聚合 266 会话；DSH 用「会话头 createdAt + 文件 mtime」近似并标 `partial`，**不逐帧解压** 18.9MB×578 个）。**指标口径踩了三处坑才修对**：① 会话区间大量重叠，直接求和得到 6128h（≈256 天）→ 改**区间并集**；② 区间跨统计窗口/跨自然日，出现"单日 81.2h"这种不可能值 → 按窗口与自然日**裁剪**；③ OpenCode 的会话 `title` 是"项目浏览/问候"这类临时标题，会把项目统计打散 → 按 `directory` 目录名归组。展示在「📊 驾驶舱」Tab；UI 明确标注"覆盖时段 = 存在活跃会话的时段并集（并行 agent 会叠加到接近全天），**不是工作时长**"
@@ -424,9 +436,9 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 | 门禁 | 命令 | 当前状态 |
 |---|---|---|
-| 单元/集成测试 | `npm test` | ✅ **1231/1231 通过**（1192 单元 + 39 集成，135 个测试文件，mock LLM 无 key 可跑） |
+| 单元/集成测试 | `npm test` | ✅ **1282/1282 通过**（1243 单元 + 39 集成，147 个测试文件，mock LLM 无 key 可跑） |
 | 类型检查（lib，双 tsc） | `npm run typecheck` | ✅ 0 错误（宽松 checkJs 覆盖 `.mjs` + `tsconfig.strict.json` 查 `lib/plugins/desktop` 的 `.ts`，strict 下同样 0） |
-| 桌面端类型检查 | `npm run typecheck:desktop` | ✅ 0 错误（`kanban-api.d.ts` 72 个接口方法与 preload 实现一致）——**2026-09-11 修复**：该配置此前漏开 `allowImportingTsExtensions`，被 133 处 TS5097 噪音掩盖了真实的 `MusicResult.catch` 类型错（该步骤以前从未在 CI 上跑到） |
+| 桌面端类型检查 | `npm run typecheck:desktop` | ✅ 0 错误（`kanban-api.d.ts` 83 个接口方法与 preload 实现**双向一致**——实测 83=83，子集关系由 `tests/ipc-declaration.test.mjs` 强制）——**2026-09-11 修复**：该配置此前漏开 `allowImportingTsExtensions`，被 133 处 TS5097 噪音掩盖了真实的 `MusicResult.catch` 类型错（该步骤以前从未在 CI 上跑到） |
 | Lint | `npm run lint` | ✅ **0 error 0 warning**（全仓库，含面板/渲染层/脚本/测试） |
 | 渲染层一致性 | `tests/react-panel.test.mjs` / `tests/react-tabs.render.test.mjs` / `tests/vue-tabs.render.test.mjs` / `renderer-sizes.test.mjs` | ✅ 三态注册表一致 + **两侧全 Tab 渲染**（分发/同源/特色标注/UI 不变量/对称卸载）+ 体积数据新鲜度 |
 | 契约与接口回归 | `tests/review-routes.test.mjs` / `tests/misc-reminders.test.mjs` / `tests/contracts.test.mjs` | ✅ TS 迁移顶出的两条恒 500 路由 + 提醒开关静默不落库已修并锁死（含契约出参校验） |
@@ -506,7 +518,7 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 
 - **许可证**：MIT（见 [LICENSE](LICENSE)）
 - **仓库不含**：本地数据（`data/`）、ASR 模型（`models/`）、`.env`（密钥）；**含**自训练声线（`assets/voice/`，开箱即用）
-- **测试**：`npm test` 1231 用例全绿（1192 单元 + 39 集成，mock LLM，CI 零成本）；评测体系见上文
+- **测试**：`npm test` 1282 用例全绿（1243 单元 + 39 集成，mock LLM，CI 零成本）；评测体系见上文
 - **插件化路线**：宿主（真白）+ 插件（秋招助手）架构见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)
 
 ---
