@@ -53,7 +53,14 @@ test("recordAgentEvent：缺 sessionId / 非 agent 事件 → 忽略（不建脏
 
 test("getAgentTimeline：项目聚合（区间**去重叠**的覆盖时长）+ Top 工具 + 时间窗过滤", () => {
   clearSessions();
-  const now = Date.now();
+  // 锚点必须保证 [-100min, -10min] 全落在**同一个 UTC 日**内（activeDaysOf 用 UTC 日切分：
+  // toISOString().slice(0,10)）。原实现直接用 now → 本地时区在 UTC+8 时 08:00~09:40 这一窗口跑
+  // 就会跨 UTC 午夜 → activeDays=2 的假失败（实测踩到过：12 点前那次全量跑挂在这一条）。
+  // 取「now-100min 所在 UTC 日的 12:00 UTC」；若该锚点离现在不足 10 分钟（未来/太近），退回前一天。
+  const anchor = new Date(Date.now() - 100 * 60_000);
+  anchor.setUTCHours(12, 0, 0, 0);
+  let now = anchor.getTime();
+  if (now > Date.now() - 10 * 60_000) now -= 24 * 3600_000;
   // mk：startAgoMin 分钟前开始，spanMin 分钟后最后一次活动（用 session_finished 推进 last_activity_at）
   const mk = (source, sid, project, startAgoMin, spanMin, turns, tools) => {
     const start = now - startAgoMin * 60_000;

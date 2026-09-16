@@ -68,8 +68,9 @@ export function registerCoreRoutes(router: Router, { laneSubmit = (fn: () => any
     checkTrends: async () => {},
     sendNotification: (_t: unknown, _m: unknown, _o?: unknown) => {},
     logErr: (_m: unknown) => {},
-    runDiscoverHidden: () => {},
+    runDiscoverHidden: async () => { throw new Error("爬取未注入（运行时缺 runDiscoverHidden）"); },
     crawlMutex: () => ({ isRunning: () => false }),
+    stopCrawl: () => ({ ok: false, error: "停止爬取未注入" }),
     patrolGetConfig: () => ({}),
     patrolWriteSetting: (_k: unknown, _v: unknown) => {},
     patrolSetBudget: (_t: unknown) => ({ ok: true }),
@@ -116,10 +117,14 @@ export function registerCoreRoutes(router: Router, { laneSubmit = (fn: () => any
     try {
       progress = JSON.parse(readFileSync(path.join(config.outputDir, "..", "progress.json"), "utf8"));
     } catch { /* ignore */ }
+    // 闭环清查修复：progress.json 可能与真实进程状态脱节（子进程被强杀时来不及写终态 →
+    // 永远停在 status:"running"，面板一直显示"爬取中"，且没有任何停止入口）。
+    // 这里额外给出**以子进程存活为准**的 running 字段，面板用它决定按钮态/停止入口。
+    const crawlRunning = (() => { try { return !!rt.crawlMutex().isRunning(); } catch { return false; } })();
     let reviewStats = { total: 0, due: 0 };
     try { reviewStats = reviewApi.review.getStats(); } catch { /* ignore */ }
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ ok: true, plan, files, outputs, progress, review: reviewStats, time: new Date().toISOString() }));
+    res.end(JSON.stringify({ ok: true, plan, files, outputs, progress, crawlRunning, review: reviewStats, time: new Date().toISOString() }));
   });
 
   router.route("/api/chat", "POST", withContract(
@@ -255,18 +260,50 @@ export function registerCoreRoutes(router: Router, { laneSubmit = (fn: () => any
     });
   });
 
-  router.route("/api/run-discover", (req: IncomingMessage, res: ServerResponse) => {
+  router.route("/api/run-discover", async (req: IncomingMessage, res: ServerResponse) => {
     // 重置进度并后台启动爬取（spawn 隐藏窗口 + 日志重定向，不弹终端）
     if (rt.crawlMutex().isRunning()) {
       res.writeHead(409, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: "已有爬取任务运行中" }));
       return;
     }
+    // 闭环清查修复：先确认真的起来了，再写 status:"running"——
+    // 原实现先写 running 再 fire-and-forget 启动，spawn 失败（node 缺失/路径错/并发竞争）时
+    // progress.json 会永远停在"爬取中"，面板一直转圈且当时没有任何停止/复位入口。
+    const progressFile = path.join(config.outputDir, "..", "progress.json");
+    let started: unknown;
     try {
-      writeFileSync(path.join(config.outputDir, "..", "progress.json"), JSON.stringify({ status: "running", step: "start", message: "爬取启动中...", current: 0, total: 0 }), "utf8");
+      started = await rt.runDiscoverHidden();
+    } catch (e) {
+      started = e;
+    }
+    if (started === false || started instanceof Error) {
+      const msg = started instanceof Error ? `爬取启动失败：${eMsg(started)}` : "爬取启动失败（已有任务在跑或子进程无法创建，详见 widget-run.log）";
+      try { writeFileSync(progressFile, JSON.stringify({ status: "error", step: "start", message: msg, ts: Date.now() }), "utf8"); } catch { /* ignore */ }
+      res.writeHead(started instanceof Error ? 500 : 409, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: msg }));
+      return;
+    }
+    try {
+      writeFileSync(progressFile, JSON.stringify({ status: "running", step: "start", message: "爬取启动中...", current: 0, total: 0 }), "utf8");
     } catch { /* ignore */ }
-    rt.runDiscoverHidden();
     res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, msg: "后台已触发" }));
+  });
+
+  router.route("/api/stop-discover", "POST", async (req: IncomingMessage, res: ServerResponse) => {
+    // 停止爬取（闭环清查修复：此前没有停止入口——爬取卡住只能等或杀整个桌宠；
+    // 且 discover 是 detached 启动，Playwright 的 chromium 孙子进程不随父进程退出，
+    // 残留孤儿会占住 profile 导致下次爬取失败）。停止实现在 widget.mjs（taskkill /T 杀进程树 +
+    // 由停止方落 progress.json 终态）。
+    try {
+      const r = (await rt.stopCrawl()) as { ok?: boolean; error?: string; pid?: number; message?: string } | null | undefined;
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      // 无任务在跑是可预期的幂等结果（200 + ok:false，面板据 error 提示），不当作 HTTP 错误
+      res.end(JSON.stringify(r && r.ok ? { ok: true, pid: r.pid, message: r.message || "已停止爬取" } : { ok: false, error: r?.error || "停止爬取失败" }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: eMsg(e) }));
+    }
   });
 
   router.route("/api/patrol-config", (req: IncomingMessage, res: ServerResponse) => {

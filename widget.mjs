@@ -55,6 +55,7 @@ registerCoreRoutes(router, {
     logErr: (m) => logErr(m),
     runDiscoverHidden: () => runDiscoverHidden(),
     crawlMutex: () => crawlMutex,
+    stopCrawl: (reason) => stopCrawl(reason),
     patrolGetConfig: () => patrol.getConfig(),
     patrolWriteSetting: (k, v) => patrol.writeSetting(k, v),
     patrolSetBudget: (t) => patrol.setBudget(t),
@@ -199,12 +200,69 @@ async function runDiscoverHidden() {
       child.on("exit", cleanup);
       child.on("error", cleanup);
       child.unref();
+      // 闭环清查修复：把互斥判定绑到子进程真实存活期（原实现只护 spawn 一瞬，
+      // isRunning() 几乎恒 false → 409 闸门与巡检跳过全部失效，可并发拉起多个 chromium）
+      if (!crawlMutex.track(child)) {
+        // 已有爬取在跑（并发 spawn 竞争）→ 立即回收刚起的这个，避免双跑
+        try { child.kill(); } catch { /* ignore */ }
+        return false;
+      }
       return true;
     } catch (e) {
       console.log(`[widget] 后台爬取启动失败: ${String(e.message).slice(0, 80)}`);
       return false;
     }
   });
+}
+
+// 停止爬取（闭环清查修复：此前**没有任何停止入口**——爬取卡住/跑错站点时用户只能等它自己结束，
+// 或杀掉整个桌宠；而 discover 是 detached 启动的，Playwright 的 chromium 孙进程不会随父进程退出，
+// 残留孤儿会占住浏览器 profile，导致下次爬取直接失败）。
+// 关键点：
+//   1. Windows 必须杀进程树（taskkill /T）——只 kill 直系子进程会留下 chromium 孤儿
+//   2. 终态由**停止方**写 progress.json：taskkill /F 是强制终止，子进程的 exit/SIGINT handler 不会执行，
+//      否则 progress.json 永远停在 status:"running"（面板一直显示"爬取中"）
+async function stopCrawl(reason = "已被用户停止") {
+  const child = crawlMutex.current();
+  const progressFile = path.join(config.outputDir, "..", "progress.json");
+  const writeTerminal = (message) => {
+    try { writeFileSync(progressFile, JSON.stringify({ status: "error", step: "stopped", message, ts: Date.now() }), "utf8"); } catch { /* ignore */ }
+  };
+  if (!child) {
+    return { ok: false, error: "当前没有正在运行的爬取" };
+  }
+  const pid = Number(child.pid) || 0;
+  let killed = false;
+  try {
+    if (process.platform === "win32" && pid) {
+      const { spawn } = await import("node:child_process");
+      await new Promise((resolve) => {
+        const k = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+        k.on("exit", resolve);
+        k.on("error", resolve);
+      });
+      killed = true;
+    } else {
+      killed = child.kill("SIGTERM");
+    }
+  } catch (e) {
+    console.log(`[widget] 停止爬取失败: ${String(e.message).slice(0, 80)}`);
+  }
+  // 等子进程真正退出（最多 3s）：退出后再落终态，避免子进程在窗口内又写回 running
+  const exited = await new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    try { child.once("exit", () => finish(true)); } catch { finish(false); }
+    setTimeout(() => finish(!crawlMutex.isRunning()), 3000);
+  });
+  if (!exited) {
+    // kill 无效（进程僵死/句柄异常）→ 强制释放锁，否则再也跑不了爬取
+    crawlMutex.release();
+    writeTerminal(`${reason}（进程 ${pid || "?"} 未在 3 秒内退出，已强制释放爬取锁——若仍有 chromium 残留请重启桌宠）`);
+    return { ok: false, error: "进程未在 3 秒内退出，已强制释放爬取锁" };
+  }
+  writeTerminal(reason);
+  return { ok: true, pid, killed, message: reason };
 }
 
 // ============ 状态跟踪（检测新趋势） ============

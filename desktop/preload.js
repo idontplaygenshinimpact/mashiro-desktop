@@ -106,6 +106,7 @@ contextBridge.exposeInMainWorld("kanban", /** @type {import("./kanban-api").Kanb
   reviewRetry: () => ipcRenderer.invoke("review:retry"),
   getMastery: () => ipcRenderer.invoke("widget:mastery"),
   runDiscover: () => ipcRenderer.invoke("widget:run-discover"),
+  stopDiscover: () => ipcRenderer.invoke("widget:stop-discover"),
   quit: () => ipcRenderer.invoke("window:quit"),
   restartApp: () => ipcRenderer.invoke("app:restart"),
   openOutput: () => ipcRenderer.invoke("window:open-output"),

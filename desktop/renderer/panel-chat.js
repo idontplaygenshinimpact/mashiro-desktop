@@ -255,7 +255,12 @@ async function loadCrawlData() {
   if (!r?.ok) return;
   loadStudyNotes(); // 讲解存档列表（面经产出转学习）
   const prog = r.progress || {};
-  if (prog.status === "running") {
+  // 闭环清查修复：以**子进程真实存活**（crawlRunning）为准决定按钮态，progress.json 只作展示。
+  // 原实现只看 progress.status：子进程被强杀时 progress.json 停在 running → 面板永远显示"爬取中"，
+  // 且没有停止入口（本次新增 crawl-stop）。
+  const running = !!r.crawlRunning || prog.status === "running";
+  updateCrawlButtons(running);
+  if (running) {
     $("crawl-progress").textContent = "🔍 " + (prog.message || "爬取中...");
     $("crawl-bar-wrap").classList.remove("hidden");
     const pct = prog.total ? Math.min(100, Math.round(prog.current / prog.total * 100)) : 8;
@@ -264,6 +269,10 @@ async function loadCrawlData() {
     $("crawl-progress").textContent = "✅ " + (prog.message || "完成");
     $("crawl-bar-wrap").classList.remove("hidden");
     $("crawl-bar").style.width = "100%";
+  } else if (prog.status === "error") {
+    // 失败/中断/手动停止：如实显示（此前一律显示"暂无任务"，失败被抹掉）
+    $("crawl-progress").textContent = "⚠️ " + (prog.message || "上次爬取失败");
+    $("crawl-bar-wrap").classList.add("hidden");
   } else {
     $("crawl-progress").textContent = "暂无任务";
     $("crawl-bar-wrap").classList.add("hidden");
@@ -450,9 +459,53 @@ $("notes-learn-all")?.addEventListener("click", async () => {
   } catch { window.kanban.notify("📥 全部转学习", "转学习失败，请稍后重试"); }
 });
 
+// 爬取中 → 禁用「开始爬取」、启用「停止爬取」（互斥闸门在 widget.mjs：并发 discover 会各拉一个 chromium）
+function updateCrawlButtons(running) {
+  const run = $("crawl-run"), stop = $("crawl-stop");
+  if (!run || !stop) return;
+  run.disabled = running;
+  run.textContent = running ? "🔍 爬取中…" : "🔍 开始爬取";
+  stop.disabled = !running;
+}
+
 $("crawl-run").addEventListener("click", async () => {
-  await window.kanban.runDiscover();
-  $("crawl-progress").textContent = "🔍 爬取已启动...";
+  const btn = $("crawl-run");
+  btn.disabled = true;
+  try {
+    const r = await window.kanban.runDiscover();
+    // 闭环清查修复：原实现无条件显示"爬取已启动"——后端 409（已有任务在跑）时也在骗用户
+    if (r?.ok === false) {
+      $("crawl-progress").textContent = "⚠️ " + String(r.error || "启动失败").slice(0, 80);
+      window.kanban.notify("🔍 爬取", String(r.error || "启动失败").slice(0, 60));
+      await loadCrawlData(); // 拉真实状态回填按钮态
+      return;
+    }
+    $("crawl-progress").textContent = "🔍 爬取已启动...";
+    $("crawl-bar-wrap").classList.remove("hidden");
+    updateCrawlButtons(true);
+  } catch (e) {
+    $("crawl-progress").textContent = "⚠️ " + String(e.message || e).slice(0, 80);
+    btn.disabled = false;
+  }
+});
+$("crawl-stop").addEventListener("click", async () => {
+  const stop = $("crawl-stop");
+  stop.disabled = true;
+  stop.textContent = "⏹ 停止中…";
+  try {
+    const r = await window.kanban.stopDiscover();
+    if (r?.ok === false) {
+      window.kanban.notify("⏹ 停止爬取", String(r.error || "停止失败").slice(0, 60));
+    } else {
+      window.kanban.notify("⏹ 停止爬取", "已停止（爬取进程树已回收，进度置为中断）");
+    }
+    await loadCrawlData();
+  } catch (e) {
+    window.kanban.notify("⏹ 停止爬取", String(e.message || e).slice(0, 60));
+  } finally {
+    stop.textContent = "⏹ 停止爬取";
+    stop.disabled = false;
+  }
 });
 $("crawl-output").addEventListener("click", () => window.kanban.openOutput());
 

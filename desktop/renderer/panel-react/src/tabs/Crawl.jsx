@@ -30,15 +30,18 @@ export function CrawlPanel() {
 
   // 挂载拉一次 + 爬取进行中时 5s 轮询（与原生 _gatedInterval(loadCrawlData, 5000) 同频；
   // 依赖 progress.status——空闲时不轮询，避免无谓 IPC）
+  // 闭环清查修复：以 crawlRunning（子进程真实存活）为准，progress.json 只作展示——
+  // 子进程被强杀时 progress.json 会停在 running，只信它就会永远轮询 + 永远显示"爬取中"。
   const status = data?.progress?.status || "idle";
+  const running = !!data?.crawlRunning || status === "running";
   useEffect(() => {
     load();
   }, []);
   useEffect(() => {
-    if (status !== "running") return;
+    if (!running) return;
     const t = setInterval(load, 5000);
     return () => clearInterval(t);
-  }, [status]);
+  }, [running]);
 
   async function startCrawl() {
     setBusy(true);
@@ -54,12 +57,29 @@ export function CrawlPanel() {
     }
   }
 
+  // 停止爬取（杀进程树 + 落终态；此前三态都没有停止入口）
+  async function stopCrawl() {
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await window.kanban.stopDiscover();
+      if (r?.ok === false) setErr("停止爬取失败：" + String(r.error || "").slice(0, 60));
+      await load();
+    } catch (e) {
+      setErr("停止爬取异常：" + String(e?.message || e).slice(0, 80));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const prog = data?.progress || {};
-  const pct = prog.status === "running"
+  const pct = running
     ? (prog.total ? Math.min(100, Math.round((prog.current / prog.total) * 100)) : 8)
     : prog.status === "done" ? 100 : 0;
-  const progressText = prog.status === "running" ? `🔍 ${prog.message || "爬取中..."}`
-    : prog.status === "done" ? `✅ ${prog.message || "完成"}` : "暂无任务";
+  const progressText = running ? `🔍 ${prog.message || "爬取中..."}`
+    : prog.status === "done" ? `✅ ${prog.message || "完成"}`
+      : prog.status === "error" ? `⚠️ ${prog.message || "上次爬取失败"}`
+        : "暂无任务";
 
   // ⚛️ React 特性：产出/推荐都是派生值（数据不变不重算）
   const files = useMemo(() => (data?.files || []).slice(0, 12), [data]);
@@ -77,7 +97,8 @@ export function CrawlPanel() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
           <b className="rf-title">🔍 爬取 · React 版</b>
           <span style={{ display: "flex", gap: 6 }}>
-            <button type="button" className="rf-btn rf-btn-primary" onClick={startCrawl} disabled={busy}>{busy ? "启动中…" : "🔍 开始爬取"}</button>
+            <button type="button" className="rf-btn rf-btn-primary" onClick={startCrawl} disabled={busy || running} title={running ? "已有爬取在运行（并发会各拉一个 chromium）" : ""}>{running ? "🔍 爬取中…" : busy ? "启动中…" : "🔍 开始爬取"}</button>
+            <button type="button" className="rf-btn" onClick={stopCrawl} disabled={busy || !running} title="杀掉爬取进程树（含 Playwright chromium）并落中断终态">⏹ 停止爬取</button>
             <button type="button" className="rf-btn" onClick={() => window.kanban.openOutput()}>📁 打开输出目录</button>
             <button type="button" className="rf-btn" onClick={load}>🔄 刷新</button>
           </span>

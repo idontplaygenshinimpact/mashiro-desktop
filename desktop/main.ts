@@ -445,6 +445,9 @@ safeHandle("widget:run-discover", async () => {
   }
 });
 
+// 停止爬取（杀 discover 进程树 + 落 progress.json 终态，实现在 widget.mjs /api/stop-discover）
+safeHandle("widget:stop-discover", () => widgetPost("/api/stop-discover"));
+
 safeHandle("widget:progress", async () => {
   try {
     const res = await widgetFetch(`${WIDGET_URL}/api/progress`);

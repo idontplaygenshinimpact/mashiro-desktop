@@ -183,23 +183,63 @@ export function readBody(req: IncomingMessage, res: ServerResponse, cb: (body: s
 /** 爬取互斥锁（并发 discover 会各自拉起 Playwright chromium，必须串行） */
 export interface CrawlMutex {
   isRunning: () => boolean;
+  /** 当前在跑的爬取子进程（无则 null）——供状态查询与「停止爬取」入口取句柄 */
+  current: () => CrawlChild | null;
   /** 执行 fn 期间置 running；运行中二次 begin 直接返回 false 且不执行 fn */
   begin: <T>(fn: () => Promise<T>) => Promise<T | false>;
+  /**
+   * 接管一个已 spawn 的子进程：其存活期间 isRunning() 恒 true，exit/error 时自动释放。
+   * 闭环清查修复：原实现只有 begin 的临界区语义——`begin(async () => spawn(...))` 在 spawn 返回的
+   * 那一刻就置回 running=false，而 discover 子进程要跑几分钟 → `isRunning()` 几乎恒 false，
+   * 于是 /api/run-discover 的 409「已有爬取任务运行中」与巡检的「爬取中则跳过」两道闸门全部失效
+   * （实测可并发拉起多个 chromium）。现在把运行的判定绑到子进程真实存活期。
+   * @returns false 表示已有子进程在跑——调用方应把刚 spawn 的进程杀掉（防御性，避免双跑）
+   */
+  track: (child: CrawlChild) => boolean;
+  /** 显式释放（停止路径兜底）：kill 没让子进程在超时内退出时调用，避免「锁死后再也跑不了爬取」 */
+  release: () => void;
+}
+
+/** 可接管的子进程句柄（child_process.ChildProcess 的最小子集——单测可注入假句柄） */
+export interface CrawlChild {
+  pid?: number;
+  kill: (signal?: NodeJS.Signals) => boolean;
+  once: (event: string, listener: () => void) => unknown;
 }
 
 /** 创建爬取互斥锁：防止并发 discover 子进程（每个都会拉起 Playwright chromium）。 */
 export function createCrawlMutex(): CrawlMutex {
   let running = false;
+  let active: CrawlChild | null = null;
   return {
     isRunning: () => running,
+    current: () => active,
     async begin<T>(fn: () => Promise<T>): Promise<T | false> {
       if (running) return false;
       running = true;
       try {
         return await fn();
       } finally {
-        running = false;
+        // track() 已接管存活期时不能在这里释放（否则又退回"只护 spawn 一瞬"）
+        if (!active) running = false;
       }
+    },
+    track(child: CrawlChild): boolean {
+      if (active) return false;
+      active = child;
+      running = true;
+      const release = () => {
+        if (active === child) { active = null; running = false; }
+      };
+      try {
+        child.once("exit", release);
+        child.once("error", release);
+      } catch { /* 假句柄/异常：退化为不自动释放（由 stop 路径显式释放） */ }
+      return true;
+    },
+    release() {
+      active = null;
+      running = false;
     },
   };
 }

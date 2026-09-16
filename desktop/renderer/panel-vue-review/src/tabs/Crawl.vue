@@ -24,18 +24,22 @@ onMounted(load);
 onUnmounted(() => { if (timer) clearInterval(timer); });
 
 const status = computed(() => data.value?.progress?.status || "idle");
+// 闭环清查修复：以 crawlRunning（子进程真实存活）为准驱动轮询/按钮态——progress.json 会因进程被强杀
+// 停在 running（只信它就会永远轮询 + 永远显示"爬取中"）
+const running = computed(() => !!data.value?.crawlRunning || status.value === "running");
 // 🟢 Vue 特色：watch 响应式驱动轮询（状态从别处变化也会自动开始/停止）
-watch(status, (v) => {
+watch(running, (v) => {
   if (timer) { clearInterval(timer); timer = null; }
-  if (v === "running") timer = setInterval(load, 5000);
+  if (v) timer = setInterval(load, 5000);
 }, { immediate: true });
 
 const prog = computed(() => data.value?.progress || {});
-const pct = computed(() => (prog.value.status === "running"
+const pct = computed(() => (running.value
   ? (prog.value.total ? Math.min(100, Math.round((prog.value.current / prog.value.total) * 100)) : 8)
   : prog.value.status === "done" ? 100 : 0));
-const progressText = computed(() => (prog.value.status === "running" ? `🔍 ${prog.value.message || "爬取中..."}`
-  : prog.value.status === "done" ? `✅ ${prog.value.message || "完成"}` : "暂无任务"));
+const progressText = computed(() => (running.value ? `🔍 ${prog.value.message || "爬取中..."}`
+  : prog.value.status === "done" ? `✅ ${prog.value.message || "完成"}`
+    : prog.value.status === "error" ? `⚠️ ${prog.value.message || "上次爬取失败"}` : "暂无任务"));
 const reco = computed(() => {
   const p = data.value?.plan || {};
   return [...(p.bishi || []).map((f) => ({ ...f, tag: "笔试" })), ...(p.mianshi || []).map((f) => ({ ...f, tag: "面经" }))];
@@ -57,6 +61,17 @@ async function startCrawl() {
   } catch (e) { err.value = "启动爬取异常：" + String(e?.message || e).slice(0, 80); }
   finally { busy.value = false; }
 }
+
+/** 停止爬取（杀进程树 + 落中断终态；此前三态都没有停止入口） */
+async function stopCrawl() {
+  busy.value = true; err.value = "";
+  try {
+    const r = await window.kanban.stopDiscover();
+    if (r?.ok === false) err.value = "停止爬取失败：" + String(r.error || "").slice(0, 60);
+    await load();
+  } catch (e) { err.value = "停止爬取异常：" + String(e?.message || e).slice(0, 80); }
+  finally { busy.value = false; }
+}
 </script>
 
 <template>
@@ -65,7 +80,8 @@ async function startCrawl() {
       <div class="rf-head">
         <b class="rf-title">🔍 爬取 · Vue 版</b>
         <span style="display:flex;gap:6px">
-          <button type="button" class="rf-btn rf-btn-primary" :disabled="busy" @click="startCrawl">{{ busy ? "启动中…" : "🔍 开始爬取" }}</button>
+          <button type="button" class="rf-btn rf-btn-primary" :disabled="busy || running" :title="running ? '已有爬取在运行（并发会各拉一个 chromium）' : ''" @click="startCrawl">{{ running ? "🔍 爬取中…" : busy ? "启动中…" : "🔍 开始爬取" }}</button>
+          <button type="button" class="rf-btn" :disabled="busy || !running" title="杀掉爬取进程树（含 Playwright chromium）并落中断终态" @click="stopCrawl">⏹ 停止爬取</button>
           <button type="button" class="rf-btn" @click="window.kanban.openOutput()">📁 打开输出目录</button>
           <button type="button" class="rf-btn" @click="load">🔄 刷新</button>
         </span>

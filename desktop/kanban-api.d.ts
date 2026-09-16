@@ -56,6 +56,7 @@ export interface KanbanApi {
   reviewRetry: () => Promise<any>;
   getMastery: () => Promise<any>;
   runDiscover: () => Promise<any>;
+  stopDiscover: () => Promise<any>;
   quit: () => Promise<any>;
   restartApp: () => Promise<any>;
   openOutput: () => Promise<any>;
