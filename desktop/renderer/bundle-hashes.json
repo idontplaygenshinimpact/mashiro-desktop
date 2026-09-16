@@ -12,5 +12,10 @@
       "speech-queue.ts": "6de9c6cff674e1db",
       "speech-queue.mjs": "8333caded30e0cab"
     }
+  },
+  "practiceEditor": {
+    "sources": {
+      "practice-editor.ts": "21c002cade358964"
+    }
   }
 }

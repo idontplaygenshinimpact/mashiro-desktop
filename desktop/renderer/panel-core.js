@@ -47,6 +47,13 @@ function switchTab(name) {
   if (name === "dashboard") loadDashboard();
   if (name === "jobs") { loadSchedule(); startJobsSchedTimer(); }
   else stopJobsSchedTimer();
+  // 专项练习（2026-09-16 从「校招」Tab 独立）：题库列表与牛客 TOP101 都按 Tab 门控加载
+  // 同时**预取判题编辑器产物**（494KB）：切到本 Tab 就开始下，点「✊ 做题」时通常已就绪（不阻塞点击）
+  if (name === "practice") {
+    loadChallenges();
+    if (typeof loadOj === "function") loadOj();
+    if (typeof loadPracticeEditor === "function") loadPracticeEditor();
+  }
   if (name === "settings") { loadSettings(); loadProfileStatus(); }
   $("settings-gear")?.classList.toggle("active", name === "settings");
 }
@@ -56,7 +63,7 @@ document.querySelectorAll(".tab").forEach((btn) => {
 });
 
 // ---------- 渲染层同窗切换（方案 D：互斥容器，不叠加；挂载/卸载对称防事件泄漏） ----------
-const rendererState = { interview: "native", review: "native", study: "native", chat: "native", crawl: "native", jobs: "native", dashboard: "native", kb: "native" };
+const rendererState = { interview: "native", review: "native", study: "native", chat: "native", crawl: "native", jobs: "native", practice: "native", dashboard: "native", kb: "native" };
 // 挂载引用按 Tab 分槽（前端三态并行展示工单任务 2）：多 Tab 各自挂框架版时互不覆盖——
 // 单一引用会让"先挂 interview 再挂 dashboard"丢掉前者的 root（切回原生只卸载最后一个 → 泄漏）
 const reactRoots = new Map(); // tab → React root
@@ -65,8 +72,8 @@ const vueApps = new Map();    // tab → Vue app
 // 前端三态并行展示工单任务 2：哪些 Tab 已有框架版（S1→S4 逐 Tab 登记——未登记的模式提示"开发中"）
 // 登记即由 initRendererSwitches 建容器；不登记则切过去只提示，不会留下空容器骗过后续判断
 const FRAMEWORK_TABS = {
-  react: ["interview", "dashboard", "kb", "study", "crawl", "jobs", "chat", "review"], // S1→S4 + 复习卡补全（三态矩阵 8×2 满格）
-  vue: ["review", "dashboard", "kb", "study", "crawl", "jobs", "chat", "interview"], // 任务 3：Vue 全 Tab（8/8 完成）
+  react: ["interview", "dashboard", "kb", "study", "crawl", "jobs", "practice", "chat", "review"], // S1→S4 + 复习卡补全 + 专项练习（三态矩阵 9×2 满格）
+  vue: ["review", "dashboard", "kb", "study", "crawl", "jobs", "practice", "chat", "interview"], // 任务 3 + 专项练习（9/9）
 };
 function hasFrameworkTab(tab, mode) {
   return (FRAMEWORK_TABS[mode] || []).includes(tab);
@@ -336,9 +343,10 @@ if (rendererSwitch) {
   });
 }
 
-// 主进程菜单「✍️ 手写/算法题库」→ 切到校招 Tab 并滚动到题库区块
+// 主进程菜单「✍️ 手写/算法题库」→ 切到专项练习 Tab 并滚动到题库区块
+// （2026-09-16：题库区块已从「校招」Tab 独立成 tab-practice，菜单入口同步改）
 window.kanban?.onPanelGotoChallenges?.(() => {
-  switchTab("jobs");
+  switchTab("practice");
   setTimeout(() => {
     const el = document.getElementById("challenge-status");
     if (el) {

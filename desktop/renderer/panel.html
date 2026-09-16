@@ -65,6 +65,7 @@
     <button class="tab" data-tab="chat">💬 对话</button>
     <button class="tab" data-tab="crawl">🔍 爬取</button>
     <button class="tab" data-tab="jobs">🏢 校招</button>
+    <button class="tab" data-tab="practice">✍️ 专项练习</button>
     <button class="tab" data-tab="dashboard">📊 驾驶舱</button>
     <button class="tab" data-tab="kb">🧠 知识库</button>
   </nav>
@@ -552,8 +553,23 @@
       </div>
       <div id="zhenti-list" class="jobs-list"></div>
 
+      <!-- 📅 面试/笔试日程（邮箱邀约识别，并入校招） -->
+      <div class="jobs-setup" style="margin-top:12px;">
+        <div class="form-row">
+          <label>📅 面试邀约识别 + 日程提醒（邮箱配置在「⚙️ 设置」，识别后这里按紧迫度分组）</label>
+          <button id="mail-check-btn" class="secondary" title="立即拉取邮箱并识别邀约">📥 立即检查</button>
+        </div>
+        <div class="resume-status" id="mail-status">加载中…</div>
+      </div>
+      <div id="schedule-list" class="jobs-list"></div>
+    </section>
+
+    <!-- ========== 专项练习 Tab（三态并行：原生/React/Vue 都是 CodeMirror 6 判题编辑器）
+         2026-09-16：从「校招」Tab 里独立出来——题库+判题是高频练习动作，埋在校招里既难找、
+         也没法让三态框架版对齐登记（三态矩阵 8 → 9） -->
+    <section id="tab-practice" class="tab-panel">
       <!-- 专项练习区块：牛客面试 TOP101（免登录、无时间窗，随时可刷） -->
-      <div class="jobs-setup" style="margin-top:14px;">
+      <div class="jobs-setup">
         <div class="form-row">
           <label>💻 专项练习（牛客面试 TOP101：101 道高频算法题，免登录随时刷）</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -567,10 +583,10 @@
       </div>
       <div id="oj-list" class="jobs-list"></div>
 
-      <!-- 手写/算法题库区块（ai-career 导入：本地沙箱判题，闭环：通过→进度，答错→薄弱点） -->
+      <!-- 手写/算法题库区块（本地沙箱判题，闭环：通过→进度，答错→薄弱点） -->
       <div class="jobs-setup" style="margin-top:14px;">
         <div class="form-row">
-          <label>✍️ 手写/算法题库（91 道高频手写题 + 算法题，本地沙箱判题，做完自动记进度）</label>
+          <label>✍️ 手写/算法题库（448 道题库：411 算法 + 37 手写，其中 281 道可自动判题）</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button id="challenge-refresh-btn" class="secondary" title="重新从本地题库加载">🔄 刷新</button>
           </div>
@@ -583,16 +599,6 @@
         <div id="challenge-cats" style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0;"></div>
       </div>
       <div id="challenge-list" class="jobs-list"></div>
-
-      <!-- 📅 面试/笔试日程（邮箱邀约识别，并入校招） -->
-      <div class="jobs-setup" style="margin-top:12px;">
-        <div class="form-row">
-          <label>📅 面试邀约识别 + 日程提醒（邮箱配置在「⚙️ 设置」，识别后这里按紧迫度分组）</label>
-          <button id="mail-check-btn" class="secondary" title="立即拉取邮箱并识别邀约">📥 立即检查</button>
-        </div>
-        <div class="resume-status" id="mail-status">加载中…</div>
-      </div>
-      <div id="schedule-list" class="jobs-list"></div>
     </section>
 
     <!-- ========== 求职驾驶舱 Tab（本周总览 + 7 天活动 + 累计进度 + 周报建议） ========== -->

@@ -17,6 +17,9 @@ const SRC = ["app.js", "index.html", "style.css"].map((f) => path.join(RENDERER,
 // 实时语音：speech-queue.ts（实现）+ speech-queue.mjs（一行桶）→ speech-queue.bundle.js（window.SpeechQueue，panel.html 引用）
 const SQ_BUNDLE = path.join(RENDERER, "speech-queue.bundle.js");
 const SQ_SRC = [path.join(RENDERER, "speech-queue.ts"), path.join(RENDERER, "speech-queue.mjs")];
+// 判题编辑器：practice-editor.ts（CodeMirror 6 封装）→ practice-editor.bundle.js（window.PracticeEditor，panel.html 引用）
+const PE_BUNDLE = path.join(RENDERER, "practice-editor.bundle.js");
+const PE_SRC = [path.join(RENDERER, "practice-editor.ts")];
 const HASH_FILE = path.join(RENDERER, "bundle-hashes.json");
 
 // 与 gen-renderer-hashes.mjs 同口径：先归一化行尾（CRLF/LF 随 checkout 变化，否则会误报"源码已改"）
@@ -26,6 +29,7 @@ const stale = [];
 try {
   if (!existsSync(BUNDLE)) stale.push("app.bundle.js 不存在");
   if (!existsSync(SQ_BUNDLE)) stale.push("speech-queue.bundle.js 不存在");
+  if (!existsSync(PE_BUNDLE)) stale.push("practice-editor.bundle.js 不存在");
 
   let hashes = null;
   if (existsSync(HASH_FILE)) {
@@ -45,11 +49,22 @@ try {
         stale.push(`${name}（内容已改，speech-queue.bundle.js 需重建）`);
       }
     }
+    // practice-editor 是后加的组：老 checkout 里没有该记录 → 不报"源码已改"，只靠上面的存在性检查
+    for (const f of PE_SRC) {
+      const name = path.basename(f);
+      if (!existsSync(f) || !hashes?.practiceEditor?.sources) continue;
+      if (hashes.practiceEditor.sources[name] !== sha(f)) {
+        stale.push(`${name}（内容已改，practice-editor.bundle.js 需重建）`);
+      }
+    }
   } else if (existsSync(BUNDLE) && existsSync(SQ_BUNDLE)) {
     // 向后兼容：没有哈希记录时按 mtime 粗判
     const bm = statSync(BUNDLE).mtimeMs;
     for (const f of SRC) if (existsSync(f) && statSync(f).mtimeMs > bm) stale.push(path.basename(f));
     for (const f of SQ_SRC) if (existsSync(f) && statSync(f).mtimeMs > statSync(SQ_BUNDLE).mtimeMs) stale.push(path.basename(f));
+    if (existsSync(PE_BUNDLE)) {
+      for (const f of PE_SRC) if (existsSync(f) && statSync(f).mtimeMs > statSync(PE_BUNDLE).mtimeMs) stale.push(path.basename(f));
+    }
   }
 } catch (e) {
   console.error(`[check-renderer] 检查失败: ${e.message}`);
@@ -61,5 +76,5 @@ if (stale.length) {
   console.error("   修复：npm run build:renderer && npm run build:speech-queue（或重启桌宠，会自动重建）");
   process.exit(1);
 }
-console.log("✅ app.bundle.js / speech-queue.bundle.js 与渲染源码内容一致");
+console.log("✅ app.bundle.js / speech-queue.bundle.js / practice-editor.bundle.js 与渲染源码内容一致");
 process.exit(0);

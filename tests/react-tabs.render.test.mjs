@@ -38,9 +38,17 @@ const KB_STATS = { total: 12, byKind: [{ kind: "note", n: 7 }, { kind: "mianjing
   stats: { docs: 3, followups: 2 },
 };
 
+const CHALLENGES = {
+  ok: true, total: 2, done: 1,
+  list: [
+    { id: "c1", title: "手写防抖节流", category: "handwrite", difficulty: 2, frequency: 3, timeLimit: 10, done: false, wrongCount: 1 },
+    { id: "c2", title: "两数之和", category: "algorithm", difficulty: 1, frequency: 2, timeLimit: 10, done: true, wrongCount: 0 },
+  ],
+};
+
 function boot() {
   const dom = new JSDOM(
-    '<div id="dashboard-react"></div><div id="kb-react"></div><div id="study-react"></div><div id="crawl-react"></div><div id="jobs-react"></div><div id="chat-react"></div><div id="probe"></div>',
+    '<div id="dashboard-react"></div><div id="kb-react"></div><div id="study-react"></div><div id="crawl-react"></div><div id="jobs-react"></div><div id="chat-react"></div><div id="practice-react"></div><div id="probe"></div>',
     { url: "http://localhost/" }
   );
   globalThis.window = dom.window;
@@ -58,6 +66,7 @@ function boot() {
       : String(url).includes("/api/jobs") ? JOBS
         : String(url).endsWith("/api/knowledge/stats") ? KB_STATS
         : String(url).endsWith("/api/knowledge/paragraphs/search") ? KB_SEARCH
+        : String(url).includes("/api/challenges") ? CHALLENGES
           : { ok: false };
     return { ok: true, json: async () => body };
   };
@@ -336,5 +345,23 @@ test("React 版 S4：对话（会话载入 + 流式发送 + 工具事件时间�
   assert.ok(calls.some((c) => c[0] === "switchRenderer" && c[1] === "chat" && c[2] === "native"), "审批切回原生渲染层");
   await assertUiClean(el, "chat", 20);
   root.unmount();
+  dom.window.close();
+});
+
+test("React 版：专项练习（题库列表 + 筛选 + ⚛️ 特色标注）——CodeMirror 判题编辑仅在展开时实例化，jsdom 无布局测量故不做编辑器渲染断言",
+    { skip: !existsSync(BUNDLE) && "产物未构建（先 npm run build:react-panel）" }, async () => {
+  const { dom } = boot();
+  await import(new URL("../desktop/renderer/panel-react/dist/assets/react-panel.js", import.meta.url).href);
+  const el = document.getElementById("practice-react");
+  const root = globalThis.__mountReactPanel("practice", el);
+  // 专项练习渲染 + 走同一路由 /api/challenges（done/分类/难度徽标与原生同源）
+  assert.ok(await waitFor(() => text(el).includes("专项练习")), "专项练习按 tab 分发渲染");
+  assert.ok(await waitFor(() => text(el).includes("手写防抖节流")), "题库列表条目渲染（同一路由 /api/challenges）");
+  assert.ok(text(el).includes("已完成 1"), "统计（接口 done/total 派生）");
+  assert.ok(el.querySelector('input[aria-label="搜索题目"]'), "搜索框渲染（aria-label 可访问名）");
+  assert.ok(text(el).includes("React 特性"), "⚛️ React 特色标注");
+  root.unmount();
+  await waitFor(() => text(el) === "");
+  assert.equal(text(el), "", "unmount 后容器清空（对称卸载）");
   dom.window.close();
 });

@@ -31,6 +31,7 @@ jobs:
           npm run lint
           npm run typecheck
           npm run build:renderer
+          npm run build:practice-editor
           npm run check:renderer
 
       - name: Build installer (NSIS + portable)

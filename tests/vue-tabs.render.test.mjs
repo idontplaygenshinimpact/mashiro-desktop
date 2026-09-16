@@ -328,6 +328,35 @@ test("Vue 版面试 Tab：状态机（invStart/invAnswer/invEnd）+ 评分与复
   dom.window.close();
 });
 
+test("Vue 版专项练习 Tab：题库列表（同一路由 /api/challenges）+ 筛选 + 🟢 标注", { skip: SKIP }, async () => {
+  // CodeMirror 6 在 jsdom 下无排版引擎（getBoundingClientRect 全 0），EditorView 实测会抛
+  // "Measurement reports a height of 0" —— 因此这里只断言：①按 tab 分发到 Practice.vue 并渲染列表 ②
+  // 数据走/api/challenges ③🟢 标注 ④挂载/卸载不抛错。编辑器实例的正确性由源码级护栏
+  // (tests/vue-practice-tab.test.mjs) + 真实沙箱判题（面板手动）兜底。
+  const CHALL = {
+    ok: true, total: 2, done: 1, left: 1,
+    list: [
+      { id: "c1", title: "手写防抖", category: "handwrite", difficulty: 1, frequency: 3, done: true, wrongCount: 0, description: "实现 debounce", timeLimit: 10 },
+      { id: "c2", title: "两数之和", category: "algorithm", difficulty: 2, frequency: 5, done: false, wrongCount: 2, description: "返回下标", timeLimit: 10 },
+    ],
+  };
+  const { dom, calls } = boot(["practice-vue"], {}, { "http://127.0.0.1:8899/api/challenges": CHALL, "http://127.0.0.1:8899/api/challenges?": CHALL });
+  const { el, app } = await mount("practice", "practice-vue");
+  assert.ok(await waitFor(() => text(el).includes("专项练习")), "专项练习渲染（按 tab 分发到 Practice.vue）");
+  assert.ok(await waitFor(() => calls.some((c) => String(c.url).endsWith("/api/challenges"))), "走同一数据源 /api/challenges");
+  assert.ok(await waitFor(() => text(el).includes("手写防抖")), "列表题目渲染（同一路由 /api/challenges）");
+  assert.ok(text(el).includes("两数之和"), "第二题渲染");
+  assert.ok(text(el).includes("✅ 已做"), "done 徽标渲染");
+  assert.ok(text(el).includes("答错 2 次"), "wrongCount 徽标渲染");
+  assert.ok(text(el).includes("🟢 Vue 特性"), "🟢 Vue 特色标注");
+  assert.ok(!/8899/.test(text(el)), "页面文本不泄漏硬编码端口（经 api() 解析）");
+  await assertUiClean(el, "practice", 8);
+  app.unmount();
+  await waitFor(() => text(el) === "");
+  assert.equal(text(el), "", "unmount 后容器清空（对称卸载）");
+  dom.window.close();
+});
+
 test("Vue 版未登记 Tab：抛错而非静默挂复习卡（与 React 侧同形守卫）", { skip: SKIP }, async () => {
   const { dom } = boot(["probe-vue"]);
   await import(new URL("../desktop/renderer/panel-vue-review/dist/assets/vue-review.js", import.meta.url).href);

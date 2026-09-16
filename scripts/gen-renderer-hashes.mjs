@@ -20,6 +20,8 @@ const GROUPS = {
   // 全量 TS 升级工单阶段 4：实现迁到 speech-queue.ts（.mjs 变一行桶）→ 哈希盯**实现文件**，
   // 否则内容哈希只会记录一成不变的桶，护栏静默失明
   "speech-queue": ["speech-queue.ts", "speech-queue.mjs"],
+  // 判题编辑器（CodeMirror 6 封装）：唯一消费者是 esbuild 打包器 → 无 .mjs 桶，只盯 .ts 实现
+  "practice-editor": ["practice-editor.ts"],
 };
 
 const group = String(process.argv[2] || "").trim();
@@ -32,10 +34,10 @@ if (!files) {
 // 行尾归一化后再哈希：仓库在 Windows 上 CRLF/LF 会随 checkout 变化，若直接哈希原始字节，
 // 一次 checkout 就能造成"源码已改"的误报（同一个坑的另一种形态，2026-09-11 实测踩到）。
 const sha = (p) => createHash("sha256").update(readFileSync(p, "utf8").replace(/\r\n/g, "\n"), "utf8").digest("hex").slice(0, 16);
-const key = group === "app" ? "app" : "speechQueue";
+const key = group === "app" ? "app" : group === "speech-queue" ? "speechQueue" : "practiceEditor";
 
 /** @type {Record<string, any>} */
-let data = { note: "自动生成，请勿手改——由 npm run build:renderer / build:speech-queue 更新" };
+let data = { note: "自动生成，请勿手改——由 npm run build:renderer / build:speech-queue / build:practice-editor 更新" };
 if (existsSync(HASH_FILE)) {
   try { data = { ...data, ...JSON.parse(readFileSync(HASH_FILE, "utf8")) }; } catch { /* 损坏则重建 */ }
 }

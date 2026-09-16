@@ -18,6 +18,8 @@ const panelGlobals = {
   drawIvRadar: "readonly",
   esc: "readonly",
   loadCareerProfile: "readonly",
+  loadOj: "readonly", // 牛客 TOP101 题库（panel-rest.js 定义，panel-core.js 切「专项练习」Tab 时调用）
+  loadPracticeEditor: "readonly", // 判题编辑器产物（CodeMirror 6）懒加载（panel-rest.js 定义，panel-core.js 切 Tab 时预取）
   loadTodayBar: "readonly", // 今日任务聚合条（panel-jobs.js 定义，panel-rest.js 轮询调用）
   loadChallenges: "readonly",
   loadCrawlData: "readonly",
@@ -66,7 +68,7 @@ const baseRules = {
 };
 
 export default [
-  { ignores: ["node_modules/**", "output/**", "data/**", "benchmark/reports/**", "desktop/renderer/app.bundle.js", "desktop/renderer/react-panel.bundle.js", "desktop/renderer/speech-queue.bundle.js", "desktop/renderer/vue-review/review-app.bundle.js", "desktop/renderer/panel-react/dist/**", "desktop/renderer/panel-vue-review/dist/**", "desktop/renderer/assets/**", "desktop/renderer/lib/**", "*.bak", "*.log"] },
+  { ignores: ["node_modules/**", "output/**", "data/**", "benchmark/reports/**", "desktop/renderer/**/*.bundle.js", "desktop/renderer/panel-react/dist/**", "desktop/renderer/panel-vue-review/dist/**", "desktop/renderer/assets/**", "desktop/renderer/lib/**", "*.bak", "*.log"] },
   // 全量 TS 升级工单护栏：.ts 必须和 .mjs 一样受 lint 约束
   // （此前 eslint 配置只匹配 **/*.mjs|js → 迁移到 .ts 的文件被静默跳过，随着迁移推进会掏空 lint 覆盖）
   {

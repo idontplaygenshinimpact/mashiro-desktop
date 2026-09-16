@@ -26,6 +26,12 @@ jobs:
         run: |
           npm ci --prefix desktop/renderer/panel-react
           npm run build:react-panel
+      - name: Build Vue panel bundle（Vue 版面板；dist 产物入库，渲染测试依赖它）
+        run: |
+          npm ci --prefix desktop/renderer/panel-vue-review
+          npm run build:vue-review
+      - name: Build 判题编辑器 bundle（CodeMirror 6；原生面板按需注入）
+        run: npm run build:practice-editor
       - name: Unit + integration tests
         run: npm test
       - name: Eval dataset validation (schema/source/datasetHash, 零 LLM)

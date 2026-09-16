@@ -675,6 +675,80 @@ $("challenge-search")?.addEventListener("input", (e) => {
   renderChallenges();
 });
 
+// 判题编辑器加载：CodeMirror 6 产物按需注入（494KB，不进首屏——与 M9"按需加载框架 bundle"同策略）
+// 产物缺失/加载失败 → 调用方退回 textarea 实现（编辑器坏掉不能连带面板不可用）
+let practiceEditorPromise = null;
+function loadPracticeEditor() {
+  if (practiceEditorPromise) return practiceEditorPromise;
+  practiceEditorPromise = new Promise((resolve) => {
+    if (window.PracticeEditor?.create) { resolve(window.PracticeEditor); return; }
+    const s = document.createElement("script");
+    s.src = "practice-editor.bundle.js";
+    s.onload = () => resolve(window.PracticeEditor || null);
+    s.onerror = () => resolve(null);
+    // 兜底：不让点击"做题"卡在加载中（正常 file:// 本地产物 ~50ms；这里给 1.5s 上限即退回 textarea）
+    setTimeout(() => resolve(window.PracticeEditor || null), 1500);
+    document.head.appendChild(s);
+  });
+  return practiceEditorPromise;
+}
+
+// 原 textarea 高亮实现的回退路径（CodeMirror 不可用时使用；与旧行为完全一致）
+function mountFallbackEditor(host, initial) {
+  const escHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // 轻量 JS 语法高亮：单次交替正则（字符串/注释→关键字→数字→函数名），
+  // replace 不回扫自己的输出，不会出现"高亮 HTML 被二次着色"（如 font-weight:600 的 600）
+  const HL_RE = /("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/)|\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|super|this|async|await|try|catch|finally|throw|typeof|instanceof|in|of|delete|void|yield|static|get|set|import|export|default|from|true|false|null|undefined|NaN|Infinity)\b|\b(\d+(?:\.\d+)?)\b|\b([A-Za-z_$][\w$]*)(?=\s*\()/g;
+  const hlJS = (code) => escHtml(String(code)).replace(HL_RE, (m, str, kw, num, fn) => {
+    if (str !== undefined) {
+      const cmt = /^\/\//.test(str) || /^\/\*/.test(str);
+      return `<span style="color:${cmt ? "#6a6790;font-style:italic" : "#9a5b00"};">${str}</span>`;
+    }
+    if (kw !== undefined) return `<span style="color:#8a5adc;font-weight:600;">${kw}</span>`;
+    if (num !== undefined) return `<span style="color:#9a5b00;">${num}</span>`;
+    return `<span style="color:#2f7d4e;">${fn}</span>`;
+  });
+  host.innerHTML = `
+    <div class="ch-code" style="position:relative;border:1px solid rgba(109,79,216,.3);border-radius:6px;background:#faf9ff;">
+      <div class="ch-lines" style="position:absolute;left:0;top:0;bottom:0;width:34px;overflow:hidden;background:#f0edff;color:#6a6790;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;padding:7px 0;text-align:right;user-select:none;pointer-events:none;border-right:1px solid rgba(109,79,216,.15);z-index:3;"></div>
+      <textarea class="ch-ta" spellcheck="false" style="position:relative;z-index:2;display:block;width:100%;min-height:160px;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;padding:7px 8px 7px 42px;border:none;background:transparent;color:transparent;caret-color:#5d48b8;resize:vertical;box-sizing:border-box;white-space:pre;overflow:auto;outline:none;tab-size:2;">${escHtml(initial || "")}</textarea>
+      <pre class="ch-hl" aria-hidden="true" style="position:absolute;inset:0;margin:0;padding:7px 8px 7px 42px;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;white-space:pre;overflow:hidden;pointer-events:none;color:#333;z-index:1;"></pre>
+    </div>`;
+  const ta = host.querySelector(".ch-ta");
+  const hlEl = host.querySelector(".ch-hl");
+  const lineEl = host.querySelector(".ch-lines");
+  const syncEditor = () => {
+    lineEl.textContent = Array.from({ length: ta.value.split("\n").length }, (_, i) => i + 1).join("\n");
+    hlEl.innerHTML = hlJS(ta.value) + "\n";
+    hlEl.scrollTop = ta.scrollTop;
+    hlEl.scrollLeft = ta.scrollLeft;
+    lineEl.scrollTop = ta.scrollTop;
+  };
+  ta.addEventListener("input", syncEditor);
+  ta.addEventListener("scroll", () => {
+    hlEl.scrollTop = ta.scrollTop;
+    hlEl.scrollLeft = ta.scrollLeft;
+    lineEl.scrollTop = ta.scrollTop;
+  });
+  // Tab → 两个空格（默认会跳焦点）
+  ta.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    e.preventDefault();
+    const s = ta.selectionStart, en = ta.selectionEnd;
+    ta.value = ta.value.slice(0, s) + "  " + ta.value.slice(en);
+    ta.selectionStart = ta.selectionEnd = s + 2;
+    syncEditor();
+  });
+  syncEditor();
+  return {
+    kind: "textarea",
+    ta,
+    getValue: () => ta.value,
+    setValue: (v) => { ta.value = String(v ?? ""); syncEditor(); },
+    focus: () => ta.focus(),
+  };
+}
+
 // ✍️ 做题：内联展开编辑器（骨架预填，本地判题）
 function bindChPractice() {
   document.querySelectorAll(".ch-practice").forEach((btn) => {
@@ -700,11 +774,7 @@ function bindChPractice() {
               <button class="job-btn ch-editor-close" style="padding:3px 8px;">✖</button>
             </div>
             <div style="color:#444;white-space:pre-wrap;margin-bottom:8px;max-height:140px;overflow:auto;">${esc(c.description)}</div>
-            <div class="ch-code" style="position:relative;border:1px solid rgba(109,79,216,.3);border-radius:6px;background:#faf9ff;">
-              <div class="ch-lines" style="position:absolute;left:0;top:0;bottom:0;width:34px;overflow:hidden;background:#f0edff;color:#6a6790;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;padding:7px 0;text-align:right;user-select:none;pointer-events:none;border-right:1px solid rgba(109,79,216,.15);z-index:3;"></div>
-              <textarea class="ch-ta" spellcheck="false" style="position:relative;z-index:2;display:block;width:100%;min-height:160px;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;padding:7px 8px 7px 42px;border:none;background:transparent;color:transparent;caret-color:#5d48b8;resize:vertical;box-sizing:border-box;white-space:pre;overflow:auto;outline:none;tab-size:2;">${esc(c.skeleton)}</textarea>
-              <pre class="ch-hl" aria-hidden="true" style="position:absolute;inset:0;margin:0;padding:7px 8px 7px 42px;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:19px;white-space:pre;overflow:hidden;pointer-events:none;color:#333;z-index:1;"></pre>
-            </div>
+            <div class="ch-code-host"></div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
               <button class="job-btn ch-editor-run" style="background:linear-gradient(135deg,#8a5adc,#6d4fd8);color:#fff;">▶ 运行判题</button>
               <button class="job-btn ch-editor-mark" data-id="${esc(c.id)}" style="display:none;background:linear-gradient(135deg,#2f7a4a,#2f7d4e);color:#fff;">✅ 全部通过，标记完成</button>
@@ -713,51 +783,29 @@ function bindChPractice() {
             <pre class="ch-editor-result" style="display:none;margin-top:8px;padding:8px;background:#1e1e2e;color:#cdd6f4;border-radius:6px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;"></pre>`;
           item.appendChild(div);
           btn.textContent = "✍️ 做题";
-          const ta = div.querySelector(".ch-ta");
-          const hlEl = div.querySelector(".ch-hl");
-          const lineEl = div.querySelector(".ch-lines");
-          const escHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-          // 轻量 JS 语法高亮：单次交替正则（字符串/注释→关键字→数字→函数名），
-          // replace 不回扫自己的输出，不会出现"高亮 HTML 被二次着色"（如 font-weight:600 的 600）
-          const HL_RE = /("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/)|\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|super|this|async|await|try|catch|finally|throw|typeof|instanceof|in|of|delete|void|yield|static|get|set|import|export|default|from|true|false|null|undefined|NaN|Infinity)\b|\b(\d+(?:\.\d+)?)\b|\b([A-Za-z_$][\w$]*)(?=\s*\()/g;
-          const hlJS = (code) => escHtml(String(code)).replace(HL_RE, (m, str, kw, num, fn) => {
-            if (str !== undefined) {
-              const cmt = /^\/\//.test(str) || /^\/\*/.test(str);
-              return `<span style="color:${cmt ? "#6a6790;font-style:italic" : "#9a5b00"};">${str}</span>`;
-            }
-            if (kw !== undefined) return `<span style="color:#8a5adc;font-weight:600;">${kw}</span>`;
-            if (num !== undefined) return `<span style="color:#9a5b00;">${num}</span>`;
-            return `<span style="color:#2f7d4e;">${fn}</span>`;
-          });
-          const syncEditor = () => {
-            lineEl.textContent = Array.from({ length: ta.value.split("\n").length }, (_, i) => i + 1).join("\n");
-            hlEl.innerHTML = hlJS(ta.value) + "\n";
-            hlEl.scrollTop = ta.scrollTop;
-            hlEl.scrollLeft = ta.scrollLeft;
-            lineEl.scrollTop = ta.scrollTop;
-          };
-          ta.addEventListener("input", syncEditor);
-          ta.addEventListener("scroll", () => {
-            hlEl.scrollTop = ta.scrollTop;
-            hlEl.scrollLeft = ta.scrollLeft;
-            lineEl.scrollTop = ta.scrollTop;
-          });
-          // Tab → 两个空格（默认会跳焦点）
-          ta.addEventListener("keydown", (e) => {
-            if (e.key !== "Tab") return;
-            e.preventDefault();
-            const s = ta.selectionStart, en = ta.selectionEnd;
-            ta.value = ta.value.slice(0, s) + "  " + ta.value.slice(en);
-            ta.selectionStart = ta.selectionEnd = s + 2;
-            syncEditor();
-          });
-          syncEditor();
+          // 编辑器：优先 CodeMirror 6（按需注入产物）→ 失败退回 textarea 实现
+          const host = div.querySelector(".ch-code-host");
+          const runRef = { fn: null }; // run() 在编辑器之后定义：keymap 通过 ref 调用，避免 TDZ
+          let ed = null;
+          const cm = await loadPracticeEditor();
+          if (cm?.create) {
+            try {
+              const h = cm.create(host, { initial: c.skeleton, onRun: () => runRef.fn && runRef.fn() });
+              ed = { kind: "codemirror", getValue: h.getValue, setValue: h.setValue, focus: h.focus, destroy: h.destroy };
+            } catch (e) { console.warn("[panel] CodeMirror 初始化失败，退回 textarea：", e); }
+          }
+          if (!ed) {
+            const fb = mountFallbackEditor(host, c.skeleton);
+            fb.ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runRef.fn && runRef.fn(); } });
+            ed = fb;
+          }
           const stateEl = div.querySelector(".ch-editor-state");
           const resultEl = div.querySelector(".ch-editor-result");
           const runBtn = div.querySelector(".ch-editor-run");
           const markBtn = div.querySelector(".ch-editor-mark");
           const run = async () => {
-            if (!ta.value.trim()) { stateEl.textContent = "⚠️ 先写代码"; return; }
+            const code = ed.getValue();
+            if (!code.trim()) { stateEl.textContent = "⚠️ 先写代码"; return; }
             runBtn.disabled = true;
             runBtn.textContent = "⏳ 判题中…";
             resultEl.style.display = "none";
@@ -765,7 +813,7 @@ function bindChPractice() {
             try {
               const r = await fetch(API_BASE + "/api/challenges/run", {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id: btn.dataset.id, userCode: ta.value }),
+                body: JSON.stringify({ id: btn.dataset.id, userCode: code }),
               });
               const j = await r.json();
               const pass = j.ok && j.success;
@@ -802,9 +850,9 @@ function bindChPractice() {
               runBtn.textContent = "▶ 运行判题";
             }
           };
+          runRef.fn = run; // Ctrl/Cmd+Enter：CodeMirror keymap 与回退 textarea 都走这里
           runBtn.addEventListener("click", run);
-          ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); } });
-          div.querySelector(".ch-editor-close").addEventListener("click", () => { div.remove(); btn.textContent = "✍️ 做题"; });
+          div.querySelector(".ch-editor-close").addEventListener("click", () => { if (ed.destroy) ed.destroy(); div.remove(); btn.textContent = "✍️ 做题"; });
           markBtn.addEventListener("click", async () => {
             try {
               const r = await fetch(API_BASE + "/api/challenges/mark-done", {
