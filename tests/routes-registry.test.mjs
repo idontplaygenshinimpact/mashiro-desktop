@@ -82,6 +82,12 @@ test("全部域路由注册齐全（原版 55 条内联路径一个不少；业�
     "/api/backups/restore",
     "/api/study/note", // 复习"显示答案"空答案回退（纯读讲解存档）
     "/api/interview/status", // 进行中会话查询（"继续上一场面试"入口；C8 恢复闭环）
+    "/api/stop-discover", // 爬取停止入口（闭环清查第五批②：此前没有取消路径）
+    "/api/schedule/delete", // 日程删除终态（闭环清查第五批③）
+    "/api/scheduled-jobs", // 持久化定时任务列表/启停/立即运行（闭环清查第五批③：此前整层调度不可达）
+    "/api/scheduled-jobs/toggle",
+    "/api/scheduled-jobs/run",
+    "/api/interview/history/delete", // 面试历史删除终态（闭环清查第五批③）
   ];
   const missingNew = NEW_PATHS.filter((p) => !router.resolve(p, "GET") && !router.resolve(p, "POST"));
   assert.deepEqual(missingNew, [], `新增路由缺失：\n${missingNew.join("\n")}`);

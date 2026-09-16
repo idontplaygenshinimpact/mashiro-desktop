@@ -503,6 +503,29 @@ export function markNotified(id: unknown): void {
   } catch { /* ignore */ }
 }
 
+/** 删除日程结果 */
+export interface DeleteEventResult { ok: boolean; removed?: number; error?: string }
+
+/**
+ * 删除一条日程（终态入口）
+ * 闭环清查修复：此前 schedule_events 只有写入与读取，**没有任何删除/已处理入口**——
+ * 解析错的邀约（公司/时间识别错）或已取消的面试会一直留在日程里：
+ * 未来时间的事件每次提醒都会再弹一遍（getUpcomingEvents → 通知），"时间待定"（interview_at 为空）
+ * 的事件更是永远显示（getSchedule 用 `interview_at >= now OR NULL` 过滤，它永远命中 NULL 分支）。
+ * 用户没有任何办法把它去掉。这里给出真实终态：按 id 删除，删不到就如实报错（不恒 ok）。
+ */
+export function deleteEvent(id: unknown): DeleteEventResult {
+  const idNum = Number(id);
+  if (!Number.isFinite(idNum) || idNum <= 0) return { ok: false, error: "id 非法" };
+  try {
+    const r = db.prepare("DELETE FROM schedule_events WHERE id = ?").run(idNum);
+    const removed = Number(r.changes) || 0;
+    return removed > 0 ? { ok: true, removed } : { ok: false, removed: 0, error: `日程不存在: ${idNum}` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // ---------- 完整流水线：配置 → 拉取 → 识别 → 入库 → 返回摘要 ----------
 // clientFactory / llm 可注入（测试）
 export async function runMailCheck({ clientFactory = defaultClientFactory, llm = null }: { clientFactory?: ClientFactory; llm?: MailLlm | null } = {}): Promise<RunMailCheckResult> {

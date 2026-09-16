@@ -44,6 +44,11 @@ const getCorsOrigin = (req) => req.headers.origin || "*";
 // runtime 全部用取数函数注入：patrolState/crawlMutex/DISABLE_PATROL/PATROL_MIN/MAX 声明在
 // 此之后（TDZ），但取数函数在请求时才求值（注册时不触碰），可安全前置；
 // actualPort 端口回退后会变（闭包快照会取旧值），同样由取数函数在请求时取值
+// 持久化调度器（scheduled_jobs）的持有引用：真实 scheduler 在文件后段（786 行）才创建，
+// 而 registerCoreRoutes 在此处就注册了 /api/scheduled-jobs* —— 用 `let` 提前声明 + 创建后赋值，
+// 请求时读取（null 时给安全空实现），彻底避开 TDZ（与 runtime 其他取数函数同一套路）
+let schedulerRef = null;
+
 registerCoreRoutes(router, {
   laneSubmit,
   runtime: {
@@ -65,6 +70,10 @@ registerCoreRoutes(router, {
     patrolState: () => patrol.state,
     patrolDisabled: () => DISABLE_PATROL,
     patrolRun: () => patrol.run(),
+    // 持久化定时任务：列表/启停/立即运行（此前只有 tick，没有任何入口 → 种子任务恒禁用且不可达）
+    scheduledJobsList: () => (schedulerRef ? schedulerRef.listJobs() : []),
+    scheduledJobsToggle: (id, enabled) => (schedulerRef ? schedulerRef.enableJob(String(id), enabled) : null),
+    scheduledJobsRun: async (id) => (schedulerRef ? schedulerRef.runJob(String(id)) : { id: String(id), ok: false, error: "调度器未就绪" }),
     patrolMinMinutes: () => patrol.minMinutes,
     patrolMaxMinutes: () => patrol.maxMinutes,
     pluginList: () => listPlugins(),
@@ -216,10 +225,12 @@ async function runDiscoverHidden() {
 }
 
 // 停止爬取（闭环清查修复：此前**没有任何停止入口**——爬取卡住/跑错站点时用户只能等它自己结束，
-// 或杀掉整个桌宠；而 discover 是 detached 启动的，Playwright 的 chromium 孙进程不会随父进程退出，
-// 残留孤儿会占住浏览器 profile，导致下次爬取直接失败）。
+// 或杀掉整个桌宠）。
 // 关键点：
-//   1. Windows 必须杀进程树（taskkill /T）——只 kill 直系子进程会留下 chromium 孤儿
+//   1. Windows 杀**进程树**（taskkill /T）：discover 里 Playwright 还会拉起 chromium 子进程，
+//      只对直系子进程 kill 不保证连带回收（本机实测：孙进程 detached 启动时，kill 直系后孙进程
+//      仍 alive=true 成为孤儿；同一场景 taskkill /PID <pid> /T /F 后父与孙全部消失）。
+//      孤儿 chromium 会占住浏览器 profile，导致下次爬取直接失败。
 //   2. 终态由**停止方**写 progress.json：taskkill /F 是强制终止，子进程的 exit/SIGINT handler 不会执行，
 //      否则 progress.json 永远停在 status:"running"（面板一直显示"爬取中"）
 async function stopCrawl(reason = "已被用户停止") {
@@ -243,17 +254,25 @@ async function stopCrawl(reason = "已被用户停止") {
       });
       killed = true;
     } else {
-      killed = child.kill("SIGTERM");
+      // POSIX：discover 以 detached 启动 = 自己带一个进程组（pgid = pid）→ 杀负 pid 才是杀整组；
+      // 只 child.kill() 会留下 Playwright 拉起的 chromium 孙进程（与 Windows 侧同理）
+      try { process.kill(-pid, "SIGTERM"); killed = true; }
+      catch { killed = child.kill("SIGTERM"); } // 组不存在（未成组/已退出）→ 退回单进程 kill
     }
   } catch (e) {
     console.log(`[widget] 停止爬取失败: ${String(e.message).slice(0, 80)}`);
   }
-  // 等子进程真正退出（最多 3s）：退出后再落终态，避免子进程在窗口内又写回 running
+  // 等子进程真正退出（最多 3s）：退出后再落终态，避免子进程在窗口内又写回 running。
+  // 注意 taskkill 通常返回时进程已死（exit 事件可能在上面 await 期间就已触发并释放了锁）——
+  // 所以先看锁、再用 100ms 轮询兜底，别让用户白等满 3 秒。
   const exited = await new Promise((resolve) => {
+    if (!crawlMutex.isRunning()) { resolve(true); return; }
     let done = false;
-    const finish = (v) => { if (!done) { done = true; resolve(v); } };
-    try { child.once("exit", () => finish(true)); } catch { finish(false); }
-    setTimeout(() => finish(!crawlMutex.isRunning()), 3000);
+    let iv = null;
+    const finish = (v) => { if (!done) { done = true; if (iv) clearInterval(iv); resolve(v); } };
+    try { child.once("exit", () => finish(true)); } catch { /* ignore */ }
+    iv = setInterval(() => { if (!crawlMutex.isRunning()) finish(true); }, 100);
+    setTimeout(() => finish(false), 3000);
   });
   if (!exited) {
     // kill 无效（进程僵死/句柄异常）→ 强制释放锁，否则再也跑不了爬取
@@ -822,6 +841,9 @@ const scheduler = createScheduler({
 });
 
 // 种子默认任务（表空才种，防重启重复）：默认禁用（enabled:false），config.seeded 标记来源
+// 注：默认禁用是为了不抢既有硬编码定时器，但**必须有启用入口**——面板「⚙️ 设置 → 定时任务」
+// 通过 /api/scheduled-jobs* 列出/启用/立即运行（闭环清查修复：此前种子任务完全不可达）
+schedulerRef = scheduler; // 供核心路由的取数函数使用（见文件头部声明处说明）
 function seedDefaultJobs() {
   try {
     const row = db.prepare("SELECT COUNT(*) AS n FROM scheduled_jobs").get();

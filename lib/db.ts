@@ -186,7 +186,7 @@ export function ensureSchema(): void {
     deadline TEXT,                     -- 截止日期（YYYY-MM-DD 或空）
     bishi_date TEXT,                   -- 笔试时间（可空）
     source TEXT,                       -- 来源（牛客/官网/内推）
-    status TEXT NOT NULL DEFAULT 'new',  -- new/ready/apply/ready_bishi/done
+    status TEXT NOT NULL DEFAULT 'new',  -- new/ready/ready_bishi/done/archived（archived=已归档，软删除：不进推荐与知识库）
     favorite INTEGER NOT NULL DEFAULT 0, -- 收藏标记（0/1）
     summary TEXT,                      -- 岗位描述摘要
     jd_text TEXT DEFAULT '',           -- JD 详情页正文（懒抓缓存，≤4000 字符）

@@ -150,9 +150,9 @@ async function collectDbAssets(): Promise<RagItem[]> {
       items.push({ source: "weak", kind: "note", title: `薄弱·${r.topic}`, content: `${r.topic}（错 ${r.fail_count || 0} 次${r.source ? "，来源：" + r.source : ""}）`, confidence: 0.3, evidence: "复盘弱项" });
     }
   } catch { /* ignore */ }
-  // 岗位
+  // 岗位（归档=用户明确不感兴趣 → 不进知识库；否则会一直作为"相关岗位"被检索出来）
   try {
-    for (const r of db.prepare("SELECT company, title, summary, deadline FROM job_posts WHERE status != 'done'").all()) {
+    for (const r of db.prepare("SELECT company, title, summary, deadline FROM job_posts WHERE status NOT IN ('done', 'archived')").all()) {
       items.push({ source: "job", kind: "job", title: `岗位·${r.company} ${r.title}`, content: `${r.company} ${r.title}\n${r.summary || ""}\n${r.deadline ? "截止：" + r.deadline : ""}` });
     }
   } catch { /* ignore */ }

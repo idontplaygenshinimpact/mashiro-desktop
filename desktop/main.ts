@@ -551,6 +551,10 @@ safeHandle("widget:observability", () => widgetGet("/api/observability"));
 // cfg 是渲染层传来的任意配置袋（键随面板而变）→ 用 Record 容纳动态键，避免退化成 any
 safeHandle("widget:patrol-config", (_e, cfg: Record<string, unknown>) => (cfg && Object.keys(cfg).length ? widgetPost("/api/patrol-config", cfg) : widgetGet("/api/patrol-config")));
 safeHandle("widget:patrol-run", () => widgetPost("/api/patrol-run", {}));
+// 持久化定时任务（scheduled_jobs）：设置区管理入口（列表/启停/立即运行）
+safeHandle("widget:scheduled-jobs", () => widgetGet("/api/scheduled-jobs"));
+safeHandle("widget:scheduled-jobs-toggle", (_e, { id, enabled }: { id?: unknown; enabled?: unknown }) => widgetPost("/api/scheduled-jobs/toggle", { id, enabled }));
+safeHandle("widget:scheduled-jobs-run", (_e, { id }: { id?: unknown }) => widgetPost("/api/scheduled-jobs/run", { id }));
 // 本地知识库（RAG）开关：无参数 GET 读取，有参数 POST 修改
 safeHandle("widget:settings-rag", (_e, cfg: Record<string, unknown>) => (cfg && Object.keys(cfg).length ? widgetPost("/api/settings/rag", cfg) : widgetGet("/api/settings/rag")));
 safeHandle("widget:interview-notes", (_e, { topics }: { topics?: unknown }) => widgetPost("/api/interview-notes", { topics }));

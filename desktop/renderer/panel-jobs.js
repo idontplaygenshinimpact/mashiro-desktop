@@ -1,7 +1,7 @@
 // 真白面板 · 求职/设置域（纵向拆分）
 /* exported loadLoop, loadLoopBar, loadTodayBar, loadDocsProject, startJobsSchedTimer, stopJobsSchedTimer, loadSettings */
 // ============ 校招（简历驱动匹配 + 投递管理） ============
-const STATUS_LABEL = { new: "🆕 未处理", ready: "📮 已投递", ready_bishi: "✍️ 待笔试", done: "✅ 已拿offer/结束" };
+const STATUS_LABEL = { new: "🆕 未处理", ready: "📮 已投递", ready_bishi: "✍️ 待笔试", done: "✅ 已拿offer/结束", archived: "🗄 已归档" };
 const DIRECTION_LABEL = { frontend: "前端", agent: "AI Agent", fullstack: "全栈", backend: "后端", other: "其他" };
 
 let jobsFilter = { status: "", fav: false }; // 校招筛选：status 走后端过滤，fav 客户端过滤
@@ -306,11 +306,15 @@ async function loadJobs() {
           <button class="job-btn job-fav" data-id="${job.id}" data-fav="${job.favorite ? 1 : 0}" title="收藏/取消收藏">${job.favorite ? "⭐" : "☆"}</button>
           ${job.applyUrl ? `<a class="job-link" href="${esc(safeUrl(job.applyUrl))}" target="_blank" rel="noopener">🔗 去投递</a>` : ""}
           ${job.jdText ? `<button class="job-btn jd-toggle" data-id="${job.id}">📋 JD</button>` : ""}
+          ${job.status === "archived" ? "" : `
           <button class="job-btn loop-study" data-id="${job.id}" title="从岗位 JD 反推考点，加入学习清单（投递前知道要补什么）">📚 学考点</button>
-          <button class="job-btn loop-iv" data-id="${job.id}" title="按该岗位 JD 开一场模拟面试（面试官按岗位考点出题）">🎤 按岗面试</button>
+          <button class="job-btn loop-iv" data-id="${job.id}" title="按该岗位 JD 开一场模拟面试（面试官按岗位考点出题）">🎤 按岗面试</button>`}
           <button class="job-btn" data-id="${job.id}" data-status="ready">📮 已投递</button>
           <button class="job-btn" data-id="${job.id}" data-status="ready_bishi">✍️ 待笔试</button>
           <button class="job-btn" data-id="${job.id}" data-status="done">✅ 完成</button>
+          ${job.status === "archived"
+            ? `<button class="job-btn" data-id="${job.id}" data-status="new" title="恢复为未处理">↩️ 恢复</button>`
+            : `<button class="job-btn" data-id="${job.id}" data-status="archived" title="归档：不感兴趣/已无岗位，不再出现在未处理与推荐里（不会真删行，避免下次搜集又加回来）">🗄 归档</button>`}
         </div>
       </div>`).join("");
     // 📚 学考点：岗位 JD 反推学习清单（闭环：岗位 → 学习）
@@ -395,11 +399,25 @@ async function loadJobs() {
     document.querySelectorAll(".job-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         if (!btn.dataset.status) return; // 收藏/其它无 data-status 的按钮不触发状态更新
-        await fetch(API_BASE + "/api/jobs/status", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: btn.dataset.id, status: btn.dataset.status }),
-        });
-        loadJobs();
+        const status = btn.dataset.status;
+        // 归档是"消失"操作：二次确认，避免手滑把岗位藏起来
+        if (status === "archived" && !window.confirm("归档这个岗位？归档后不再出现在「未处理」与推荐里（可在筛选里选「已归档」恢复）。")) return;
+        btn.disabled = true;
+        try {
+          const res = await fetch(API_BASE + "/api/jobs/status", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: btn.dataset.id, status }),
+          });
+          const j = await res.json();
+          // 闭环清查修复：此前不看结果也不提示——后端拒绝（非法状态/岗位不存在）时界面照样刷新，
+          // 用户以为改成功了。现在失败如实提示。
+          if (j?.ok === false) window.kanban.notify("🏢 校招岗位", String(j.error || "状态更新失败").slice(0, 60));
+          else if (status === "archived") window.kanban.notify("🏢 校招岗位", "已归档（可在筛选里看「🗄 已归档」）");
+          await loadJobs();
+        } catch (e) {
+          window.kanban.notify("🏢 校招岗位", String(e.message || e).slice(0, 60));
+          btn.disabled = false;
+        }
       });
     });
   } catch (e) {

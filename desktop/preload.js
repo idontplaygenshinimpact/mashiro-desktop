@@ -74,6 +74,10 @@ contextBridge.exposeInMainWorld("kanban", /** @type {import("./kanban-api").Kanb
   getObservability: () => ipcRenderer.invoke("widget:observability"),
   patrolConfig: (cfg) => ipcRenderer.invoke("widget:patrol-config", cfg || {}),
   patrolRun: () => ipcRenderer.invoke("widget:patrol-run"),
+  // 持久化定时任务（scheduled_jobs）：设置区管理入口（列表/启停/立即运行）
+  scheduledJobs: () => ipcRenderer.invoke("widget:scheduled-jobs"),
+  scheduledJobsToggle: (id, enabled) => ipcRenderer.invoke("widget:scheduled-jobs-toggle", { id, enabled }),
+  scheduledJobsRun: (id) => ipcRenderer.invoke("widget:scheduled-jobs-run", { id }),
   ragConfig: (cfg) => ipcRenderer.invoke("widget:settings-rag", cfg || {}),
   interviewNotes: (topics) => ipcRenderer.invoke("widget:interview-notes", { topics }),
   studyDetail: (id) => ipcRenderer.invoke("widget:study-detail", { id }),

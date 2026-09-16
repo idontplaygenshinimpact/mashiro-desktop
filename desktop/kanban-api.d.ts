@@ -33,6 +33,10 @@ export interface KanbanApi {
   getObservability: () => Promise<any>;
   patrolConfig: (cfg?: Record<string, unknown>) => Promise<any>;
   patrolRun: () => Promise<any>;
+  // 持久化定时任务（scheduled_jobs）：设置区管理入口（闭环清查补齐：此前整层调度不可达）
+  scheduledJobs: () => Promise<any>;
+  scheduledJobsToggle: (id: string, enabled: boolean) => Promise<any>;
+  scheduledJobsRun: (id: string) => Promise<any>;
   ragConfig: (cfg?: Record<string, unknown>) => Promise<any>;
   interviewNotes: (topics: string[] | string) => Promise<any>;
   studyDetail: (id: string) => Promise<any>;

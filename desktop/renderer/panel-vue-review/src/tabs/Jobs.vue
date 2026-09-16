@@ -5,10 +5,11 @@ import { computed, onMounted, ref, watch } from "vue";
 import { api } from "../api.js";
 
 const DIRECTION_LABEL = { frontend: "前端", agent: "AI Agent", fullstack: "全栈", backend: "后端", algorithm: "算法" };
-const STATUS_LABEL = { ready: "📮 已投递", ready_bishi: "✍️ 待笔试", done: "✅ 已完成", new: "未处理" };
-// 状态值与后端枚举一致（lib/jobs.ts setJobStatus 只接受 new/ready/ready_bishi/done）——
-// 修复（闭环清查）：此前用 "none" → 「未处理」筛选恒空，且与原生面板（new）口径不一致
-const STATUS_FILTERS = [["", "全部"], ["ready", "📮 已投递"], ["ready_bishi", "✍️ 待笔试"], ["new", "未处理"]];
+const STATUS_LABEL = { ready: "📮 已投递", ready_bishi: "✍️ 待笔试", done: "✅ 已完成", archived: "🗄 已归档", new: "未处理" };
+// 状态值与后端枚举一致（lib/jobs.ts setJobStatus 接受 new/ready/ready_bishi/done/archived）——
+// 修复（闭环清查）：此前用 "none" → 「未处理」筛选恒空，且与原生面板（new）口径不一致；
+// archived 为终态（归档，软删除），可与「恢复」组成闭环
+const STATUS_FILTERS = [["", "全部"], ["ready", "📮 已投递"], ["ready_bishi", "✍️ 待笔试"], ["new", "未处理"], ["archived", "🗄 已归档"]];
 
 const jobs = ref([]);
 const status = ref("");   // v-model
@@ -44,7 +45,13 @@ async function setJobStatus(job, next) {
   try {
     await api("/api/jobs/status", { method: "POST", body: { id: job.id, status: next } });
     jobs.value = jobs.value.map((x) => (x.id === job.id ? { ...x, status: next } : x));
+    if (next === "archived") window.kanban?.notify?.("🏢 校招岗位", "已归档（筛选里选「🗄 已归档」可恢复）");
   } catch (e) { err.value = "状态更新失败：" + String(e?.message || e).slice(0, 60); }
+}
+/** 归档（消失型操作 → 二次确认；Electron 渲染层 confirm 可用，prompt 会抛异常） */
+function archiveJob(job) {
+  if (!window.confirm(`归档「${job.company} ${job.title}」？归档后不再出现在未处理与推荐里。`)) return;
+  setJobStatus(job, "archived");
 }
 /** agent 流程（JD 反推考点/按岗面试）复用原生渲染层，不做两套 */
 function openInNative(kind) {
@@ -115,10 +122,15 @@ const stats = computed(() => ({
           <button type="button" class="rf-btn" :aria-label="job.favorite ? `取消收藏 ${job.company}` : `收藏 ${job.company}`" @click="toggleFav(job)">{{ job.favorite ? "⭐" : "☆" }}</button>
           <button v-if="job.jdText" type="button" class="rf-btn" :aria-expanded="Boolean(openJd[job.id])" @click="openJd = { ...openJd, [job.id]: !openJd[job.id] }">📋 JD</button>
           <a v-if="job.applyUrl" class="rf-btn" :href="job.applyUrl" target="_blank" rel="noopener noreferrer">🔗 去投递</a>
-          <button type="button" class="rf-btn" title="从 JD 反推考点加入学习清单（原生流程）" @click="openInNative('study')">📚 学考点</button>
-          <button type="button" class="rf-btn" title="按该岗位 JD 开一场模拟面试（原生流程）" @click="openInNative('interview')">🎤 按岗面试</button>
+          <!-- 归档=不感兴趣：不再提供「学考点/按岗面试」（后端按 id 查岗位时排除了归档行，否则点了必 404） -->
+          <template v-if="job.status !== 'archived'">
+            <button type="button" class="rf-btn" title="从 JD 反推考点加入学习清单（原生流程）" @click="openInNative('study')">📚 学考点</button>
+            <button type="button" class="rf-btn" title="按该岗位 JD 开一场模拟面试（原生流程）" @click="openInNative('interview')">🎤 按岗面试</button>
+          </template>
           <button type="button" class="rf-btn rf-btn-primary" :disabled="job.status === 'ready'" @click="setJobStatus(job, 'ready')">📮 已投递</button>
           <button type="button" class="rf-btn" :disabled="job.status === 'ready_bishi'" @click="setJobStatus(job, 'ready_bishi')">✍️ 待笔试</button>
+          <button v-if="job.status === 'archived'" type="button" class="rf-btn" title="恢复为未处理" @click="setJobStatus(job, 'new')">↩️ 恢复</button>
+          <button v-else type="button" class="rf-btn" title="归档：不感兴趣/已无岗位，不再出现在未处理与推荐里（软删除，避免下次搜集又加回来）" @click="archiveJob(job)">🗄 归档</button>
         </span>
       </div>
     </div>

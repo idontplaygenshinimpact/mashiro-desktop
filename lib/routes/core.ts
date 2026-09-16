@@ -80,6 +80,10 @@ export function registerCoreRoutes(router: Router, { laneSubmit = (fn: () => any
     patrolState: () => ({}),
     patrolDisabled: () => false,
     patrolRun: async () => {},
+    // 持久化定时任务（scheduler）：未注入时列表为空、启停/运行如实报错，不假成功
+    scheduledJobsList: () => [],
+    scheduledJobsToggle: (_id: unknown, _enabled: unknown) => null,
+    scheduledJobsRun: async (_id: unknown) => ({ ok: false, error: "调度器未就绪" }),
     patrolMinMinutes: () => 15,
     patrolMaxMinutes: () => 1440,
     pluginList: () => [],
@@ -306,6 +310,66 @@ export function registerCoreRoutes(router: Router, { laneSubmit = (fn: () => any
     }
   });
 
+  router.route("/api/scheduled-jobs", (req: IncomingMessage, res: ServerResponse) => {
+    // 持久化定时任务列表（scheduled_jobs）
+    // 闭环清查修复：这一层此前**完全不可达**——调度器在 widget.mjs 里正常 tick，种子任务却恒为
+    // enabled:false，而没有任何路由/UI 能列出或启用它们（"注册了却没入口"）。
+    try {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, jobs: rt.scheduledJobsList() }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: eMsg(e) }));
+    }
+  });
+
+  router.route("/api/scheduled-jobs/toggle", "POST", (req: IncomingMessage, res: ServerResponse) => {
+    // 启用/禁用定时任务：启用时重算 next_run_at 并清零连续失败计数（scheduler.enableJob 语义）
+    readBody(req, res, (body: string) => {
+      try {
+        const { id, enabled } = JSON.parse(body || "{}");
+        if (!id) {
+          res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: false, error: "id required" }));
+          return;
+        }
+        const job = rt.scheduledJobsToggle(String(id), !!enabled);
+        if (!job) {
+          res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: false, error: `任务不存在: ${String(id)}` }));
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, job }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: false, error: eMsg(e) }));
+      }
+    });
+  });
+
+  router.route("/api/scheduled-jobs/run", "POST", async (req: IncomingMessage, res: ServerResponse) => {
+    // 立即运行一次（否则 daily:0900 在下午启用要等次日 9 点才看得到效果，无法验证任务真能跑）
+    readBody(req, res, async (body: string) => {
+      try {
+        const { id } = JSON.parse(body || "{}");
+        if (!id) {
+          res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: false, error: "id required" }));
+          return;
+        }
+        const out = (await rt.scheduledJobsRun(String(id))) as { ok?: boolean; error?: string; skipped?: string } | null | undefined;
+        // 无执行器（skipped:"no-executor"）也算"跑了但没干活"——如实带回，不让面板显示成功
+        const ok = !!out && out.ok === true;
+        res.writeHead(ok ? 200 : 500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok, error: ok ? undefined : (out?.error || out?.skipped || "运行失败"), outcome: out }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: false, error: eMsg(e) }));
+      }
+    });
+  });
+
   router.route("/api/patrol-config", (req: IncomingMessage, res: ServerResponse) => {
     // 巡检配置：GET 读取（enabled/intervalMin/lastRun/nextRun/dailyTokenBudget/usedToday），POST 修改（即时重排定时器）
     if (req.method === "GET") {
@@ -432,6 +496,33 @@ export function registerCoreRoutes(router: Router, { laneSubmit = (fn: () => any
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: eMsg(e) }));
     }
+  });
+
+  router.route("/api/schedule/delete", "POST", (req: IncomingMessage, res: ServerResponse) => {
+    // 删除日程（终态入口）：解析错的/已取消的邀约此前无法去掉——未来事件会一直重复提醒，
+    // "时间待定"的事件会永远显示在面板里
+    readBody(req, res, (body: string) => {
+      try {
+        const { id } = JSON.parse(body || "{}");
+        if (id === undefined || id === null || id === "") {
+          res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: false, error: "id required" }));
+          return;
+        }
+        const r = mailApi.deleteEvent(id);
+        if (!r.ok) {
+          // 删不到（不存在/已删）→ 404 如实上报，不假装成功（面板据 ok 决定是否刷新+提示）
+          res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: false, error: r.error || "删除失败" }));
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, removed: r.removed, message: "日程已删除" }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: eMsg(e) }));
+      }
+    });
   });
 
   // ---------- 插件管理（阶段 3：列表/启停/设置/市场安装） ----------

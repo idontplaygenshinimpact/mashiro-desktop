@@ -457,6 +457,11 @@
         <div class="patrol-status" id="patrol-status">加载中…</div>
       </div>
       <div class="patrol-card" style="margin-top:10px;">
+        <h4>⏱️ 定时任务（持久化调度）</h4>
+        <div class="patrol-status" id="sched-jobs-status">加载中…</div>
+        <div id="sched-jobs-list" style="font-size:12px;line-height:1.8;"></div>
+      </div>
+      <div class="patrol-card" style="margin-top:10px;">
         <h4>🔍 系统自检 <span id="self-check-time" style="color:#6a6790;font-weight:400;font-size:11px;"></span></h4>
         <div style="display:flex;gap:6px;margin-bottom:6px;">
           <button id="self-check-btn" class="secondary">🔄 立即检查</button>
@@ -515,11 +520,12 @@
         <div id="platforms-box" class="platforms-box"></div>
       </div>
       <div id="jobs-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
-        <button class="job-chip active" data-status="">全部</button>
+        <button class="job-chip active" data-status="" title="不含已归档（归档岗位见「🗄 已归档」）">全部</button>
         <button class="job-chip" data-status="new">未投递</button>
         <button class="job-chip" data-status="ready">已投递</button>
         <button class="job-chip" data-status="ready_bishi">待笔试</button>
         <button class="job-chip" data-status="done">已完成</button>
+        <button class="job-chip" data-status="archived">🗄 已归档</button>
         <button class="job-chip" data-fav="1">⭐ 收藏</button>
       </div>
       <div id="jobs-list" class="jobs-list"></div>

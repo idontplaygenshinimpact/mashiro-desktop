@@ -309,6 +309,41 @@ test("checkDue 重入保护：并发调用只跑一轮", async () => {
   assert.deepEqual(order, [a.id]);
 });
 
+// ---------- runJob：立即运行一次（闭环清查补齐：只有"启用开关"时用户要等下一个排程点才看得出效果） ----------
+test("runJob 立即运行未到期任务（不等到期），并推进 last_run_at/next_run_at", async () => {
+  let ran = 0;
+  const s = makeScheduler({ patrol: async () => { ran++; return { ok: true }; } });
+  const job = s.registerJob({ job_type: "patrol", schedule_spec: "daily:0900" }); // 下一个排程点远未到期
+  assert.equal(s.getJob(job.id).last_run_at, null);
+  clock = T0 + 60 * 60 * 1000; // 只前进 1 小时，仍远未到次日 9 点
+  const out = await s.runJob(job.id);
+  assert.equal(out.ok, true);
+  assert.equal(ran, 1, "未到期也要真的执行");
+  const after = s.getJob(job.id);
+  assert.equal(after.last_run_at, clock, "last_run_at 应更新");
+  assert.equal(after.next_run_at > clock, true, "next_run_at 应重排到未来");
+});
+
+test("runJob 任务不存在 → 如实返回失败（不抛、不假成功）", async () => {
+  const s = makeScheduler({ patrol: async () => ({ ok: true }) });
+  const out = await s.runJob("no-such-job");
+  assert.equal(out.ok, false);
+  assert.match(String(out.error), /不存在/);
+});
+
+test("runJob 失败与 checkDue 同语义：累加失败计数、无执行器跳过", async () => {
+  const s = makeScheduler({ patrol: async () => ({ ok: false, error: "boom" }) });
+  const job = s.registerJob({ job_type: "patrol", schedule_spec: "interval:5" });
+  const out = await s.runJob(job.id);
+  assert.equal(out.ok, false);
+  assert.equal(s.getJob(job.id).consecutive_failures, 1, "手动运行失败同样计入连续失败（否则自动禁用永不触发）");
+  const s2 = makeScheduler({});
+  const j2 = s2.registerJob({ job_type: "rss_digest", schedule_spec: "interval:5" });
+  const out2 = await s2.runJob(j2.id);
+  assert.equal(out2.skipped, "no-executor");
+  assert.equal(s2.getJob(j2.id).consecutive_failures, 0, "无执行器不算失败");
+});
+
 // ---------- HEARTBEAT_OK 契约 ----------
 test("HEARTBEAT_OK：未完成不计失败、不重置、短时重试", async () => {
   const s = makeScheduler({

@@ -230,12 +230,15 @@ export async function fetchJobDetails(): Promise<FetchJobDetailsResult> {
   return { ok: true, total, done, failed, updated, skipped };
 }
 
-/** 岗位列表：按方向匹配度 + 新鲜度排序；可过滤状态 */
+/** 岗位列表：按方向匹配度 + 新鲜度排序；可过滤状态
+ * 闭环清查修复：不传 status 时**默认排除已归档**（否则「归档」在主列表里等于没生效——
+ * 自动搜集的 233 条垃圾岗位依旧占满列表）；要看待归档的显式传 status:"archived"。 */
 export function getJobs({ status, direction }: { status?: string; direction?: string } = {}): JobView[] {
   let sql = "SELECT * FROM job_posts";
   const cond: string[] = [];
   const args: string[] = [];
   if (status) { cond.push("status=?"); args.push(status); }
+  else { cond.push("status != 'archived'"); }
   if (direction) { cond.push("direction=?"); args.push(direction); }
   if (cond.length) sql += " WHERE " + cond.join(" AND ");
   sql += " ORDER BY found_at DESC";
@@ -261,14 +264,19 @@ export function getJobs({ status, direction }: { status?: string; direction?: st
 /** 更新投递状态结果 */
 export interface SetJobStatusResult { ok: boolean; changes?: number | bigint; error?: string }
 
-/** 更新投递状态：new→ready(已投)→ready_bishi(待笔试)→done
+/** 更新投递状态：new→ready(已投)→ready_bishi(待笔试)→done，另有 archived(已归档/不感兴趣)
  * 允许跳级（用户手动管理，如直接标记"已拿offer"）；转 ready/ready_bishi/done
- * 时若 applied_at 为空则补记首次投递时间（修复：new→done 跳级丢失投递记录） */
+ * 时若 applied_at 为空则补记首次投递时间（修复：new→done 跳级丢失投递记录）
+ * 闭环清查修复：原先只有四种状态且没有终态——自动搜集进来的岗位（生产库 233 条全是 new）
+ * 只能"已投/待笔试/完成"，**没有任何办法把不感兴趣的岗位从列表里清掉**，
+ * 于是「未处理」越堆越多、推荐也被垃圾岗位占位。新增 archived：软删除（不真删行，
+ * 保留 company/title/apply_url 供入库去重，避免下次爬取又把它加回来），
+ * 归档后不再出现在推荐（getRecommendedJobs 只推 status='new'）与 RAG 索引里。 */
 export function setJobStatus(id: unknown, status: unknown): SetJobStatusResult {
-  if (!["new", "ready", "ready_bishi", "done"].includes(String(status))) return { ok: false, error: "非法状态" };
+  if (!["new", "ready", "ready_bishi", "done", "archived"].includes(String(status))) return { ok: false, error: "非法状态" };
   const now = Date.now();
-  // 非 new 状态（已投/待笔试/完成）都确保有投递时间；ready 重复标记不刷新首次时间
-  const recordApplied = status !== "new";
+  // 投递时间只对"真的投了"的状态补记：archived 是撤销/忽略，不能算投递（否则统计里冒出幽灵投递）
+  const recordApplied = ["ready", "ready_bishi", "done"].includes(String(status));
   const idArg = id as string | number | null;   // SQLite 绑定值：调用方传 job id（TEXT）
   let r: { changes?: number | bigint };
   if (recordApplied) {
@@ -300,7 +308,7 @@ export interface JobStats {
 export function getJobStats(): JobStats {
   const total = Number((db.prepare("SELECT COUNT(*) n FROM job_posts").get() as { n?: unknown } | undefined)?.n) || 0;
   const byStatus: Record<string, number> = {};
-  for (const s of ["new", "ready", "ready_bishi", "done"]) {
+  for (const s of ["new", "ready", "ready_bishi", "done", "archived"]) {
     byStatus[s] = Number((db.prepare("SELECT COUNT(*) n FROM job_posts WHERE status=?").get(s) as { n?: unknown } | undefined)?.n) || 0;
   }
   const byDirection: Record<string, number> = {};

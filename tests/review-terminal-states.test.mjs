@@ -32,3 +32,68 @@ test("重练队列：最近一次答对后必须出队（错→错→对 的终�
   assert.equal(review.getRetryQueue(20).some((r) => r.id === card.id), false, "最近一次答对 → 出队（此前会永久滞留）");
   assert.equal(review.getReviewFeedback().retry >= 0, true, "反馈计数可读");
 });
+
+// ---------- /api/review/add：priority 不再丢 + 写库失败不再假成功 ----------
+test("POST /api/review/add：priority 透传到落盘（此前路由层丢弃，一律落「拓展」）", async () => {
+  const { createRouter } = await import("../lib/routes/router.mjs");
+  const { registerReviewRoutes } = await import("../plugins/job-hunter/routes/review.ts");
+  const router = createRouter();
+  registerReviewRoutes(router);
+  const entry = router.resolve("/api/review/add", "POST");
+  assert.ok(entry, "路由已注册");
+  const res = mockJsonRes();
+  await entry.fn(mockBodyReq({ topic: "手写深拷贝", question: "实现深拷贝", source: "测试", priority: "必会" }), res, new URL("/api/review/add", "http://x"));
+  const j = JSON.parse(res.chunks.join(""));
+  assert.equal(res.status, 200, JSON.stringify(j));
+  assert.equal(j.ok, true);
+  const card = review.loadCards().cards.find((c) => c.topic === "手写深拷贝");
+  assert.equal(card?.priority, "必会", "priority 必须落盘（调度按优先级排序）");
+  // 非法优先级被契约挡在门外（400，而不是静默降级）
+  const bad = mockJsonRes();
+  await entry.fn(mockBodyReq({ topic: "手写深拷贝2", priority: "最高" }), bad, new URL("/api/review/add", "http://x"));
+  assert.equal(bad.status, 400, "非法 priority 应被契约拒绝");
+});
+
+test("POST /api/review/add：写库失败不再假成功（原实现无条件 ok:true，把错误对象当 card 回给前端）", async () => {
+  const { createRouter } = await import("../lib/routes/router.mjs");
+  const { registerReviewRoutes } = await import("../plugins/job-hunter/routes/review.ts");
+  const router = createRouter();
+  registerReviewRoutes(router);
+  const entry = router.resolve("/api/review/add", "POST");
+  // 制造写库失败：把 review_cards 表改名（addCard 的 INSERT 会抛错 → 返回 {ok:false,error}）
+  const { db } = await import("../lib/db.mjs");
+  db.exec("ALTER TABLE review_cards RENAME TO review_cards_bak");
+  try {
+    const res = mockJsonRes();
+    await entry.fn(mockBodyReq({ topic: "写库失败用例", question: "q" }), res, new URL("/api/review/add", "http://x"));
+    const j = JSON.parse(res.chunks.join(""));
+    assert.notEqual(res.status, 200, "写库失败不得回 200");
+    assert.notEqual(j.ok, true, `不得假成功，实得 ${JSON.stringify(j)}`);
+    assert.ok(j.error, "应带回错误原因");
+  } finally {
+    db.exec("ALTER TABLE review_cards_bak RENAME TO review_cards");
+  }
+});
+
+function mockJsonRes() {
+  const chunks = [];
+  return {
+    chunks, destroyed: false, writableEnded: false, status: 0,
+    writeHead(code) { this.status = code; return this; },
+    write(c) { chunks.push(String(c)); return true; },
+    end(c) { if (c !== undefined) chunks.push(String(c)); this.writableEnded = true; return this; },
+    on() {},
+  };
+}
+function mockBodyReq(body) {
+  const listeners = {};
+  return {
+    method: "POST", url: "/", headers: {}, destroyed: false,
+    on(ev, fn) {
+      listeners[ev] = fn;
+      if (ev === "end") setImmediate(() => { if (listeners.data) listeners.data(Buffer.from(JSON.stringify(body))); fn(); });
+      return this;
+    },
+    destroy() {},
+  };
+}

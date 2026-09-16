@@ -1419,9 +1419,30 @@ async function loadSchedule() {
             <div class="job-meta">🕐 ${esc(fmtEventTime(ev.interviewAt))}${relTime(Number(ev.interviewAt))}${ev.location ? " · 📍 " + esc(ev.location) : ""}</div>
             <div class="job-actions">
               ${ev.link ? `<a class="job-link" href="${esc(safeUrl(ev.link))}" target="_blank" rel="noopener">🔗 会议/链接</a>` : ""}
+              <button class="job-link sched-del" data-id="${esc(ev.id)}" title="删除这条日程（解析错的邀约/已取消的面试——否则会一直提醒）">🗑 删除</button>
             </div>
           </div>`).join("")}
       </div>`).join("");
+    // 删除入口（终态）：删除失败如实提示，成功才刷新列表
+    list.querySelectorAll(".sched-del").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        if (!window.confirm("删除这条日程？删除后不再提醒（邮箱里的原始邮件不受影响）。")) return;
+        btn.disabled = true;
+        try {
+          const r = await fetch(API_BASE + "/api/schedule/delete", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }),
+          });
+          const j = await r.json();
+          if (j?.ok) window.kanban.notify("🗓 日程", "已删除该日程");
+          else window.kanban.notify("🗓 日程", String(j?.error || "删除失败").slice(0, 60));
+          await loadSchedule();
+        } catch (e) {
+          window.kanban.notify("🗓 日程", String(e.message || e).slice(0, 60));
+          btn.disabled = false;
+        }
+      });
+    });
   } catch (e) {
     statusEl.textContent = "⚠️ " + e.message;
     list.innerHTML = `<div class="empty-hint">加载失败：${esc(e.message)}</div>`;

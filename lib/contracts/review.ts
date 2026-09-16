@@ -19,6 +19,8 @@ export const ReviewAddInput = z.object({
   question: z.string().max(1000).optional().default(""),
   answer: z.string().max(1000).optional().default(""),
   source: z.string().max(100).optional().default(""),
+  // 闭环清查补齐：addCard 支持优先级（必会/进阶/拓展，调度按优先级排序），路由此前把它丢了
+  priority: z.enum(["必会", "进阶", "拓展"]).optional(),
 });
 
 /** /api/review/add POST 出参 */

@@ -362,13 +362,23 @@ async function loadCrawlData() {
   } catch { /* ignore */ }
   // 自动巡检配置（开关/频率/状态）
   loadPatrolConfig();
+  // 定时任务（持久化调度：列出/启停/立即运行——此前整层调度没有任何入口）
+  loadScheduledJobs();
   // 系统自检报告（表堆积/产出污染/巡检停摆/LLM 失败率）
   loadSelfCheck();
-  // 面试历史（点击展开完整复盘 + 五维雷达）
+  // 面试历史（点击展开完整复盘 + 五维雷达）+ 删除终态
+  loadIhInChat();
+}
+
+// 面板「对话/自检」区的历史复盘列表渲染 + 删除（抽出为独立函数：删除后重渲染用）
+// 与 panel-study.js 走同一 HTTP 路由 /api/interview/history/delete（三态不各自造删除逻辑）
+async function loadIhInChat() {
+  const box = $("interview-history");
+  if (!box) return;
   try {
     const h = await window.kanban.interviewHistory();
     const list = (h?.history || []).slice(-5).reverse();
-    $("interview-history").innerHTML = list.length
+    box.innerHTML = list.length
       ? list.map((it) => {
           const dims = DIM_LABELS.map(([k, l]) => [k, l, Math.round((it.dims || {})[k] ?? 0)]);
           const dimsBars = dims.map(([_k, l, v]) => scoreBarHtml(l, v)).join("");
@@ -376,7 +386,8 @@ async function loadCrawlData() {
         <div class="iv-hist-item">
           <div class="iv-hist-head">${esc(it.position || "模拟面试")} · ${esc(it.role || "")} · ${it.rounds || 0} 轮
             <span class="iv-hist-score">均分 ${it.avg ?? it.avgScore ?? "-"}</span>
-            ${it.report ? `<button class="iv-hist-expand">详情 ▾</button>` : ""}</div>
+            ${it.report ? `<button class="iv-hist-expand">详情 ▾</button>` : ""}
+            ${it.id ? `<button class="iv-hist-del" data-id="${esc(String(it.id))}" data-label="${esc(it.position || "模拟面试")}">🗑 删除</button>` : ""}</div>
           ${it.report ? `<div class="iv-hist-report">${esc(it.report).slice(0, 120)}${it.report.length > 120 ? "..." : ""}</div>` : ""}
           <div class="iv-hist-detail hidden">
             <div class="iv-hist-dims">${dimsBars}</div>
@@ -387,7 +398,7 @@ async function loadCrawlData() {
         }).join("")
       : '<div style="color:#7c7c7c;font-size:12px">暂无面试记录，去「🎤 模拟面试」来一场吧</div>';
     // 展开/收起 + 雷达图（dims 已存在 item.dataset 上）
-    $("interview-history").querySelectorAll(".iv-hist-item").forEach((item) => {
+    box.querySelectorAll(".iv-hist-item").forEach((item) => {
       const btn = item.querySelector(".iv-hist-expand");
       if (!btn) return;
       btn.addEventListener("click", () => {
@@ -403,9 +414,31 @@ async function loadCrawlData() {
         }
       });
     });
+    // 删除入口：二次确认用 confirm，删除后刷新 + 真实结果反馈
+    box.querySelectorAll(".iv-hist-del").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const { id, label } = btn.dataset;
+        if (!id || !confirm(`确定删除这场复盘「${String(label || "模拟面试")}」吗？不可恢复。`)) return;
+        try {
+          const r = await fetch(API_BASE + "/api/interview/history/delete", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+          });
+          const j = await r.json().catch(() => ({}));
+          if (r.ok && j?.ok) {
+            window.kanban.notify("🗑 历史复盘", "已删除该场复盘");
+            loadIhInChat(); // DB + 内存镜像皆删，重渲染不再出现
+          } else {
+            window.kanban.notify("🗑 历史复盘", j?.error || `删除失败（HTTP ${r.status}）`);
+          }
+        } catch (e) {
+          window.kanban.notify("🗑 历史复盘", "删除异常: " + String(e?.message || e).slice(0, 60));
+        }
+      });
+    });
     // 把 dims 存到 item 上（雷达图展开时用）
     list.forEach((it, i) => {
-      const item = $("interview-history").querySelectorAll(".iv-hist-item")[i];
+      const item = box.querySelectorAll(".iv-hist-item")[i];
       if (item) item.dataset.dims = JSON.stringify(it.dims || {});
     });
   } catch { /* ignore */ }
@@ -574,6 +607,71 @@ $("patrol-run").addEventListener("click", async () => {
     window.kanban.notify("🛰️ 自动巡检", "触发失败：" + String(e.message || e).slice(0, 60));
   }
 });
+
+// ============ 定时任务（scheduled_jobs 持久化调度） ============
+// 闭环清查修复：调度器一直在 tick（每分钟 checkDue），种子任务却恒 enabled:false，
+// 而**没有任何入口**能列出/启用它们——整层调度不可达。这里补上爬取 Tab（自动巡检卡片下方）的管理入口。
+async function loadScheduledJobs() {
+  const statusEl = $("sched-jobs-status"), listEl = $("sched-jobs-list");
+  if (!statusEl || !listEl) return;
+  try {
+    const r = await window.kanban.scheduledJobs();
+    if (!r?.ok) { statusEl.textContent = "⚠️ " + (r?.error || "读取失败"); listEl.innerHTML = ""; return; }
+    const jobs = r.jobs || [];
+    if (!jobs.length) {
+      statusEl.textContent = "暂无定时任务（宿主启动时会种入「自动巡检 / 每日技术资讯摘要」）";
+      listEl.innerHTML = "";
+      return;
+    }
+    statusEl.textContent = `共 ${jobs.length} 个任务 · 已启用 ${jobs.filter((j) => j.enabled).length} 个（调度器每分钟检查一次到期任务）`;
+    const fmt = (ts) => (ts ? new Date(ts).toLocaleString("zh-CN", { hour12: false }) : "—");
+    listEl.innerHTML = jobs.map((j) => {
+      const reason = j.config?.disabled_reason ? ` · 自动停用原因：${esc(j.config.disabled_reason)}` : "";
+      return `
+      <div class="job-item" style="margin-bottom:4px;">
+        <div class="job-head">
+          <b style="font-size:12px;">${esc(j.name || j.id)}</b>
+          <span class="job-badge">${esc(j.job_type)}</span>
+          <span class="job-badge">${esc(j.schedule_spec)}</span>
+        </div>
+        <div class="job-meta">上次：${esc(fmt(j.last_run_at))} · 下次：${esc(j.enabled ? fmt(j.next_run_at) : "—")} · 连续失败 ${Number(j.consecutive_failures) || 0}${reason}</div>
+        <div class="job-actions">
+          <button class="job-btn sched-toggle" data-id="${esc(j.id)}" data-enabled="${j.enabled ? "0" : "1"}">${j.enabled ? "⏸ 停用" : "▶️ 启用"}</button>
+          <button class="job-btn sched-run" data-id="${esc(j.id)}" title="立即运行一次（不等下一个排程点，用于验证任务真能跑）">▶ 立即运行</button>
+        </div>
+      </div>`;
+    }).join("");
+    listEl.querySelectorAll(".sched-toggle").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          const r2 = await window.kanban.scheduledJobsToggle(btn.dataset.id, btn.dataset.enabled === "1");
+          if (r2?.ok === false) window.kanban.notify("⏱️ 定时任务", String(r2.error || "操作失败").slice(0, 60));
+          else window.kanban.notify("⏱️ 定时任务", btn.dataset.enabled === "1" ? "已启用（已排入下次运行）" : "已停用");
+        } catch (e) {
+          window.kanban.notify("⏱️ 定时任务", String(e.message || e).slice(0, 60));
+        }
+        loadScheduledJobs();
+      });
+    });
+    listEl.querySelectorAll(".sched-run").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "⏳ 运行中…";
+        try {
+          const r2 = await window.kanban.scheduledJobsRun(btn.dataset.id);
+          // 如实反馈：失败（含无执行器）不报成功
+          window.kanban.notify("⏱️ 定时任务", r2?.ok ? "已运行一次，可在产出/日志查看结果" : "运行失败：" + String(r2?.error || "未知错误").slice(0, 60));
+        } catch (e) {
+          window.kanban.notify("⏱️ 定时任务", "运行失败：" + String(e.message || e).slice(0, 60));
+        }
+        loadScheduledJobs();
+      });
+    });
+  } catch (e) {
+    statusEl.textContent = "⚠️ " + String(e.message || e).slice(0, 60);
+  }
+}
 
 // ============ 系统自检（自行发现隐患：表堆积/产出污染/巡检停摆/LLM 失败率） ============
 async function loadSelfCheck() {

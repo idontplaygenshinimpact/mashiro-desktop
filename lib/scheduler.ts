@@ -91,6 +91,8 @@ export interface Scheduler {
   deleteJob(id: string): boolean;
   updateJob(id: string, patch?: JobPatch): ScheduledJob | null;
   checkDue(now?: number): Promise<RunOutcome[]>;
+  /** 立即运行一次（不受 next_run_at 限制）：与 checkDue 共用 runOne（同失败计数/自动禁用语义） */
+  runJob(id: string): Promise<RunOutcome>;
 }
 
 // ---------- schedule_spec → 下一次运行时间戳（毫秒）；无效 spec 返回 null ----------
@@ -370,6 +372,26 @@ export function createScheduler({ db, now = Date.now, executes = {} }: Scheduler
     return results;
   }
 
+  /**
+   * 立即运行一次（不管 next_run_at 是否到期）
+   * 闭环清查补齐：启用入口若只有"打开开关"，用户要等到下一个排程点才看得到任何效果
+   * （如 daily:0900 在下午启用 → 要等次日 9 点），无法验证任务是否真的能跑。
+   * 与 checkDue 共用同一 runOne（同一失败计数/自动禁用/心跳语义），不另造执行路径。
+   */
+  async function runJob(id: string): Promise<RunOutcome> {
+    const job = getJob(id);
+    if (!job) return { id, ok: false, error: `任务不存在: ${id}` };
+    if (running) return { id, ok: false, error: "已有调度任务在运行（稍后重试）" };
+    running = true;
+    try {
+      return await runOne(job, nowFn());
+    } catch (e) {
+      return { id, ok: false, error: e && (e as Error).message ? (e as Error).message : String(e) };
+    } finally {
+      running = false;
+    }
+  }
+
   return {
     registerJob,
     listJobs,
@@ -378,5 +400,6 @@ export function createScheduler({ db, now = Date.now, executes = {} }: Scheduler
     deleteJob,
     updateJob,
     checkDue,
+    runJob,
   };
 }

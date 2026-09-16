@@ -208,7 +208,18 @@ ${kbContext ? `本地知识库相关段落（仅作补充素材）：\n${kbConte
   router.route("/api/review/add", "POST", withContract(
     // 添加复习卡（学习清单/薄弱点回流用）
     (input) => {
-      const card = reviewApi.review.addCard({ topic: input.topic, question: input.question, answer: input.answer, source: input.source });
+      // 闭环清查修复两处：
+      //  ① priority 此前被路由层丢掉（addCard 支持 必会/进阶/拓展，调度按优先级排序）——
+      //     调用方传了优先级也一律落"拓展"，优先级调度静默失效；契约同步补 priority 字段。
+      //  ② addCard 写库失败会返回 {ok:false,error,topic}，而这里无条件回 ok:true 且把错误对象
+      //     当 card 塞给前端 → 面板显示"已加入复习卡"，实际零写入（重启即消失）。
+      const card = reviewApi.review.addCard({
+        topic: input.topic, question: input.question, answer: input.answer, source: input.source,
+        ...(input.priority ? { priority: input.priority } : {}),
+      });
+      if (card && typeof card === "object" && "ok" in card && card.ok === false) {
+        throw new Error(String(card.error || "复习卡创建失败"));
+      }
       return { ok: true, card };
     },
     { input: ReviewAddInput, output: ReviewAddOutput }
