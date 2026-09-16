@@ -162,6 +162,12 @@
 | 23 | **面试历史"读得到、删不掉"**：每场复盘的复盘写进 `interview_history`、`GET /api/interview/history` 也读得到，但**没有删除函数、没有路由、UI 没有入口**——错误/测试产生的复盘永远留在历史里 | C9 | `memory.deleteInterviewHistory(id)`（按主键删；**DB 与内存镜像同步删**——只删 DB 会让同进程继续读到"鬼影"；镜像条目补主键，否则 UI 的 id 与镜像对不上、删除空转）+ `POST /api/interview/history/delete`（200 / 404 / 缺参 400）+ 三态入口（原生两处、React、Vue，一律 `confirm` 二次确认、失败如实提示）；`tests/interview-history-delete.test.mjs`（4 项，改坏路由后 3 项必红） |
 | 24 | **Vue 面试无语音作答**（三态能力不对齐，第 ⑨ 种样子货）：React 版早有「麦克风采集 → `speechToText` → 回填作答」整条链路，Vue 版一格都没有 | C2/C9 | 照抄 React 版契约补齐：AudioWorklet 16k 单声道采集 + 录音状态机 + 停止/取消 + **卸载时释放麦克风流**（不泄漏）+ 空转写/失败可见提示；worklet 路径判据与 React 一致（内嵌/独立窗口）；`tests/vue-interview-speech.test.mjs`（4 项，**已独立反证**：改名 IPC 调用后必红） |
 
+#### 接口性能修复（commit `2b646e5`）
+
+| # | 问题（实测） | 修法与护栏 |
+|---|---|---|
+| 25 | **"后端比前端慢这么多"**：面板窗口是静态文件 ~0.8s 就画出来，后端却要 2s+ 才能响应。逐模块计时定位到**启动路径静态导入了整条浏览器栈**——`lib/routes/core.ts` 顶层 `import { chatWithAgent } from "../agent.mjs"` → `impl-search.ts` → `fetch-page.ts` → playwright + jsdom（`agent.ts` 导入 **1483ms**、`fetch-page.ts` **1290ms**），而这条链只有聊天/抓取才用得到；`lib/oj.ts` 同样静态导入 `fetch-page.mjs` | agent 图改 memo 化动态加载（`loadAgent()`，两个聊天入口 await 它，lane 队列语义不变）、`assertPublicUrl` 改使用处动态 import；**实测 spawn→可响应 2190ms → 834ms（后台全开 1994ms → 841ms）**。踩坑记录：预热不能放在 listen 回调之前——ESM 求值在主线程，会把事件循环堵 ~1.25s（"已启动"从 621ms 被推到 1897ms），故 listen 后延迟 2s 再预热。护栏 `tests/boot-lazy-graph.test.mjs`（**看模块图而不是看时间**：导启动路径后 CJS 缓存里不得出现 playwright/jsdom，带正对照防"方法失效导致的永远绿"；旧代码下 2 项全红） |
+
 #### 待修（已定位到 `file:line`，按严重度排序；完整报告见 `%TEMP%\mashiro-audit\{A..H}-*.md`）
 
 - **P0 巡检三键"读而不写"**：`lib/patrol.ts` 读 `patrol_enabled/interval_min/avoid_peak`，写点只在面板路由；真实库 30 个 settings 键里没有这三个 —— 面板"默认态与后端相反"这一症状已由第二批 #9 消解（`GET /api/patrol-config` 带 `ok` 后按后端真实态回填）；仅剩"用户不动就不落盘"（行为等价，不再算断链）
@@ -436,7 +442,7 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 | 门禁 | 命令 | 当前状态 |
 |---|---|---|
-| 单元/集成测试 | `npm test` | ✅ **1282/1282 通过**（1243 单元 + 39 集成，147 个测试文件，mock LLM 无 key 可跑） |
+| 单元/集成测试 | `npm test` | ✅ **1284/1284 通过**（1245 单元 + 39 集成，148 个测试文件，mock LLM 无 key 可跑） |
 | 类型检查（lib，双 tsc） | `npm run typecheck` | ✅ 0 错误（宽松 checkJs 覆盖 `.mjs` + `tsconfig.strict.json` 查 `lib/plugins/desktop` 的 `.ts`，strict 下同样 0） |
 | 桌面端类型检查 | `npm run typecheck:desktop` | ✅ 0 错误（`kanban-api.d.ts` 83 个接口方法与 preload 实现**双向一致**——实测 83=83，子集关系由 `tests/ipc-declaration.test.mjs` 强制）——**2026-09-11 修复**：该配置此前漏开 `allowImportingTsExtensions`，被 133 处 TS5097 噪音掩盖了真实的 `MusicResult.catch` 类型错（该步骤以前从未在 CI 上跑到） |
 | Lint | `npm run lint` | ✅ **0 error 0 warning**（全仓库，含面板/渲染层/脚本/测试） |
@@ -518,7 +524,7 @@ npm run dist    # release/ 下 NSIS 安装包 + 便携版
 
 - **许可证**：MIT（见 [LICENSE](LICENSE)）
 - **仓库不含**：本地数据（`data/`）、ASR 模型（`models/`）、`.env`（密钥）；**含**自训练声线（`assets/voice/`，开箱即用）
-- **测试**：`npm test` 1282 用例全绿（1243 单元 + 39 集成，mock LLM，CI 零成本）；评测体系见上文
+- **测试**：`npm test` 1284 用例全绿（1245 单元 + 39 集成，mock LLM，CI 零成本）；评测体系见上文
 - **插件化路线**：宿主（真白）+ 插件（秋招助手）架构见 [`docs/plugin-architecture.md`](docs/plugin-architecture.md)
 
 ---
