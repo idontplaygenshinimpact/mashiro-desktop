@@ -339,7 +339,10 @@ function syncIvGutter() {
   gutter.scrollTop = box.scrollTop;
 }
 
-/** 作答形态切换（code = 手写轮：显示编辑器栏 + 行号 + 隐藏语音按钮——代码靠语音输入不现实） */
+/** 作答形态切换（code = 手写轮：显示编辑器栏 + 行号 + 隐藏语音按钮——代码靠语音输入不现实）
+ * 2026-09-16：code 模式在手搓 textarea 之上再加一层 **CodeMirror 6**（复用专项练习的编辑器产物，
+ * 按需注入；产物缺失/加载失败 → 自动保持原 textarea 行为，兜底链路不变）。每轮问答都会走这里，
+ * 所以 mount/destroy 的边界在这里收口（切走/换轮自动销毁，不泄漏）。 */
 function setIvAnswerMode(mode) {
   ivAnswerMode = mode === "code" ? "code" : "text";
   const area = $("iv-answer-area");
@@ -354,7 +357,47 @@ function setIvAnswerMode(mode) {
       ? "写代码作答（Tab 缩进 · Enter 自动缩进 · Ctrl+Enter 提交）"
       : "输入你的回答...（也可点 🎙️ 直接说，语音自动转写 + 录音留存可回听；Ctrl+Enter 提交）");
   }
+  if (ivAnswerMode === "code") ensureIvCodeEditor();
+  else destroyIvCodeEditor();
   syncIvGutter();
+}
+
+// ---------- 面试代码轮的 CodeMirror 版（2026-09-16 接入） ----------
+// 复用 practice-editor.bundle.js（专项练习同一产物，按需注入）；缺产物时 ivCmView 恒为 null，
+// 一切回到原 textarea 路径（Tab/Enter 手工缩进），对现有 jsdom 测试与旧环境零影响。
+let ivCmView = null; // CodeMirror 实例（EditorView），仅 code 模式 + 产物可用时非空
+
+async function ensureIvCodeEditor() {
+  const box = $("iv-answer");
+  const host = $("iv-editor");
+  if (!box || !host || ivCmView) return;
+  if (typeof loadPracticeEditor !== "function") return; // 面板脚本未加载完/产物入口不存在 → 兜底
+  const cm = await loadPracticeEditor();
+  if (!cm || typeof cm.create !== "function") return;  // 产物缺失/加载失败 → 原 textarea 行为
+  if (!document.body.contains(host)) return;            // 面板已切走，不再挂
+  const gutter = $("iv-gutter");
+  ivCmView = cm.create(host, {
+    initial: box.value,             // 每轮 setIvAnswerMode 前已清空 #iv-answer → 初始为空
+    onChange: (v) => { box.value = String(v); syncIvGutter(); }, // 提交/语音零改动：仍读 #iv-answer
+    onRun: () => submitAnswer(),    // Ctrl/Cmd+Enter 提交（与 textarea 行为一致）
+    height: "240px",
+  });
+  box.style.display = "none";
+  if (gutter) gutter.style.display = "none";
+  host.classList.add("iv-cm-host");
+}
+
+function destroyIvCodeEditor() {
+  if (ivCmView && typeof ivCmView.destroy === "function") {
+    try { ivCmView.destroy(); } catch { /* ignore */ }
+  }
+  ivCmView = null;
+  const box = $("iv-answer");
+  const gutter = $("iv-gutter");
+  const host = $("iv-editor");
+  if (box) box.style.display = "";
+  if (gutter) gutter.style.display = "";
+  if (host) host.classList.remove("iv-cm-host");
 }
 
 /** 选区替换（jsdom 无 setRangeText 时手工拼接——两条路径都保持光标在插入文本之后） */
