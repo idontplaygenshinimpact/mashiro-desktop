@@ -340,10 +340,15 @@ test("Vue 版专项练习 Tab：题库列表（同一路由 /api/challenges）+ 
       { id: "c2", title: "两数之和", category: "algorithm", difficulty: 2, frequency: 5, done: false, wrongCount: 2, description: "返回下标", timeLimit: 10 },
     ],
   };
-  const { dom, calls } = boot(["practice-vue"], {}, { "http://127.0.0.1:8899/api/challenges": CHALL, "http://127.0.0.1:8899/api/challenges?": CHALL });
+  // 列表请求带 mode 参数（核心代码 / ACM 两套题库）→ 精确 URL 键要覆盖带 query 的形态
+  const { dom, calls } = boot(["practice-vue"], {}, {
+    "http://127.0.0.1:8899/api/challenges": CHALL,
+    "http://127.0.0.1:8899/api/challenges?": CHALL,
+    "http://127.0.0.1:8899/api/challenges?mode=core": CHALL,
+  });
   const { el, app } = await mount("practice", "practice-vue");
   assert.ok(await waitFor(() => text(el).includes("专项练习")), "专项练习渲染（按 tab 分发到 Practice.vue）");
-  assert.ok(await waitFor(() => calls.some((c) => String(c.url).endsWith("/api/challenges"))), "走同一数据源 /api/challenges");
+  assert.ok(await waitFor(() => calls.some((c) => String(c.url).includes("/api/challenges") && String(c.url).includes("mode=core"))), "走同一数据源 /api/challenges 且带 mode 参数（两套题库各自成集）");
   assert.ok(await waitFor(() => text(el).includes("手写防抖")), "列表题目渲染（同一路由 /api/challenges）");
   assert.ok(text(el).includes("两数之和"), "第二题渲染");
   assert.ok(text(el).includes("✅ 已做"), "done 徽标渲染");

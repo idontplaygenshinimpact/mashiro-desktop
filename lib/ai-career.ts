@@ -21,6 +21,10 @@ export interface ChallengeImportItem {
   skeleton?: unknown;
   testCode?: unknown;
   source?: unknown;
+  /** 判题模式：core（默认，LeetCode 核心代码）/ acm（标准输入输出） */
+  mode?: unknown;
+  /** ACM 用例：[{input, expected}]（mode='acm' 时必填；也可传 JSON 字符串） */
+  ioCases?: unknown;
 }
 /** 题目列表行（含用户状态） */
 export interface ChallengeRow {
@@ -32,18 +36,34 @@ export interface ChallengeRow {
   timeLimit: number;
   description: string;
   skeleton: string;
+  /** 判题模式：core / acm（列表页据此分组与展示"ACM 模式"徽标） */
+  mode: string;
   done: boolean;
   wrongCount: number;
 }
-/** 单题详情（含 test_code） */
-export interface ChallengeDetail extends ChallengeRow { testCode: string }
+/** ACM 用例（标准输入输出判题） */
+export interface ChallengeIoCase { input: string; expected: string }
+/** 单题详情（含 test_code / ACM 用例） */
+export interface ChallengeDetail extends ChallengeRow { testCode: string; ioCases: ChallengeIoCase[] }
 /** 沙箱判题结果 */
 export interface ChallengeRunResult {
   success: boolean;
-  tests: Array<{ passed: boolean; label: string }>;
+  /** ACM 模式下带逐用例 diff（input/expected/actual） */
+  tests: Array<{ passed: boolean; label: string; input?: string; expected?: string; actual?: string }>;
   logs: string[];
   error: string | null;
   durationMs: number;
+}
+
+/** io_cases 列的 JSON 解析（坏数据不抛：返回空数组，判题侧会明确报"缺少用例"） */
+export function parseIoCases(raw: unknown): ChallengeIoCase[] {
+  if (Array.isArray(raw)) return raw.map((c) => ({ input: String((c as { input?: unknown })?.input ?? ""), expected: String((c as { expected?: unknown })?.expected ?? "") }));
+  const s = String(raw ?? "").trim();
+  if (!s) return [];
+  try {
+    const j = JSON.parse(s);
+    return Array.isArray(j) ? j.map((c) => ({ input: String(c?.input ?? ""), expected: String(c?.expected ?? "") })) : [];
+  } catch { return []; }
 }
 
 // ---------- 导入（由 scripts/import-ai-career.mjs / import-codetop-top400.mjs 调用） ----------
@@ -55,8 +75,8 @@ export interface ChallengeRunResult {
 export function importChallengesData(list: unknown): { ok: boolean; imported?: number; error?: string } {
   if (!Array.isArray(list) || !list.length) return { ok: false, error: "空数据" };
   const ins = db.prepare(`INSERT INTO challenges
-    (id, title, category, difficulty, frequency, time_limit, description, skeleton, test_code, source, created_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+    (id, title, category, difficulty, frequency, time_limit, description, skeleton, test_code, mode, io_cases, source, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       category = excluded.category,
@@ -66,18 +86,24 @@ export function importChallengesData(list: unknown): { ok: boolean; imported?: n
       description = excluded.description,
       skeleton = excluded.skeleton,
       test_code = excluded.test_code,
+      mode = excluded.mode,
+      io_cases = excluded.io_cases,
       source = excluded.source`);
   const now = Date.now();
   let n = 0;
   for (const raw of list as ChallengeImportItem[]) {
     const c = raw;
     if (!c?.id || !c?.title) continue;
+    const mode = c.mode === "acm" ? "acm" : "core";
+    const ioCases = mode === "acm"
+      ? JSON.stringify(parseIoCases(c.ioCases).filter((x) => x.expected !== "" || x.input !== ""))
+      : "";
     ins.run(
       String(c.id), String(c.title).slice(0, 100),
       c.category === "algorithm" ? "algorithm" : "handwrite",
       Number(c.difficulty) || 1, Number(c.frequency) || 1, Number(c.timeLimit) || 10,
       String(c.description || "").slice(0, 6000),
-      String(c.skeleton || ""), String(c.testCode || ""), String(c.source || "ai-career"), now
+      String(c.skeleton || ""), String(c.testCode || ""), mode, ioCases, String(c.source || "ai-career"), now
     );
     n++;
   }
@@ -85,34 +111,37 @@ export function importChallengesData(list: unknown): { ok: boolean; imported?: n
 }
 
 // ---------- 查询 ----------
-/** 题目列表（含用户状态：done/wrong_count） */
-export function getChallenges({ category = "", difficulty = 0, done = null }: { category?: string; difficulty?: number; done?: boolean | null } = {}): ChallengeRow[] {
+/** 题目列表（含用户状态：done/wrong_count；mode 决定前端是否按 ACM 模式展示） */
+export function getChallenges({ category = "", difficulty = 0, done = null, mode = "" }: { category?: string; difficulty?: number; done?: boolean | null; mode?: string } = {}): ChallengeRow[] {
   const conds: string[] = [];
   const args: Array<string | number> = [];
   if (category) { conds.push("category=?"); args.push(category); }
   if (difficulty) { conds.push("difficulty=?"); args.push(Number(difficulty)); }
   if (done !== null) { conds.push("done=?"); args.push(done ? 1 : 0); }
+  if (mode) { conds.push("mode=?"); args.push(String(mode)); }
   const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
   return (db.prepare(`SELECT id, title, category, difficulty, frequency, time_limit, description, skeleton,
-    done, wrong_count FROM challenges ${where} ORDER BY category, difficulty, frequency DESC, id`).all(...args) as Array<Record<string, unknown>>)
+    mode, done, wrong_count FROM challenges ${where} ORDER BY mode, category, difficulty, frequency DESC, id`).all(...args) as Array<Record<string, unknown>>)
     .map((r) => ({
       id: String(r.id), title: String(r.title), category: String(r.category),
       difficulty: Number(r.difficulty), frequency: Number(r.frequency), timeLimit: Number(r.time_limit),
       description: String(r.description || ""), skeleton: String(r.skeleton || ""),
+      mode: String(r.mode || "core"),
       done: !!r.done, wrongCount: Number(r.wrong_count || 0),
     }));
 }
 
-/** 单题详情（含 test_code，供判题页加载） */
+/** 单题详情（含 test_code 与 ACM 用例，供判题页加载） */
 export function getChallengeDetail(id: unknown): ChallengeDetail | null {
   const r = db.prepare(`SELECT id, title, category, difficulty, frequency, time_limit, description, skeleton, test_code,
-    done, wrong_count FROM challenges WHERE id=?`).get(String(id)) as Record<string, unknown> | undefined;
+    mode, io_cases, done, wrong_count FROM challenges WHERE id=?`).get(String(id)) as Record<string, unknown> | undefined;
   if (!r) return null;
   return {
     id: String(r.id), title: String(r.title), category: String(r.category),
     difficulty: Number(r.difficulty), frequency: Number(r.frequency), timeLimit: Number(r.time_limit),
     description: String(r.description || ""), skeleton: String(r.skeleton || ""),
-    testCode: String(r.test_code || ""), done: !!r.done, wrongCount: Number(r.wrong_count || 0),
+    testCode: String(r.test_code || ""), mode: String(r.mode || "core"), ioCases: parseIoCases(r.io_cases),
+    done: !!r.done, wrongCount: Number(r.wrong_count || 0),
   };
 }
 
@@ -138,12 +167,18 @@ export function buildExportArgs(skeleton: unknown): string {
 
 /**
  * 沙箱判题：用户代码 + 测试代码在独立 worker 线程（vm 双隔离）执行，超时真正终止
+ * @param mode core=LeetCode 核心代码（默认，testCode 走 __test__ 断言）；acm=标准输入输出（cases 逐组比对）
  */
-export async function runChallengeCode({ userCode, testCode, skeleton, timeoutMs = SANDBOX_TIMEOUT_MS }: { userCode: string; testCode: string; skeleton?: string; timeoutMs?: number }): Promise<ChallengeRunResult> {
+export async function runChallengeCode({ userCode, testCode = "", skeleton, mode = "core", cases = [], timeoutMs = SANDBOX_TIMEOUT_MS }: { userCode: string; testCode?: string; skeleton?: string; mode?: string; cases?: ChallengeIoCase[]; timeoutMs?: number }): Promise<ChallengeRunResult> {
   const start = Date.now();
   try {
     const { runInSandbox } = await import("./sandbox-runner.ts");
-    const r = await runInSandbox({ userCode, testCode, skeleton, timeoutMs }) as { success?: unknown; tests?: unknown; logs?: unknown; error?: unknown };
+    const r = await runInSandbox({
+      userCode, testCode, skeleton,
+      mode: mode === "acm" ? "acm" : "core",
+      cases: Array.isArray(cases) ? cases : [],
+      timeoutMs,
+    }) as { success?: unknown; tests?: unknown; logs?: unknown; error?: unknown };
     return {
       success: !!r.success,
       tests: Array.isArray(r.tests) ? r.tests as ChallengeRunResult["tests"] : [],

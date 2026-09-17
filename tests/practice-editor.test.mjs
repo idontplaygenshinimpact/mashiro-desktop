@@ -50,7 +50,7 @@ test("真机行为：在 jsdom 里挂载 CodeMirror 并读写/销毁（不是只
   assert.equal(host.querySelector(".cm-editor"), null, "destroy 后应移除编辑器 DOM（关闭面板不残留/不泄漏）");
 });
 
-test("原生接线：按需注入产物 + 失败回退 textarea + 判题读编辑器值 + 关闭销毁", () => {
+test("原生接线：回退优先 + 异步升级 CodeMirror + 判题读编辑器值 + 关闭销毁", () => {
   const panel = read("desktop/renderer/panel-rest.js");
   // ① 按需注入：494KB 产物不进首屏（与 M9"按需加载框架 bundle"同策略）
   assert.match(panel, /function loadPracticeEditor\(\)/, "应有懒加载函数");
@@ -58,9 +58,13 @@ test("原生接线：按需注入产物 + 失败回退 textarea + 判题读编�
   assert.match(panel, /practice-editor\.bundle\.js/, "应加载编辑器产物");
   const html = read("desktop/renderer/panel.html");
   assert.doesNotMatch(html, /practice-editor\.bundle\.js/, "panel.html 不应静态引入（否则白付 494KB 首屏）");
-  // ② 回退路径保留：产物缺失/初始化异常时退回 textarea（编辑器坏掉不能连带面板不可用）
-  assert.match(panel, /function mountFallbackEditor\(/, "应保留 textarea 回退实现");
-  assert.match(panel, /CodeMirror 初始化失败，退回 textarea/, "初始化异常要回退并留日志");
+  // ② 回退优先、后升级：产物加载期（最长 1.5s）面板必须**立即可用**
+  //    反例（本次实测踩到）：先 await 产物再挂编辑器 → 那段时间按钮点了没反应（jsdom 无产物时整块不可用）
+  const fbIdx = panel.indexOf("const fb = mountFallbackEditor(host, c.skeleton);");
+  const upIdx = panel.indexOf("loadPracticeEditor().then((cm) =>");
+  assert.ok(fbIdx > 0 && upIdx > 0 && fbIdx < upIdx, "应先挂 textarea 回退、再异步升级 CodeMirror（顺序不可反）");
+  assert.match(panel, /const current = ed\.getValue\(\)/, "升级时要保留用户已写内容");
+  assert.match(panel, /CodeMirror 初始化失败，保留 textarea/, "初始化异常要保留回退实现并留日志");
   // ③ 判题读的是编辑器当前值（不能还读旧的 ta.value）
   assert.match(panel, /const code = ed\.getValue\(\)/, "run() 应从编辑器取值");
   assert.match(panel, /body: JSON\.stringify\(\{ id: btn\.dataset\.id, userCode: code \}\)/, "判题应提交编辑器内容");
@@ -68,6 +72,12 @@ test("原生接线：按需注入产物 + 失败回退 textarea + 判题读编�
   assert.match(panel, /if \(ed\.destroy\) ed\.destroy\(\)/, "关闭编辑器应销毁 CodeMirror 实例");
   // ⑤ Ctrl/Cmd+Enter 走统一入口（CodeMirror keymap 与回退实现共用）
   assert.match(panel, /runRef\.fn = run/, "应以 runRef 暴露 run 给编辑器 keymap（避免 TDZ）");
+  // ⑥ ACM 模式三件套：模式切换 / 用例面板 / 逐用例 diff
+  assert.match(panel, /qs\.set\("mode", chMode\)/, "列表请求应带 mode（核心代码 / ACM 两套题库）");
+  assert.match(panel, /data-mode="acm"/, "应有「🖥️ ACM 模式」切换 chip");
+  assert.match(panel, /📥 测试用例/, "ACM 题应展示用例面板（输入/期望输出）");
+  assert.match(panel, /const isAcm = \(j\.tests \|\| \[\]\)\.some\(\(t\) => t\.expected !== undefined\)/, "应识别 ACM 判题返回（带 expected 的用例）");
+  assert.match(panel, /期望：\$\{String\(t\.expected/, "ACM 失败应展示逐用例 diff");
 });
 
 test("打包与哈希登记齐全（产物不会被漏构建/漏检查）", () => {

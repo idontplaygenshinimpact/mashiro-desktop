@@ -22,6 +22,7 @@ export function registerPracticeRoutes(router: Router): void {
       const list = challengeApi.getChallenges({
         category: u.searchParams.get("category") || "",
         difficulty: Number(u.searchParams.get("difficulty")) || 0,
+        mode: u.searchParams.get("mode") || "", // core / acm（专项练习的模式切换）
       });
       const stats = challengeApi.getChallengeStats();
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -57,6 +58,9 @@ export function registerPracticeRoutes(router: Router): void {
           userCode: String(userCode || ""),
           testCode: detail.testCode,
           skeleton: detail.skeleton,
+          // ACM 模式（标准输入输出）：题目自带 io_cases，判题逐组比对输入输出
+          mode: detail.mode,
+          cases: detail.ioCases,
         });
         // 闭环清查修复：判题结果必须回流——此前只埋点不落状态：
         //   · 判题通过不写 challenges.done → 生产库 done 恒 0/448（"练完"没有任何痕迹）

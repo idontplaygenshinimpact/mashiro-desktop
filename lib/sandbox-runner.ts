@@ -24,13 +24,23 @@ const WORKER_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "san
  * @param {{userCode: string, testCode: string, skeleton: string, timeoutMs?: number}} opts
  * @returns {Promise<{ok: boolean, success: boolean, tests: Array<{passed: boolean, label: string}>, logs: string[], error: string|null, durationMs: number}>}
  */
-export interface SandboxTask { userCode: string; testCode?: string; skeleton?: string; timeoutMs?: number }
+export interface SandboxTask {
+  userCode: string;
+  testCode?: string;
+  skeleton?: string;
+  /** 判题模式：core=LeetCode 核心代码模式（默认）；acm=标准输入输出（readline/print + 用例比对） */
+  mode?: "core" | "acm";
+  /** ACM 模式用例（多组输入输出） */
+  cases?: Array<{ input?: string; expected?: string }>;
+  timeoutMs?: number;
+}
 /** 判题结果（与上方 JSDoc 契约一致：调用方 lib/ai-career.mjs 直接读这些字段） */
 export interface SandboxResult {
-  ok: boolean; success: boolean; tests: Array<{ passed: boolean; label: string }>;
+  ok: boolean; success: boolean;
+  tests: Array<{ passed: boolean; label: string; input?: string; expected?: string; actual?: string }>;
   logs: string[]; error: string | null; durationMs: number;
 }
-export function runInSandbox({ userCode, testCode, skeleton, timeoutMs = 15000 }: SandboxTask): Promise<SandboxResult> {
+export function runInSandbox({ userCode, testCode, skeleton, mode = "core", cases = [], timeoutMs = 15000 }: SandboxTask): Promise<SandboxResult> {
   return new Promise((resolve) => {
     let settled = false;
     const done = (payload: Record<string, unknown>) => {
@@ -48,6 +58,8 @@ export function runInSandbox({ userCode, testCode, skeleton, timeoutMs = 15000 }
           userCode: String(userCode || ""),
           testCode: String(testCode || ""),
           skeleton: String(skeleton || ""),
+          mode: mode === "acm" ? "acm" : "core",
+          cases: Array.isArray(cases) ? cases : [],
         },
         resourceLimits: { maxOldGenerationSizeMb: 64, maxYoungGenerationSizeMb: 16, stackSizeMb: 2 },
       });

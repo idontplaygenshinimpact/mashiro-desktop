@@ -217,3 +217,92 @@ test("牛客 TOP101：条目点击展开题干（detail mock）+ 再点收起", 
     ctx.dom.window.close();
   }
 });
+
+// ---------- ACM 模式（标准输入输出，秋招笔试卷子形态）----------
+// 背景：题库原先只有 LeetCode 核心代码模式；ACM 模式需要「模式切换 + 用例可见 + 逐用例 diff」三件套。
+function bootAcm() {
+  const list = [
+    { id: "acm-sum-n", title: "n 个数求和（单组）", category: "algorithm", difficulty: 1, frequency: 3, timeLimit: 5,
+      description: "输入格式：第一行 n，第二行 n 个整数。\n输出格式：一行，和。", skeleton: "// ACM 模式：readline()/print()", mode: "acm", done: false, wrongCount: 0 },
+    { id: "debounce", title: "手写防抖 debounce", category: "handwrite", difficulty: 1, frequency: 3, timeLimit: 10,
+      description: "补全函数", skeleton: "function debounce(){}", mode: "core", done: false, wrongCount: 0 },
+  ];
+  const ioCases = [{ input: "3\n1 2 3", expected: "6" }, { input: "1\n-7", expected: "-7" }];
+  const ctx = bootPanel({});
+  const seen = { listUrls: [], runBody: null };
+  ctx.window.__seen = seen;
+  ctx.window.fetch = async (url, init) => {
+    const u = String(url);
+    let j;
+    if (u.includes("/api/challenges/run")) {
+      seen.runBody = JSON.parse(init.body);
+      j = { ok: true, success: false, durationMs: 12, tests: [
+        { passed: true, label: "用例 1" },
+        { passed: false, label: "用例 2", input: "1\n-7", expected: "-7", actual: "0" },
+      ], logs: [], reflow: { wrong: true, title: "n 个数求和（单组）" } };
+    } else if (u.includes("/api/challenges/detail")) {
+      j = { ok: true, detail: { ...list[0], testCode: "", ioCases } };
+    } else if (u.includes("/api/challenges?")) {
+      seen.listUrls.push(u);
+      const mode = new URL(u).searchParams.get("mode") || "core";
+      const filtered = list.filter((c) => c.mode === mode);
+      j = { ok: true, total: filtered.length, done: 0, left: filtered.length, list: filtered };
+    } else j = { ok: true, items: [], list: [], plan: { items: [] } };
+    return { ok: true, json: async () => j };
+  };
+  ctx.window.loadChallenges();
+  return ctx;
+}
+
+test("ACM：模式切换 chips → 请求带 mode=acm，列表只回 ACM 题并带 ACM 徽标", async () => {
+  const ctx = bootAcm();
+  try {
+    await tick(60);
+    const chips = [...ctx.window.document.querySelectorAll("#challenge-cats .oj-cat-chip")];
+    const acmChip = chips.find((c) => c.dataset.mode === "acm");
+    const coreChip = chips.find((c) => c.dataset.mode === "core");
+    assert.ok(acmChip && coreChip, "应有「核心代码 / ACM 模式」两个模式 chip");
+    assert.ok(ctx.window.__seen.listUrls.some((u) => u.includes("mode=core")), "默认应按 core 拉取");
+    acmChip.click();
+    await tick(60);
+    assert.ok(ctx.window.__seen.listUrls.some((u) => u.includes("mode=acm")), "点 ACM 后应按 acm 拉取");
+    const items = [...ctx.window.document.getElementById("challenge-list").querySelectorAll(".job-item")];
+    assert.equal(items.length, 1, "ACM 模式下列表只含 ACM 题");
+    assert.ok(items[0].textContent.includes("ACM"), "ACM 题应显示 ACM 徽标");
+  } finally {
+    ctx.window.clearAllTimers();
+    ctx.dom.window.close();
+  }
+});
+
+test("ACM：做题展示测试用例（输入/期望），判题失败给逐用例 diff", async () => {
+  const ctx = bootAcm();
+  try {
+    await tick(60);
+    ctx.window.document.querySelector("#challenge-cats .oj-cat-chip[data-mode='acm']").click();
+    await tick(60);
+    const item = ctx.window.document.getElementById("challenge-list").querySelector(".job-item");
+    item.querySelector(".ch-practice").click();
+    await tick(120);
+    const editor = ctx.window.document.querySelector(".ch-editor");
+    assert.ok(editor, "编辑器应展开");
+    const details = editor.querySelector("details");
+    assert.ok(details, "ACM 题应展示可展开的「测试用例」面板");
+    assert.ok(details.textContent.includes("输入") && details.textContent.includes("期望输出"), "用例面板应含输入与期望输出");
+    assert.ok(details.textContent.includes("1\n-7") || details.textContent.includes("-7"), "应能看见真实用例内容");
+
+    // 判题失败 → 结果区应出现逐用例 diff（输入/期望/实际）
+    editor.querySelector(".ch-editor-run").click();
+    await tick(200);
+    const result = editor.querySelector(".ch-editor-result").textContent;
+    assert.match(result, /用例 2/, "应显示失败用例");
+    assert.match(result, /输入：/, "应显示输入");
+    assert.match(result, /期望：-7/, "应显示期望输出");
+    assert.match(result, /实际：0/, "应显示实际输出");
+    assert.match(result, /已记入错题/, "回流结果应如实展示");
+    assert.equal(ctx.window.__seen.runBody.id, "acm-sum-n", "判题请求应带题目 id（服务端按题目 mode 走 ACM 分支）");
+  } finally {
+    ctx.window.clearAllTimers();
+    ctx.dom.window.close();
+  }
+});

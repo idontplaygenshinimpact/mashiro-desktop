@@ -4,19 +4,19 @@ window.__RENDERER_SIZES = {
   "measuredAt": "2026-09-17",
   "unit": "KB（1KB = 1024 字节；gzip = zlib 压缩后大小，与浏览器传输量同口径）",
   "native": {
-    "bytes": 381989,
-    "gzip": 117020,
+    "bytes": 385831,
+    "gzip": 118198,
     "files": 6,
     "note": "panel-*.js 直引，无打包无依赖"
   },
   "react": {
-    "bytes": 764455,
-    "gzip": 253777,
+    "bytes": 766544,
+    "gzip": 254544,
     "note": "Vite 构建的 react-panel.js（含 React 运行时）"
   },
   "vue": {
-    "bytes": 682447,
-    "gzip": 234416,
+    "bytes": 685249,
+    "gzip": 235083,
     "note": "Vite 构建的 vue-review.js（含 Vue 运行时）"
   }
 };

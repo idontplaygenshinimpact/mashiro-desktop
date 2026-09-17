@@ -533,6 +533,7 @@ let challengeCat = "";
 let challengeDiff = 0;
 let chSearch = "";   // 搜索关键词（前端过滤：标题/描述/ID）
 let chDone = 0;      // 0 全部 / 1 未做 / 2 已做（前端过滤）
+let chMode = "core"; // 判题模式：core=LeetCode 核心代码（骨架函数判题）/ acm=标准输入输出（readline/print 用例比对）
 let chVisible = 60;  // 懒加载：每批条数（448 道全渲染太卡且难找）
 let chAll = [];      // 当前完整排序列表（过滤前）
 
@@ -544,6 +545,7 @@ async function loadChallenges() {
     const qs = new URLSearchParams();
     if (challengeCat) qs.set("category", challengeCat);
     if (challengeDiff) qs.set("difficulty", String(challengeDiff));
+    qs.set("mode", chMode); // 核心代码 / ACM 两种模式各自成集（秋招笔试卷子形态）
     const res = await fetch(API_BASE + "/api/challenges?" + qs.toString());
     const j = await res.json();
     const statusEl = $("challenge-status");
@@ -580,8 +582,11 @@ function renderChallenges() {
     (!q || `${p.title}\n${p.description || ""}\n${p.id}`.toLowerCase().includes(q))
   );
   $("challenge-count").textContent = (q || chDone) ? `命中 ${filtered.length} / ${chAll.length}` : "";
-  // 筛选 chips：完成状态 + 分类 + 难度（搜索/状态前端过滤，分类/难度走后端）
+  // 筛选 chips：判题模式 + 完成状态 + 分类 + 难度（搜索/状态前端过滤，模式/分类/难度走后端）
   cats.innerHTML =
+    `<button class="oj-cat-chip" data-mode="core" style="${chMode === "core" ? activeChip : ""}" title="LeetCode 核心代码模式：只写函数体，判题器调用你的函数断言">📐 核心代码</button>` +
+    `<button class="oj-cat-chip" data-mode="acm" style="${chMode === "acm" ? activeChip : ""}" title="ACM 模式（秋招笔试卷子形态）：自己 readline() 读输入、print() 输出，按用例比对">🖥️ ACM 模式</button>` +
+    `<span style="width:1px;height:14px;background:rgba(109,79,216,.18);margin:0 2px;align-self:center;"></span>` +
     `<button class="oj-cat-chip" data-done="0" style="${!chDone ? activeChip : ""}">📋 全部</button>` +
     `<button class="oj-cat-chip" data-done="1" style="${chDone === 1 ? activeChip : ""}">🆕 未做</button>` +
     `<button class="oj-cat-chip" data-done="2" style="${chDone === 2 ? activeChip : ""}">✅ 已做</button>` +
@@ -594,6 +599,12 @@ function renderChallenges() {
     `<button class="oj-cat-chip" data-cat="${esc(challengeCat)}" data-diff="3" style="${challengeDiff === 3 ? activeChip : ""}">困难</button>`;
   document.querySelectorAll("#challenge-cats .oj-cat-chip").forEach((btn) => {
     btn.addEventListener("click", () => {
+      if (btn.dataset.mode !== undefined) { // 模式切换：分类/难度保留（两套题库互不影响）
+        chMode = btn.dataset.mode === "acm" ? "acm" : "core";
+        chVisible = 60;
+        loadChallenges();
+        return;
+      }
       if (btn.dataset.done !== undefined) { chDone = Number(btn.dataset.done); chVisible = 60; renderChallenges(); return; }
       challengeCat = btn.dataset.cat;
       challengeDiff = Number(btn.dataset.diff || 0);
@@ -611,6 +622,7 @@ function renderChallenges() {
     <div class="job-item" id="ch-${esc(p.id)}" title="点击展开/收起题干" style="cursor:pointer;">
       <div class="job-head">
         <span class="job-badge" style="background:${p.category === "handwrite" ? "rgba(58,141,90,.12)" : "rgba(109,79,216,.12)"};color:${p.category === "handwrite" ? "#2f7d4e" : "#5d48b8"};">${p.category === "handwrite" ? "✍️手写" : "🧮算法"}</span>
+        ${p.mode === "acm" ? '<span class="job-badge" style="background:rgba(13,102,201,.12);color:#0d66c9;" title="ACM 模式：自己读输入、自己输出（秋招笔试卷子形态）">🖥️ACM</span>' : ""}
         <span style="color:${dc};font-size:11px;">${dl}</span>
         <span style="font-size:11px;" title="面试出现频率">${freqStars(p.frequency)}</span>
         <span class="job-title">${esc(p.title)}</span>
@@ -769,11 +781,25 @@ function bindChPractice() {
           div.innerHTML = `
             <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
               <b style="color:#5d48b8;">${esc(c.title)}</b>
-              <span style="color:#6a6790;">（${c.category === "handwrite" ? "手写" : "算法"} · ${(DIFF_LABEL[c.difficulty] || ["", ""])[0]} · 建议 ${c.timeLimit || 10} 分钟内）</span>
+              <span style="color:#6a6790;">（${c.category === "handwrite" ? "手写" : "算法"} · ${(DIFF_LABEL[c.difficulty] || ["", ""])[0]} · 建议 ${c.timeLimit || 10} 分钟内${c.mode === "acm" ? " · 🖥️ ACM 模式" : ""}）</span>
               <span style="flex:1;"></span>
               <button class="job-btn ch-editor-close" style="padding:3px 8px;">✖</button>
             </div>
             <div style="color:#444;white-space:pre-wrap;margin-bottom:8px;max-height:140px;overflow:auto;">${esc(c.description)}</div>
+            ${c.mode === "acm" && (c.ioCases || []).length ? `
+            <details style="margin-bottom:8px;">
+              <summary style="cursor:pointer;color:#0d66c9;font-size:12px;">📥 测试用例（${c.ioCases.length} 组 · 点开看输入/期望输出，判题按这些用例比对）</summary>
+              <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px;">
+                ${c.ioCases.map((t, i) => `
+                  <div style="display:flex;gap:8px;align-items:flex-start;">
+                    <span style="color:#6a6790;min-width:44px;">用例 ${i + 1}</span>
+                    <div style="flex:1;display:flex;gap:8px;">
+                      <pre style="flex:1;margin:0;padding:6px;background:#f4f2ff;border-radius:4px;white-space:pre-wrap;max-height:90px;overflow:auto;">输入：\n${esc(t.input)}</pre>
+                      <pre style="flex:1;margin:0;padding:6px;background:#eefaf1;border-radius:4px;white-space:pre-wrap;max-height:90px;overflow:auto;">期望输出：\n${esc(t.expected)}</pre>
+                    </div>
+                  </div>`).join("")}
+              </div>
+            </details>` : ""}
             <div class="ch-code-host"></div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
               <button class="job-btn ch-editor-run" style="background:linear-gradient(135deg,#8a5adc,#6d4fd8);color:#fff;">▶ 运行判题</button>
@@ -783,21 +809,25 @@ function bindChPractice() {
             <pre class="ch-editor-result" style="display:none;margin-top:8px;padding:8px;background:#1e1e2e;color:#cdd6f4;border-radius:6px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;"></pre>`;
           item.appendChild(div);
           btn.textContent = "✍️ 做题";
-          // 编辑器：优先 CodeMirror 6（按需注入产物）→ 失败退回 textarea 实现
+          // 编辑器：先挂**立即可用**的回退实现（textarea），再异步升级到 CodeMirror 6
           const host = div.querySelector(".ch-code-host");
           const runRef = { fn: null }; // run() 在编辑器之后定义：keymap 通过 ref 调用，避免 TDZ
-          let ed = null;
-          const cm = await loadPracticeEditor();
-          if (cm?.create) {
-            try {
-              const h = cm.create(host, { initial: c.skeleton, onRun: () => runRef.fn && runRef.fn() });
-              ed = { kind: "codemirror", getValue: h.getValue, setValue: h.setValue, focus: h.focus, destroy: h.destroy };
-            } catch (e) { console.warn("[panel] CodeMirror 初始化失败，退回 textarea：", e); }
-          }
-          if (!ed) {
-            const fb = mountFallbackEditor(host, c.skeleton);
-            fb.ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runRef.fn && runRef.fn(); } });
-            ed = fb;
+          // 反例（本次实测踩到）：先 await 产物再挂编辑器 → 产物加载期（最长 1.5s）面板上是"按钮点了没反应"
+          // 的死界面；jsdom（无产物）里整块也不可用。先可用、后升级，任何情况下都不空窗。
+          const fb = mountFallbackEditor(host, c.skeleton);
+          fb.ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runRef.fn && runRef.fn(); } });
+          let ed = fb;
+          if (typeof loadPracticeEditor === "function") {
+            loadPracticeEditor().then((cm) => {
+              if (!cm || typeof cm.create !== "function" || !div.isConnected) return;
+              try {
+                const current = ed.getValue();          // 保留用户已写的内容
+                host.innerHTML = "";                    // 清掉回退 DOM，换成 CodeMirror
+                const h = cm.create(host, { initial: current, onRun: () => runRef.fn && runRef.fn() });
+                ed = { kind: "codemirror", getValue: h.getValue, setValue: h.setValue, focus: h.focus, destroy: h.destroy };
+                host.dataset.editor = "codemirror";
+              } catch (e) { console.warn("[panel] CodeMirror 初始化失败，保留 textarea：", e); }
+            }).catch(() => { /* 产物加载失败：保留 textarea */ });
           }
           const stateEl = div.querySelector(".ch-editor-state");
           const resultEl = div.querySelector(".ch-editor-result");
@@ -820,7 +850,17 @@ function bindChPractice() {
               const lines = [];
               lines.push(pass ? "🎉 全部通过 ✅" : "❌ 有测试未通过");
               lines.push(`⏱ ${j.durationMs} ms · ${(j.tests || []).length} 个测试`);
-              for (const t of (j.tests || [])) lines.push(`${t.passed ? "✅" : "❌"} ${t.label}`);
+              // ACM 模式：逐用例 diff（输入/期望/实际）——核心代码模式只有断言 label
+              const isAcm = (j.tests || []).some((t) => t.expected !== undefined);
+              for (const t of (j.tests || [])) {
+                if (!isAcm) { lines.push(`${t.passed ? "✅" : "❌"} ${t.label}`); continue; }
+                lines.push(`${t.passed ? "✅" : "❌"} ${t.label}`);
+                if (!t.passed) {
+                  lines.push(`   输入：${String(t.input ?? "").replace(/\n/g, " ⏎ ")}`);
+                  lines.push(`   期望：${String(t.expected ?? "").replace(/\n/g, " ⏎ ")}`);
+                  lines.push(`   实际：${String(t.actual ?? "").replace(/\n/g, " ⏎ ")}`);
+                }
+              }
               if (j.error) lines.push("⚠️ " + j.error);
               if ((j.logs || []).length) { lines.push("— console —"); for (const l of j.logs) lines.push(l); }
               // 即时反馈 tip（长期学习计划：节奏对比/错题转正提示）

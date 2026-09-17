@@ -17,7 +17,7 @@
 | **事件驱动内核** | 事件总线 + 自主决策（off/notify/full 三级刹车）+ CC 会话 watcher（Claude Code 伴侣）+ 场景技能装配 | ✅ P0+P1 已接线 |
 | **契约层（Phase 2）** | zod 契约：**20 条路由**挂 input/output 校验（`withContract`）+ SSE 事件 union + preload/renderer 类型化（`kanban-api.d.ts` **83 个接口方法**，preload 以该类型 expose，checkJs 校验）+ 117 处硬编码收编；护栏 `tests/routes-registry.test.mjs`（路由总数 + 契约覆盖率）与 `tests/contracts.test.mjs`（400/500 语义） | ✅ |
 | **双层评测（Phase 评测）** | Layer A 真实模型基线 + Layer B mock agent 机制；数据集治理（sha256）/ 成本延迟指标 / 分层回归门禁 / 消融基线 / 每周评测 workflow（机制已接线；**尚未产出真实徽章与趋势**——`<!-- EVAL_BADGE -->` 仍为空、`benchmark/trend.svg` 未入库，需带 `DEEPSEEK_API_KEY` secret 跑一周） | ✅ 机制 |
-| **三态渲染层** | **9 个 Tab × 原生 / React / Vue 三态并行**（含 2026-09-16 新增的「专项练习」：三态统一 CodeMirror 6 判题编辑器）（同一 preload IPC 桥 + 同一业务层零改动）；三态对比卡（dist 实测 2026-09-16，含三态 CodeMirror 判题编辑器：原生 373.0KB / React 746.5KB / Vue 666.5KB）；**两侧全 Tab 渲染护栏**（`tests/react-tabs.render.test.mjs` + `tests/vue-tabs.render.test.mjs`：按 tab 挂载 → 数据等价 → 特色标注 → UI 不变量 → 对称卸载） | ✅ 矩阵 8×2 满格 |
+| **三态渲染层** | **9 个 Tab × 原生 / React / Vue 三态并行**（含 2026-09-16 新增的「专项练习」：三态统一 CodeMirror 6 判题编辑器）（同一 preload IPC 桥 + 同一业务层零改动）；三态对比卡（dist 实测 2026-09-16，含三态 CodeMirror 判题编辑器：原生 376.8KB / React 748.6KB / Vue 669.2KB）；**两侧全 Tab 渲染护栏**（`tests/react-tabs.render.test.mjs` + `tests/vue-tabs.render.test.mjs`：按 tab 挂载 → 数据等价 → 特色标注 → UI 不变量 → 对称卸载） | ✅ 矩阵 8×2 满格 |
 | **工程门禁** | **三条 tsc（宽松 checkJs + strict 含 lib/plugins/desktop + desktop 主进程）0 错误** + eslint **0 error 0 warning** + **1231 用例全绿**（1192 单元 + 39 集成）+ 渲染产物内容哈希新鲜度 + node:test 协议通道守卫 + UI 8 类机器指标巡检 + 本地 ASR 分段回归；**全量 TS 迁移已完成**（`lib` 122 `.ts` / `plugins` 14 `.ts` / `desktop` 11 `.ts`，实现全在 `.ts`，`.mjs` 只剩同名一行桶 → 调用方/插件协议/Electron 入口零改动；每模块一提交） | ✅ |
 
 **秋招助手（插件①）能力一览**：
@@ -167,6 +167,16 @@
 | # | 问题（实测） | 修法与护栏 |
 |---|---|---|
 | 25 | **"后端比前端慢这么多"**：面板窗口是静态文件 ~0.8s 就画出来，后端却要 2s+ 才能响应。逐模块计时定位到**启动路径静态导入了整条浏览器栈**——`lib/routes/core.ts` 顶层 `import { chatWithAgent } from "../agent.mjs"` → `impl-search.ts` → `fetch-page.ts` → playwright + jsdom（`agent.ts` 导入 **1483ms**、`fetch-page.ts` **1290ms**），而这条链只有聊天/抓取才用得到；`lib/oj.ts` 同样静态导入 `fetch-page.mjs` | agent 图改 memo 化动态加载（`loadAgent()`，两个聊天入口 await 它，lane 队列语义不变）、`assertPublicUrl` 改使用处动态 import；**实测 spawn→可响应 2190ms → 834ms（后台全开 1994ms → 841ms）**。踩坑记录：预热不能放在 listen 回调之前——ESM 求值在主线程，会把事件循环堵 ~1.25s（"已启动"从 621ms 被推到 1897ms），故 listen 后延迟 2s 再预热。护栏 `tests/boot-lazy-graph.test.mjs`（**看模块图而不是看时间**：导启动路径后 CJS 缓存里不得出现 playwright/jsdom，带正对照防"方法失效导致的永远绿"；旧代码下 2 项全红） |
+
+#### 功能增强：判题编辑器与 ACM 模式（2026-09-16）
+
+| # | 内容 | 说明与护栏 |
+|---|---|---|
+| 26 | **三态统一 CodeMirror 6 判题编辑器 + 新增「✍️ 专项练习」Tab** | 原先题库只有原生面板有、且"编辑器"是手搓 textarea（Tab/Enter 缩进靠 60 行手工实现，无语法高亮/括号匹配）；现三态都是 CodeMirror 6（`desktop/renderer/practice-editor.ts` esbuild IIFE 产物，原生按需注入 + 缺产物回退 textarea；React/Vue 各新增 `Practice.jsx`/`Practice.vue`）。题库从「校招」Tab 独立成一级 Tab（三态矩阵 8×2 → 9×2）。护栏：`tests/practice-editor.test.mjs`（jsdom 真挂载产物，空壳产物反证必红）、`tests/react-practice-tab.test.mjs`、`tests/vue-practice-tab.test.mjs`、`tests/panel-challenges.test.mjs`（改契约 + 补回退路径） |
+| 27 | **面试「手写轮」接入同一编辑器** | `panel-study.js` 的 `setIvAnswerMode()` 收口 mount/destroy；CodeMirror 的 `onChange` 把内容同步回 `#iv-answer`，`submitAnswer()` 照旧读它 → 文本/语音/代码三种作答共用同一提交链路（零改动）；`Mod-Enter` 提交。护栏 `tests/interview-codemirror.test.mjs`（4 项：挂载/提交/切走销毁/无产物兜底） |
+| 28 | **ACM 模式（标准输入输出判题）** | 原先只有 LeetCode 核心代码模式，而秋招笔试（牛客/赛码）绝大多数是 ACM 模式——"自己读输入/自己输出/多组用例/EOF 处理"是独立考点。沙箱新增 `mode:"acm"`：vm 内注入 `readline()`（逐行读、耗尽返回 `null`）与 `print()`，按 `io_cases` 逐组比对（行尾空白/末尾空行按 OJ 口径忽略，行内差异不忽略），失败给**逐用例 diff**（输入/期望/实际）；`challenges` 迁移 v5 加 `mode`/`io_cases` 列（存量题保持 `core`，零破坏）；内置 **15 道 ACM 题**（`lib/acm-bank.ts` + `scripts/import-acm-bank.mjs`，多组 A+B / EOF / 前缀和 / DP / 括号匹配 / 取模递推等）。护栏 `tests/acm-mode.test.mjs`（9 项：正解通过 / 错解 diff / **用例间输入隔离** / 归一化口径 / 运行时报错归因 / 缺用例明确报错 / 迁移默认值 / 路由 mode 过滤与回流 / 15 题参考解逐题通过——题库与判题器一起验） |
+
+> 说明：15 道 ACM 题的期望输出都是**参考解经本判题器实测**校准的（`node --experimental-strip-types scripts/_verify-acm-bank.mjs` → 15/15），不是手算拍脑袋。
 
 #### 待修（已定位到 `file:line`，按严重度排序；完整报告见 `%TEMP%\mashiro-audit\{A..H}-*.md`）
 
@@ -360,9 +370,9 @@ mashiro-desktop/                    # 宿主 + 插件（插件化架构，见 do
 
 | 渲染层 | 技术 | 覆盖 Tab | dist 实测 | 选型依据 |
 |---|---|---|---|---|
-| 原生 | 原生 JS + **esbuild** 单入口 | 全部 10 Tab（对照基线；设置 Tab 只有原生） | **373.0KB**（gzip 114.3KB / 6 文件；判题编辑器是 494KB 的按需产物，不进首屏） | file:// 加载不需 dev server/HMR；零依赖启动快 |
-| React 版 | **Vite 子项目**（`panel-react/`，vite 7） | 9/9（面试·驾驶舱·知识库·学习·爬取·校招·专项练习·对话·复习） | **746.5KB**（gzip 247.8KB，含 React 运行时 + CodeMirror 6） | 交互密集：**useReducer Phase 状态机** + useMemo 派生缓存 + useDeferredValue 搜索 |
-$19/9（同上） | **666.5KB**（gzip 228.9KB，含 Vue 运行时 + CodeMirror 6） | 数据可视化：**响应式 computed 曲线缓存** + watch 动画 + Transition 切卡 |
+| 原生 | 原生 JS + **esbuild** 单入口 | 全部 10 Tab（对照基线；设置 Tab 只有原生） | **376.8KB**（gzip 115.4KB / 6 文件；判题编辑器是 494KB 的按需产物，不进首屏） | file:// 加载不需 dev server/HMR；零依赖启动快 |
+| React 版 | **Vite 子项目**（`panel-react/`，vite 7） | 9/9（面试·驾驶舱·知识库·学习·爬取·校招·专项练习·对话·复习） | **748.6KB**（gzip 248.6KB，含 React 运行时 + CodeMirror 6） | 交互密集：**useReducer Phase 状态机** + useMemo 派生缓存 + useDeferredValue 搜索 |
+$19/9（同上） | **669.2KB**（gzip 229.6KB，含 Vue 运行时 + CodeMirror 6） | 数据可视化：**响应式 computed 曲线缓存** + watch 动画 + Transition 切卡 |
 
 三态共用**同一 preload IPC 桥 + 同一业务层**（`lib/interview*.ts`/`lib/review.ts` **零改动**）——**渲染层可替换性有代码证据**：功能等价证明可替换，同时各框架秀招牌特性（React useReducer/并发渲染、Vue 响应式/Transition）——"渲染层选型"从口号变成可对比的实现 + 实测包体积（`npm run gen:sizes` 从 dist 生成，`tests/renderer-sizes.test.mjs` 防数据过期）。
 
@@ -382,7 +392,7 @@ $19/9（同上） | **666.5KB**（gzip 228.9KB，含 Vue 运行时 + CodeMirror 
 - **Skills 插件 + 场景装配**：SKILL.md 声明式 + skill.mjs 可编程（tools/hooks/权限），`skill__<skill>__<tool>` 命名空间，`lib/skills.ts` 热重载；P1 场景激活子集（agent 只注入当前场景技能）
 - **可观测性**：`trace_llm`/`trace_tools` 每次调用记录 token/耗时/成败；面板运行监控实时可见
 - **定时任务与调度**：`widget.mjs` 的 33 处 `registerTimer/registerInterval`（18 周期 + 15 启动首跑；进程内、显式管理、退出统一清理）**+** `lib/scheduler.ts` 的持久化调度（`scheduled_jobs` 表 + `schedule_spec` 解析 + 失败自动停用）——scheduler 是 ADDITIVE 层，种子任务默认禁用，不与既有定时器双重触发
-- **渲染层三态并行**：同一业务层 + 同一 IPC 桥上的三套实现（原生 / React / Vue），覆盖 9 个 Tab×2 框架；`gen:sizes` 从 dist 实测包体积（原生 373.0KB / React 746.5KB / Vue 666.5KB——**2026-09-16 三态统一 CodeMirror 6 判题编辑器**后 React/Vue 明显变大，代价换来真编辑器：语法高亮/括号匹配/自动缩进/多光标/搜索/补全；框架包按 M9 按需加载，不进首屏），注册表一致性 + 两侧全 Tab 渲染测试 + 体积数据新鲜度三重护栏
+- **渲染层三态并行**：同一业务层 + 同一 IPC 桥上的三套实现（原生 / React / Vue），覆盖 9 个 Tab×2 框架；`gen:sizes` 从 dist 实测包体积（原生 376.8KB / React 748.6KB / Vue 669.2KB——**2026-09-16 三态统一 CodeMirror 6 判题编辑器**后 React/Vue 明显变大，代价换来真编辑器：语法高亮/括号匹配/自动缩进/多光标/搜索/补全；框架包按 M9 按需加载，不进首屏），注册表一致性 + 两侧全 Tab 渲染测试 + 体积数据新鲜度三重护栏
 - **语音识别长音频分段**：实测定位"多句 + 思考停顿的长音频整段送离线 paraformer → 注意力跨句错配（把后句的词串进前句、整句重复）"；修法是 `segmentVoice` 能量谷切段（静音 ≥250ms 视为句界，合并 ≤14s）+ 逐段识别拼接，并补齐术语/同音词纠错表（技术栈是/有限状态机/JD/FSM…）——同一段 90s 音频 **CER 4.1% → 0%、耗时 6.7s → 4.8s**（`scripts/_asr-ab.mjs <wav> <gt.txt>` 可复跑，需自备样本与真值；另一段样本的早期记录见 `lib/speech.ts` 注释：5.5% → 4.5%、6.8s → 3.3s——**数字随录音/切分不同，不要跨样本比较**）；`MIANSHI_KEEP_ASR_AUDIO=1` 可落盘真实录音样本，便于按真实嗓音继续调
 - **本地知识库混合检索（2026-09-11 补齐）**：`lib/knowledge-base.ts` —— 讲解文档按标题/💬 追问切段（追问=用户亲手问的缺口，检索加权）→ `knowledge_paragraphs` + FTS5 trigram；检索 = BM25（含 2 字词 LIKE 兜底）+ bge-small-zh 向量余弦 → **RRF 融合**（k=60，分数不可比只看排名）→ `bge-reranker-base` 交叉编码器精排（粗排 top10 → top5，路由 `/api/knowledge/paragraphs/search-reranked` 已就绪但**前端未接**）。踩过的三个坑都固化成修复：① 向量列**只读不写**（索引期从不向量化 → 向量腿一直是空的，实测 35% → 补齐后 55%）；② transformers.js 默认远端 huggingface.co（国内 `fetch failed` 被 catch 吞掉 → 静默退化，现支持 `MIANSHI_HF_ENDPOINT` 镜像）；③ 缓存目录默认是 cwd 相对 `.cache`（会在仓库根留垃圾 → 固定到 `<data>/models/transformers`）
 - **Agent 会话时间线（"把感知信号沉淀成数据"，2026-09-11）**：`lib/agent-timeline.ts` 两张表——`agent_sessions`（会话汇总：source/project/起止/轮次/工具数）+ `agent_tool_events`（工具明细，支持高频工具与按天分布）；写入两条路径：**实时**（事件总线回调）+ **历史回填**（OpenCode 走 SQL 聚合 266 会话；DSH 用「会话头 createdAt + 文件 mtime」近似并标 `partial`，**不逐帧解压** 18.9MB×578 个）。**指标口径踩了三处坑才修对**：① 会话区间大量重叠，直接求和得到 6128h（≈256 天）→ 改**区间并集**；② 区间跨统计窗口/跨自然日，出现"单日 81.2h"这种不可能值 → 按窗口与自然日**裁剪**；③ OpenCode 的会话 `title` 是"项目浏览/问候"这类临时标题，会把项目统计打散 → 按 `directory` 目录名归组。展示在「📊 驾驶舱」Tab；UI 明确标注"覆盖时段 = 存在活跃会话的时段并集（并行 agent 会叠加到接近全天），**不是工作时长**"

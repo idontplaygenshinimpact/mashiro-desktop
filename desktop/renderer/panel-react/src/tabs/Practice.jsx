@@ -27,12 +27,20 @@ const chipStyle = (active) => (active
   : { background: "rgba(109,79,216,.08)", color: "#5d48b8", border: "1px solid rgba(109,79,216,.25)", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12 });
 
 /** 判题结果展示（逐条断言 + 耗时 + console + tip + reflow 回流） */
+// ACM 模式 diff 口径与原生 panel-rest.js 一致：检测到任一用例带 expected（服务端 ACM 分支返回的
+// 逐用例 input/expected/actual 字段）即判为 ACM 题；非 ACM 题只有 label，不做 diff。
+// 换行展示选择「⏎ 」内联替换而不是 <pre>：结果区整体是单个深色 pre（white-space:pre-wrap），
+// 若在 pre 里再嵌 <pre> 会多一层滚动条/缩进，且逐用例多行会被折行——改成 ⏎ 视觉上每个字段
+// 单独一行、不折行，更贴近 OJ 判题日志。这是「⏎ 或 <pre>」二选一里选的 ⏎，理由写在这里。
+const fmtNL = (s) => String(s ?? "").replace(/\n/g, " ⏎ ");
 function ResultView({ result }) {
   if (!result) return null;
   const pass = !!(result.ok && result.success);
   const tests = result.tests || [];
   const logs = result.logs || [];
   const rf = result.reflow || {};
+  // ACM = 任一用例带 expected（服务端按题目自身 mode 走 ACM 分支返回此字段）
+  const isAcm = tests.some((t) => t.expected !== undefined);
   return (
     <div className="rf-card" style={{ borderColor: pass ? "rgba(58,141,90,.35)" : "rgba(185,28,28,.35)" }}>
       <div style={{ fontWeight: 700, color: pass ? "#2f7a4a" : "#b91c1c" }}>
@@ -43,6 +51,14 @@ function ResultView({ result }) {
       {tests.map((t, i) => (
         <div key={i} style={{ fontSize: 12, lineHeight: 1.6, color: t.passed ? "#2f7a4a" : "#b91c1c" }}>
           {t.passed ? "✅" : "❌"} {t.label}
+          {/* ACM 逐用例 diff：仅失败用例显示 输入/期望/实际（通过时不显示，避免刷屏） */}
+          {isAcm && !t.passed && (
+            <div style={{ marginLeft: 14, fontSize: 11, lineHeight: 1.5 }}>
+              <div>输入：{fmtNL(t.input)}</div>
+              <div>期望：{fmtNL(t.expected)}</div>
+              <div>实际：{fmtNL(t.actual)}</div>
+            </div>
+          )}
         </div>
       ))}
       {result.error && <div style={{ fontSize: 12, color: "#b91c1c", marginTop: 4 }}>⚠️ {result.error}</div>}
@@ -166,6 +182,30 @@ function ChallengeEditor({ challenge, onChanged, onNotify }) {
         <span className="rf-muted" style={{ fontWeight: 400 }}> [{catLabel} · {dl} · 建议 {detail?.timeLimit || 10} 分钟内]</span>
       </div>
       <pre className="rf-report" style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{detail?.description || "（本题暂无题干说明）"}</pre>
+      {/* ACM 题可折叠用例面板：逐组展示 输入/期望输出（用 <pre>，pre-wrap 保留换行可见）。 */}
+      {/* 与原生 panel-rest.js 789-802 同款信息层级：输入浅紫、期望淡绿、组头「用例 N」。 */}
+      {detail?.mode === "acm" && (detail.ioCases || []).length > 0 && (
+        <details style={{ marginTop: 8, marginBottom: 4 }} className="acm-cases" open={false}>
+          <summary style={{ cursor: "pointer", color: "#0d66c9", fontSize: 12 }}>
+            📥 测试用例（{detail.ioCases.length} 组 · 点开看输入/期望输出，判题按这些用例比对）
+          </summary>
+          <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+            {(detail.ioCases || []).map((t, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <span style={{ color: "#6a6790", minWidth: 44 }}>用例 {i + 1}</span>
+                <div style={{ flex: 1, display: "flex", gap: 8 }}>
+                  <pre style={{ flex: 1, margin: 0, padding: 6, background: "#f4f2ff", borderRadius: 4, whiteSpace: "pre-wrap", maxHeight: 90, overflow: "auto" }}>
+                    输入：{"\n"}{t.input}
+                  </pre>
+                  <pre style={{ flex: 1, margin: 0, padding: 6, background: "#eefaf1", borderRadius: 4, whiteSpace: "pre-wrap", maxHeight: 90, overflow: "auto" }}>
+                    期望输出：{"\n"}{t.expected}
+                  </pre>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
       {err && <div className="rf-muted rf-chip-warn">⚠️ {err}</div>}
       <div ref={hostRef} />
       <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -197,13 +237,15 @@ export function PracticePanel() {
   const [diff, setDiff] = useState(0);       // 0全部 / 1/2/3（走后端）
   const [done, setDone] = useState(0);       // 0全部 / 1未做 / 2已做（前端过滤）
   const [search, setSearch] = useState(""); // 搜索（前端过滤：标题/描述/ID）
+  const [mode, setMode] = useState("core"); // 判题模式：core=LeetCode 核心代码 / acm=标准输入输出（走后端，两套题库各自成集）
   const [expandedId, setExpandedId] = useState(null);
 
-  // 拉题库列表（分类/难度走后端过滤；done/搜索前端过滤）
+  // 拉题库列表（模式/分类/难度走后端过滤；done/搜索前端过滤）
   async function load() {
     setBusy(true); setErr("");
     try {
       const qs = new URLSearchParams();
+      if (mode) qs.set("mode", mode); // ACM / 核心代码两种模式各自成集（与原生 panel-rest.js 548 同口径）
       if (cat) qs.set("category", cat);
       if (diff) qs.set("difficulty", String(diff));
       const j = await api("/api/challenges?" + qs.toString());
@@ -216,7 +258,7 @@ export function PracticePanel() {
       setBusy(false);
     }
   }
-  useEffect(() => { load(); }, [cat, diff]);
+  useEffect(() => { load(); }, [cat, diff, mode]);
 
   // 派生筛选（useMemo：done 态 + 关键词，状态驱动差量过滤）
   const filtered = useMemo(() => {
@@ -243,8 +285,18 @@ export function PracticePanel() {
           📦 共 {stats.total} 道 · 已完成 {stats.done}（{pct}%）· 本地沙箱判题，无需登录
         </div>
 
-        {/* 工具栏：搜索 + 完成状态 + 分类 + 难度（搜索/done 前端过滤，cat/diff 走后端） */}
+        {/* 工具栏：模式 + 搜索 + 完成状态 + 分类 + 难度（搜索/done 前端过滤，mode/cat/diff 走后端） */}
         <div className="rf-toolbar" style={{ flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+          {/* 判题模式切换 chip（与原生 panel-rest.js 587-588 同款文案/信息层级）：
+              core=LeetCode 骨架函数判题，acm=自读输入/自输出按用例比对。点击重置已展开题目。 */}
+          {[
+            ["core", "📐 核心代码"], ["acm", "🖥️ ACM 模式"],
+          ].map(([v, lbl]) => (
+            <button key={v} type="button" style={chipStyle(mode === v)}
+              title={v === "acm" ? "ACM 模式（秋招笔试卷子形态）：自己 readline() 读输入、print() 输出，按用例比对" : "LeetCode 核心代码模式：只写函数体，判题器调用你的函数断言"}
+              onClick={() => { setMode(v); setExpandedId(null); }}>{lbl}</button>
+          ))}
+          <span style={{ width: 1, height: 14, background: "rgba(109,79,216,.18)", alignSelf: "center" }} />
           <input className="rf-input" placeholder="🔍 搜索标题/描述/ID…" value={search}
             aria-label="搜索题目" onChange={(e) => setSearch(e.target.value)} style={{ maxWidth: 200 }} />
           {[
@@ -291,6 +343,11 @@ export function PracticePanel() {
                 <span className="job-badge" style={{ background: p.category === "handwrite" ? "rgba(58,141,90,.12)" : "rgba(109,79,216,.12)", color: p.category === "handwrite" ? "#2f7d4e" : "#5d48b8" }}>
                   {p.category === "handwrite" ? "✍️手写" : "🧮算法"}
                 </span>
+                {/* ACM 题徽标：与原生 panel-rest.js 625 同款（蓝系），点开面板时提示读入/输出约定 */}
+                {p.mode === "acm" && (
+                  <span className="job-badge" style={{ background: "rgba(13,102,201,.12)", color: "#0d66c9" }}
+                    title="ACM 模式：自己读输入、自己输出（秋招笔试卷子形态）">🖥️ACM</span>
+                )}
                 <span style={{ color: dc, fontSize: 11 }}>{dl}</span>
                 <span title="面试出现频率" style={{ fontSize: 11 }}>{freqStars(p.frequency)}</span>
                 <b style={{ fontSize: 12 }}>{p.title}</b>

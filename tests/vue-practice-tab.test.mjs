@@ -41,6 +41,34 @@ function assess(src) {
   return fails;
 }
 
+/** ACM 模式专项断言（源码级）：模式 switch、ACM 徽标、用例折叠区、逐用例 diff、请求参数 mode */
+function assessAcm(src) {
+  const fails = [];
+  const has = (needle) => src.includes(String(needle));
+  // ① 顶部判题模式 switch：核心代码 / ACM，切换后重新拉列表
+  if (!has("📐 核心代码")) fails.push("缺少「📐 核心代码」模式 chip");
+  if (!has("🖥️ ACM 模式")) fails.push("缺少「🖥️ ACM 模式」模式 chip");
+  if (!/\bswitchMode\s*\(/.test(src)) fails.push("缺少 switchMode 切换函数");
+  // ② 列表请求带 mode 参数（后端契约：&mode=core|acm）
+  if (!/sp\.set\("mode",\s*mode\.value\)/.test(src)) fails.push("列表请求未带 mode 参数（sp.set(\"mode\", mode.value)）");
+  // ③ ACM 题徽标：列表项按 topic.mode 显示 🖥️ ACM
+  if (!/[mc]\.mode\s*===\s*['"]acm['"]/.test(src) || !has("🖥️ ACM")) fails.push("缺少 ACM 题徽标（mode==='acm' → 🖥️ ACM）");
+  // ④ 用例折叠区：ACM 题展示 <details> 逐组 输入/期望输出
+  if (!/\bdetails\b/.test(src) || !has("ioCases")) fails.push("缺少可折叠「测试用例」区（<details> + ioCases）");
+  if (!has("📥 测试用例")) fails.push("缺少用例区标题「📥 测试用例」");
+  if (!has("期望输出")) fails.push("用例区缺少「期望输出」展示");
+  // ⑤ 逐用例 diff：失败且有 input/expected/actual 时渲染「输入/期望/实际」，通过时为空不显示
+  if (!/\bacmFailedCases\b/.test(src)) fails.push("缺少逐用例 diff computed（acmFailedCases）");
+  if (!has("acmFailedCases.length")) fails.push("diff 展示未以 acmFailedCases.length 为条件（通过时不显示）");
+  if (!has("输入：")) fails.push("diff 缺少「输入：」字段");
+  if (!has("期望：")) fails.push("diff 缺少「期望：」字段");
+  if (!has("实际：")) fails.push("diff 缺少「实际：」字段");
+  // ⑥ 不硬编码端口（ACM 分支同样必须走 api()）
+  const m = src.match(/8899/);
+  if (m) fails.push("硬编码端口 8899（必须经 api() 解析基址）");
+  return fails;
+}
+
 test("Practice.vue 存在且含 CodeMirror 6 + 四个判题路由 + api() + onUnmounted destroy（源码级）", () => {
   assert.ok(existsSync(PRACTICE), `Practice.vue 必须存在：${PRACTICE}`);
   const src = readFileSync(PRACTICE, "utf8");
@@ -76,4 +104,33 @@ test("整仓无其它 Vue Tab 硬编码 8899（practice 之外的 Tab 一致性�
     return /\b8899\b/.test(s);
   });
   assert.deepEqual(offenders, [], "任何 Vue Tab 都不得硬编码 8899（统一走 api()）");
+});
+
+test("ACM 模式专项：Practice.vue 含模式 switch + ACM 徽标 + 用例折叠区 + 逐用例 diff + mode 参数 + 不硬编码端口（源码级）", () => {
+  const src = readFileSync(PRACTICE, "utf8");
+  const fails = assessAcm(src);
+  assert.deepEqual(fails, [], `Practice.vue 未过 ACM 护栏：\n` + (fails.length ? fails.map((f) => "  ❌ " + f).join("\n") : "（无）"));
+});
+
+test("反证：去掉列表请求的 mode 参数（mode=acm 失效）→ ACM 护栏必须红", () => {
+  const src = readFileSync(PRACTICE, "utf8");
+  // 篡改：删掉 sp.set("mode", ...) → 列表不再按 mode 拉取，护栏应抓出「未带 mode 参数」
+  const tampered = src.replace('sp.set("mode", mode.value);', "");
+  assert.notStrictEqual(tampered, src, "反证前提：源码里确实存在 mode 参数设置行");
+  const fails = assessAcm(tampered);
+  assert.ok(
+    fails.some((f) => f.includes("mode 参数")),
+    `反证失败：去掉 mode 参数后 ACM 护栏仍全绿（failures=${JSON.stringify(fails)}）`
+  );
+});
+
+test("反证：去掉 ACM 逐用例 diff 条件 → ACM 护栏必须红", () => {
+  const src = readFileSync(PRACTICE, "utf8");
+  const tampered = src.replace("acmFailedCases.length", "acmFailedCases");
+  assert.notStrictEqual(tampered, src, "反证前提：源码里确实存在 acmFailedCases.length 条件");
+  const fails = assessAcm(tampered);
+  assert.ok(
+    fails.some((f) => f.includes("acmFailedCases.length")),
+    `反证失败：去掉 diff 条件后 ACM 护栏仍全绿（failures=${JSON.stringify(fails)}）`
+  );
 });

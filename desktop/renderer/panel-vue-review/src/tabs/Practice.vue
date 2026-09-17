@@ -22,6 +22,8 @@ const total = ref(0);
 const loading = ref(false);
 const err = ref("");
 // v-model 驱动的筛选：分类/难度走后端（与原生同口径），是否已做 + 搜索在前端 computed 过滤
+// mode：判题模式 switch（核心代码 / ACM），默认 core，走后端 &mode= 参数拉取对应题库列表
+const mode = ref("core"); // "core" | "acm"（后端契约：/api/challenges?mode=core|acm）
 const cat = ref("");   // "" | handwrite | algorithm
 const diff = ref(0);   // 0 全部 | 1 简单 | 2 中等 | 3 困难
 const doneFilter = ref(0); // 0 全部 | 1 未做 | 2 已做
@@ -46,6 +48,7 @@ async function loadChallenges() {
   err.value = "";
   try {
     const sp = new URLSearchParams();
+    sp.set("mode", mode.value); // 判题模式：核心代码 / ACM（后端据此返回对应题库）
     if (cat.value) sp.set("category", cat.value);
     if (diff.value) sp.set("difficulty", String(diff.value));
     const qs = sp.toString();
@@ -59,6 +62,13 @@ async function loadChallenges() {
   } finally {
     loading.value = false;
   }
+}
+
+/** 顶部模式 switch：切换判题模式并重新拉取列表（默认 core） */
+function switchMode(m) {
+  if (mode.value === m) return; // 点当前已激活的模式无操作
+  mode.value = m;
+  loadChallenges();
 }
 onMounted(loadChallenges);
 
@@ -171,6 +181,12 @@ const reflowNote = computed(() => {
   return "";
 });
 
+/** ACM 逐用例 diff：失败用例且带 input/expected/actual 的，抽出来单独展示「输入/期望/实际」。
+ *  为什么抽 computed：判题结果里核心代码模式的测试只有 label，没有三字段；只有 ACM 用例才逐组 diff。 */
+const acmFailedCases = computed(() =>
+  (result.value?.tests || []).filter((t) => !t.passed && (t.input !== undefined || t.expected !== undefined || t.actual !== undefined))
+);
+
 /** ✅ 标记完成：POST mark-done，服务端确认 ok 才更新徽标（失败如实显示，乐观不假成功）。
  *  既可点击列表行的「已会」（传 ch = 该行题目），也可判题通过后点编辑器里的「标记完成」（不传 → 用当前 detail） */
 async function markDone(ch) {
@@ -218,6 +234,15 @@ async function markWrong(ch) {
         <span v-if="loading" class="rf-muted">⏳ 加载题库…</span>
         <span v-else class="rf-muted">📦 {{ total }} 道 · 已完成 {{ doneCount }}（{{ pct }}%）</span>
       </div>
+      <!-- 判题模式 switch：核心代码 / ACM（后端按 mode 返回对应题库；切换重新拉列表） -->
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" class="rf-chip"
+                :style="mode === 'core' ? { background: 'rgba(109,79,216,.16)', color: '#5d48b8', border: '1px solid rgba(109,79,216,.45)' } : {}"
+                @click="switchMode('core')" aria-label="切到核心代码模式">📐 核心代码</button>
+        <button type="button" class="rf-chip"
+                :style="mode === 'acm' ? { background: 'rgba(58,141,90,.16)', color: '#2f7d4e', border: '1px solid rgba(58,141,90,.45)' } : {}"
+                @click="switchMode('acm')" aria-label="切到 ACM 模式">🖥️ ACM 模式</button>
+      </div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
         <input class="rf-input rf-grow" v-model="q" placeholder="搜索题目 / 描述 / ID…" aria-label="搜索题目" />
         <select class="rf-input" v-model="cat" aria-label="按分类筛选" @change="loadChallenges">
@@ -249,6 +274,7 @@ async function markWrong(ch) {
         <span class="rf-grow">
           <span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span class="rf-chip" :style="{ background: c.category === 'handwrite' ? 'rgba(58,141,90,.12)' : 'rgba(109,79,216,.12)', color: c.category === 'handwrite' ? '#2f7d4e' : '#5d48b8' }">{{ c.category === "handwrite" ? "✍️手写" : "🧮算法" }}</span>
+            <span v-if="c.mode === 'acm'" class="rf-chip" style="background:rgba(23,116,150,.12);color:#177494">🖥️ ACM</span>
             <span v-if="DIFF_LABEL[c.difficulty]" :style="{ color: DIFF_LABEL[c.difficulty][1], fontSize: '11px' }">{{ DIFF_LABEL[c.difficulty][0] }}</span>
             <span class="rf-muted" :title="`面试出现频率 ${c.frequency}`">{{ freqStars(c.frequency) }}</span>
             <b>{{ c.title }}</b>
@@ -267,6 +293,18 @@ async function markWrong(ch) {
         <div v-if="detailLoadErr" class="rf-muted rf-chip-warn">⚠️ {{ detailLoadErr }}</div>
         <div v-else-if="detail">
           <div class="rf-muted" style="display:block;white-space:pre-wrap;margin-bottom:8px;max-height:140px;overflow:auto">{{ detail.description || "(本题暂无题干说明)" }}</div>
+          <!-- ACM 题展示可折叠用例区：逐组显示输入/期望输出（<pre> 保留换行），核心代码模式无此区 -->
+          <details v-if="detail.mode === 'acm' && (detail.ioCases || []).length"
+                   class="rf-sub" style="margin-bottom:8px;font-size:12px">
+            <summary style="cursor:pointer;font-weight:600">📥 测试用例（{{ (detail.ioCases || []).length }} 组）</summary>
+            <div v-for="(tc, i) in detail.ioCases || []" :key="i"
+                 style="margin-top:6px;padding:4px 0;border-top:1px dashed rgba(128,128,128,.25)">
+              <span class="rf-muted">用例 {{ i + 1 }} · 输入：</span>
+              <pre class="rf-report" style="white-space:pre-wrap;word-break:break-all;margin:2px 0 4px">{{ tc.input }}</pre>
+              <span class="rf-muted">期望输出：</span>
+              <pre class="rf-report" style="white-space:pre-wrap;word-break:break-all;margin:2px 0 4px">{{ tc.expected }}</pre>
+            </div>
+          </details>
           <div class="rf-muted" style="margin-bottom:4px;font-size:11px">建议 {{ detail.timeLimit || 10 }} 分钟内完成 · 在骨架里补全实现 · Ctrl/Cmd + Enter 快速判题</div>
           <!-- CodeMirror 6 挂载点（ref editorHost） -->
           <div ref="editorHost"></div>
@@ -282,8 +320,17 @@ async function markWrong(ch) {
           <!-- 判题结果：逐条断言 + 耗时 + console + tip + 回流。失败如实可见，不乐观假成功 -->
           <pre v-if="result" class="rf-report" style="white-space:pre-wrap;word-break:break-all;max-height:260px;overflow:auto;margin-top:8px">{{ result.success ? "🎉 全部通过 ✅" : "❌ 有测试未通过" }}
 ⏱ {{ result.durationMs }} ms · {{ (result.tests || []).length }} 个测试
-{{ (result.tests || []).map((t) => `${t.passed ? "✅" : "❌"} ${t.label}`).join("\n") }}
+{{ (result.tests || []).map((t) => `${t.passed ? "✅" : "❌"} ${t.label || "(用例)"}`).join("\n") }}
 {{ result.error ? "⚠️ " + result.error : "" }}{{ (result.logs || []).length ? "\n— console —\n" + result.logs.join("\n") : "" }}{{ result.tip ? "\n💡 " + result.tip : "" }}{{ reflowNote ? "\n" + reflowNote : "" }}</pre>
+          <!-- ACM 逐用例 diff：仅失败且带 input/expected/actual 时显示「输入/期望/实际」；全部通过时 acmFailedCases 为空 → 不显示 -->
+          <div v-if="acmFailedCases.length" class="rf-report" style="white-space:normal;word-break:break-all;max-height:200px;overflow:auto;margin-top:8px">
+            <div v-for="(t, i) in acmFailedCases" :key="i" style="margin-top:4px;padding:4px 0;border-top:1px dashed rgba(128,128,128,.25)">
+              <span style="color:#b91c1c;font-weight:600">用例 {{ i + 1 }} 未通过 ⛔</span>
+              <div><span class="rf-muted">输入：</span><pre class="rf-report" style="display:inline" v-if="t.input !== undefined">{{ t.input }}</pre></div>
+              <div><span class="rf-muted">期望：</span><pre class="rf-report" style="display:inline" v-if="t.expected !== undefined">{{ t.expected }}</pre></div>
+              <div><span class="rf-muted">实际：</span><pre class="rf-report" style="display:inline" v-if="t.actual !== undefined">{{ t.actual }}</pre></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

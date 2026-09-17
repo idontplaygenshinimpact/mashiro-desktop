@@ -292,7 +292,9 @@ export function ensureSchema(): void {
     time_limit INTEGER NOT NULL,     -- 建议时限（分钟）
     description TEXT,
     skeleton TEXT,                   -- 代码骨架（提取导出名用）
-    test_code TEXT,                  -- 判题测试代码（__test__/__assert__ 沙箱格式）
+    test_code TEXT,                  -- 判题测试代码（__test__/__assert__ 沙箱格式；ACM 模式为空）
+    mode TEXT NOT NULL DEFAULT 'core', -- core=LeetCode 核心代码模式 / acm=标准输入输出模式（readline/print + 用例比对）
+    io_cases TEXT NOT NULL DEFAULT '', -- ACM 模式用例 JSON：[{input, expected}]（core 模式为空）
     source TEXT NOT NULL DEFAULT 'ai-career',
     done INTEGER NOT NULL DEFAULT 0,
     done_at INTEGER,
@@ -368,6 +370,20 @@ const MIGRATIONS: Migration[] = [
         db.exec("DROP INDEX IF EXISTS idx_schedule_email_id");
         db.exec("CREATE INDEX IF NOT EXISTS idx_schedule_email_id ON schedule_events(email_id)");
       }
+    },
+  },
+  {
+    version: 5,
+    name: "challenges 判题模式：mode（core=LeetCode 核心代码 / acm=标准输入输出）+ io_cases（ACM 用例 JSON）",
+    // 为什么加：秋招笔试（牛客/赛码等）绝大多数是 ACM 模式（自己读输入、自己输出、多组用例），
+    // 而本地判题原先只有 LeetCode 核心代码模式（骨架函数 + __test__ 断言），练不到"读入解析/输出格式"
+    // 这层真实考点。存量题全部保持 mode='core'（默认值），零破坏。
+    up() {
+      const cols = colNames("challenges");
+      if (!cols.length) return; // 表不存在（极少见）→ 建表语句已含新列
+      if (!cols.includes("mode")) db.exec("ALTER TABLE challenges ADD COLUMN mode TEXT NOT NULL DEFAULT 'core'");
+      if (!cols.includes("io_cases")) db.exec("ALTER TABLE challenges ADD COLUMN io_cases TEXT NOT NULL DEFAULT ''");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_challenges_mode ON challenges(mode)");
     },
   },
 ];
