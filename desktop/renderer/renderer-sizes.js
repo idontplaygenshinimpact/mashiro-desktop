@@ -4,8 +4,8 @@ window.__RENDERER_SIZES = {
   "measuredAt": "2026-09-17",
   "unit": "KB（1KB = 1024 字节；gzip = zlib 压缩后大小，与浏览器传输量同口径）",
   "native": {
-    "bytes": 385831,
-    "gzip": 118198,
+    "bytes": 389979,
+    "gzip": 119554,
     "files": 6,
     "note": "panel-*.js 直引，无打包无依赖"
   },

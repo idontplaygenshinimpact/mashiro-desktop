@@ -20,6 +20,7 @@ const panelGlobals = {
   loadCareerProfile: "readonly",
   loadOj: "readonly", // 牛客 TOP101 题库（panel-rest.js 定义，panel-core.js 切「专项练习」Tab 时调用）
   loadPracticeEditor: "readonly", // 判题编辑器产物（CodeMirror 6）懒加载（panel-rest.js 定义，panel-core.js 切 Tab 时预取）
+  gotoChallenge: "readonly", // 跨 Tab 跳转：清单「✍️ 去做题」→ 专项练习并打开该题（panel-rest.js 定义，panel-study.js 调用）
   loadTodayBar: "readonly", // 今日任务聚合条（panel-jobs.js 定义，panel-rest.js 轮询调用）
   loadChallenges: "readonly",
   loadCrawlData: "readonly",

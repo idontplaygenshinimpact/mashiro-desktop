@@ -1,4 +1,5 @@
 // 真白面板 · 个人/题库/专注/初始化域（纵向拆分）
+/* exported gotoChallenge */ // 跨文件共享全局（普通 script 无模块导出）：panel-study.js 的清单「✍️ 去做题」调用它
 // ============ 轮询门控（M9：面板隐藏暂停全部 + 重轮询按 Tab 门控；声明必须先于任何 _gatedInterval 调用） ============
 const _pollers = new Map(); // key -> { fn, ms, tab, id }
 let _pollVisible = document.visibilityState !== "hidden";
@@ -632,6 +633,7 @@ function renderChallenges() {
       ${desc ? `<div class="job-summary" style="margin-top:3px;">${esc(desc.slice(0, 90))}${desc.length > 90 ? "…" : ""}</div>` : ""}
       <div class="job-actions">
         <button class="job-btn ch-practice" data-id="${esc(p.id)}" title="内联编辑器写代码，本地沙箱跑测试">✍️ 做题</button>
+        <button class="job-btn ch-addplan" data-id="${esc(p.id)}" title="把这道题加进学习清单（清单里点讲解按题目形态讲；ACM 题会标注为笔试题）">📚 加入清单</button>
         ${p.done ? "" : `<button class="job-btn ch-done" data-id="${esc(p.id)}" title="已掌握（本地直接标记，计入学习进度）">✅ 已会</button>`}
         ${p.done ? "" : `<button class="job-btn ch-wrong" data-id="${esc(p.id)}" title="做错了（记入薄弱点，复习阶段优先补）">❌ 不会</button>`}
       </div>
@@ -935,6 +937,33 @@ function bindChallengeMarks() {
   };
   bindMark(".ch-done", "mark-done", "已记录，计入学习进度");
   bindMark(".ch-wrong", "mark-wrong", "已记入薄弱点，复习阶段优先补");
+  // 📚 加入清单（题目 → 学习清单，2026-09-16 补的闭环）：加入后清单里点「讲解」会按题目形态讲
+  // （ACM 题讲"读入解析/多组 EOF/输出格式/可提交脚本"），并能从清单一键跳回做题
+  document.querySelectorAll(".ch-addplan").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        const r = await fetch(API_BASE + "/api/challenges/add-to-plan", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: btn.dataset.id }),
+        });
+        const j = await r.json();
+        if (j.ok === false) {
+          window.kanban.notify("📚 学习清单", String(j.error || "加入失败").slice(0, 60));
+        } else if (j.existing > 0) {
+          window.kanban.notify("📚 学习清单", `「${j.topic}」已在清单里`);
+        } else {
+          window.kanban.notify("📚 学习清单", `已加入：${j.topic}——去清单点「💡 讲解」即可（ACM 题按笔试题口径讲）`);
+        }
+        // 清单 Tab 已加载则刷新条目（否则切过去时 switchTab 会重载）
+        if (typeof loadStudyPlan === "function") loadStudyPlan();
+      } catch (e) {
+        window.kanban.notify("📚 学习清单", String(e.message || e).slice(0, 60));
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
 }
 
 $("challenge-refresh-btn")?.addEventListener("click", () => {
@@ -950,6 +979,38 @@ function diffColor(d) {
   if (d.includes("简单")) return "#2f7a4a";
   if (d.includes("中等")) return "#9a5b00";
   return "#b91c1c";
+}
+
+// 题目 → 清单 → 做题：清单条目的「✍️ 去做题」跳到专项练习并打开该题编辑器
+// （2026-09-16 闭环：清单条目带了 challengeId/mode 之后，从学习回练习只需一次点击；
+//  切换模式是必需的——ACM 题只在 acm 模式下出现在列表里，否则找不到节点）
+async function gotoChallenge(challengeId, mode) {
+  const id = String(challengeId || "");
+  if (!id) return;
+  if (typeof switchTab === "function") switchTab("practice");
+  chMode = String(mode || "") === "acm" ? "acm" : "core";
+  challengeCat = "";
+  challengeDiff = 0;
+  chDone = 0;
+  chSearch = "";
+  chVisible = 60;
+  const searchEl = $("challenge-search");
+  if (searchEl) searchEl.value = "";
+  await loadChallenges();
+  for (let i = 0; i < 20; i++) { // 懒加载分批渲染：目标题可能在更后面，逐批放大直到出现
+    const item = document.getElementById("ch-" + id);
+    if (item) {
+      item.scrollIntoView({ behavior: "smooth", block: "center" });
+      const btn = item.querySelector(".ch-practice");
+      if (btn && !item.querySelector(".ch-editor")) btn.click(); // 展开编辑器（骨架已预填）
+      return;
+    }
+    if (chVisible >= chAll.length) break;
+    chVisible += 60;
+    renderChallenges();
+    await new Promise((r) => setTimeout(r, 30));
+  }
+  window.kanban.notify("✍️ 专项练习", `没找到题目 ${id}（可能已被移除）`);
 }
 
 $("oj-collect-btn")?.addEventListener("click", async () => {

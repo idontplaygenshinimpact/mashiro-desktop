@@ -211,6 +211,36 @@ export function getPlan() {
 export interface PlanItemInput {
   topic?: unknown; why?: unknown; source?: unknown; verify_question?: unknown;
   level?: unknown; group?: unknown; grp?: unknown; fromInterview?: unknown;
+  /** 关联题库题目 id（题库「加入清单」写入；空=纯知识点条目） */
+  challengeId?: unknown;
+  /** 题目形态 core/acm（决定讲解代码形态与「去做题」跳哪套题库） */
+  mode?: unknown;
+}
+
+/** 题型 → 清单 topic：`手写题·X` / `笔试题·X`（ACM）/ `算法题·X`——与 review.addCard 的 `手写题·X` 口径一致 */
+export function challengeTopicFor(title: string, mode?: unknown, category?: unknown): string {
+  const prefix = String(mode || "") === "acm" ? "笔试题" : String(category || "") === "algorithm" ? "算法题" : "手写题";
+  return `${prefix}·${String(title || "").trim()}`;
+}
+
+/** 把一道题库题目加进学习清单（幂等：同 topic 已存在则跳过，保持原有完成状态） */
+export function addChallengeToPlan({ challengeId, title, mode, category, description }: { challengeId: string; title: string; mode?: string; category?: string; description?: string }): { ok: boolean; added: number; existing: number; topic: string; error?: string } {
+  const topic = challengeTopicFor(title, mode, category);
+  if (!topic || topic.endsWith("·")) return { ok: false, added: 0, existing: 0, topic, error: "题目标题为空" };
+  const isAcm = String(mode || "") === "acm";
+  const r = addPlanItems([{
+    topic,
+    why: isAcm ? "ACM 模式笔试题（自己读输入/自己输出）——练「读入解析 + 输出格式 + 多组/EOF」" : "题库练习题目",
+    source: "题库",
+    // verify_question 决定讲解的提问口径：ACM 题按"可提交脚本"问，核心代码题按"补全函数"问
+    verify_question: isAcm
+      ? `请按 ACM 模式（标准输入输出）完整讲解这道笔试题：${title}\n题面：${String(description || "").slice(0, 400)}`
+      : `请完整讲解并手写实现这道题：${title}\n题面：${String(description || "").slice(0, 400)}`,
+    level: "必会",
+    challengeId,
+    mode: String(mode || "core"),
+  }]);
+  return { ok: true, added: r.added, existing: r.existing, topic };
 }
 
 // 从面试复盘等来源追加知识点（不重复；支持 group 分组）
@@ -237,6 +267,8 @@ export function addPlanItems(items: readonly PlanItemInput[] | null | undefined)
       // 分类：显式 group 优先，缺省自动归类（知识树/规则——面试实录/模拟面试/对话回流
       // 此前不带 group → grp 全空、分类失效；与 generateStudyPlan 同口径）
       grp: normalizeGroupName(String(it.group || it.grp || "")) || normalizeGroup(topic, "", String(it.why || "")),
+      challengeId: String(it.challengeId || ""),
+      mode: String(it.mode || ""),
     });
     added++;
   }

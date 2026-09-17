@@ -2,6 +2,7 @@
 // 手写/算法题库（ai-career.mjs 沙箱判题）+ 牛客刷题进度（oj.mjs）
 import * as challengeApi from "#lib/ai-career.mjs";
 import * as ojApi from "#lib/oj.mjs";
+import * as studyApi from "#lib/study.mjs"; // 题目 → 学习清单（addChallengeToPlan：清单条目带题目 id/形态）
 import { readBody } from "#lib/widget-core.mjs";
 
 // 全量 TS 升级工单阶段 4（插件）：实现迁至 practice.ts，practice.mjs 保留同名薄桶（插件按路径加载 → 入口与调用方零改动）
@@ -157,6 +158,32 @@ export function registerPracticeRoutes(router: Router): void {
   });
 
   // ---------- 牛客刷题进度 ----------
+  router.route("/api/challenges/add-to-plan", "POST", (req: IncomingMessage, res: ServerResponse) => {
+    // 题目 → 学习清单（2026-09-16 补的闭环）：用户做了 ACM 笔试题/手写题后，把这道题挂进清单，
+    // 清单里就有了"这题"的条目（带 challenge_id + mode）→ 讲解按题目形态讲、点「✍️ 去做题」跳回题库。
+    // 此前清单只能由"产出提炼/复习卡恢复"生成，题目与清单之间没有通路（用户反馈"ACM 笔试很难去做练习"）。
+    readBody(req, res, (body: string) => {
+      try {
+        const { id } = JSON.parse(body || "{}");
+        if (!id) { res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" }); res.end(JSON.stringify({ ok: false, error: "id required" })); return; }
+        const detail = challengeApi.getChallengeDetail(String(id));
+        if (!detail) { res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" }); res.end(JSON.stringify({ ok: false, error: `题目不存在: ${String(id)}` })); return; }
+        const r = studyApi.addChallengeToPlan({
+          challengeId: detail.id,
+          title: detail.title,
+          mode: detail.mode,
+          category: detail.category,
+          description: detail.description,
+        });
+        res.writeHead(r.ok ? 200 : 500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: false, error: eMsg(e) }));
+      }
+    });
+  });
+
   router.route("/api/oj/mark-done", "POST", (req: IncomingMessage, res: ServerResponse) => {
     readBody(req, res, (body: string) => {
       try {

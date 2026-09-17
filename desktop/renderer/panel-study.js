@@ -1756,18 +1756,24 @@ document.querySelectorAll(".study-state-chip").forEach((btn) => {
   });
 });
 
-// 单条清单条目渲染（状态流分组内使用；来源徽章 + 级别徽章 + 复习状态）
+// 单条清单条目渲染（状态流分组内使用；来源徽章 + 级别徽章 + 复习状态 + 题目入口）
 function renderPlanItemHtml(it) {
   const lvCls = { "必会": "lv-must", "进阶": "lv-adv", "拓展": "lv-ext" };
   const srcBadge = (() => {
     if (it.fromInterview) return '<span class="s-src">面试</span>';
     const s = String(it.source || "");
+    if (s.includes("题库")) return it.mode === "acm" ? '<span class="s-src" style="background:rgba(13,102,201,.15);color:#0d66c9;">笔试题</span>' : '<span class="s-src">题库</span>';
     if (s.includes("真题")) return '<span class="s-src">真题</span>';
     if (s.includes("简历") || s.includes("拷打")) return '<span class="s-src">简历</span>';
     if (s.includes("复习卡")) return '<span class="s-src">复习</span>';
     if (s.includes("产出")) return '<span class="s-src">产出</span>';
     return s ? `<span class="s-src" title="${esc(s)}">${esc(s.slice(0, 5))}</span>` : "";
   })();
+  // ✍️ 去做题：条目关联了题库题目（题库「加入清单」写入 challengeId）→ 一键跳回专项练习并打开该题
+  // （2026-09-16 补的闭环：此前从清单只能看讲解，ACM 笔试题"练不回去"）
+  const goPractice = it.challengeId
+    ? `<button class="s-learn s-goch" data-cid="${esc(it.challengeId)}" data-mode="${esc(it.mode || "core")}" title="跳到「专项练习」并打开这道题（${it.mode === "acm" ? "ACM 模式" : "核心代码模式"}）">✍️ 去做题</button>`
+    : "";
   return `
     <div class="study-item ${it.done ? "done" : ""}" data-id="${it.id}">
       <input type="checkbox" ${it.done ? "checked" : ""} />
@@ -1775,6 +1781,7 @@ function renderPlanItemHtml(it) {
         <div class="s-topic">${esc(it.topic)} ${it.level ? `<span class="s-lv ${lvCls[it.level] || "lv-must"}">${esc(it.level)}</span>` : ""} ${srcBadge}${it.reviewDue ? '<span class="s-src" style="background:rgba(220,150,60,.2);color:#9a5b00;">🔁 复习到期</span>' : ""}</div>
         <div class="s-why">${esc(it.why || "")}</div>
       </div>
+      ${goPractice}
       <button class="s-learn" data-id="${it.id}">${it.hasFile ? "📖 学习" : "💡 讲解"}</button>
       <span class="s-badge ${it.reviewed ? "reviewed" : ""}">${it.reviewed ? "已复盘" : "待学"}</span>
     </div>`;
@@ -1807,6 +1814,12 @@ function bindPlanItems(root, _isDone) {
       }
     });
     el.querySelector(".s-learn").addEventListener("click", () => showStudyDetail(el.dataset.id));
+    // ✍️ 去做题：跳到专项练习 Tab 并打开这道题（模式随之切换，保证题目在列表里可见）
+    el.querySelector(".s-goch")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      gotoChallenge(btn.dataset.cid, btn.dataset.mode);
+    });
   });
   // 主题簇组头：点击折叠/展开（状态存内存，重渲染后按状态恢复；默认展开）
   root.querySelectorAll(".study-group-head").forEach((head) => {

@@ -11,6 +11,7 @@ interface PlanRow {
   id: string; topic: string; why: string | null; source: string | null; verify_question: string | null;
   done: number; reviewed: number; done_at: string | null; reviewed_at: string | null;
   level: string | null; from_interview: number; grp: string | null;
+  challenge_id: string | null; mode: string | null;
 }
 /** 清单条目（对外形状：DB 蛇形 → camelCase + 布尔化 + reviewDue 派生）
  * doneAt/reviewedAt/reviewDue 可选：loadPlan 一定给全，但 addPlanItems 新建条目时只给必要字段——
@@ -19,6 +20,10 @@ export interface PlanItem {
   id: string; topic: string; why?: string | null; source?: string | null; verify_question?: string | null;
   done: boolean; reviewed: boolean; doneAt?: string | null; reviewedAt?: string | null;
   level?: string | null; fromInterview?: boolean; grp?: string; reviewDue?: boolean;
+  /** 关联题库题目 id（空=纯知识点条目）：清单→做题闭环用（有值时面板显示「✍️ 去做题」） */
+  challengeId?: string;
+  /** 题目形态：core（LeetCode 核心代码）/ acm（标准输入输出）——讲解与做题都按它分流 */
+  mode?: string;
 }
 /** 学习清单（date + 条目数组） */
 export interface StudyPlan { date: string; items: PlanItem[] }
@@ -51,13 +56,14 @@ export function loadPlan(): StudyPlan {
     }
   } catch { /* 复习表暂不可用 */ }
   // 也把最近复习过的（reviewed_at 近 3 天）算"不久待复习"？——保持简单：只按到期卡
-  plan.items = (db.prepare(`SELECT id, topic, why, source, verify_question, done, reviewed, done_at, reviewed_at, level, from_interview, grp
+  plan.items = (db.prepare(`SELECT id, topic, why, source, verify_question, done, reviewed, done_at, reviewed_at, level, from_interview, grp, challenge_id, mode
     FROM study_plan_items ORDER BY rowid`).all() as unknown as PlanRow[]).map((r) => ({
     id: r.id, topic: r.topic, why: r.why, source: r.source,
     verify_question: r.verify_question,
     done: !!r.done, reviewed: !!r.reviewed,
     doneAt: r.done_at, reviewedAt: r.reviewed_at,
     level: r.level, fromInterview: !!r.from_interview, grp: r.grp || "",
+    challengeId: String(r.challenge_id || ""), mode: String(r.mode || ""),
     reviewDue: dueByTopic.has(String(r.topic)),
   }));
   return plan;
@@ -71,14 +77,15 @@ export function savePlan(plan: Partial<StudyPlan>): boolean {
       db.exec("DELETE FROM study_plan_items");
       for (const it of plan.items || []) {
         db.prepare(`INSERT OR REPLACE INTO study_plan_items
-          (id, date, topic, why, source, verify_question, done, reviewed, done_at, reviewed_at, level, from_interview, grp, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          (id, date, topic, why, source, verify_question, done, reviewed, done_at, reviewed_at, level, from_interview, grp, challenge_id, mode, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .run(
             String(it.id), String(plan.date || ""), String(it.topic),
             it.why || null, it.source || null, it.verify_question || null,
             it.done ? 1 : 0, it.reviewed ? 1 : 0,
             it.doneAt || null, it.reviewedAt || null,
-            it.level || null, it.fromInterview ? 1 : 0, it.grp || "", Date.now()
+            it.level || null, it.fromInterview ? 1 : 0, it.grp || "",
+            String(it.challengeId || ""), String(it.mode || ""), Date.now()
           );
       }
     });

@@ -238,9 +238,9 @@ ${sanitizeExternal(text.slice(0, 6000)).wrapped}`;
  * @param {string} [role] LLM 角色（如 "面试官"）
  * @returns {Promise<string>} 讲解全文
  */
-export async function solveQuestion({ title, text, company, position, sourceUrl }: { title: string; text: string; company: string; position: string; sourceUrl: string }, role = "") {
+export async function solveQuestion({ title, text, company, position, sourceUrl, mode }: { title: string; text: string; company: string; position: string; sourceUrl: string; mode?: string }, role = "") {
   const { llmChat, getReplyText } = await import("./llm.mjs");
-  return await solveQuestionImpl({ title, text, company, position, sourceUrl }, async (messages, opts) => {
+  return await solveQuestionImpl({ title, text, company, position, sourceUrl, mode }, async (messages, opts) => {
     const data = await llmChat(messages, { ...opts, role });
     return getReplyText(data);
   });
@@ -255,9 +255,9 @@ export async function solveQuestion({ title, text, company, position, sourceUrl 
  * @param {(delta: string) => void} onChunk 流式回调
  * @returns {Promise<string>} 讲解全文
  */
-export async function solveQuestionStream({ title, text, company, position, sourceUrl }: { title: string; text: string; company: string; position: string; sourceUrl: string }, onChunk: (delta: string) => void) {
+export async function solveQuestionStream({ title, text, company, position, sourceUrl, mode }: { title: string; text: string; company: string; position: string; sourceUrl: string; mode?: string }, onChunk: (delta: string) => void) {
   const { llmChatStream } = await import("./llm.mjs");
-  return await solveQuestionImpl({ title, text, company, position, sourceUrl }, async (messages, opts) => {
+  return await solveQuestionImpl({ title, text, company, position, sourceUrl, mode }, async (messages, opts) => {
     // llmChatStream 可返回 {choices}（工具调用路径）；讲解场景恒为纯文本——收窄后按文本处理
     const r = await llmChatStream(messages, opts, onChunk);
     return typeof r === "string" ? r : (r.choices?.[0]?.message?.content ?? "");
@@ -472,12 +472,36 @@ export function topicDirection(title: string, text: string, _prof: { roleLabel?:
 }
 // 算法/手写题专属要求（命中时注入 prompt；LeetCode 风格完整可运行 + 复杂度 + 边界 + 演进）
 const ALGO_REQUIREMENT = `
-【算法/手写题专属要求】（本题为算法/手写题）：
+【算法/手写题专属要求】（本题为算法/手写题，**核心代码模式**：只写函数体，判题器调用你的函数断言）：
 - 代码必须是完整可运行的函数（含函数签名/输入输出），LeetCode 风格
 - 必须给出时间/空间复杂度分析
 - 必须覆盖边界条件（空输入/单元素/重复元素/大数）
 - 优先给出"暴力解 → 优化解"的演进（面试官必问"有没有更优解"）
 - 用示例输入输出验证代码`;
+
+// ACM 模式专属要求（2026-09-16 追加）：秋招笔试卷子（牛客/赛码等）绝大多数是 ACM 模式——
+// 自己读输入、自己输出、多组用例、处理 EOF。此前算法题一律按 ALGO_REQUIREMENT 讲成"补全函数"，
+// 用户实测反馈："ACM 的笔试很难去做练习/讲解对不上"。按形态分流后，ACM 题讲的是**可提交的完整脚本**。
+const ACM_REQUIREMENT = `
+【ACM 模式专属要求】（本题为 **ACM 模式**算法题：标准输入输出判题，与 LeetCode 核心代码模式不同）：
+- 代码必须是**完整可提交的脚本**（顶层 main 流程：读输入 → 处理 → 输出），不是"补全某个函数"
+- 读输入用本环境约定：\`readline()\` 逐行取一行（无更多输入返回 \`null\`）；输出用 \`print(...)\`
+  （也接受 console.log）；必须写清**怎么按题面的输入格式解析**（按空格/换行切分、首行 n、多组以 EOF 结束等）
+- 必须处理**多组输入 / T 组 / EOF 结束**三种常见形态中该题属于哪一种（题面有就给对应写法）
+- 必须说明**输出格式**要点：每行一个答案 / 同行空格分隔 / 保留几位小数；提醒**行尾空格与末尾空行**、
+  以及"多组之间不要多输出空行"这类常见判错原因
+- 必须给出**数据范围 → 复杂度选择**的推理（n 多大就必须 O(n log n)/前缀和/取模；会不会超 int/精度，
+  何时该用 BigInt）
+- 必须列出该题**最容易踩的坑**（读入没按行切分、多组没重置状态、输出多余换行、死循环没判 EOF）
+- 用题面样例做一次"输入 → 输出"的走查`;
+
+/** 题目形态判定（纯函数，导出供测试直测）：ACM 模式 vs 核心代码模式
+ * 判据优先级：显式 mode（清单条目/题目记录带的）> 题面特征词（输入格式/输出格式/多组输入/EOF/样例输入） */
+export function isAcmStyle(text: string, mode?: unknown): boolean {
+  if (String(mode || "").toLowerCase() === "acm") return true;
+  const t = String(text || "");
+  return /输入格式|输出格式|多组|直到\s*EOF|读到文件结束|读到\s*EOF|样例输入|标准输入|readline\s*\(|ACM\s*模式/i.test(t);
+}
 
 // 改编约束（2026-08 追加：讲解改编失真——"把改编说成本质"导致三视角矛盾）
 // 问题：原题是后端 SOC/SIEM 安全管道，讲解改编成前端 Agent 语境（Tool parsing vs Agent reasoning），
@@ -588,11 +612,15 @@ async function getWeakPointContext(title: string) {
   } catch { return ""; }
 }
 
-async function solveQuestionImpl({ title, text, company, position, sourceUrl }: { title: string; text: string; company: string; position: string; sourceUrl: string }, call: (messages: any[], opts: any) => Promise<string>) {
+async function solveQuestionImpl({ title, text, company, position, sourceUrl, mode }: { title: string; text: string; company: string; position: string; sourceUrl: string; mode?: string }, call: (messages: any[], opts: any) => Promise<string>) {
   const { getCareerProfile } = await import("./career.mjs");
   const prof = getCareerProfile();
   const dir = topicDirection(title, text, prof);
-  const algoReq = dir.isAlgo ? ALGO_REQUIREMENT : "";
+  // 讲解按**题目形态**分流（2026-09-16）：ACM 模式（标准输入输出）与核心代码模式要求的"代码形态"
+  // 完全不同——前者要可提交的完整脚本（读入→处理→输出、多组/EOF、输出格式），后者只写函数体。
+  // 判据：调用方显式传入的 mode（清单条目带的题目形态）优先，其次看题面特征词。
+  const acm = isAcmStyle(`${title} ${text}`, mode);
+  const algoReq = acm ? ACM_REQUIREMENT : dir.isAlgo ? ALGO_REQUIREMENT : "";
   // 讲解质量增强工单任务 1：时效性主题 → 联网检索最新资料（带来源链接，可溯源；失败降级不阻断）
   let latestRefs = "";
   if (isTimeSensitiveTopic(title, text)) {

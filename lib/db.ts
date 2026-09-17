@@ -386,6 +386,19 @@ const MIGRATIONS: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_challenges_mode ON challenges(mode)");
     },
   },
+  {
+    version: 6,
+    name: "study_plan_items 关联题目：challenge_id + mode（清单条目←→题库题目打通，支持按 ACM/核心代码形态讲与跳回做题）",
+    // 为什么加：清单条目原先只有 topic/verify_question，既不知道自己对应哪道题、也不知道题目形态，
+    // 于是算法讲解一律按 LeetCode 风格给"补全函数"，ACM 模式笔试题（自己读输入/自己输出）讲不到点上，
+    // 也没法从清单跳回做题。存量条目保持空串（不影响既有行为）。
+    up() {
+      const cols = colNames("study_plan_items");
+      if (!cols.length) return;
+      if (!cols.includes("challenge_id")) db.exec("ALTER TABLE study_plan_items ADD COLUMN challenge_id TEXT NOT NULL DEFAULT ''");
+      if (!cols.includes("mode")) db.exec("ALTER TABLE study_plan_items ADD COLUMN mode TEXT NOT NULL DEFAULT ''");
+    },
+  },
 ];
 
 /** 当前 schema 版本（PRAGMA user_version） */

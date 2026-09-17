@@ -14,6 +14,7 @@ import { getProjectArchiveContext } from "#lib/personal-projects.mjs";
 import { createSSEPush, withContract } from "#lib/routes/contract.mjs";
 import { StudyStreamEvent } from "#lib/contracts/sse.mjs";
 import { safeExternalBlock } from "#lib/prompt-guard.mjs";
+import { isAcmStyle } from "#lib/ai.ts"; // ACM 形态判定（讲解按题目形态分流；判据与 lib/ai.ts 同一实现，避免两处漂移）
 import { config } from "#root/config.mjs";
 import { StudyPlanOutput, StudyCheckInput, StudyCheckOutput } from "#lib/contracts/study.mjs";
 
@@ -76,7 +77,10 @@ function findEarlierArchive(topic: string, ownBirth: number, { excludeId, items 
 
 // 项目条目特化：topic 剥离"项目·"前缀；讲解引导改为"项目剖析"（面试拷打准备），
 // 而非把项目当知识点讲（此前"请完整讲解：项目·网易云音乐" → LLM 凭空编，逻辑奇怪）
-function explainPromptFor(item: StudyItemLike, prof: Record<string, unknown>) {
+// 2026-09-16 追加：**算法条目按题目形态分流**——ACM 模式（标准输入输出）与核心代码模式要的代码
+// 形态不同；清单条目带的 mode（由题库「加入清单」写入）决定引导语，题面特征词兜底。
+// 导出供测试直测（讲解风格是最容易被"改回去"的地方，值得有断言盯着）。
+export function explainPromptFor(item: StudyItemLike, prof: Record<string, unknown>) {
   const isProject = String(item?.topic || "").startsWith("项目·");
   const name = String(item?.topic || "").replace(/^项目·/, "").trim() || item?.topic || "";
   if (isProject) {
@@ -85,12 +89,28 @@ function explainPromptFor(item: StudyItemLike, prof: Record<string, unknown>) {
       text: `请剖析简历项目「${name}」——这是候选人简历中的项目，为面试拷打做准备：\n1) 技术选型 trade-off（为什么选这些技术）\n2) 架构设计（模块划分 / 数据流）\n3) 候选人的个人贡献（职责边界）\n4) 难点与踩坑（怎么解决）\n5) 量化指标（性能 / 规模提升）\n信息不足时围绕项目名给出合理剖析框架，并明确说明需要候选人补充什么。`,
     };
   }
+  const body = `这是一道${prof.scopeNote || "面试"}相关面试题，请完整讲解：${item?.verify_question || item.topic}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`;
+  const isAcm = isAcmStyle(`${item?.topic || ""} ${item?.verify_question || ""}`, item?.mode);
+  if (isAcm) {
+    // ACM 模式：讲解必须落到"可提交的完整脚本 + 输入解析 + 多组/EOF + 输出格式 + 数据范围与复杂度 + 常见坑"，
+    // 而不是"补全函数"——这正是用户反馈"ACM 笔试对不上讲解/不好练"的根因
+    return {
+      title: item?.verify_question || `请讲解这道 ACM 模式笔试题：${item.topic}`,
+      text: `${body}\n\n【本题是 ACM 模式（标准输入输出判题）——讲解必须按笔试卷子形态】\n` +
+        `1) 先讲**输入格式怎么解析**（按行/按空格切分、首行 n、多组或 T 组、什么时候读到 EOF 结束）\n` +
+        `2) 给出**完整可提交的脚本**（顶层流程：读输入 → 处理 → 输出；用 readline() 逐行读，读不到返回 null；用 print() 输出）\n` +
+        `3) 讲**输出格式**要点与常见判错原因（每行一个答案 / 同行空格分隔 / 行尾空格与末尾空行 / 不要多输出空行）\n` +
+        `4) 给出**数据范围 → 复杂度选择**的推理（n 大就要 O(n log n)/前缀和/取模；注意整数范围与精度）\n` +
+        `5) 列出**最容易踩的坑**（没按行切分、多组没重置状态、没判 EOF 导致死循环）\n` +
+        `6) 用样例数据做一次"输入 → 输出"的走查`,
+    };
+  }
   return {
     title: item?.verify_question || `请完整讲解：${item.topic}`,
     // text 用 verify_question（修复：仅用 topic 有歧义——"NSP 与 MLM 的区别"被 LLM 理解成数据库树形建模
     // （嵌套集/物化路径）而非预训练任务；verify_question 有明确表述（如"NSP（Next Sentence Prediction）…"），
     // 注入 text 消除歧义）
-    text: `这是一道${prof.scopeNote || "面试"}相关面试题，请完整讲解：${item?.verify_question || item.topic}\n（若题干信息不足，围绕知识点本身展开：核心概念、原理、代码示例、边界情况）`,
+    text: body,
   };
 }
 
@@ -153,6 +173,10 @@ interface StudyItemLike {
   done?: boolean;
   reviewed?: boolean;
   grp?: string;
+  /** 关联题库题目 id（题库「加入清单」写入；空=纯知识点条目） */
+  challengeId?: string;
+  /** 题目形态 core/acm（决定讲解按哪种代码形态讲、面板「去做题」跳哪套题库） */
+  mode?: string;
 }
 export function registerStudyRoutes(router: Router, { getCorsOrigin = (_req: IncomingMessage) => "*", laneSubmit = (fn: () => any) => fn() }: StudyRoutesOpts = {}): void {
   const PORT = config.widgetPort; // 技术债 L4：端口收编 config 单点
@@ -323,6 +347,9 @@ export function registerStudyRoutes(router: Router, { getCorsOrigin = (_req: Inc
           company: "真白讲解",
           position: "面试", // 修复：position 硬编码"前端"诱导 LLM 硬套前端视角（"前端场景的特殊约束"）——通用"面试"，从知识本身讲
           sourceUrl: "学习清单",
+          // 题目形态透传（2026-09-16）：ACM 题 → 讲解按"可提交脚本 / 输入解析 / 多组 EOF / 输出格式"讲，
+          // 而不是"补全函数"（用户反馈"ACM 笔试的讲解对不上、不好练"的根因）
+          mode: String(item.mode || ""),
         }, (delta) => {
           full += delta;
           activity.touch(); // 流式活动——重置空闲超时（长讲解生成不误中断）

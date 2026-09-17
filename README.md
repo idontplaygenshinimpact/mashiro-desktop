@@ -178,6 +178,8 @@
 
 > 说明：15 道 ACM 题的期望输出都是**参考解经本判题器实测**校准的（`node --experimental-strip-types scripts/_verify-acm-bank.mjs` → 15/15），不是手算拍脑袋。
 
+| 29 | **算法讲解不区分题目形态 + 清单与题库没有通路**（用户实测反馈："学习清单对算法的讲解不好——LeetCode 题还凑合，我做的 ACM 笔试很难去做练习"） | 两条根因都修：① 讲解 prompt 里算法题一律要求"**LeetCode 风格完整可运行的函数**"（`ALGO_REQUIREMENT`）→ ACM 笔试题讲不到点上；现按形态分流（`isAcmStyle`：显式 mode 优先、题面特征词兜底），ACM 题改用 `ACM_REQUIREMENT`（**可提交的完整脚本**：`readline()` 读入解析 / 多组与 EOF / 输出格式与行尾坑 / 数据范围→复杂度 / 常见坑），清单条目讲解也按 `mode` 分流。② 清单条目与题目之间**没有通路**（实测 219 条清单里 0 条 ACM 题）→ 迁移 v6 给 `study_plan_items` 加 `challenge_id`/`mode`，题库加「📚 加入清单」（`POST /api/challenges/add-to-plan`，ACM 题落成 `笔试题·X`、核心代码题按类目落 `手写题·X`/`算法题·X`），清单条目出现「✍️ 去做题」→ `gotoChallenge()` 自动切到题目所属模式并展开该题编辑器。护栏 `tests/study-acm-explain.test.mjs`（5 项：形态判定 / 讲解分流（含项目条目回归）/ 入库字段与幂等 / 路由闭环 / 面板接线） |
+
 #### 待修（已定位到 `file:line`，按严重度排序；完整报告见 `%TEMP%\mashiro-audit\{A..H}-*.md`）
 
 - **P0 巡检三键"读而不写"**：`lib/patrol.ts` 读 `patrol_enabled/interval_min/avoid_peak`，写点只在面板路由；真实库 30 个 settings 键里没有这三个 —— 面板"默认态与后端相反"这一症状已由第二批 #9 消解（`GET /api/patrol-config` 带 `ok` 后按后端真实态回填）；仅剩"用户不动就不落盘"（行为等价，不再算断链）
