@@ -586,9 +586,10 @@
       <!-- 手写/算法题库区块（本地沙箱判题，闭环：通过→进度，答错→薄弱点） -->
       <div class="jobs-setup" style="margin-top:14px;">
         <div class="form-row">
-          <label>✍️ 手写/算法题库（448 道题库：411 算法 + 37 手写，其中 281 道可自动判题）</label>
+          <label>✍️ 手写/算法题库（核心代码 + ACM 笔试题两套；ACM 题按标准输入输出判题）</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button id="challenge-refresh-btn" class="secondary" title="重新从本地题库加载">🔄 刷新</button>
+            <button id="challenge-import-btn" class="secondary" title="把你在牛客/赛码上做过的 ACM 笔试题整段题面粘进来：自动解析输入/输出格式与样例（样例即判题用例）→ 立刻可做题、可加入清单、可按 ACM 口径讲解">➕ 录入笔试题</button>
           </div>
         </div>
         <div class="resume-status" id="challenge-status">题库加载中…</div>

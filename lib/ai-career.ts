@@ -6,6 +6,7 @@
 import { db } from "./db.mjs";
 import { memory } from "./memory.mjs";
 import { review } from "./review.mjs";
+import { challengeTopicFor } from "./study-plan.ts"; // 题目 → 清单/卡片 topic 的单一来源（笔试题·/算法题·/手写题·）
 
 const SANDBOX_TIMEOUT_MS = 15000; // 总超时（同步死循环 + 异步不 resolve 都掐）
 
@@ -209,19 +210,22 @@ export function markChallengeDone(id: unknown, { progress = true }: { progress?:
 
 /** 记录一次失败：wrong_count+1 + 薄弱点回流 + 自动建 FSRS 复习卡（到期提醒复习，闭环） */
 export function markChallengeWrong(id: unknown): { ok: boolean; title?: string; error?: string } {
-  const row = db.prepare("SELECT title FROM challenges WHERE id=?").get(String(id)) as { title?: unknown } | undefined;
+  const row = db.prepare("SELECT title, category, mode FROM challenges WHERE id=?").get(String(id)) as { title?: unknown; category?: unknown; mode?: unknown } | undefined;
   if (!row) return { ok: false, error: `题目不存在: ${String(id)}` };
   db.prepare("UPDATE challenges SET wrong_count = wrong_count + 1 WHERE id=?").run(String(id));
   try {
     memory.addWeakPoint(String(row.title), "手写题练习", "agent", { question: String(row.title) });
   } catch { /* 回流失败不影响计数 */ }
-  // 答错自动进复习卡（FSRS 遗忘曲线；topic 去重幂等，答对后由复习流程拉长间隔）
+  // 答错自动进复习卡（FSRS 遗忘曲线；带题目 id → 卡片按 id 认亲，标题相似也不会串题）
   try {
     const r = review.addCard({
-      topic: `手写题·${String(row.title)}`,
+      // 前缀按题目形态/类目走（2026-09-16 修）：原先写死「手写题·」——ACM 笔试题答错也会被标成"手写题"，
+      // 且与清单里的「笔试题·X」对不上；现在统一用 challengeTopicFor（笔试题/算法题/手写题）
+      topic: challengeTopicFor(String(row.title), row.mode, row.category),
       question: `请完整实现并讲清原理：${String(row.title)}（不会时回「专项练习」重做该题）`,
       answer: "",
-      source: "手写题库",
+      source: String(row.mode || "") === "acm" ? "ACM 笔试题库" : "手写题库",
+      challengeId: String(id),
     }) as { ok?: boolean; topic?: unknown } | null | undefined;
     if (r && r.ok === false) console.warn(`[ai-career] 复习卡建卡失败: ${String(r.topic)}`);
   } catch { /* 回流失败不影响计数 */ }

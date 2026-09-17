@@ -399,6 +399,20 @@ const MIGRATIONS: Migration[] = [
       if (!cols.includes("mode")) db.exec("ALTER TABLE study_plan_items ADD COLUMN mode TEXT NOT NULL DEFAULT ''");
     },
   },
+  {
+    version: 7,
+    name: "review_cards 关联题目：challenge_id（卡片身份按题目 id，不靠标题相似度）",
+    // 为什么加：卡片/清单/讲解存档原先都靠 **topic 字符串 + 相似度** 判定"是不是同一题"——
+    // 实测 isSimilarTopicForArchive("n 个数求和（单组）", "n 个数求和") = true，两道不同的题会被并成一条；
+    // ACM 笔试题标题往往只差一个括号，靠标题当身份迟早串题。现在带题目 id 的卡片按 id 认亲，
+    // 相似度合并只对"没有 id 的纯知识点卡片"生效。
+    up() {
+      const cols = colNames("review_cards");
+      if (!cols.length) return;
+      if (!cols.includes("challenge_id")) db.exec("ALTER TABLE review_cards ADD COLUMN challenge_id TEXT NOT NULL DEFAULT ''");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_review_cards_challenge ON review_cards(challenge_id)");
+    },
+  },
 ];
 
 /** 当前 schema 版本（PRAGMA user_version） */

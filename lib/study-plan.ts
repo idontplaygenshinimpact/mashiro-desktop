@@ -223,10 +223,19 @@ export function challengeTopicFor(title: string, mode?: unknown, category?: unkn
   return `${prefix}·${String(title || "").trim()}`;
 }
 
-/** 把一道题库题目加进学习清单（幂等：同 topic 已存在则跳过，保持原有完成状态） */
+/** 把一道题库题目加进学习清单（幂等：**按 challengeId** 判重，不靠标题相似度）
+ * 为什么按 id：ACM 笔试题标题常常只差一个括号（如「A+B（多组输入直到 EOF）」vs「A+B（先给组数 T）」），
+ * 而 addPlanItems 的判重是 topic 精确匹配、下游还有相似度合并——靠标题必然串题（实测
+ * isSimilarTopicForArchive("n 个数求和（单组）","n 个数求和") = true）。带 id 的条目只认 id。 */
 export function addChallengeToPlan({ challengeId, title, mode, category, description }: { challengeId: string; title: string; mode?: string; category?: string; description?: string }): { ok: boolean; added: number; existing: number; topic: string; error?: string } {
+  const cid = String(challengeId || "").trim();
   const topic = challengeTopicFor(title, mode, category);
+  if (!cid) return { ok: false, added: 0, existing: 0, topic, error: "缺少题目 id" };
   if (!topic || topic.endsWith("·")) return { ok: false, added: 0, existing: 0, topic, error: "题目标题为空" };
+  // ① 先按题目 id 判重（已有同题条目 → 幂等返回，不动它的完成状态）
+  const plan = loadPlan();
+  const byId = plan.items.find((x) => String(x.challengeId || "") === cid);
+  if (byId) return { ok: true, added: 0, existing: 1, topic: byId.topic };
   const isAcm = String(mode || "") === "acm";
   const r = addPlanItems([{
     topic,
@@ -234,10 +243,10 @@ export function addChallengeToPlan({ challengeId, title, mode, category, descrip
     source: "题库",
     // verify_question 决定讲解的提问口径：ACM 题按"可提交脚本"问，核心代码题按"补全函数"问
     verify_question: isAcm
-      ? `请按 ACM 模式（标准输入输出）完整讲解这道笔试题：${title}\n题面：${String(description || "").slice(0, 400)}`
-      : `请完整讲解并手写实现这道题：${title}\n题面：${String(description || "").slice(0, 400)}`,
+      ? `请按 ACM 模式（标准输入输出）完整讲解这道笔试题：${title}\n题面：${String(description || "").slice(0, 1500)}`
+      : `请完整讲解并手写实现这道题：${title}\n题面：${String(description || "").slice(0, 1500)}`,
     level: "必会",
-    challengeId,
+    challengeId: cid,
     mode: String(mode || "core"),
   }]);
   return { ok: true, added: r.added, existing: r.existing, topic };

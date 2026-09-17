@@ -3,6 +3,7 @@
 import * as challengeApi from "#lib/ai-career.mjs";
 import * as ojApi from "#lib/oj.mjs";
 import * as studyApi from "#lib/study.mjs"; // 题目 → 学习清单（addChallengeToPlan：清单条目带题目 id/形态）
+import { parseStatement } from "#lib/acm-statement.ts"; // 题面解析（ACM 题面 → 结构化字段 + 样例→判题用例）
 import { readBody } from "#lib/widget-core.mjs";
 
 // 全量 TS 升级工单阶段 4（插件）：实现迁至 practice.ts，practice.mjs 保留同名薄桶（插件按路径加载 → 入口与调用方零改动）
@@ -177,6 +178,48 @@ export function registerPracticeRoutes(router: Router): void {
         });
         res.writeHead(r.ok ? 200 : 500, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(r));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: false, error: eMsg(e) }));
+      }
+    });
+  });
+
+  router.route("/api/challenges/import-custom", "POST", (req: IncomingMessage, res: ServerResponse) => {
+    // 录入自己做过的 ACM 笔试题（2026-09-16）：粘贴题面 → **题面解析**（输入格式/输出格式/数据范围/样例）
+    // → 样例自动变成判题用例 → 落库（mode=acm）→ 立刻可做题 / 可加入清单 / 可按 ACM 口径讲。
+    // 为什么必须有这个入口：用户真实做的笔试在牛客、赛码上，本地没有那道题；只靠内置 15 题练不到自己遇到的题。
+    readBody(req, res, (body: string) => {
+      try {
+        const { title, statement } = JSON.parse(body || "{}");
+        const stmt = String(statement || "").trim();
+        if (!stmt) { res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" }); res.end(JSON.stringify({ ok: false, error: "statement required（把题面整段粘进来）" })); return; }
+        const parsed = parseStatement(stmt);
+        const name = String(title || "").trim() || parsed.titleHint || "自定义笔试题";
+        const id = `custom-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        const desc = [
+          stmt.slice(0, 5900),
+          parsed.inputFormat ? `\n\n【解析出的输入格式】\n${parsed.inputFormat}` : "",
+          parsed.outputFormat ? `\n【解析出的输出格式】\n${parsed.outputFormat}` : "",
+          parsed.constraints ? `\n【解析出的数据范围】\n${parsed.constraints}` : "",
+        ].join("");
+        const r = challengeApi.importChallengesData([{
+          id, title: name, category: "algorithm", difficulty: 2, frequency: 2, timeLimit: 20,
+          description: desc,
+          skeleton: "// ACM 模式：自己读输入、自己输出（readline() 逐行读，耗尽返回 null；print() 输出）\n",
+          testCode: "", mode: "acm", ioCases: parsed.samples, source: "custom-acm",
+        }]);
+        if (!r.ok) { res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" }); res.end(JSON.stringify({ ok: false, error: r.error || "入库失败" })); return; }
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({
+          ok: true, id, title: name, mode: "acm",
+          samples: parsed.samples.length,
+          hasInputFormat: !!parsed.inputFormat,
+          hasOutputFormat: !!parsed.outputFormat,
+          hasConstraints: !!parsed.constraints,
+          // 如实告知：没解析出样例 → 判题没有用例（面板提示补样例，而不是假装"可判题"）
+          warning: parsed.samples.length ? null : "题面里没解析出「样例输入/样例输出」——判题暂时没有用例；把样例补进题面（用「样例输入：」「样例输出：」标注）后重新录入",
+        }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ok: false, error: eMsg(e) }));

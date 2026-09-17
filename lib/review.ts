@@ -48,6 +48,8 @@ export interface ReviewCard {
   stage: ReviewStage;
   createdAt: string;
   history: ReviewHistoryEntry[];
+  /** 关联题库题目 id（题库来源的卡按 id 认亲，不靠标题相似度；纯知识点卡为空串） */
+  challengeId?: string;
 }
 
 /** 检测 topic 是否为算法题（标题/问题命中算法关键词且非概念讲解 → type: 'algo'） */
@@ -200,10 +202,11 @@ interface ReviewRow {
   priority: unknown;
   fsrs: unknown;
   created_at: unknown;
+  challenge_id?: unknown;
 }
 
 function loadCards(): { cards: ReviewCard[]; lastReviewDate: string } {
-  const rows = db.prepare("SELECT id, topic, question, answer, source, type, priority, fsrs, created_at FROM review_cards").all() as unknown as ReviewRow[];
+  const rows = db.prepare("SELECT id, topic, question, answer, source, type, priority, fsrs, created_at, challenge_id FROM review_cards").all() as unknown as ReviewRow[];
   // 回填/纠偏：每张卡按 topic 重检测（type 是派生的——检测规则升级后旧标记一并纠正，防误标记残留）
   for (const r of rows) {
     const want = detectAlgoTopic(r.topic) ? "algo" : "concept";
@@ -230,6 +233,7 @@ function loadCards(): { cards: ReviewCard[]; lastReviewDate: string } {
         source: String(r.source ?? ""),
         type: (r.type || "concept") === "algo" ? "algo" as const : "concept" as const,
         priority: ["必会", "进阶", "拓展"].includes(String(r.priority)) ? String(r.priority) : "拓展",
+        challengeId: String(r.challenge_id || ""),
         fsrs: fsrsState,
         // 记忆方法可视化：记忆强度 % + 复习阶段（艾宾浩斯节奏）
         memPct: calcMemPct(fsrsState),
@@ -295,10 +299,16 @@ export const review = {
   // 去重归一化（工单任务 1）：先精确匹配，无则相似合并（isSimilarTopicForArchive 2-gram 门槛）——
   // 防漂移卡分裂（"状态机与异步并发/异步状态机与并发提交控制/状态机状态定义与重复提交拦截机制"同一知识点多卡）
   // 判据不用 isSimilarWeakTopic（3-gram 太宽松：共享"状态机与"会把"状态机与SSE数据流联动"和"状态机与接口联动"误并）
-  addCard({ topic, question = "", answer = "", source = "", priority = "拓展" }: { topic: string; question?: string; answer?: string; source?: string; priority?: string }): ReviewCard | { ok: false; error: string; topic: string } {
+  addCard({ topic, question = "", answer = "", source = "", priority = "拓展", challengeId = "" }: { topic: string; question?: string; answer?: string; source?: string; priority?: string; challengeId?: string }): ReviewCard | { ok: false; error: string; topic: string } {
     const data = loadCards();
-    let card = data.cards.find((c) => c.topic === topic);
-    if (!card) card = data.cards.find((c) => isSimilarTopicForArchive(topic, c.topic));
+    const cid = String(challengeId || "");
+    // 身份优先级（2026-09-16 修）：**题目 id 优先**，其次精确 topic，最后才是相似合并。
+    // 为什么：相似合并对 ACM 笔试题标题不适用——实测 isSimilarTopicForArchive("n 个数求和（单组）","n 个数求和")
+    // 返回 true，两道不同的题会被并成一张卡（讲解/复习都串题）。带 id 的卡片只认 id：
+    // 同 id → 同一张；不同 id → 绝不合并（哪怕标题只差一个括号）。
+    let card = cid ? data.cards.find((c) => String((c as { challengeId?: string }).challengeId || "") === cid) : undefined;
+    if (!card) card = data.cards.find((c) => c.topic === topic);
+    if (!card && !cid) card = data.cards.find((c) => isSimilarTopicForArchive(topic, c.topic));
     if (!card) {
       card = {
         id: `c${Date.now().toString(36)}${randomUUID().slice(0, 8)}`,
@@ -308,6 +318,7 @@ export const review = {
         source,
         priority: ["必会", "进阶", "拓展"].includes(priority) ? priority : "拓展",
         type: detectAlgoTopic(topic) ? "algo" : "concept", // 算法题标记（手写模式 + 多维自评）
+        challengeId: cid,
         // FSRS 状态
         fsrs: createEmptyCard(),
         // 与 loadCards 输出对齐（新卡：记忆强度 0 / 首次复习阶段；DB 只存核心字段）
@@ -319,9 +330,9 @@ export const review = {
       // 写 DB（修复 S6：此前 catch 静默吞错仍 return card——调用方以为建卡成功，重启即消失；
       // 对齐同文件复习写库的 withTx 透传标准——失败必须可见：console.warn + 返回失败信号）
       try {
-        db.prepare(`INSERT OR IGNORE INTO review_cards (id, topic, question, answer, source, type, priority, fsrs, fsrs_due, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-          .run(card.id, topic, question, card.answer, source || null, card.type, card.priority, JSON.stringify(card.fsrs), 0, Date.now(), Date.now());
+        db.prepare(`INSERT OR IGNORE INTO review_cards (id, topic, question, answer, source, type, priority, challenge_id, fsrs, fsrs_due, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(card.id, topic, question, card.answer, source || null, card.type, card.priority, cid, JSON.stringify(card.fsrs), 0, Date.now(), Date.now());
       } catch (e) {
         console.warn(`[review] addCard 写库失败（topic=${topic}）: ${String(e instanceof Error ? e.message : e).slice(0, 120)}`);
         return { ok: false, error: "复习卡写库失败", topic };

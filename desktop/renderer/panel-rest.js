@@ -1013,6 +1013,40 @@ async function gotoChallenge(challengeId, mode) {
   window.kanban.notify("✍️ 专项练习", `没找到题目 ${id}（可能已被移除）`);
 }
 
+// ➕ 录入笔试题（2026-09-16）：把真实做过的 ACM 笔试题（牛客/赛码上的长题面）整段粘进来
+// → 服务端题面解析（输入格式/输出格式/数据范围/样例）→ 样例即判题用例 → 落库后可做题/可讲/可加清单。
+// 为什么需要：内置题库是"通用题"，练不到用户自己遇到的那道；此前只能干看着笔试题，回不到练习闭环。
+$("challenge-import-btn")?.addEventListener("click", async () => {
+  const ask = window.__askText;
+  // 题面是多行长文本 → 走页内浮层的 multiline 模式（Electron 渲染层不能用 window.prompt）
+  const statement = typeof ask === "function"
+    ? await ask({ title: "➕ 录入 ACM 笔试题", label: "把题面整段粘进来（含「输入格式/输出格式/样例输入/样例输出/数据范围」）", placeholder: "题目描述…\n输入格式：\n…\n输出格式：\n…\n样例输入：\n…\n样例输出：\n…", multiline: true })
+    : null;
+  if (!statement || !String(statement).trim()) return;
+  const title = typeof ask === "function"
+    ? await ask({ title: "题目名称", label: "给这道题起个名字（留空则取题面首行）", placeholder: "如：区间和（多组询问）" })
+    : null;
+  try {
+    const r = await fetch(API_BASE + "/api/challenges/import-custom", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: title || "", statement: String(statement) }),
+    });
+    const j = await r.json();
+    if (j.ok === false) { window.kanban.notify("➕ 录入笔试题", String(j.error || "录入失败").slice(0, 80)); return; }
+    // 切到 ACM 模式并刷新，让刚录入的题立刻可见
+    chMode = "acm";
+    chVisible = 60;
+    await loadChallenges();
+    const tip = j.warning
+      ? `已录入「${j.title}」（⚠️ ${String(j.warning).slice(0, 60)}）`
+      : `已录入「${j.title}」：解析出 ${j.samples} 组样例用例${j.hasConstraints ? " + 数据范围" : ""}——可直接做题`;
+    window.kanban.notify("➕ 录入笔试题", tip);
+    if (j.id) gotoChallenge(j.id, "acm");
+  } catch (e) {
+    window.kanban.notify("➕ 录入笔试题", String(e.message || e).slice(0, 60));
+  }
+});
+
 $("oj-collect-btn")?.addEventListener("click", async () => {
   const btn = $("oj-collect-btn");
   btn.disabled = true;
