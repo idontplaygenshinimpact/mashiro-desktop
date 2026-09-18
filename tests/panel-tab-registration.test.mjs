@@ -6,7 +6,8 @@
 // 不走 switchRenderer 这条真实路径）。这类"登记表之间不同步 → 静默失效"必须由测试盯住。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const R = (p) => new URL("../" + p, import.meta.url);
 const core = readFileSync(R("desktop/renderer/panel-core.js"), "utf8");
@@ -45,10 +46,14 @@ test("rendererState 覆盖所有业务 Tab（切换状态机不能漏 Tab）", (
   assert.deepEqual(missing, [], `rendererState 缺：${missing.join(", ")}`);
 });
 
-test("真浏览器渲染断言（本护栏的由来）：切到框架版专项练习后容器真的可见且有内容", async () => {
-  // 这条是"看得见"的版本——jsdom 覆盖不到布局/可见性；用真 Chromium（不启 Electron、不连运行中的 app）
+test("真浏览器渲染断言（本护栏的由来）：切到框架版专项练习后容器真的可见且有内容", async (t) => {
+  // 这条是"看得见"的版本——jsdom 覆盖不到布局/可见性；用真 Chromium（不启 Electron、不连运行中的 app）。
+  // CI 设了 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1（测试不依赖浏览器二进制）→ 本机可跑时跑，CI 跳过；
+  // **登记完整性由上面三条静态护栏兜底**（反证时正是第 1 条先红），所以跳过不会漏掉这个 bug 类。
   let chromium;
-  try { ({ chromium } = await import("playwright-core")); } catch { return; } // 没装 playwright 时跳过（CI 仅装 playwright-core）
+  try { ({ chromium } = await import("playwright-core")); } catch { return t.skip("未安装 playwright-core"); }
+  const exe = (() => { try { return chromium.executablePath(); } catch { return null; } })();
+  if (!exe || !existsSync(exe)) return t.skip("没有 Playwright 浏览器二进制（CI 常见）——静态登记护栏仍生效");
   const browser = await chromium.launch({ args: ["--allow-file-access-from-files"] });
   try {
     const page = await browser.newPage({ viewport: { width: 1180, height: 900 } });
@@ -58,7 +63,7 @@ test("真浏览器渲染断言（本护栏的由来）：切到框架版专项�
       W.kanban = new Proxy({}, { get: () => async () => base });
       W.fetch = async () => ({ ok: true, status: 200, json: async () => base });
     });
-    await page.goto("file:///" + new URL("../desktop/renderer/panel.html", import.meta.url).pathname.replace(/^\//, "").replace(/\//g, "/"), { waitUntil: "load" });
+    await page.goto(pathToFileURL(fileURLToPath(R("desktop/renderer/panel.html"))).href, { waitUntil: "load" });
     await page.waitForTimeout(700);
     for (const mode of ["react", "vue"]) {
       const r = await page.evaluate(async (m) => {
