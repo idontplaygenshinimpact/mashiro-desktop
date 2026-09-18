@@ -203,7 +203,12 @@ function restoreRendererPrefs() {
 }
 
 // 前端三态并行展示工单任务 1：全 Tab 三态切换按钮（interview/review 手写条只含已实现的框架版——这里补齐到统一三态）
-const TAB_LABELS = { interview: "面试", review: "复习", study: "清单", chat: "对话", crawl: "爬取", jobs: "校招", dashboard: "驾驶舱", kb: "知识库" };
+// ⚠️ 本表**必须覆盖 FRAMEWORK_TABS 里的每个 Tab**：initRendererSwitches 只对本表的 Tab 建
+// `#<tab>-native/-react/-vue` 容器，而 switchRenderer 开头就要求 `#<tab>-native` 存在否则**静默 return** ——
+// 漏登记一个 Tab 就等于"那一列三态切换失效"。2026-09-16 真浏览器渲染检查实测踩到：
+// 新增「专项练习」时漏了这里，切换条点了没反应，而 jsdom 测试全绿（它们直接挂组件、不走 switchRenderer）。
+// 护栏：tests/panel-renderer-switch.test.mjs 断言"FRAMEWORK_TABS ⊆ TAB_LABELS 且每个 Tab 有 section"。
+const TAB_LABELS = { interview: "面试", review: "复习", study: "清单", chat: "对话", crawl: "爬取", jobs: "校招", practice: "专项练习", dashboard: "驾驶舱", kb: "知识库" };
 const RENDERER_MODES = [["native", "🎨 原生"], ["react", "⚛️ React 版"], ["vue", "🟢 Vue 版"]];
 function initRendererSwitches() {
   for (const [tab, label] of Object.entries(TAB_LABELS)) {
