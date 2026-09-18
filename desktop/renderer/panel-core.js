@@ -517,14 +517,16 @@ document.addEventListener("wheel", (e) => {
 // 背景：Electron 渲染进程**不支持 window.prompt**（实测抛 "prompt() is not supported."），
 // 任何用 prompt 收集输入的功能点了就抛错（真题「记错题」曾如此，整条错题回流链路不可用）。
 // 这里提供 Promise 化的页内浮层：确定 → 文本（可选场景可为空串），取消/Esc → null；带 aria-modal 与自动聚焦。
-window.__askText = function askText({ title = "请输入", label = "", placeholder = "", multiline = false, optional = false } = {}) {
+window.__askText = function askText({ title = "请输入", label = "", placeholder = "", multiline = false, optional = false, rows = 4, width = 560 } = {}) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "sd-overlay";
+    // rows/width 可选：默认沿用原样（4 行 / 560px），录入长文本的调用方自己放大
+    // （2026-09-16 视觉复核发现："录入笔试题"要粘整段 ACM 题面，4 行输入框太矮，只能看到零星提示文字）
     const field = multiline
-      ? `<textarea class="rf-input" rows="4" aria-label="${escHtml(title)}" placeholder="${escHtml(placeholder)}"></textarea>`
+      ? `<textarea class="rf-input" rows="${Math.max(2, Math.min(40, Number(rows) || 4))}" aria-label="${escHtml(title)}" placeholder="${escHtml(placeholder)}"></textarea>`
       : `<input class="rf-input" type="text" aria-label="${escHtml(title)}" placeholder="${escHtml(placeholder)}" />`;
-    overlay.innerHTML = `<div class="sd-modal" role="dialog" aria-modal="true" aria-label="${escHtml(title)}" style="width:min(560px,92vw);">
+    overlay.innerHTML = `<div class="sd-modal" role="dialog" aria-modal="true" aria-label="${escHtml(title)}" style="width:min(${Math.max(320, Number(width) || 560)}px,92vw);">
       <div class="sd-modal-head"><b>${escHtml(title)}</b><button type="button" class="sd-close" data-cancel title="关闭">✕</button></div>
       <div class="sd-modal-body">
         ${label ? `<div class="rf-muted" style="margin-bottom:6px;">${escHtml(label)}</div>` : ""}

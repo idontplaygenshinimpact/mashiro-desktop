@@ -173,20 +173,32 @@ await shoot("04-acm-run-diff", ".ch-editor");
 // 4) 录入笔试题浮层（多行）
 await page.evaluate(() => {
   const W = /** @type {any} */ (window);
-  W.__askText?.({ title: "➕ 录入 ACM 笔试题", label: "把题面整段粘进来（含输入格式/输出格式/样例输入/样例输出/数据范围）", placeholder: "题目描述…\n输入格式：…\n样例输入：…\n样例输出：…", multiline: true });
+  W.__askText?.({ title: "➕ 录入 ACM 笔试题", label: "把题面整段粘进来（含输入格式/输出格式/样例输入/样例输出/数据范围）", placeholder: "题目描述…\n输入格式：…\n样例输入：…\n样例输出：…", multiline: true, rows: 16, width: 720 });
 });
 await page.waitForTimeout(400);
-await shoot("05-import-modal", ".sd-modal-ask");
+await shoot("05-import-modal", ".sd-overlay:not(.hidden)");
+// 关掉浮层——**视觉复核实测踩到**：不关的话后续 06~09 全被中央白弹窗遮住，截图等于废片
+// （当时视觉模型报"中央巨大白色弹窗遮挡主要內容"，才发现是我截图脚本的问题）
+await page.keyboard.press("Escape");
+await page.waitForTimeout(300);
+console.log(`   浮层关闭检查：仍显示的 ask 浮层 = ${await page.evaluate(() => [...document.querySelectorAll(".sd-modal-ask")].filter((e) => (e.closest(".sd-overlay")?.getBoundingClientRect().height || 0) > 0).length)}（应为 0）`);
 
 // 5) 清单：笔试题徽标 + 去做题
 await page.evaluate(() => (/** @type {any} */ (window)).loadStudyPlan?.());
 await go("study", "native"); await page.waitForTimeout(900);
 await shoot("06-study-plan-native", "#tab-study");
 
-// 6) 面试手写轮（CodeMirror）
-await go("interview", "native"); await page.waitForTimeout(500);
-await page.evaluate(() => document.getElementById("iv-start")?.click());
-await page.waitForTimeout(1800);
+// 6) 面试手写轮（CodeMirror）：先切 Tab 等它加载完，再点开始
+await go("interview", "native"); await page.waitForTimeout(900);
+const ivStub = await page.evaluate(() => typeof (/** @type {any} */ (window)).kanban?.invStart);
+await page.evaluate(() => /** @type {any} */ (document.getElementById("iv-start"))?.click());
+await page.waitForTimeout(2000);
+const ivState = await page.evaluate(() => ({
+  cm: !!document.querySelector("#iv-editor .cm-editor"),
+  answerHidden: document.getElementById("iv-answer")?.style.display === "none",
+  round: (document.getElementById("iv-question")?.textContent || "").slice(0, 30),
+}));
+console.log(`   面试手写轮状态：${JSON.stringify(ivState)}（invStart 桥类型 ${ivStub}）`);
 await shoot("07-interview-code-round", "#tab-interview");
 
 // 7) React / Vue 版专项练习（ACM 模式）

@@ -133,6 +133,11 @@ input:focus, select:focus, textarea:focus { border-color: rgba(109,79,216,0.6); 
 .iv-answer-area textarea { flex: 1; height: 70px; resize: none; }
 /* 💻 手写轮代码作答（用户反馈 2026-09：手写题用纯文本框太难受 → 行号 + 等宽 + Tab/自动缩进） */
 .iv-editor { display: flex; align-items: stretch; gap: 6px; }
+/* CodeMirror 挂到 flex 宿主里必须显式撑满（2026-09-16 视觉复核发现的真 bug）：
+   `.iv-editor` 是 flex 行（为"行号槽 + 文本域"设计），CM 作为 flex 子项按 **min-content** 收缩——
+   实测只剩 39px 宽（就是行号槽的宽度），面板里看起来是"左侧一条极窄黑条"。
+   JS 里加了 .iv-cm-host 标记类，本规则据此给 CM 撑满宽度；min-width:0 允许它在窄容器里正常收缩。 */
+.iv-editor.iv-cm-host > .cm-editor { flex: 1 1 auto; min-width: 0; }
 .iv-gutter {
   display: none; flex: none; width: 30px; padding: 8px 4px 8px 0; text-align: right;
   font-family: var(--sd-mono); font-size: var(--sd-fs-xs); line-height: 1.55;

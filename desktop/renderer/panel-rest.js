@@ -1020,7 +1020,7 @@ $("challenge-import-btn")?.addEventListener("click", async () => {
   const ask = window.__askText;
   // 题面是多行长文本 → 走页内浮层的 multiline 模式（Electron 渲染层不能用 window.prompt）
   const statement = typeof ask === "function"
-    ? await ask({ title: "➕ 录入 ACM 笔试题", label: "把题面整段粘进来（含「输入格式/输出格式/样例输入/样例输出/数据范围」）", placeholder: "题目描述…\n输入格式：\n…\n输出格式：\n…\n样例输入：\n…\n样例输出：\n…", multiline: true })
+    ? await ask({ title: "➕ 录入 ACM 笔试题", label: "把题面整段粘进来（含「输入格式/输出格式/样例输入/样例输出/数据范围」）", placeholder: "题目描述…\n输入格式：\n…\n输出格式：\n…\n样例输入：\n…\n样例输出：\n…", multiline: true, rows: 16, width: 720 })
     : null;
   if (!statement || !String(statement).trim()) return;
   const title = typeof ask === "function"
