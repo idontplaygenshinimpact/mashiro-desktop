@@ -143,7 +143,8 @@ test("编辑器回退路径：产物缺失时退回 textarea（行号 + 语法�
     ta.dispatchEvent(new ctx.window.Event("input", { bubbles: true }));
     await tick(10);
     assert.ok(hl.innerHTML.includes('font-weight:600;">function</span>'), "function 关键字应着紫色 span");
-    assert.ok(hl.innerHTML.includes('color:#2f7d4e;">a</span>'), "函数名 a 应着绿色 span");
+    // 绿色值跟随后端的对比度整改（2026-09-16 像素实测：原 #2f7d4e 在浅底上仅 ~4.1，未达 AA 4.5 → 加深为 #1f6b3f）
+    assert.ok(hl.innerHTML.includes('color:#1f6b3f;">a</span>'), "函数名 a 应着绿色 span");
     assert.equal(lines.textContent.trim(), "1", "行号应为 1");
     assert.equal(fb.getValue(), "function a() { return 1; }", "getValue 应返回 textarea 当前值");
   });

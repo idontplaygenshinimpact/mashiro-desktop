@@ -100,6 +100,11 @@ async function measure(tab, mode) {
       const hi = Math.max(ink, bg), lo = Math.min(ink, bg);
       const ratio = Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
       const need = L.px >= 14 ? 3 : th;
+      // 纯 emoji/图形样本不计入文字对比度：WCAG 的对比度要求针对**文字**，emoji 是字形图（颜色不受 CSS
+      // 控制，如 🔥🔥🔥 实测 3.1、🗑 实测 2.0 都只是字形自带配色）——把它们算进来会产生无法修复的噪声。
+      // 只跳过"去掉 emoji/零宽连接符/空白后没有剩余字符"的样本；含文字+emoji（如「🆕 首次」）照常测量。
+      const textOnly = L.text.replace(/[\p{Extended_Pictographic}\uFE0F\u200D\s]/gu, "");
+      if (!textOnly) continue;
       out.push({ text: L.text, ratio, pass: ratio >= need });
     }
     return out;

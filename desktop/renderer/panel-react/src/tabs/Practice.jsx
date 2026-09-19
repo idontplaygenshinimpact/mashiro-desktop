@@ -15,8 +15,8 @@ import { indentWithTab } from "@codemirror/commands";
 import { api } from "../api.js";
 
 const DIFF_LABEL = {
-  1: ["简单", "#2f7a4a"],
-  2: ["中等", "#9a5b00"],
+  1: ["简单", "#1f6b3f"],
+  2: ["中等", "#7d4a00"],
   3: ["困难", "#b91c1c"],
 };
 // 频率热度用 🔥 星标（与原生 panel-rest.js 同口径：最多 3 个）
@@ -43,13 +43,13 @@ function ResultView({ result }) {
   const isAcm = tests.some((t) => t.expected !== undefined);
   return (
     <div className="rf-card" style={{ borderColor: pass ? "rgba(58,141,90,.35)" : "rgba(185,28,28,.35)" }}>
-      <div style={{ fontWeight: 700, color: pass ? "#2f7a4a" : "#b91c1c" }}>
+      <div style={{ fontWeight: 700, color: pass ? "#1f6b3f" : "#b91c1c" }}>
         {pass ? "🎉 全部通过 ✅" : "❌ 有测试未通过"}
         <span style={{ fontWeight: 400, color: "#5a5678", fontSize: 12 }}> ⏱ {result.durationMs || 0} ms · {tests.length} 个测试</span>
       </div>
       {/* 逐条断言：✅/❌ + label（失败必须如实可见，不乐观假成功） */}
       {tests.map((t, i) => (
-        <div key={i} style={{ fontSize: 12, lineHeight: 1.6, color: t.passed ? "#2f7a4a" : "#b91c1c" }}>
+        <div key={i} style={{ fontSize: 12, lineHeight: 1.6, color: t.passed ? "#1f6b3f" : "#b91c1c" }}>
           {t.passed ? "✅" : "❌"} {t.label}
           {/* ACM 逐用例 diff：仅失败用例显示 输入/期望/实际（通过时不显示，避免刷屏） */}
           {isAcm && !t.passed && (
@@ -68,11 +68,11 @@ function ResultView({ result }) {
           <pre style={{ margin: 4, fontSize: 11, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-all", color: "#8a5adc" }}>{logs.join("\n")}</pre>
         </div>
       )}
-      {result.tip && <div style={{ fontSize: 12, color: "#9a5b00", marginTop: 4 }}>💡 {result.tip}</div>}
+      {result.tip && <div style={{ fontSize: 12, color: "#7d4a00", marginTop: 4 }}>💡 {result.tip}</div>}
       {/* reflow：服务端判题已自动回流，面板如实显示去向；回流失败也要报 */}
       {rf.error && <div style={{ fontSize: 12, color: "#b91c1c", marginTop: 4 }}>⚠️ 回流失败：{String(rf.error).slice(0, 80)}</div>}
-      {rf.done && <div style={{ fontSize: 12, color: "#2f7a4a", marginTop: 4 }}>♻️ 已自动标记完成（题库进度 + 学习进度回流）</div>}
-      {rf.wrong && <div style={{ fontSize: 12, color: "#9a5b00", marginTop: 4 }}>♻️ 已记入错题 + 复习卡（wrong_count + 薄弱点回流，到期会提醒复习）</div>}
+      {rf.done && <div style={{ fontSize: 12, color: "#1f6b3f", marginTop: 4 }}>♻️ 已自动标记完成（题库进度 + 学习进度回流）</div>}
+      {rf.wrong && <div style={{ fontSize: 12, color: "#7d4a00", marginTop: 4 }}>♻️ 已记入错题 + 复习卡（wrong_count + 薄弱点回流，到期会提醒复习）</div>}
     </div>
   );
 }
@@ -340,7 +340,7 @@ export function PracticePanel() {
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedId(expanded ? null : p.id); } }}
                 style={{ cursor: "pointer", display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}
               >
-                <span className="job-badge" style={{ background: p.category === "handwrite" ? "rgba(58,141,90,.12)" : "rgba(109,79,216,.12)", color: p.category === "handwrite" ? "#2f7d4e" : "#5d48b8" }}>
+                <span className="job-badge" style={{ background: p.category === "handwrite" ? "rgba(58,141,90,.12)" : "rgba(109,79,216,.12)", color: p.category === "handwrite" ? "#1f6b3f" : "#5d48b8" }}>
                   {p.category === "handwrite" ? "✍️手写" : "🧮算法"}
                 </span>
                 {/* ACM 题徽标：与原生 panel-rest.js 625 同款（蓝系），点开面板时提示读入/输出约定 */}
@@ -351,7 +351,7 @@ export function PracticePanel() {
                 <span style={{ color: dc, fontSize: 11 }}>{dl}</span>
                 <span title="面试出现频率" style={{ fontSize: 11 }}>{freqStars(p.frequency)}</span>
                 <b style={{ fontSize: 12 }}>{p.title}</b>
-                {p.done && <span style={{ color: "#2f7a4a", fontSize: 11 }}>✅ 已做</span>}
+                {p.done && <span style={{ color: "#1f6b3f", fontSize: 11 }}>✅ 已做</span>}
                 {p.wrongCount > 0 && <span style={{ color: "#b91c1c", fontSize: 11 }}>答错 {p.wrongCount} 次</span>}
               </div>
               {expanded && (

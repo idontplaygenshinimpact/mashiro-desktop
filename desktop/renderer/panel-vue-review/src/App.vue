@@ -231,7 +231,7 @@ const trendMax = computed(() => Math.max(1, ...(trend.value || []).map((t) => t.
 .vr-count { font-size: 12px; color: #6a6790; }
 .vr-hint { color: #6a6790; font-size: 12px; padding: 16px 0; text-align: center; }
 .vr-err { color: #b91c1c; }
-.vr-done { color: #2f7a4a; font-weight: 600; }
+.vr-done { color: #1f6b3f; font-weight: 600; }
 .vr-feedback {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
   padding: 5px 10px; border-radius: 8px; font-size: 11px; color: #5a5678;
@@ -281,20 +281,20 @@ const trendMax = computed(() => Math.max(1, ...(trend.value || []).map((t) => t.
 }
 .vr-quiz-opt:hover { border-color: #9a8fd0; }
 .vr-quiz-opt.picked { border-color: #5d48b8; background: rgba(109,79,216,.08); }
-.vr-quiz-opt.correct { border-color: #2f7a4a; background: rgba(47,122,74,.10); }
+.vr-quiz-opt.correct { border-color: #1f6b3f; background: rgba(47,122,74,.10); }
 .vr-quiz-opt.wrong { border-color: #c0392b; background: rgba(192,57,43,.10); }
 .vr-quiz-fb { font-size: 11px; margin-top: 3px; }
-.fb-ok { color: #2f7a4a; }
+.fb-ok { color: #1f6b3f; }
 .fb-bad { color: #c0392b; }
 .vr-quiz-submit {
   font-size: 12px; padding: 4px 14px; border-radius: 6px; cursor: pointer;
-  background: rgba(47,122,74,.10); color: #2f7a4a; border: 1px solid rgba(47,122,74,.3); font-weight: 600;
+  background: rgba(47,122,74,.10); color: #1f6b3f; border: 1px solid rgba(47,122,74,.3); font-weight: 600;
 }
 
 /* 完成面板 */
 .vr-done-panel { display: flex; flex-direction: column; gap: 8px; }
 .vr-cleared {
-  padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #2f7a4a;
+  padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #1f6b3f;
   background: linear-gradient(135deg, rgba(47,122,74,.10), rgba(80,160,255,.05));
   border: 1px solid rgba(47,122,74,.2);
 }
@@ -306,7 +306,7 @@ const trendMax = computed(() => Math.max(1, ...(trend.value || []).map((t) => t.
   font-size: 12px; padding: 6px 14px; border-radius: 6px; cursor: pointer;
   background: rgba(109,79,216,.10); color: #5d48b8; border: 1px solid rgba(109,79,216,.3); font-weight: 600;
 }
-.vr-plan-msg { font-size: 11px; color: #2f7a4a; }
+.vr-plan-msg { font-size: 11px; color: #1f6b3f; }
 
 /* 统计 */
 .vr-stats, .vr-trend, .vr-wrong, .vr-mastery {

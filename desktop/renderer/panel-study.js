@@ -134,7 +134,7 @@ const ivSessionEl = $("interview-session");
 const DIM_LABELS = [["tech", "技术"], ["expr", "表达"], ["depth", "深度"], ["edge", "边界"], ["reflect", "复盘"]];
 function scoreBarHtml(label, val, big = false) {
   const v = Math.max(0, Math.min(100, Number(val) || 0));
-  const color = v >= 80 ? "linear-gradient(90deg,#3a8a5a,#2f7d4e)" : v >= 60 ? "linear-gradient(90deg,#8a5adc,#6d4fd8)" : "linear-gradient(90deg,#d98a3d,#c07020)";
+  const color = v >= 80 ? "linear-gradient(90deg,#3a8a5a,#1f6b3f)" : v >= 60 ? "linear-gradient(90deg,#8a5adc,#6d4fd8)" : "linear-gradient(90deg,#d98a3d,#c07020)";
   return `<div class="score-bar${big ? " big" : ""}">
     <span class="sb-label">${label}</span>
     <span class="sb-track"><i style="width:${v}%;background:${color}"></i></span>
@@ -172,7 +172,7 @@ function startIvTimer() {
     const el = $("iv-timer");
     if (el) {
       el.textContent = `⏱ ${m}:${s}`;
-      el.style.color = interviewState.roundSeconds > 180 ? "#c05050" : interviewState.roundSeconds > 90 ? "#9a5b00" : "";
+      el.style.color = interviewState.roundSeconds > 180 ? "#c05050" : interviewState.roundSeconds > 90 ? "#7d4a00" : "";
     }
   };
   tick();
@@ -1002,7 +1002,7 @@ function renderReviewBatch(queue) {
   const r2 = queue.filter((c) => c.history?.length === 1).length;
   const r3p = queue.length - first - r2;
   const chip = (label, n, color) => `<span class="job-badge" style="background:${color};color:#fff;">${label} ${n}</span>`;
-  box.innerHTML = `今日 ${queue.length} 张：${chip("🆕 首次", first, "#2563eb")} ${chip("🔁 第2次", r2, "#7c3aed")} ${chip("🔁 3次+", r3p, "#5d48b8")} <span style="font-size:10px;color:#6a6790;">· 预计 ${Math.max(1, Math.round(queue.length / 2))} 分钟</span>`;
+  box.innerHTML = `今日 ${queue.length} 张：${chip("🆕 首次", first, "#1d4ed8")} ${chip("🔁 第2次", r2, "#6d28d9")} ${chip("🔁 3次+", r3p, "#5d48b8")} <span style="font-size:10px;color:#6a6790;">· 预计 ${Math.max(1, Math.round(queue.length / 2))} 分钟</span>`;
 }
 
 // 复习统计渲染：总卡/到期/今日完成/学习/掌握 + 今日进度条（今日完成 / 今日到期）
@@ -1092,7 +1092,7 @@ async function loadMastery() {
 // 单个知识点条形：颜色按 score（<50 红 / 50-70 黄 / >=70 绿），宽度按 score%
 function masteryBar(k) {
   const score = Math.max(0, Math.min(100, Number(k.score) || 0));
-  const color = score < 50 ? "#c0392b" : score < 70 ? "#8f6f00" : "#2f7a4a";
+  const color = score < 50 ? "#c0392b" : score < 70 ? "#8f6f00" : "#1f6b3f";
   return `<div class="mastery-item" title="${esc(k.id)}">
     <span class="mastery-name">${esc(k.title)}</span>
     <span class="mastery-bar"><i style="width:${score}%;background:${color}"></i></span>
@@ -1161,10 +1161,10 @@ function showReviewCard() {
       memEl.innerHTML = `<span class="rc-stage-badge">${esc(stage.label)}</span>
         <span style="font-size:11px;color:#6a6790;">首次复习，学完记住它</span>`;
     } else {
-      const color = memPct >= 80 ? "linear-gradient(90deg,#3a8a5a,#2f7d4e)" : memPct >= 60 ? "linear-gradient(90deg,#8a5adc,#6d4fd8)" : "linear-gradient(90deg,#d98a3d,#c07020)";
+      const color = memPct >= 80 ? "linear-gradient(90deg,#3a8a5a,#1f6b3f)" : memPct >= 60 ? "linear-gradient(90deg,#8a5adc,#6d4fd8)" : "linear-gradient(90deg,#d98a3d,#c07020)";
       memEl.innerHTML = `<span class="rc-stage-badge">${esc(stage.label)}</span>
         <span class="rc-mem-track"><i style="width:${memPct}%;background:${color}"></i></span>
-        <b class="rc-mem-pct" style="color:${memPct >= 80 ? "#2e9e5b" : memPct >= 60 ? "#5d48b8" : "#9a5b00"};">${memPct}%</b>
+        <b class="rc-mem-pct" style="color:${memPct >= 80 ? "#2e9e5b" : memPct >= 60 ? "#5d48b8" : "#7d4a00"};">${memPct}%</b>
         <span style="font-size:10px;color:#6a6790;">记忆强度</span>`;
     }
   }
@@ -1175,7 +1175,7 @@ function showReviewFeedback(rating, nextDue, nextCard) {
   const fb = $("rc-feedback");
   if (!fb) return;
   const label = ["😵 忘了", "😕 困难", "🙂 记得", "😄 简单"][rating] || "";
-  const color = rating >= 2 ? "#2f7a4a" : "#c05050";
+  const color = rating >= 2 ? "#1f6b3f" : "#c05050";
   const schedDays = nextCard?.fsrs?.scheduled_days;
   fb.innerHTML = `<span style="color:${color};font-weight:600;">${label}</span> · 间隔 <b>${schedDays || 1}</b> 天 · 下次复习：<b>${nextDue ? relDue(nextDue) : "—"}</b>`;
   fb.classList.remove("hidden");
@@ -1778,7 +1778,7 @@ function renderPlanItemHtml(it) {
     <div class="study-item ${it.done ? "done" : ""}" data-id="${it.id}">
       <input type="checkbox" ${it.done ? "checked" : ""} />
       <div style="flex:1">
-        <div class="s-topic">${esc(it.topic)} ${it.level ? `<span class="s-lv ${lvCls[it.level] || "lv-must"}">${esc(it.level)}</span>` : ""} ${srcBadge}${it.reviewDue ? '<span class="s-src" style="background:rgba(220,150,60,.2);color:#9a5b00;">🔁 复习到期</span>' : ""}</div>
+        <div class="s-topic">${esc(it.topic)} ${it.level ? `<span class="s-lv ${lvCls[it.level] || "lv-must"}">${esc(it.level)}</span>` : ""} ${srcBadge}${it.reviewDue ? '<span class="s-src" style="background:rgba(220,150,60,.2);color:#7d4a00;">🔁 复习到期</span>' : ""}</div>
         <div class="s-why">${esc(it.why || "")}</div>
       </div>
       ${goPractice}
@@ -2649,7 +2649,7 @@ $("iv-notes-btn").addEventListener("click", async () => {
     if (!r?.ok) { result.textContent = "⚠️ " + (r?.error || "记录失败"); return; }
     result.innerHTML = `
       <div style="color:#3a8a5a">✅ 新增 ${r.added?.length || 0} 个：${esc((r.added || []).join("、") || "无")}</div>
-      ${r.existing?.length ? `<div style="color:#9a5b00">已在清单：${esc(r.existing.join("、"))}</div>` : ""}
+      ${r.existing?.length ? `<div style="color:#7d4a00">已在清单：${esc(r.existing.join("、"))}</div>` : ""}
       ${r.skipped?.length ? `<div style="color:#6a6790">跳过非知识点：${esc(r.skipped.map((s) => s.topic).join("、"))}</div>` : ""}
       <div style="color:#6a6790;font-size:11px;margin-top:4px">${esc(r.hint || "")}</div>`;
     $("iv-notes-input").value = "";

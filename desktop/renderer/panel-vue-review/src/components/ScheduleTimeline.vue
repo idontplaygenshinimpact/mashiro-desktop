@@ -19,7 +19,7 @@
 
 <script setup>
 defineProps({ history: Array });
-const COLORS = { again: "#e5484d", hard: "#e0a800", good: "#2f7a4a", easy: "#3a7bd5" };
+const COLORS = { again: "#e5484d", hard: "#e0a800", good: "#1f6b3f", easy: "#3a7bd5" };
 const LABELS = { again: "忘记", hard: "困难", good: "良好", easy: "简单" };
 const colorOf = (k) => COLORS[k] || "#6a6790";
 const labelOf = (k) => LABELS[k] || k;

@@ -511,7 +511,7 @@ async function loadDocs() {
           // 项目内版本对比：项目版本 < 最新 → 橙色升级提示
           let upgrade = "";
           if (c.version && c.localVersion && c.localVersion !== c.version) {
-            upgrade = `<div class="job-meta" style="color:#9a5b00;font-weight:600;">📌 你的项目：v${esc(c.localVersion)} → 最新 v${esc(c.version)}</div>`;
+            upgrade = `<div class="job-meta" style="color:#7d4a00;font-weight:600;">📌 你的项目：v${esc(c.localVersion)} → 最新 v${esc(c.version)}</div>`;
           }
           // 升级命令（registry 包名存在时）
           let cmd = "";
@@ -525,7 +525,7 @@ async function loadDocs() {
           <div class="job-item">
             <div class="job-head">
               <b>${esc(s.name)}</b>
-              <span class="job-badge" style="background:${c.ok ? "rgba(120,180,120,.15);color:#2f7a4a;" : "rgba(220,150,60,.15);color:#9a5b00;"}">${badge}</span>
+              <span class="job-badge" style="background:${c.ok ? "rgba(120,180,120,.15);color:#1f6b3f;" : "rgba(220,150,60,.15);color:#7d4a00;"}">${badge}</span>
             </div>
             <div class="job-meta">${esc(s.desc)}</div>
             ${upgrade}
@@ -721,7 +721,7 @@ async function loadDashboard() {
       <div style="font-size:11px;color:#6a6790;margin:6px 0;">📌 累计进度（闭环总览）</div>
       ${bar("📚 学习清单", p.plan?.done, p.plan?.total)}
       ${bar("✍️ 手写/算法题库", p.challenges?.done, p.challenges?.total, "linear-gradient(90deg,#4a6fe0,#3a5bd5)")}
-      ${bar("🔁 复习卡掌握", p.review?.mastered, p.review?.total, "linear-gradient(90deg,#3a8a5a,#2f7d4e)")}
+      ${bar("🔁 复习卡掌握", p.review?.mastered, p.review?.total, "linear-gradient(90deg,#3a8a5a,#1f6b3f)")}
       <div class="stats-row" style="margin-top:8px;">
         <div class="stat-chip">🎯 方向 <b>${esc(p.direction || "未设置")}</b></div>
         <div class="stat-chip">🔧 薄弱点 <b>${p.weak ?? 0}</b></div>
@@ -1225,8 +1225,8 @@ async function openSelfAssess() {
           x.style.background = "#fff"; x.style.color = "#6a6790"; x.style.borderColor = "#d8d4ea";
         });
         b.style.background = b.dataset.level === "weak" ? "rgba(229,72,77,.15)" : b.dataset.level === "ok" ? "rgba(224,168,0,.15)" : "rgba(47,122,74,.15)";
-        b.style.color = b.dataset.level === "weak" ? "#c0392b" : b.dataset.level === "ok" ? "#9a5b00" : "#2f7a4a";
-        b.style.borderColor = b.dataset.level === "weak" ? "#c0392b" : b.dataset.level === "ok" ? "#9a5b00" : "#2f7a4a";
+        b.style.color = b.dataset.level === "weak" ? "#c0392b" : b.dataset.level === "ok" ? "#7d4a00" : "#1f6b3f";
+        b.style.borderColor = b.dataset.level === "weak" ? "#c0392b" : b.dataset.level === "ok" ? "#7d4a00" : "#1f6b3f";
         const n = Object.keys(saAssessments).length;
         $("sa-status").textContent = `已自评 ${n}/${total} 项`;
       });

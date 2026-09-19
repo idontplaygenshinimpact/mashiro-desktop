@@ -13,7 +13,7 @@ import { indentWithTab } from "@codemirror/commands";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
 
-const DIFF_LABEL = { 1: ["简单", "#2f7a4a"], 2: ["中等", "#9a5b00"], 3: ["困难", "#b91c1c"] };
+const DIFF_LABEL = { 1: ["简单", "#1f6b3f"], 2: ["中等", "#7d4a00"], 3: ["困难", "#b91c1c"] };
 const freqStars = (n) => "🔥".repeat(Math.max(0, Math.min(3, Number(n) || 0)));
 
 // ---------- 题库列表 ----------
@@ -240,7 +240,7 @@ async function markWrong(ch) {
                 :style="mode === 'core' ? { background: 'rgba(109,79,216,.16)', color: '#5d48b8', border: '1px solid rgba(109,79,216,.45)' } : {}"
                 @click="switchMode('core')" aria-label="切到核心代码模式">📐 核心代码</button>
         <button type="button" class="rf-chip"
-                :style="mode === 'acm' ? { background: 'rgba(58,141,90,.16)', color: '#2f7d4e', border: '1px solid rgba(58,141,90,.45)' } : {}"
+                :style="mode === 'acm' ? { background: 'rgba(58,141,90,.16)', color: '#1f6b3f', border: '1px solid rgba(58,141,90,.45)' } : {}"
                 @click="switchMode('acm')" aria-label="切到 ACM 模式">🖥️ ACM 模式</button>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
@@ -273,7 +273,7 @@ async function markWrong(ch) {
         <button type="button" class="rf-btn" style="flex:0 0 auto" @click="openChallenge(c)">✍️ 做题</button>
         <span class="rf-grow">
           <span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span class="rf-chip" :style="{ background: c.category === 'handwrite' ? 'rgba(58,141,90,.12)' : 'rgba(109,79,216,.12)', color: c.category === 'handwrite' ? '#2f7d4e' : '#5d48b8' }">{{ c.category === "handwrite" ? "✍️手写" : "🧮算法" }}</span>
+            <span class="rf-chip" :style="{ background: c.category === 'handwrite' ? 'rgba(58,141,90,.12)' : 'rgba(109,79,216,.12)', color: c.category === 'handwrite' ? '#1f6b3f' : '#5d48b8' }">{{ c.category === "handwrite" ? "✍️手写" : "🧮算法" }}</span>
             <span v-if="c.mode === 'acm'" class="rf-chip" style="background:rgba(23,116,150,.12);color:#177494">🖥️ ACM</span>
             <span v-if="DIFF_LABEL[c.difficulty]" :style="{ color: DIFF_LABEL[c.difficulty][1], fontSize: '11px' }">{{ DIFF_LABEL[c.difficulty][0] }}</span>
             <span class="rf-muted" :title="`面试出现频率 ${c.frequency}`">{{ freqStars(c.frequency) }}</span>

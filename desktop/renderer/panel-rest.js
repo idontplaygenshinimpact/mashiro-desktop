@@ -315,7 +315,7 @@ async function loadZhenti() {
     list.innerHTML = j.papers.map((p) => `
       <div class="job-item">
         <div class="job-head">
-          <span class="job-badge" style="${p.kind === "simulate" ? "background:rgba(120,180,120,.15);color:#2f7a4a;" : "background:rgba(109,79,216,.12);color:#5d48b8;"}">${p.kind === "simulate" ? "🧪 模拟卷" : "🏢 真题"}</span>
+          <span class="job-badge" style="${p.kind === "simulate" ? "background:rgba(120,180,120,.15);color:#1f6b3f;" : "background:rgba(109,79,216,.12);color:#5d48b8;"}">${p.kind === "simulate" ? "🧪 模拟卷" : "🏢 真题"}</span>
           <b style="font-size:12px;">${esc(p.company || "平台")}</b>
           <span class="job-title">${esc(p.title)}</span>
         </div>
@@ -516,8 +516,8 @@ async function toggleOjDetail(item, btn) {
       html += `<div style="margin-top:8px;font-weight:bold;color:#5d48b8;">示例</div>`;
       for (const s of samples) {
         html += `<div style="margin:4px 0;">【${esc(s.title)}】`;
-        if (s.input) html += `<div style="color:#2f7a4a;">输入：${esc(s.input)}</div>`;
-        if (s.output) html += `<div style="color:#9a5b00;">输出：${esc(s.output)}</div>`;
+        if (s.input) html += `<div style="color:#1f6b3f;">输入：${esc(s.input)}</div>`;
+        if (s.output) html += `<div style="color:#7d4a00;">输出：${esc(s.output)}</div>`;
         if (s.note) html += `<div style="color:#6a6790;">说明：${esc(s.note)}</div>`;
         html += `</div>`;
       }
@@ -538,7 +538,7 @@ let chMode = "core"; // 判题模式：core=LeetCode 核心代码（骨架函数
 let chVisible = 60;  // 懒加载：每批条数（448 道全渲染太卡且难找）
 let chAll = [];      // 当前完整排序列表（过滤前）
 
-const DIFF_LABEL = { 1: ["简单", "#2f7a4a"], 2: ["中等", "#9a5b00"], 3: ["困难", "#b91c1c"] };
+const DIFF_LABEL = { 1: ["简单", "#1f6b3f"], 2: ["中等", "#7d4a00"], 3: ["困难", "#b91c1c"] };
 const freqStars = (n) => "🔥".repeat(Math.max(0, Math.min(3, Number(n) || 0)));
 
 async function loadChallenges() {
@@ -622,12 +622,12 @@ function renderChallenges() {
     return `
     <div class="job-item" id="ch-${esc(p.id)}" title="点击展开/收起题干" style="cursor:pointer;">
       <div class="job-head">
-        <span class="job-badge" style="background:${p.category === "handwrite" ? "rgba(58,141,90,.12)" : "rgba(109,79,216,.12)"};color:${p.category === "handwrite" ? "#2f7d4e" : "#5d48b8"};">${p.category === "handwrite" ? "✍️手写" : "🧮算法"}</span>
+        <span class="job-badge" style="background:${p.category === "handwrite" ? "rgba(58,141,90,.12)" : "rgba(109,79,216,.12)"};color:${p.category === "handwrite" ? "#1f6b3f" : "#5d48b8"};">${p.category === "handwrite" ? "✍️手写" : "🧮算法"}</span>
         ${p.mode === "acm" ? '<span class="job-badge" style="background:rgba(13,102,201,.12);color:#0d66c9;" title="ACM 模式：自己读输入、自己输出（秋招笔试卷子形态）">🖥️ACM</span>' : ""}
         <span style="color:${dc};font-size:11px;">${dl}</span>
         <span style="font-size:11px;" title="面试出现频率">${freqStars(p.frequency)}</span>
         <span class="job-title">${esc(p.title)}</span>
-        ${p.done ? '<span style="color:#2f7a4a;font-size:11px;">✅ 已做</span>' : ""}
+        ${p.done ? '<span style="color:#1f6b3f;font-size:11px;">✅ 已做</span>' : ""}
         ${wrong}
       </div>
       ${desc ? `<div class="job-summary" style="margin-top:3px;">${esc(desc.slice(0, 90))}${desc.length > 90 ? "…" : ""}</div>` : ""}
@@ -716,11 +716,11 @@ function mountFallbackEditor(host, initial) {
   const hlJS = (code) => escHtml(String(code)).replace(HL_RE, (m, str, kw, num, fn) => {
     if (str !== undefined) {
       const cmt = /^\/\//.test(str) || /^\/\*/.test(str);
-      return `<span style="color:${cmt ? "#6a6790;font-style:italic" : "#9a5b00"};">${str}</span>`;
+      return `<span style="color:${cmt ? "#6a6790;font-style:italic" : "#7d4a00"};">${str}</span>`;
     }
     if (kw !== undefined) return `<span style="color:#8a5adc;font-weight:600;">${kw}</span>`;
-    if (num !== undefined) return `<span style="color:#9a5b00;">${num}</span>`;
-    return `<span style="color:#2f7d4e;">${fn}</span>`;
+    if (num !== undefined) return `<span style="color:#7d4a00;">${num}</span>`;
+    return `<span style="color:#1f6b3f;">${fn}</span>`;
   });
   host.innerHTML = `
     <div class="ch-code" style="position:relative;border:1px solid rgba(109,79,216,.3);border-radius:6px;background:#faf9ff;">
@@ -805,7 +805,7 @@ function bindChPractice() {
             <div class="ch-code-host"></div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
               <button class="job-btn ch-editor-run" style="background:linear-gradient(135deg,#8a5adc,#6d4fd8);color:#fff;">▶ 运行判题</button>
-              <button class="job-btn ch-editor-mark" data-id="${esc(c.id)}" style="display:none;background:linear-gradient(135deg,#2f7a4a,#2f7d4e);color:#fff;">✅ 全部通过，标记完成</button>
+              <button class="job-btn ch-editor-mark" data-id="${esc(c.id)}" style="display:none;background:linear-gradient(135deg,#1f6b3f,#1f6b3f);color:#fff;">✅ 全部通过，标记完成</button>
               <span class="ch-editor-state" style="align-self:center;font-size:12px;"></span>
             </div>
             <pre class="ch-editor-result" style="display:none;margin-top:8px;padding:8px;background:#1e1e2e;color:#cdd6f4;border-radius:6px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;"></pre>`;
@@ -975,9 +975,9 @@ $("challenge-refresh-btn")?.addEventListener("click", () => {
 const activeChip = "background:linear-gradient(135deg,#8a5adc,#6d4fd8);color:#fff;";
 function diffColor(d) {
   if (!d) return "#6a6790";
-  if (d.includes("入门")) return "#2f7a4a";
-  if (d.includes("简单")) return "#2f7a4a";
-  if (d.includes("中等")) return "#9a5b00";
+  if (d.includes("入门")) return "#1f6b3f";
+  if (d.includes("简单")) return "#1f6b3f";
+  if (d.includes("中等")) return "#7d4a00";
   return "#b91c1c";
 }
 
@@ -1587,7 +1587,7 @@ async function loadSchedule() {
       if (!at) return "";
       const diff = at - now;
       if (diff <= 48 * H) return ` · <span style="color:#c05050;font-weight:700;">${diff <= H ? "即将开始" : Math.max(1, Math.round(diff / H)) + " 小时后"}</span>`;
-      if (diff <= 7 * D) return ` · <span style="color:#9a5b00;font-weight:600;">${Math.max(1, Math.round(diff / D))} 天后</span>`;
+      if (diff <= 7 * D) return ` · <span style="color:#7d4a00;font-weight:600;">${Math.max(1, Math.round(diff / D))} 天后</span>`;
       return ` · ${Math.round(diff / D)} 天后`;
     };
     list.innerHTML = groups.filter((g) => g.items.length).map((g) => `
