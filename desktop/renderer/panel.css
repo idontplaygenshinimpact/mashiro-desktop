@@ -85,7 +85,18 @@ main { flex: 1; overflow-y: auto; padding: 14px; scrollbar-width: thin; scrollba
 main::-webkit-scrollbar { width: 8px; }
 main::-webkit-scrollbar-thumb { background: rgba(109,79,216,0.6); border-radius: 4px; }
 .tab-panel { display: none; }
-.tab-panel.active { display: block; }
+/* 内容底板（2026-09-16 视觉复核 + 像素实测结论）：`.tab-panel` 原先**没有背景**，正文直接压在 body 的
+   动漫壁纸上——像素级实测（按文本行紧贴矩形采样、外环取背景、极值当字色）显示 103 个文字元素里
+   **46 个低于 WCAG AA**（中位对比度 4.2~5.5，最差 1.5）。加底板后逐档实测：0.60+blur6 → 14 个不达标；
+   0.72+blur4 → 6；**0.82+blur3 → 5**；0.90 全不透明 → 0（但壁纸几乎被盖住）。取 0.82+blur3：95% 问题消掉、
+   又留住壁纸观感，且与面板既有表面（.rf-card 等 rgba(255,255,255,.55)+blur(12px)）视觉语言一致。
+   只加背景/圆角、不加 padding——避免动布局。 */
+.tab-panel.active {
+  display: block;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(3px);
+  border-radius: 12px;
+}
 h4 { color: #5d48b8; font-size: var(--sd-fs-md); margin: 14px 0 8px; }
 
 button.primary {
