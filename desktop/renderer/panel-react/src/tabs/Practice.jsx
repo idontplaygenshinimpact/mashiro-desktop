@@ -307,13 +307,13 @@ export function PracticePanel() {
           ))}
           <span style={{ width: 1, height: 14, background: "rgba(109,79,216,.18)", alignSelf: "center" }} />
           {[
-            ["", "全部"], ["handwrite", "✍️ 手写"], ["algorithm", "🧮 算法"],
+            ["", "全部分类"], ["handwrite", "✍️ 手写"], ["algorithm", "🧮 算法"],
           ].map(([v, lbl]) => (
             <button key={v || "all"} type="button" style={chipStyle(cat === v)}
               onClick={() => { setCat(v); setExpandedId(null); }}>{lbl}</button>
           ))}
           {[
-            [0, "全部"], [1, "简单"], [2, "中等"], [3, "困难"],
+            [0, "全部难度"], [1, "简单"], [2, "中等"], [3, "困难"],
           ].map(([v, lbl]) => (
             <button key={v} type="button" style={chipStyle(diff === v)}
               onClick={() => { setDiff(v); setExpandedId(null); }}>{lbl}</button>

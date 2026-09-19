@@ -549,13 +549,19 @@ async function loadPatrolConfig() {
     if (!r?.ok) { $("patrol-status").textContent = "⚠️ " + (r?.error || "读取失败"); return; }
     const sel = $("patrol-interval");
     $("patrol-enabled").checked = !!r.enabled;
-    sel.value = String(r.intervalMin);
-    if (sel.value !== String(r.intervalMin)) { // 自定义频率不在预设下拉里 → 追加选项
-      const opt = document.createElement("option");
-      opt.value = String(r.intervalMin);
-      opt.textContent = `${r.intervalMin} 分钟`;
-      sel.appendChild(opt);
-      sel.value = String(r.intervalMin);
+    // 防御（同 renderPatrolStatus）：缺失/非法 intervalMin 不要写进 value 与选项文案——
+    // 否则下拉里会出现"undefined 分钟"选项（视觉复核实测）
+    const iv = Number(r.intervalMin);
+    const ivText = Number.isFinite(iv) && iv > 0 ? String(iv) : "";
+    if (ivText) {
+      sel.value = ivText;
+      if (sel.value !== ivText) { // 自定义频率不在预设下拉里 → 追加选项
+        const opt = document.createElement("option");
+        opt.value = ivText;
+        opt.textContent = `${ivText} 分钟`;
+        sel.appendChild(opt);
+        sel.value = ivText;
+      }
     }
     renderPatrolStatus(r);
   } catch (e) {
@@ -564,12 +570,16 @@ async function loadPatrolConfig() {
 }
 function renderPatrolStatus(cfg) {
   const fmt = (ts) => (ts ? new Date(ts).toLocaleString("zh-CN", { hour12: false }) : "—");
+  // 防御：后端字段缺失/为 0 时不要渲染出字面量 "undefined"（2026-09-16 视觉复核实测踩到——
+  // 缺 intervalMin 时状态行显示"每 undefined 分钟"、下拉里出现"undefined 分钟"选项）
+  const iv = Number(cfg?.intervalMin);
+  const intervalText = Number.isFinite(iv) && iv > 0 ? String(iv) : "—";
   const parts = [
-    `当前配置：${cfg.enabled ? "开启" : "关闭"} · 每 ${cfg.intervalMin} 分钟`,
-    `上次巡检：${fmt(cfg.lastRun)}`,
-    `下次巡检：${cfg.enabled && cfg.nextRun ? fmt(cfg.nextRun) : "—"}`,
+    `当前配置：${cfg?.enabled ? "开启" : "关闭"} · 每 ${intervalText} 分钟`,
+    `上次巡检：${fmt(cfg?.lastRun)}`,
+    `下次巡检：${cfg?.enabled && cfg?.nextRun ? fmt(cfg.nextRun) : "—"}`,
   ];
-  if (cfg.note) parts.push(`（${esc(cfg.note)}）`);
+  if (cfg?.note) parts.push(`（${esc(cfg.note)}）`);
   $("patrol-status").innerHTML = parts.join("　");
 }
 async function savePatrolConfig(patch, tip) {

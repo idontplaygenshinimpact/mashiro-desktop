@@ -592,7 +592,7 @@ function renderChallenges() {
     `<button class="oj-cat-chip" data-done="1" style="${chDone === 1 ? activeChip : ""}">🆕 未做</button>` +
     `<button class="oj-cat-chip" data-done="2" style="${chDone === 2 ? activeChip : ""}">✅ 已做</button>` +
     `<span style="width:1px;height:14px;background:rgba(109,79,216,.18);margin:0 2px;align-self:center;"></span>` +
-    `<button class="oj-cat-chip" data-cat="" data-diff="0" style="${!challengeCat && !challengeDiff ? activeChip : ""}">全部</button>` +
+    `<button class="oj-cat-chip" data-cat="" data-diff="0" style="${!challengeCat && !challengeDiff ? activeChip : ""}" title="分类与难度都不过滤">全部分类</button>` +
     `<button class="oj-cat-chip" data-cat="handwrite" data-diff="0" style="${challengeCat === "handwrite" && !challengeDiff ? activeChip : ""}">✍️ 手写</button>` +
     `<button class="oj-cat-chip" data-cat="algorithm" data-diff="0" style="${challengeCat === "algorithm" && !challengeDiff ? activeChip : ""}">🧮 算法</button>` +
     `<button class="oj-cat-chip" data-cat="${esc(challengeCat)}" data-diff="1" style="${challengeDiff === 1 ? activeChip : ""}">简单</button>` +

@@ -257,7 +257,7 @@ async function markWrong(ch) {
           <option :value="3">困难</option>
         </select>
         <select class="rf-input" v-model="doneFilter" aria-label="按是否已做筛选">
-          <option :value="0">全部</option>
+          <option :value="0">全部状态</option>
           <option :value="1">🆕 未做</option>
           <option :value="2">✅ 已做</option>
         </select>
