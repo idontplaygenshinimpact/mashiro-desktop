@@ -246,7 +246,39 @@ function SessionView({ session, scores, busy, log, onSubmit, onExit }) {
   const avgRounds = Math.max(1, scores.rounds);
   // 💻 手写轮代码作答（用户反馈 2026-09：手写题用纯文本框太难受）——原生面板同款：行号 + 等宽 + Tab/自动缩进
   const isCode = session?.answerMode === "code";
-  const gutterText = Array.from({ length: (answer.match(/\n/g) || []).length + 1 }, (_, i) => i + 1).join("\n");
+
+  // 💻 CodeMirror 6（2026-09-16 三态对齐）：原生面板已上 CM，框架版仍是 textarea → 这里复用**同一个产物**
+  // （panel-rest.js 的全局 loadPracticeEditor 负责注入 practice-editor.bundle.js 并按需缓存），
+  // `answer` 仍是唯一数据源（CM 的 onChange 写回 setAnswer，提交链路零改动）；产物缺失则保留 textarea 兜底。
+  const cmHost = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const cmRef = useRef(/** @type {{ destroy?: () => void } | null} */ (null));
+  // CM 挂载失败（产物缺失/初始化异常）→ 回退 textarea：绝不留一个空白作答区
+  const [cmFailed, setCmFailed] = useState(false);
+  useEffect(() => {
+    const host = cmHost.current;
+    if (!isCode || !host) return;
+    let cancelled = false;
+    (async () => {
+      const loader = /** @type {{ loadPracticeEditor?: () => Promise<{ create: (...a: unknown[]) => { destroy: () => void } } | null> }} */ (window);
+      const cm = typeof loader.loadPracticeEditor === "function" ? await loader.loadPracticeEditor() : null;
+      if (cancelled) return;
+      if (!cm || typeof cm.create !== "function" || !host.isConnected) { setCmFailed(true); return; }
+      try {
+        cmRef.current = cm.create(host, {
+          initial: answer,
+          onChange: (v) => setAnswer(String(v)),
+          onRun: () => { if (answer.trim()) onSubmit(answer); },
+          height: "240px",
+        });
+      } catch { setCmFailed(true); }
+    })();
+    return () => {
+      cancelled = true;
+      try { cmRef.current?.destroy?.(); } catch { /* ignore */ }
+      cmRef.current = null;
+    };
+    // 依赖故意只放 isCode/轮次：answer 进依赖会导致每次输入都重建编辑器（内容由 CM 自己维护）
+  }, [isCode, session?.round]);
 
   // 计时器：进入会话/切换轮次时启动
   useEffect(() => {
@@ -342,13 +374,12 @@ function SessionView({ session, scores, busy, log, onSubmit, onExit }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
-            {isCode && (
-              <div aria-hidden="true" style={{
-                width: 30, flexShrink: 0, textAlign: "right", padding: "8px 4px 8px 0", borderRadius: 6,
-                fontFamily: MONO, fontSize: 11, lineHeight: 1.5, color: "#8d89a8",
-                background: "rgba(109,79,216,.07)", whiteSpace: "pre", overflow: "hidden", userSelect: "none",
-              }}>{gutterText}</div>
-            )}
+            {/* 手搓行号列已随 CodeMirror 上线条（CM 自带行号槽）——保留会变成两条行号，2026-09-16 */}
+            {isCode && !cmFailed ? (
+              /* 代码轮：CodeMirror 6 宿主（行号/语法高亮/Tab 缩进/Mod-Enter 提交由编辑器提供）；
+                 CM 挂载失败（产物缺失等）→ cmFailed=true 时下面走 textarea 兜底，不留空白作答区 */
+              <div ref={cmHost} style={{ flex: 1, minWidth: 0, minHeight: 240 }} data-role="iv-cm-host" />
+            ) : (
             <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={isCode ? 10 : 7}
               placeholder={isCode ? "写代码作答（Tab 缩进 · Enter 自动缩进 · Ctrl+Enter 提交）…" : "组织你的回答（思路 → 代码/例子 → 边界）…"}
               style={{
@@ -362,7 +393,7 @@ function SessionView({ session, scores, busy, log, onSubmit, onExit }) {
                   if (answer.trim() && !busy) { onSubmit(answer); setAnswer(""); }
                   return;
                 }
-                // 手写轮：Tab 缩进两格 / Enter 自动缩进（与原生面板 panel-study.js 同款行为）
+                // 手写轮兜底路径：Tab 缩进两格 / Enter 自动缩进（与原生面板 panel-study.js 同款行为）
                 if (!isCode) return;
                 const box = e.target;
                 const { selectionStart: s, selectionEnd: en, value } = box;
@@ -378,6 +409,7 @@ function SessionView({ session, scores, busy, log, onSubmit, onExit }) {
                   setAnswer(replaceRange(box, s, en, "\n" + indent + extra));
                 }
               }} />
+            )}
           </div>
           <button onClick={() => { onSubmit(answer); setAnswer(""); }} disabled={busy || !answer.trim()}
             style={{ ...btnPrimary, width: "100%", marginTop: 10, padding: "10px 0" }}>

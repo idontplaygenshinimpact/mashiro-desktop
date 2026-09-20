@@ -10,13 +10,13 @@ window.__RENDERER_SIZES = {
     "note": "panel-*.js 直引，无打包无依赖"
   },
   "react": {
-    "bytes": 766802,
-    "gzip": 254695,
+    "bytes": 767043,
+    "gzip": 254799,
     "note": "Vite 构建的 react-panel.js（含 React 运行时）"
   },
   "vue": {
-    "bytes": 685527,
-    "gzip": 235216,
+    "bytes": 686500,
+    "gzip": 235593,
     "note": "Vite 构建的 vue-review.js（含 Vue 运行时）"
   }
 };

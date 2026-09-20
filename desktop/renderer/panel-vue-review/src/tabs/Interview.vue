@@ -1,11 +1,39 @@
 <!-- Vue 版模拟面试（前端三态并行展示工单任务 3 最后一块）：同一 IPC 桥，状态机在 useInterview.js -->
 <!-- 🟢 Vue 特色：composable 组织（reactive 状态 + computed 评分派生）+ v-model 配置表单 + Transition 阶段切换 -->
 <script setup>
-import { onMounted } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useInterview } from "../useInterview.js";
 
 const { st, config, history, resumable, err, answer, micState, micErr, ROLES, start, resume, submit, finish, loadMeta, toggleMic, cancelMic, scoreRows, delHistory } = useInterview();
 onMounted(loadMeta);
+
+// 💻 手写轮代码作答（2026-09-16 三态对齐）：原生面板已上 CodeMirror 6，React 版已对齐，Vue 版此前
+// **完全不识别 answerMode**（一直是纯 textarea）→ 这里补上：复用原生 panel-rest.js 暴露的全局
+// loadPracticeEditor（注入 practice-editor.bundle.js 并按需缓存），answer 仍是唯一数据源
+// （CM 的 onChange 写回 answer，提交链路零改动）；挂载失败则保持 textarea（cmFailed）。
+const isCode = computed(() => st.session?.answerMode === "code");
+const cmHost = ref(null);
+const cmFailed = ref(false);
+let cmView = null;
+async function mountCodeEditor() {
+  if (!isCode.value) return;
+  await nextTick();
+  const host = cmHost.value;
+  if (!host) return;
+  const loader = /** @type {{ loadPracticeEditor?: () => Promise<{ create: (...a: unknown[]) => { destroy: () => void } } | null> }} */ (window);
+  const cm = typeof loader.loadPracticeEditor === "function" ? await loader.loadPracticeEditor() : null;
+  if (!cm || typeof cm.create !== "function" || !host.isConnected) { cmFailed.value = true; return; }
+  try {
+    cmView = cm.create(host, { initial: answer.value, onChange: (v) => { answer.value = String(v); }, onRun: () => { if (String(answer.value).trim()) submit(); }, height: "240px" });
+  } catch { cmFailed.value = true; }
+}
+function destroyCodeEditor() {
+  try { cmView?.destroy?.(); } catch { /* ignore */ }
+  cmView = null;
+}
+// 轮次切换/模式切换都重挂（同一轮内不重建，避免打断输入）
+watch([isCode, () => st.session?.round], async () => { destroyCodeEditor(); cmFailed.value = false; if (isCode.value) await mountCodeEditor(); });
+onBeforeUnmount(destroyCodeEditor);
 </script>
 
 <template>
@@ -57,7 +85,10 @@ onMounted(loadMeta);
         </div>
       </div>
       <div class="rf-card">
-        <textarea class="rf-input" v-model="answer" rows="5" placeholder="作答…（Ctrl/Cmd + Enter 提交）" aria-label="面试作答" @keydown.ctrl.enter.prevent="submit" @keydown.meta.enter.prevent="submit" />
+        <!-- 代码轮且 CM 可用 → CodeMirror 宿主（行号/高亮/Tab 缩进/Mod-Enter 提交由编辑器提供）；
+             非代码轮或 CM 挂载失败 → textarea 兜底（Vue 版此前一直是这个） -->
+        <div v-if="isCode && !cmFailed" ref="cmHost" style="min-height:240px" data-role="iv-cm-host"></div>
+        <textarea v-else class="rf-input" v-model="answer" :rows="isCode ? 10 : 5" :placeholder="isCode ? '写代码作答（Tab 缩进 · Ctrl+Enter 提交）…' : '作答…（Ctrl/Cmd + Enter 提交）'" aria-label="面试作答" @keydown.ctrl.enter.prevent="submit" @keydown.meta.enter.prevent="submit" />
         <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
           <button type="button" class="rf-btn rf-btn-primary" :disabled="st.busy || !answer.trim()" @click="submit">{{ st.busy ? "评分中…" : "提交回答" }}</button>
           <button type="button" class="rf-btn" :disabled="st.busy" @click="finish">结束并生成复盘</button>
