@@ -77,6 +77,50 @@ function buildExportArgs(skeleton: unknown): string {
         warn: (...a: unknown[]) => logs.push("[warn] " + a.map(String).join(" ")),
       },
       __sleep__: (ms: number) => new Promise((r) => setTimeout(r, ms)), // 测试代码的时序辅助（防抖断言用）
+      // 链表/树节点构造器与序列化（2026-09-16）：真实库 448 道 core 题里 167 道没有 test_code，
+      // 其中 74 道是链表/树题——示例输入是数组（`[1,2,3]`），过去无法自动构造 ListNode/TreeNode 所以判不了。
+      // 这里按 LeetCode 惯例提供构造/序列化，供 scripts/gen-listtree-tests.mjs 生成的测试代码使用。
+      // （只在测试代码里调用；用户代码若需要也可用——名字带 __ 前缀避免与题解变量冲突。）
+      __buildListNode__: (arr: unknown) => {
+        const a = Array.isArray(arr) ? arr : [];
+        let head: { val: unknown; next: unknown } | null = null;
+        for (let i = a.length - 1; i >= 0; i--) head = { val: a[i], next: head };
+        return head;
+      },
+      __listToArray__: (head: unknown, limit = 10000) => {
+        const out: unknown[] = [];
+        let n = head as { val?: unknown; next?: unknown } | null | undefined;
+        let guard = 0;
+        while (n && guard++ < limit) { out.push(n.val); n = n.next as { val?: unknown; next?: unknown } | null | undefined; }
+        return out; // 有环时靠 limit 兜底（返回前 limit 个，断言自然不通过而不是死循环）
+      },
+      __buildTreeNode__: (arr: unknown) => {
+        // LeetCode 层序数组（null 表示空位）→ 二叉树
+        const a = Array.isArray(arr) ? arr : [];
+        if (!a.length || a[0] === null) return null;
+        const root = { val: a[0], left: null as unknown, right: null as unknown };
+        const queue: Array<{ left: unknown; right: unknown }> = [root];
+        let i = 1;
+        while (queue.length && i < a.length) {
+          const cur = queue.shift()!;
+          if (i < a.length) { const v = a[i++]; if (v !== null) { cur.left = { val: v, left: null, right: null }; queue.push(cur.left as { left: unknown; right: unknown }); } }
+          if (i < a.length) { const v = a[i++]; if (v !== null) { cur.right = { val: v, left: null, right: null }; queue.push(cur.right as { left: unknown; right: unknown }); } }
+        }
+        return root;
+      },
+      __treeToArray__: (root: unknown) => {
+        // 二叉树 → 层序数组（去掉尾部 null，与 LeetCode 期望输出一致）
+        const out: unknown[] = [];
+        const queue: unknown[] = [root];
+        while (queue.length) {
+          const n = queue.shift() as { val?: unknown; left?: unknown; right?: unknown } | null | undefined;
+          if (!n) { out.push(null); continue; }
+          out.push(n.val);
+          queue.push(n.left ?? null, n.right ?? null);
+        }
+        while (out.length && out[out.length - 1] === null) out.pop();
+        return out;
+      },
       // 断言闭包在 worker 侧定义（引用 worker 的 tests 数组——vm 脚本内访问不到 worker 闭包）
       // 2026-09 再修（安全工单 S3）：断言可被用户代码伪造（sandbox 全局属性可写——
       // userCode 里 `__mashiroAssert9f3a__ = (c) => {}` 覆盖 → 断言静默失效）。
