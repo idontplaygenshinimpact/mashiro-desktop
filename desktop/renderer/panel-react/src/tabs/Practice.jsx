@@ -209,9 +209,15 @@ function ChallengeEditor({ challenge, onChanged, onNotify }) {
       {err && <div className="rf-muted rf-chip-warn">⚠️ {err}</div>}
       <div ref={hostRef} />
       <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <button type="button" className="rf-btn rf-btn-primary" disabled={busy || marking} onClick={runJudgement}>
-          {busy ? "⏳ 判题中…" : "▶ 运行判题"}
-        </button>
+        {/* 无可判题用例的题（真实库 167/448 道 core 题缺 test_code，多为链表/树题）：不渲染判题按钮——
+            否则点了必然失败，用户会以为是自己写错。改为明确说明 + 保留「已会/不会」记录（2026-09-16） */}
+        {detail?.judgeable === false ? (
+          <span className="rf-muted" style={{ fontSize: 12, color: "#7d4a00" }}>🧩 本题暂无自动判题用例（多为链表/树题）——可对照讲解自测，或用「✅ 已会 / ❌ 不会」记录掌握情况</span>
+        ) : (
+          <button type="button" className="rf-btn rf-btn-primary" disabled={busy || marking} onClick={runJudgement}>
+            {busy ? "⏳ 判题中…" : "▶ 运行判题"}
+          </button>
+        )}
         {/* 标记完成/记错题：经同一路由 + 如实反馈 ok:false / 错误体 */}
         <button type="button" className="rf-btn" disabled={marking || busy || !result?.success}
           title={result?.success ? "所有测试通过，标记完成（计入学习进度）" : "需先判题且全部通过"} onClick={() => doMark("/api/challenges/mark-done", "已标记完成，进度 +1")}>

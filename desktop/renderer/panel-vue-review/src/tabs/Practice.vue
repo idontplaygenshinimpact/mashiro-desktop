@@ -309,7 +309,9 @@ async function markWrong(ch) {
           <!-- CodeMirror 6 挂载点（ref editorHost） -->
           <div ref="editorHost"></div>
           <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
-            <button type="button" class="rf-btn rf-btn-primary" :disabled="running" @click="runJudgement">{{ running ? "⏳ 判题中…" : "▶ 运行判题" }}</button>
+            <!-- 无可判题用例的题不渲染判题按钮（真实库 167/448 道 core 题缺 test_code）——改为说明，保留「已会/不会」 -->
+        <span v-if="detail?.judgeable === false" class="rf-muted" style="font-size:12px;color:#7d4a00">🧩 本题暂无自动判题用例（多为链表/树题）——可对照讲解自测，或用「❌ 不会」记录</span>
+        <button v-else type="button" class="rf-btn rf-btn-primary" :disabled="running" @click="runJudgement">{{ running ? "⏳ 判题中…" : "▶ 运行判题" }}</button>
             <button v-if="result?.success" type="button" class="rf-btn" :disabled="markBusy" @click="markDone">✅ 全部通过，标记完成</button>
             <button v-if="result && !result.success" type="button" class="rf-btn" :disabled="markBusy" @click="markWrong">❌ 不会</button>
             <button type="button" class="rf-btn" @click="closeEditor">✖ 收起</button>

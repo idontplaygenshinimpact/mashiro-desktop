@@ -56,6 +56,14 @@ export function registerPracticeRoutes(router: Router): void {
         if (!id) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "id required" })); return; }
         const detail = challengeApi.getChallengeDetail(String(id));
         if (!detail) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "题目不存在" })); return; }
+        // 无判题用例的题：直接如实返回，不再跑沙箱（此前会给出"测试未执行（可能骨架函数名与测试不匹配）"——
+        // 对"这题本来就没有 test_code"是误导，用户会以为自己代码写错。真实库 167/448 道 core 题属此类）。
+        if (!detail.judgeable) {
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: true, success: false, tests: [], logs: [], durationMs: 0,
+            error: "本题暂无自动判题用例（缺 test_code；多为链表/树题或示例参数无法自动解析）——可看讲解或标记「已会」", judgeable: false }));
+          return;
+        }
         const r = await challengeApi.runChallengeCode({
           userCode: String(userCode || ""),
           testCode: detail.testCode,

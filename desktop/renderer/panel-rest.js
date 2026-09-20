@@ -627,6 +627,7 @@ function renderChallenges() {
         <span style="color:${dc};font-size:11px;">${dl}</span>
         <span style="font-size:11px;" title="面试出现频率">${freqStars(p.frequency)}</span>
         <span class="job-title">${esc(p.title)}</span>
+        ${p.judgeable === false ? '<span style="color:#7d4a00;font-size:11px;" title="本题没有自动判题用例（多为链表/树题）——可看讲解、可标记已会">🧩 仅手动</span>' : ""}
         ${p.done ? '<span style="color:#1f6b3f;font-size:11px;">✅ 已做</span>' : ""}
         ${wrong}
       </div>
@@ -804,7 +805,9 @@ function bindChPractice() {
             </details>` : ""}
             <div class="ch-code-host"></div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-              <button class="job-btn ch-editor-run" style="background:linear-gradient(135deg,#8a5adc,#6d4fd8);color:#fff;">▶ 运行判题</button>
+              ${c.judgeable === false
+                ? '<span style="align-self:center;color:#7d4a00;font-size:12px;">🧩 本题暂无自动判题用例（多为链表/树题）——可对照讲解自测，或用「✅ 已会 / ❌ 不会」记录掌握情况</span>'
+                : '<button class="job-btn ch-editor-run" style="background:linear-gradient(135deg,#8a5adc,#6d4fd8);color:#fff;">▶ 运行判题</button>'}
               <button class="job-btn ch-editor-mark" data-id="${esc(c.id)}" style="display:none;background:linear-gradient(135deg,#1f6b3f,#1f6b3f);color:#fff;">✅ 全部通过，标记完成</button>
               <span class="ch-editor-state" style="align-self:center;font-size:12px;"></span>
             </div>
@@ -988,28 +991,36 @@ async function gotoChallenge(challengeId, mode) {
   const id = String(challengeId || "");
   if (!id) return;
   if (typeof switchTab === "function") switchTab("practice");
-  chMode = String(mode || "") === "acm" ? "acm" : "core";
-  challengeCat = "";
-  challengeDiff = 0;
-  chDone = 0;
-  chSearch = "";
-  chVisible = 60;
-  const searchEl = $("challenge-search");
-  if (searchEl) searchEl.value = "";
-  await loadChallenges();
-  for (let i = 0; i < 20; i++) { // 懒加载分批渲染：目标题可能在更后面，逐批放大直到出现
-    const item = document.getElementById("ch-" + id);
-    if (item) {
-      item.scrollIntoView({ behavior: "smooth", block: "center" });
-      const btn = item.querySelector(".ch-practice");
-      if (btn && !item.querySelector(".ch-editor")) btn.click(); // 展开编辑器（骨架已预填）
-      return;
+  // 模式未知（复习卡只存题目 id）→ 先试 core，找不到再试 acm；给了 mode 就只用那个模式
+  const wanted = String(mode || "") === "acm" ? "acm" : String(mode || "") === "core" ? "core" : "";
+  const modes = wanted ? [wanted] : ["core", "acm"];
+  const tryOpen = async (m) => {
+    chMode = m;
+    challengeCat = "";
+    challengeDiff = 0;
+    chDone = 0;
+    chSearch = "";
+    chVisible = 60;
+    const searchEl = $("challenge-search");
+    if (searchEl) searchEl.value = "";
+    await loadChallenges();
+    for (let i = 0; i < 20; i++) { // 懒加载分批渲染：目标题可能在更后面，逐批放大直到出现
+      const item = document.getElementById("ch-" + id);
+      if (item) {
+        // 防御调用：jsdom 不实现 scrollIntoView（测试环境实测 TypeError），真机正常滚动
+        if (typeof item.scrollIntoView === "function") item.scrollIntoView({ behavior: "smooth", block: "center" });
+        const btn = item.querySelector(".ch-practice");
+        if (btn && !item.querySelector(".ch-editor")) btn.click(); // 展开编辑器（骨架已预填）
+        return true;
+      }
+      if (chVisible >= chAll.length) break;
+      chVisible += 60;
+      renderChallenges();
+      await new Promise((r) => setTimeout(r, 30));
     }
-    if (chVisible >= chAll.length) break;
-    chVisible += 60;
-    renderChallenges();
-    await new Promise((r) => setTimeout(r, 30));
-  }
+    return false;
+  };
+  for (const m of modes) if (await tryOpen(m)) return;
   window.kanban.notify("✍️ 专项练习", `没找到题目 ${id}（可能已被移除）`);
 }
 

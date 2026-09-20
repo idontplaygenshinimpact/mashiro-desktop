@@ -118,7 +118,9 @@ test("面板接线：题库有「加入清单」、清单有「去做题」+ 跨
   assert.match(rest, /ch-addplan/, "题库列表应有「📚 加入清单」按钮");
   assert.match(rest, /\/api\/challenges\/add-to-plan/, "应调用加入清单路由");
   assert.match(rest, /async function gotoChallenge\(/, "应实现跨 Tab 跳转（清单→做题）");
-  assert.match(rest, /chMode = String\(mode \|\| ""\) === "acm" \? "acm" : "core"/, "跳转时必须切到题目所属模式（否则 ACM 题不在列表里）");
+  // 2026-09-16 重构：模式可能未知（复习卡只存题目 id）→ "给了模式就用它，没给就 core→acm 回退查找"。
+  // 行为级验证在 tests/review-go-challenge.test.mjs（真跑一遍跨模式回退并断言编辑器展开），这里只钉源码结构。
+  assert.match(rest, /const modes = wanted \? \[wanted\] : \["core", "acm"\]/, "跳转必须切到题目所属模式（未给模式时两模式回退查找，否则 ACM 题找不到）");
   assert.match(rest, /item\.querySelector\("\.ch-practice"\)/, "跳转后应自动展开该题编辑器");
   const study = await readFile(new URL("../desktop/renderer/panel-study.js", import.meta.url), "utf8");
   assert.match(study, /s-goch/, "清单条目应有「✍️ 去做题」按钮（仅在关联题目时渲染）");

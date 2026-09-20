@@ -39,6 +39,11 @@ export interface ChallengeRow {
   skeleton: string;
   /** 判题模式：core / acm（列表页据此分组与展示"ACM 模式"徽标） */
   mode: string;
+  /** 能否自动判题：core 看有没有 test_code、acm 看有没有 io_cases。
+   *  为什么需要：真实库 448 道 core 题里 **167 道没有 test_code**（链表/树题与参数不可解析的题，
+   *  实测 scripts/gen-challenge-tests.mjs 对它们可生成 0 条）——此前面板照样给「▶ 运行判题」，
+   *  点了必然失败，用户以为"自己写错了"。现在如实标记，面板改为明确提示（2026-09-16）。 */
+  judgeable: boolean;
   done: boolean;
   wrongCount: number;
 }
@@ -122,12 +127,13 @@ export function getChallenges({ category = "", difficulty = 0, done = null, mode
   if (mode) { conds.push("mode=?"); args.push(String(mode)); }
   const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
   return (db.prepare(`SELECT id, title, category, difficulty, frequency, time_limit, description, skeleton,
-    mode, done, wrong_count FROM challenges ${where} ORDER BY mode, category, difficulty, frequency DESC, id`).all(...args) as Array<Record<string, unknown>>)
+    mode, test_code, io_cases, done, wrong_count FROM challenges ${where} ORDER BY mode, category, difficulty, frequency DESC, id`).all(...args) as Array<Record<string, unknown>>)
     .map((r) => ({
       id: String(r.id), title: String(r.title), category: String(r.category),
       difficulty: Number(r.difficulty), frequency: Number(r.frequency), timeLimit: Number(r.time_limit),
       description: String(r.description || ""), skeleton: String(r.skeleton || ""),
       mode: String(r.mode || "core"),
+      judgeable: String(r.mode || "core") === "acm" ? parseIoCases(r.io_cases).length > 0 : String(r.test_code || "").trim().length > 0,
       done: !!r.done, wrongCount: Number(r.wrong_count || 0),
     }));
 }
@@ -142,6 +148,8 @@ export function getChallengeDetail(id: unknown): ChallengeDetail | null {
     difficulty: Number(r.difficulty), frequency: Number(r.frequency), timeLimit: Number(r.time_limit),
     description: String(r.description || ""), skeleton: String(r.skeleton || ""),
     testCode: String(r.test_code || ""), mode: String(r.mode || "core"), ioCases: parseIoCases(r.io_cases),
+    // 详情页与列表同一口径（面板据 judgeable 决定是否渲染「▶ 运行判题」）
+    judgeable: String(r.mode || "core") === "acm" ? parseIoCases(r.io_cases).length > 0 : String(r.test_code || "").trim().length > 0,
     done: !!r.done, wrongCount: Number(r.wrong_count || 0),
   };
 }

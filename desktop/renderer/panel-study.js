@@ -1120,6 +1120,23 @@ function showReviewCard() {
   $("rc-progress-bar").style.width = pct + "%";
   $("rc-progress-pct").textContent = pct + "%";
   $("rc-topic").textContent = "🔁 " + card.topic;
+  // ✍️ 去做题（2026-09-16 补闭环）：复习卡若关联了题库题目（challenge_id，由「答错自动建卡」/题库加入时写入），
+  // 就在卡片头给一个直达入口——复习时发现"这题其实不会写"，一步跳回专项练习重做（此前只能看讲解，回不到题）。
+  // 卡里只有题目 id、没有 mode → 交给 gotoChallenge 自动在两种模式间回退查找。
+  (() => {
+    const host = $("rc-topic");
+    if (!host) return;
+    document.getElementById("rc-go-challenge")?.remove(); // 逐张切换时先清掉上一张的入口
+    if (!card.challengeId) return;
+    const btn = document.createElement("button");
+    btn.id = "rc-go-challenge";
+    btn.className = "s-learn";
+    btn.style.marginLeft = "8px";
+    btn.textContent = "✍️ 去做题";
+    btn.title = "跳到「专项练习」重做这道题（复习卡只记题目 id，会自动切到题目所属模式）";
+    btn.addEventListener("click", () => gotoChallenge(String(card.challengeId), ""));
+    host.appendChild(btn);
+  })();
   // 默答引导：说明这题是"先心里作答→显示答案核对→选择题+评级"三步（此前标题无引导，用户困惑简答/选择的定位）
   // 复习卡消费侧升级工单任务 1：多角度题分块渲染（"原理：…；边界：…；场景：…" → 三块折叠区——逐块回忆）
   const angleBlocks = splitAngleQuestion(card.question || card.topic);
