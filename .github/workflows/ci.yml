@@ -32,6 +32,12 @@ jobs:
           npm run build:vue-review
       - name: Build 判题编辑器 bundle（CodeMirror 6；原生面板按需注入）
         run: npm run build:practice-editor
+      # 浏览器类护栏（真 Chromium 渲染：几何塌陷 / 像素级对比度 / Tab×三态登记）默认会因"没有浏览器二进制"
+      # 自动跳过——这里显式装上 chromium，让它们在 CI **真的跑**（2026-09-16；此前只在本机能验证，
+      # 而这些护栏抓到的正是 jsdom 看不见的问题：CM 被压成 39px、正文压在壁纸上导致 45% 文字不达标）。
+      # 注意：上面的 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD 只影响 npm ci 的 postinstall，不影响这里的显式安装。
+      - name: Install Chromium (浏览器类护栏需要)
+        run: npx playwright-core install --with-deps chromium
       - name: Unit + integration tests
         run: npm test
       - name: Eval dataset validation (schema/source/datasetHash, 零 LLM)
